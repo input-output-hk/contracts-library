@@ -80,7 +80,7 @@ pub fn burn(self: Transaction, own_policy: PolicyId) -> Bool {
 /// being present among the transaction inputs.
 pub fn update(self: Transaction, own_ref: OutputReference) -> Bool {
   let own_input = transaction.resolve_input(self.inputs, own_ref)
-  expect (reference_policy, reference_name) =
+  let (reference_policy, reference_name) =
     own_reference_nft(own_input.value)
   let own_credential = own_input.address.payment_credential
 
@@ -110,7 +110,7 @@ pub fn update(self: Transaction, own_ref: OutputReference) -> Bool {
 /// inner name, and the burned reference NFT must be the one held in this UTxO.
 pub fn burn_pair(self: Transaction, own_ref: OutputReference) -> Bool {
   let own_input = transaction.resolve_input(self.inputs, own_ref)
-  expect (reference_policy, reference_name) =
+  let (reference_policy, reference_name) =
     own_reference_nft(own_input.value)
 
   let burned = self.mint |> assets.tokens(reference_policy) |> dict.to_pairs()
