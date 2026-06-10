@@ -146,16 +146,19 @@ An **exploration** produces: a lightweight design sketch, a complexity/risk read
 
 | Contract | Category | Description | Status | Details |
 |---|---|---|---|---|
-| Vesting | Building block | Time-locked token release (linear / cliff). | Candidate | TBD |
+| Native NFT collection | Native Tokens | Mint a Native NFT collection | Candidate | TBD |
+| Soulbound Tokens | Native Tokens | Tokens forever bound to an address | Candidate | TBD |
 | CIP-68 metadata | Token standard | Rich, updatable on-chain token metadata. | Candidate | TBD |
-| Programmable Tokens (CIP-113) substandards | Token standard | Permissioned / transfer-restricted tokens. | Candidate | TBD |
-| Escrow / Atomic Swap | DeFi primitive | Trustless exchange of assets between parties. | Candidate | TBD |
-| AMM DEX / Liquidity Pool | DeFi primitive | Automated market maker with liquidity pools. | Candidate | TBD |
-| Lending | DeFi primitive | Collateralized lending/borrowing. | Candidate | TBD |
-| Auction | DeFi primitive | On-chain auctions (English/Dutch). | Candidate | TBD |
+| Programmable Tokens (CIP-113) substandards | Token standard | Permissioned / transfer-restricted tokens. ERC-20, ERC-721, ERC-1155, ERC-4626, ERC-6909 | Candidate | TBD |
+| Vesting | DeFi | Time-locked token release (linear / cliff). | Candidate | TBD |
+| Escrow / Atomic Swap | DeFi | Trustless exchange of assets between parties. | Candidate | TBD |
+| AMM DEX / Liquidity Pool | DeFi | Automated market maker with liquidity pools. | Candidate | TBD |
+| Lending | DeFi | Collateralized and DeFi-kernel-based lending/borrowing. | Candidate | TBD |
+| Auction | DeFi | On-chain auctions (English/Dutch). | Candidate | TBD |
+| Order-book DEX | DeFi | Order-book-based exchange. | Candidate | TBD |
 | Multisig / Smart wallet | Building block | Script-based authorization schemes. | Candidate | TBD |
 | Oracle | Building block | On-chain data feed consumption pattern. | Candidate | TBD |
-| Order-book DEX | DeFi primitive | Order-book-based exchange. | Candidate | TBD |
+| DAO | Governance | Used to govern projects with token-based voting | Candidate | TBD |
 
 
 *The committed set of "at least 5 ready-to-audit" contracts emerges from the explore/triage process; it is not fixed in advance.*
