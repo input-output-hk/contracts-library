@@ -1,4 +1,4 @@
-# ContractsLibrary — Composability Architecture Specification
+# ContractsLibrary: Composability Architecture Specification
 
 ## Purpose of This Document
 
@@ -29,11 +29,7 @@ A validator MUST NOT (unless unavoidable) assert properties about:
 
 This is the most important principle of the library. The objective behind these is to aid composability between contracts.
 
-### 1.2 Authorization is always pluggable
-
-No contract in this library hardcodes a specific authorization mechanism. All authorization flows through a shared interface that supports single-key signatures, script-based authorization (multisig, DAOs, smart wallets), and native script authorization. This ensures every contract composes freely with every authorization scheme.
-
-### 1.3 Contracts Ship as On-Chain + Off-Chain Pairs
+### 1.2 Contracts Ship as On-Chain + Off-Chain Pairs
 
 Every contract consists of:
 
@@ -42,7 +38,7 @@ Every contract consists of:
 
 The off-chain layer is the primary developer-facing API unless they want to change how the protocol works. The on-chain layer is a dependency of it.
 
-### 1.4 Developer experience and security have priority
+### 1.3 Developer experience and security have priority
 
 All unavoidable trade-offs will err on the side of improving ease of use and developer experience over execution cost, speed, and even composability, with the only exception of security. Security is never compromised.
 
@@ -50,4 +46,13 @@ All unavoidable trade-offs will err on the side of improving ease of use and dev
 
 ## 2. The Authorization System
 
-TODO
+> **Status: Experimental.** This is exploratory and may change or be scrapped entirely. We do not yet know if any of it will prove useful; it is one direction we are trying, not a commitment.
+
+The idea is that a contract should state *that* an action requires authorization without hardcoding *how* authorization is decided, so the same contract composes equally well with a single key, a multisig, a DAO, a smart wallet, or schemes that do not exist yet.
+
+We are exploring modeling the authorizer as a Cardano `Credential` (either a public-key hash or a script hash) supplied by the consumer:
+
+- **Public-key authorizer**: satisfied by a signature in the transaction.
+- **Script authorizer**: satisfied by *calling another contract*, requiring that script to run and approve within the same transaction. This is how a multisig, DAO, or smart wallet can stand in for a key without the consuming contract knowing anything about them.
+
+Whether this abstraction is worth its cost (newcomer friction, execution budget, audit surface) is an open question we will answer by building real contracts, not in this document.
