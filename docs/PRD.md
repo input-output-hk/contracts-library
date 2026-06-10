@@ -148,7 +148,7 @@ An **exploration** produces: a lightweight design sketch, a complexity/risk read
 |---|---|---|---|---|
 | Vesting | Building block | Time-locked token release (linear / cliff). | Candidate | TBD |
 | CIP-68 metadata | Token standard | Rich, updatable on-chain token metadata. | Candidate | TBD |
-| Programmable Tokens | Token standard | Permissioned / transfer-restricted tokens. | Candidate | TBD |
+| Programmable Tokens (CIP-113) substandards | Token standard | Permissioned / transfer-restricted tokens. | Candidate | TBD |
 | Escrow / Atomic Swap | DeFi primitive | Trustless exchange of assets between parties. | Candidate | TBD |
 | AMM DEX / Liquidity Pool | DeFi primitive | Automated market maker with liquidity pools. | Candidate | TBD |
 | Lending | DeFi primitive | Collateralized lending/borrowing. | Candidate | TBD |
