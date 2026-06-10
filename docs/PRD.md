@@ -156,6 +156,8 @@ An **exploration** produces: a lightweight design sketch, a complexity/risk read
 | Lending | DeFi | Collateralized and DeFi-kernel-based lending/borrowing. | Candidate | TBD |
 | Auction | DeFi | On-chain auctions (English/Dutch). | Candidate | TBD |
 | Order-book DEX | DeFi | Order-book-based exchange. | Candidate | TBD |
+| Crowdfund | DeFi | crowdfunding mechanism | Candidate | TBD |
+| Prediction Market | DeFi | Market to bet on the outcome of events | Candidate | TBD |
 | Multisig / Smart wallet | Building block | Script-based authorization schemes. | Candidate | TBD |
 | Oracle | Building block | On-chain data feed consumption pattern. | Candidate | TBD |
 | DAO | Governance | Used to govern projects with token-based voting | Candidate | TBD |
