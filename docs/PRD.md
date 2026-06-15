@@ -171,7 +171,7 @@ A contract is **Ready-to-audit** when it has **all** of:
 
 1. **On-chain**: Aiken module(s) exposing parameterized logic functions + a reference validator; conforms to `ARCHITECTURE.md` composability principles; no known unhandled edge cases.
 2. **Tests**: comprehensive on-chain unit + property tests (happy path + adversarial/negative cases) with a stated coverage expectation; off-chain integration tests against an emulator.
-3. **Specification**: written spec in the specs folder (state machine / datum-redeemer transitions, invariants, threat model & known assumptions).
+3. **Specification**: written spec in the specs folder (state machine / datum-redeemer transitions, invariants, threat model & known assumptions) No formal-methods implemented.
 4. **Off-chain**: **two** reference implementations (starting with MeshJS + Tx3), each covering every action, with end-to-end tests.
 5. **Docs**: usage guide + API reference + at least one worked example.
 6. **Reproducible build**: pinned toolchain versions; deterministic blueprint output.
@@ -205,8 +205,8 @@ v1 website scope:
 Monorepo, source of truth for all layers:
 
 ```
-/on-chain          Aiken workspace (lib/<contract>/, validators/)
-/off-chain
+/onchain          Aiken workspace (lib/<contract>/, validators/)
+/offchain
   /meshjs          MeshJS implementations
   /tx3             Tx3 implementations
   /<lang>          contributor-added languages
