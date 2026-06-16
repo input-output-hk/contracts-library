@@ -150,6 +150,7 @@ An **exploration** produces: a lightweight design sketch, a complexity/risk read
 | Soulbound Tokens | Native Tokens | Tokens forever bound to an address | Candidate | TBD |
 | CIP-68 metadata | Token standard | Rich, updatable on-chain token metadata. | Candidate | TBD |
 | Programmable Tokens (CIP-113) substandards | Token standard | Permissioned / transfer-restricted tokens. ERC-20, ERC-721, ERC-1155, ERC-4626, ERC-6909 | Candidate | TBD |
+| CIP-113 to Native Token Vault | Token standard | Switch between CIP-113 and Native Tokens representations to use CIP-113 tokens with protocols that don't support them | Candidate | TBD |
 | Vesting | DeFi | Time-locked token release (linear / cliff). | Candidate | TBD |
 | Escrow / Atomic Swap | DeFi | Trustless exchange of assets between parties. | Candidate | TBD |
 | AMM DEX / Liquidity Pool | DeFi | Automated market maker with liquidity pools. | Candidate | TBD |
