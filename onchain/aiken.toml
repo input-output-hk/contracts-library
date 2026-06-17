@@ -15,4 +15,9 @@ name = "aiken-lang/stdlib"
 version = "v3.1.0"
 source = "github"
 
+[[dependencies]]
+name = "aiken-lang/fuzz"
+version = "v2"
+source = "github"
+
 [config]
