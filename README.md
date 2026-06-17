@@ -1,6 +1,9 @@
 # ContractsLibrary
 
-> A library of standardized, reusable smart contracts for Cardano.
+[![CodeQL](https://github.com/input-output-hk/contracts-library/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/input-output-hk/contracts-library/actions/workflows/github-code-scanning/codeql)
+[![CI](https://github.com/input-output-hk/contracts-library/actions/workflows/ci.yml/badge.svg)](https://github.com/input-output-hk/contracts-library/actions/workflows/ci.yml)
+
+**_A library of standardized, reusable smart contracts for Cardano._**
 
 ContractsLibrary provides battle-tested, ready-to-use contract implementations, shipped as **on-chain + off-chain pairs** with a decoupled formal **spec**. The goal is to reduce the time and risk of building on Cardano, especially for developers new to the ecosystem.
 
