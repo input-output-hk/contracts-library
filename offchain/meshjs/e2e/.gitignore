@@ -1,0 +1,8 @@
+node_modules/
+*.tsbuildinfo
+
+# Yaci DevKit runtime artifacts (created by `npm run test:devnet`)
+.yaci-devnet.log
+logs/
+yaci-cli.history
+.yaci*/

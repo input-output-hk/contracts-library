@@ -1,0 +1,27 @@
+{
+  "name": "@contracts-library/vesting-meshjs",
+  "version": "0.0.0",
+  "description": "MeshJS off-chain builders for the linear vesting contract",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "@meshsdk/core": "^1.8.0"
+  },
+  "devDependencies": {
+    "@meshsdk/core": "^1.8.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  },
+  "blueprint": {
+    "validatorHash": "fa1144f1c5ae4cd0500b4d8b5b07ecba5c5e47f941c9105e785a25d1",
+    "compiler": "aiken-v1.1.21"
+  }
+}

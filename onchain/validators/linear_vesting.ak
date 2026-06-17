@@ -23,4 +23,8 @@ validator linear_vesting {
       Cancel -> linear.validate_cancel(vesting_datum, self)
     }
   }
+
+  else(_) {
+    fail
+  }
 }

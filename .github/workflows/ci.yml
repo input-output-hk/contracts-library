@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  onchain:
+    name: On-chain (aiken)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aiken-lang/setup-aiken@v1
+        with:
+          version: v1.1.21
+      - name: aiken check
+        working-directory: onchain
+        run: aiken check
+      - name: aiken build
+        working-directory: onchain
+        run: aiken build
+
+  offchain-unit:
+    name: Off-chain unit (MeshJS lib)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install
+        working-directory: offchain/meshjs/lib
+        run: npm ci
+      - name: Typecheck
+        working-directory: offchain/meshjs/lib
+        run: npm run typecheck
+      - name: Unit tests
+        working-directory: offchain/meshjs/lib
+        run: npm test
+
+  e2e:
+    name: Off-chain e2e (Yaci devnet)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install Yaci DevKit
+        run: npm install -g @bloxbean/yaci-devkit
+
+      - name: Build library
+        working-directory: offchain/meshjs/lib
+        run: npm ci && npm run build
+
+      - name: Install e2e deps
+        working-directory: offchain/meshjs/e2e
+        run: npm install
+
+      # Starts an ephemeral devnet, runs the suite against it, always tears down.
+      - name: Run e2e tests against an ephemeral devnet
+        working-directory: offchain/meshjs/e2e
+        run: npm run test:devnet
