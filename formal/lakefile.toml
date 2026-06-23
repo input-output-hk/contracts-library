@@ -1,11 +1,29 @@
 name = "formal"
 defaultTargets = ["Formal"]
 
-# Lean-Blaster: SMT (Z3) backend for discharging the spec's properties.
-# Requires Z3 4.15.2 on PATH at build time. See README.md.
+# Parallel proof checking.
+moreLeanArgs = ["--threads=4"]
+moreGlobalServerArgs = ["--threads=4"]
+
+# Lean-Blaster: SMT (Z3) backend for discharging properties via the `blaster`
+# tactic/command. Requires Z3 4.15.2 on PATH at build time. See README.md.
 [[require]]
 name = "Blaster"
 git = "https://github.com/input-output-hk/Lean-blaster"
+rev = "main"
+
+# UPLC AST + CEK machine — lets proofs load and execute the *compiled*
+# validator (`#import_uplc`, `cekExecuteProgram`).
+[[require]]
+name = "PlutusCore"
+git = "https://github.com/input-output-hk/PlutusCoreBlaster"
+rev = "main"
+
+# Cardano ledger types (V3 ScriptContext / TxInfo / TxOut / Value / Data) used
+# to build the script context the validator runs against.
+[[require]]
+name = "CardanoLedgerApi"
+git = "https://github.com/input-output-hk/CardanoLedgerApiBlaster"
 rev = "main"
 
 [[lean_lib]]
