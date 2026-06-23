@@ -31,6 +31,7 @@
             # reads ./lean-toolchain (leanprover/lean4:v4.24.0) and fetches it.
             pkgs.elan
             z3
+            pkgs.gawk   # `just verify` pipes lake output through annotate-blaster-logs.awk
           ];
 
           shellHook = ''
