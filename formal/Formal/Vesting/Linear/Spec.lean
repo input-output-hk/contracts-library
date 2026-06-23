@@ -127,12 +127,12 @@ def cancelRedeemer : Data := Data.Constr 1 []
 def validSchedule (d : VestingDatum) : Prop :=
   d.startTime < d.endTime ∧ d.endTime < d.recoveryTime
 
-/-- The credential held by `c` is satisfied by signatories `sigs` (key case
-only; the script/withdrawal case is modeled in the proof files). Mirrors
-`authorization.is_authorized` for the verification-key branch. -/
-def keyAuthorized (c : Cred) (sigs : List ByteString) : Prop :=
+/-- The credential `c` is satisfied: a **key** credential by a signature in
+`sigs`; a **script** credential by a withdrawal keyed by it (withdraw-0), i.e.
+its hash is among `wdrlScripts`. Mirrors `authorization.is_authorized`. -/
+def authorized (c : Cred) (sigs wdrlScripts : List ByteString) : Prop :=
   match c with
   | .key h    => h ∈ sigs
-  | .script _ => False  -- TODO: model the withdraw-0 (script) branch
+  | .script h => h ∈ wdrlScripts
 
 end Formal.Vesting.Linear.Spec

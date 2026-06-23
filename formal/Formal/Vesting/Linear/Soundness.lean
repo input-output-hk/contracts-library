@@ -1,13 +1,9 @@
 /-
 Linear vesting — SOUNDNESS: `accepts ⇒ spec` (spec §9).
 
-OPEN MODELING TODOs (block real proofs):
-  * script-credential authorization via withdraw-0 (`txInfoWdrl`); only the
-    key branch is modeled (`Spec.keyAuthorized`).
-  * value bundle is modeled per-asset and concretely; generalize to an
-    arbitrary bundle (spec "arbitrary value bundle").
-  * field names of `CardanoLedgerApi.V3.TxInfo`/`TxOut` are taken from the
-    reference; verify against the actual library on first build.
+OPEN MODELING TODOs:
+  * value bundle is modeled per single asset; generalize to an arbitrary bundle
+    (spec "arbitrary value bundle").
 -/
 import Blaster
 import PlutusCore.UPLC
@@ -24,7 +20,7 @@ open PlutusCore.ByteString (ByteString)
 open PlutusCore.Data (Data)
 open CardanoLedgerApi.IsData.Class (IsData)
 open CardanoLedgerApi.V3 (Address Redeemer ScriptContext TxInfo TxInInfo TxOut
-                          Value OutputDatum valueOf)
+                          Value OutputDatum valueOf Withdrawals)
 open Formal.Common (validatorAccepts)
 open Formal.Vesting.Linear.Spec
 open Formal.Vesting.Linear.Script (spendValidator)
@@ -69,17 +65,51 @@ def baseTxInfo (now : Int) (signatories : List ByteString) : TxInfo :=
     txInfoCurrentTreasuryAmount := IsData.toData (none : Option Int)
     txInfoTreasuryDonation := IsData.toData (none : Option Int) }
 
-/-- A spend context: one contract input carrying `datum`, one (arbitrary)
-continuing output, validity lower bound `now`, signatories `sigs`, redeemer
-`r`. The continuation's datum is the free parameter `outDatum`; soundness
-must *derive* that equality. -/
+/-- A spend context with explicit `wdrl` (reward withdrawals). One contract
+input carrying `datum`, one (arbitrary) continuing output, validity lower bound
+`now`, signatories `sigs`, withdrawals `wdrl`, redeemer `r`. The continuation's
+datum is the free parameter `outDatum`; soundness must *derive* that equality.
+
+`wdrl` carries the withdraw-0 entries that satisfy a **script** beneficiary
+(its key is the beneficiary's `ScriptCredential`); `sigs` satisfies a **key**
+beneficiary. -/
+def mkClaimCtxW
+    (datum : VestingDatum) (inValue : Value)
+    (outAddr : Address) (outValue : Value) (outDatum : Data)
+    (now : Int) (sigs : List ByteString) (wdrl : Withdrawals)
+    (r : Redeemer) : ScriptContext :=
+  let inDatumData := datumData datum
+  let utxoRef := ⟨"txid_placeholder_32bytes!!!!!!!!", 0⟩
+  let inUtxo : TxOut := ⟨scriptAddress, inValue, .OutputDatum inDatumData, none⟩
+  let outUtxo : TxOut := ⟨outAddr, outValue, .OutputDatum outDatum, none⟩
+  let txInfo :=
+    { baseTxInfo now sigs with
+      txInfoInputs := [⟨utxoRef, inUtxo⟩]
+      txInfoOutputs := [outUtxo]
+      txInfoWdrl := wdrl
+      txInfoRedeemers := [(.Spending utxoRef, r)] }
+  { scriptContextTxInfo := txInfo
+    scriptContextRedeemer := r
+    scriptContextScriptInfo := .SpendingScript utxoRef inDatumData }
+
+/-- The common case: no withdrawals (key-auth claims). -/
 def mkClaimCtx
     (datum : VestingDatum) (inValue : Value)
     (outAddr : Address) (outValue : Value) (outDatum : Data)
     (now : Int) (sigs : List ByteString) (r : Redeemer) : ScriptContext :=
+  mkClaimCtxW datum inValue outAddr outValue outDatum now sigs [] r
+
+/-- A spend context whose contract input carries a datum **hash** rather than an
+inline datum (`datumHash`), while the resolved datum is still supplied via the
+script info (as on a real hash-datum spend). Used to test that the validator
+rejects datum-hash inputs (spec §3.1, "datum hashes are rejected"). -/
+def mkClaimCtxHashInput
+    (datum : VestingDatum) (inValue : Value) (datumHash : ByteString)
+    (outAddr : Address) (outValue : Value) (outDatum : Data)
+    (now : Int) (sigs : List ByteString) (r : Redeemer) : ScriptContext :=
   let inDatumData := datumData datum
   let utxoRef := ⟨"txid_placeholder_32bytes!!!!!!!!", 0⟩
-  let inUtxo : TxOut := ⟨scriptAddress, inValue, .OutputDatum inDatumData, none⟩
+  let inUtxo : TxOut := ⟨scriptAddress, inValue, .OutputDatumHash datumHash, none⟩
   let outUtxo : TxOut := ⟨outAddr, outValue, .OutputDatum outDatum, none⟩
   let txInfo :=
     { baseTxInfo now sigs with
@@ -89,6 +119,30 @@ def mkClaimCtx
   { scriptContextTxInfo := txInfo
     scriptContextRedeemer := r
     scriptContextScriptInfo := .SpendingScript utxoRef inDatumData }
+
+/-- A spend context with **two** contract inputs that share a byte-identical
+datum and value (refs differ only by index), and a **single** continuation
+carrying that datum. The validator, invoked for the first input, computes
+`k = 2` and requires the continuation to hold `2 × required`; this builder lets
+us test both that a correctly funded batch is accepted and that an under-funded
+one (one continuation for two inputs) is rejected (spec §5.1, I2). -/
+def mkClaimCtxDouble
+    (datum : VestingDatum) (inValue : Value)
+    (outValue : Value) (outDatum : Data)
+    (now : Int) (sigs : List ByteString) (r : Redeemer) : ScriptContext :=
+  let inDatumData := datumData datum
+  let ref0 := ⟨"txid_placeholder_32bytes!!!!!!!!", 0⟩
+  let ref1 := ⟨"txid_placeholder_32bytes!!!!!!!!", 1⟩
+  let inUtxo : TxOut := ⟨scriptAddress, inValue, .OutputDatum inDatumData, none⟩
+  let outUtxo : TxOut := ⟨scriptAddress, outValue, .OutputDatum outDatum, none⟩
+  let txInfo :=
+    { baseTxInfo now sigs with
+      txInfoInputs := [⟨ref0, inUtxo⟩, ⟨ref1, inUtxo⟩]  -- two inputs, same datum
+      txInfoOutputs := [outUtxo]                          -- one continuation
+      txInfoRedeemers := [(.Spending ref0, r), (.Spending ref1, r)] }
+  { scriptContextTxInfo := txInfo
+    scriptContextRedeemer := r
+    scriptContextScriptInfo := .SpendingScript ref0 inDatumData }  -- own input = ref0
 
 /-! ## Soundness theorems -/
 

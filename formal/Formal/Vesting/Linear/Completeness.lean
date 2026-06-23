@@ -22,7 +22,7 @@ open PlutusCore.Data (Data)
 open CardanoLedgerApi.V3 (Address Redeemer)
 open Formal.Common (validatorAccepts)
 open Formal.Vesting.Linear.Spec
-open Formal.Vesting.Linear.Soundness (mkClaimCtx withAsset scriptAddress)
+open Formal.Vesting.Linear.Soundness (mkClaimCtx mkClaimCtxW mkClaimCtxDouble withAsset scriptAddress)
 open Formal.Vesting.Linear.Script (spendValidator)
 
 set_option warn.sorry false
@@ -69,6 +69,14 @@ def dWithTotal (total : Int) : VestingDatum :=
 
 /-- The fully fixed datum used by the lower rungs: total 100. -/
 def dConcrete : VestingDatum := dWithTotal 100
+
+/-- Like `dConcrete` but the beneficiary is a **script** credential `bhash`
+(authorized via a withdrawal, not a signature). -/
+def dScript (bhash : ByteString) : VestingDatum :=
+  { beneficiary := .script bhash,
+    locker := .key "locker_key_hash",
+    vesting := [{ policy := "policyA", name := "assetA", total := 100 }],
+    startTime := 1000, endTime := 2000, recoveryTime := 3000 }
 
 /-- A specific, well-formed partial `Claim`, fully concrete:
 - one asset `assetA`, total 100, schedule `[1000, 2000]`, recovery 3000;
@@ -142,6 +150,43 @@ theorem claim_accept_generic_identities
         (datumData (dGen bene policy name total))
         now
         [bene]                       -- beneficiary signs (equality by construction)
+        claimRedeemer)
+      spendValidator := by
+  blaster
+
+/-- **Script-credential auth (accept side).** A beneficiary that is a *script*
+credential `bhash` is authorized by a withdrawal keyed by that script
+(withdraw-0), with no key signature. The claim is accepted. This is the other
+half of the pluggable-credential design (ARCHITECTURE §3): a script can fill the
+beneficiary role exactly like a key. -/
+theorem claim_accept_script_auth (bhash : ByteString) :
+    validatorAccepts
+      (mkClaimCtxW (dScript bhash)
+        (withAsset 2000000 "policyA" "assetA" 100)
+        scriptAddress
+        (withAsset 2000000 "policyA" "assetA" 100)
+        (datumData (dScript bhash))
+        1500
+        []                              -- no key signature
+        [(.ScriptCredential bhash, 0)]  -- withdraw-0 keyed by the beneficiary script
+        claimRedeemer)
+      spendValidator := by
+  blaster
+
+/-- **Batched claim accepted (the `k`-scaling, accept side; spec §5.1).** Two
+contract inputs sharing a datum, with a single continuation holding `2 × required`
+(100 = 2 × 50 at `now = 1500`), is accepted. The companion of
+`no_double_satisfaction`: this confirms a correctly funded batch *is* accepted,
+so the rejection there is specifically about under-funding, not a 2-input
+artifact. -/
+theorem claim_accept_two_inputs :
+    validatorAccepts
+      (mkClaimCtxDouble dConcrete
+        (withAsset 2000000 "policyA" "assetA" 100)   -- each input holds 100
+        (withAsset 2000000 "policyA" "assetA" 100)   -- continuation holds 2 × required
+        (datumData dConcrete)
+        1500
+        ["beneficiary_key_hash"]
         claimRedeemer)
       spendValidator := by
   blaster
