@@ -2,8 +2,6 @@
 Linear vesting — SOUNDNESS: `accepts ⇒ spec` (spec §9).
 
 OPEN MODELING TODOs (block real proofs):
-  * `validRangeData` — encode the validity interval `[now, +∞)` exactly as the
-    ledger/validator reads it (spec §5.2). Currently `sorry`.
   * script-credential authorization via withdraw-0 (`txInfoWdrl`); only the
     key branch is modeled (`Spec.keyAuthorized`).
   * value bundle is modeled per-asset and concretely; generalize to an
@@ -14,8 +12,10 @@ OPEN MODELING TODOs (block real proofs):
 import Blaster
 import PlutusCore.UPLC
 import CardanoLedgerApi.V3
+import CardanoLedgerApi.V1.Time
 import Formal.Common
 import Formal.Vesting.Linear.Spec
+import Formal.Vesting.Linear.Script
 
 namespace Formal.Vesting.Linear.Soundness
 
@@ -27,6 +27,7 @@ open CardanoLedgerApi.V3 (Address Redeemer ScriptContext TxInfo TxInInfo TxOut
                           Value OutputDatum valueOf)
 open Formal.Common (validatorAccepts)
 open Formal.Vesting.Linear.Spec
+open Formal.Vesting.Linear.Script (spendValidator)
 
 set_option warn.sorry false
 
@@ -36,9 +37,9 @@ set_option warn.sorry false
 def scriptHash : ByteString := "fake_script_hash_28bytes!!!!"
 def scriptAddress : Address := ⟨.ScriptCredential scriptHash, none⟩
 
--- TODO: encode the validity range `[now, +∞)` as the validator reads it
--- (spec §5.2: `now` is the finite lower bound). Placeholder until then.
-def validRangeData (now : Int) : Data := sorry
+/-- Validity range `[now, +∞)`-/
+def validRangeData (now : Int) : Data :=
+  IsData.toData (CardanoLedgerApi.V1.Time.after now)
 
 /-- Ada-only value of `lovelace`. -/
 def adaOnly (lovelace : Int) : Value :=
@@ -98,7 +99,6 @@ signed and a well-formed schedule, then the continuing output reproduces the
 datum and keeps at least the required remainder of the asset (spec §9 R2/R3,
 I2/I3). The output's datum/value are free, so accepting *forces* them. -/
 theorem claim_sound_partial
-    (validator : Program)
     (d : VestingDatum) (a : VestedAsset)
     (inLovelace outLovelace inQty outQty now : Int)
     (outAddr : Address) (outDatum : Data) :
@@ -112,13 +112,15 @@ theorem claim_sound_partial
     d.vesting = [a] ∧
     validSchedule d ∧
     now < d.endTime ∧
-    validatorAccepts ctx validator →
+    validatorAccepts ctx spendValidator →   -- the CONCRETE compiled validator
       -- continuation reproduces the datum (I3) ...
       outDatum = datumData d ∧
       -- ... and keeps the required remainder (I2/B1).
       outQty ≥ required a.total d.startTime d.endTime now := by
-  -- TODO: prove with `blaster` once `validRangeData` is real and the toolchain
-  -- is available. Cannot be claimed sound until then.
+  -- The general (∀ datum/amounts/addresses) version is too large for Z3 even
+  -- over the concrete validator (hangs for minutes). Left as `sorry`; see the
+  -- fully-concrete `Completeness.claim_accept_concrete` for a fast end-to-end
+  -- check, then generalize one parameter at a time from there.
   sorry
 
 /-- **Cancel soundness.** A `Cancel` that the validator accepts implies the

@@ -13,6 +13,7 @@ import PlutusCore.UPLC
 import CardanoLedgerApi.V3
 import Formal.Common
 import Formal.Vesting.Linear.Spec
+import Formal.Vesting.Linear.Script
 import Formal.Vesting.Linear.Soundness
 import Formal.Vesting.Linear.Completeness
 
@@ -24,13 +25,15 @@ open PlutusCore.Data (Data)
 open CardanoLedgerApi.V3 (Address Redeemer)
 open Formal.Common (validatorRejects)
 open Formal.Vesting.Linear.Spec
-open Formal.Vesting.Linear.Soundness (mkClaimCtx withAsset)
-open Formal.Vesting.Linear.Completeness (spendValidator)
+open Formal.Vesting.Linear.Soundness (mkClaimCtx withAsset scriptAddress)
+open Formal.Vesting.Linear.Script (spendValidator)
+open Formal.Vesting.Linear.Completeness (dConcrete)
 
 set_option warn.sorry false
 
 /-- **R1 — unauthorized claim is rejected.** No signatory satisfies the
-beneficiary key ⇒ the validator rejects the `Claim`. -/
+beneficiary key ⇒ the validator rejects the `Claim`. General target; the
+concrete instances below are the proved ones. -/
 theorem reject_unauthorized_claim
     (d : VestingDatum) (a : VestedAsset)
     (inLovelace outLovelace inQty outQty now : Int)
@@ -40,8 +43,43 @@ theorem reject_unauthorized_claim
     let ctx := mkClaimCtx d inValue outAddr outValue outDatum now [] claimRedeemer
     (∃ h, d.beneficiary = .key h) →   -- key-auth instance, but NO signatories
       validatorRejects ctx spendValidator := by
-  -- TODO: prove (no signatory ⇒ is_authorized fails ⇒ reject).
+  -- General version (∀ d/amounts/addr) hangs, like the completeness analogues.
+  -- See the concrete instances below.
   sorry
+
+/-- **R1, concrete: no signatory ⇒ reject.** The honest claim of
+`claim_accept_concrete`, but with an EMPTY signatory list, is rejected: the
+beneficiary key credential is unsatisfied, so `is_authorized` fails. -/
+theorem reject_unauthorized_claim_no_sig :
+    validatorRejects
+      (mkClaimCtx dConcrete
+        (withAsset 2000000 "policyA" "assetA" 100)
+        scriptAddress
+        (withAsset 2000000 "policyA" "assetA" 100)
+        (datumData dConcrete)
+        1500
+        []                           -- NO signatories
+        claimRedeemer)
+      spendValidator := by
+  blaster
+
+/-- **R1, concrete: wrong signer ⇒ reject.** A claim signed by some key `w`
+that is **not** the beneficiary is rejected. This is the inequality form: it is
+the property that makes auth meaningful, and it cannot be stated with concrete
+equal hashes. `w ≠ "beneficiary_key_hash"` is the load-bearing hypothesis. -/
+theorem reject_wrong_signer (w : ByteString)
+    (hw : w ≠ "beneficiary_key_hash") :
+    validatorRejects
+      (mkClaimCtx dConcrete
+        (withAsset 2000000 "policyA" "assetA" 100)
+        scriptAddress
+        (withAsset 2000000 "policyA" "assetA" 100)
+        (datumData dConcrete)
+        1500
+        [w]                          -- the WRONG signer
+        claimRedeemer)
+      spendValidator := by
+  blaster
 
 /-- **R2 — over-release is rejected.** A `Claim` whose continuation holds less
 than the required remainder is rejected (spec §9 R2, I2/B1). -/
