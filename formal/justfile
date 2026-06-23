@@ -1,0 +1,90 @@
+# Formal-verification pipeline. Run from this directory (`formal/`).
+#
+# Compile the Aiken validators (in ../onchain), dump their UPLC, encode it to
+# flat bytes under Scripts/, and re-check the Lean (Lean-Blaster) proofs against
+# that bytecode. The point of the flat step is that the proofs target the
+# *actual compiled validator*, not a hand-written model.
+#
+# Lean v4.24.0 + Z3 4.15.2 come from ./flake.nix (`nix develop`); `aiken` must
+# be on PATH. Run `just deps` once before the first `just verify`.
+
+onchain   := "../onchain"
+artifacts := onchain / "artifacts"
+scripts   := "Scripts"
+
+# Full pipeline: build -> flats -> verify.
+default: verify
+
+# List recipes.
+list:
+    @just --list
+
+# Fetch the Lean dependencies (Blaster). Run once, or after bumping its rev.
+deps:
+    nix develop --command lake update
+
+# Compile validators and dump textual UPLC under ../onchain/artifacts/.
+build:
+    cd {{onchain}} && aiken build -u
+
+# Encode each artifacts/<module>.<validator>.<handler>.uplc into
+# Scripts/<module>_<handler>.flat, for the handlers we verify (`spend` and
+# `mint`). Only rewrites a flat when its bytes change, and invalidates the Lake
+# cache of any Lean module that reads it so `verify` re-checks it. New
+# validators are picked up by the loops automatically.
+
+# Encode compiled UPLC to flat bytes under Scripts/.
+flats: build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p {{scripts}}
+
+    invalidate_lean() {
+      flat="$1"
+      for lean in $(find Formal -name '*.lean' -exec grep -lF "Scripts/$flat" {} +); do
+        mod="${lean%.lean}"
+        echo "    invalidate Lake cache for $mod (depends on $flat)"
+        rm -f .lake/build/lib/lean/"$mod".olean \
+              .lake/build/lib/lean/"$mod".olean.hash \
+              .lake/build/lib/lean/"$mod".ilean \
+              .lake/build/lib/lean/"$mod".ilean.hash \
+              .lake/build/lib/lean/"$mod".trace \
+              .lake/build/ir/"$mod".c \
+              .lake/build/ir/"$mod".c.hash \
+              .lake/build/ir/"$mod".setup.json
+      done
+    }
+
+    encode_flat() {
+      src="$1"; out="$2"; tmp="$out.tmp"
+      aiken uplc encode --hex "$src" > "$tmp" || { rm -f "$tmp"; exit 1; }
+      if [ ! -e "$out" ] || ! cmp -s "$out" "$tmp"; then
+        echo "  encode $src -> $out (changed)"
+        mv "$tmp" "$out"
+        invalidate_lean "$(basename "$out")"
+      else
+        echo "  encode $src -> $out (unchanged)"
+        rm -f "$tmp"
+      fi
+    }
+
+    shopt -s nullglob
+    for f in {{artifacts}}/*.spend.uplc; do
+      base="$(basename "$f" .spend.uplc)"; module="${base%%.*}"
+      encode_flat "$f" "{{scripts}}/${module}_spend.flat"
+    done
+    for f in {{artifacts}}/*.mint.uplc; do
+      base="$(basename "$f" .mint.uplc)"; module="${base%%.*}"
+      encode_flat "$f" "{{scripts}}/${module}_mint.flat"
+    done
+
+# Re-check every theorem. Runs inside the flake's shell (Lean v4.24.0 + Z3
+# 4.15.2). Drop `nix develop --command` if the toolchain is already on PATH.
+
+# Re-check every Lean proof against the current flats.
+verify: flats
+    nix develop --command lake build
+
+clean:
+    rm -rf {{artifacts}} {{scripts}}
+    nix develop --command lake clean

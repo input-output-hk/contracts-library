@@ -1,0 +1,7 @@
+/.lake/
+/lake-packages/
+/build/
+# Flat-encoded UPLC, generated from onchain/artifacts by `just flats`.
+/Scripts/
+
+.direnv

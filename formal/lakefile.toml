@@ -1,0 +1,12 @@
+name = "formal"
+defaultTargets = ["Formal"]
+
+# Lean-Blaster: SMT (Z3) backend for discharging the spec's properties.
+# Requires Z3 4.15.2 on PATH at build time. See README.md.
+[[require]]
+name = "Blaster"
+git = "https://github.com/input-output-hk/Lean-blaster"
+rev = "main"
+
+[[lean_lib]]
+name = "Formal"
