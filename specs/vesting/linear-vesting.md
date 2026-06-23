@@ -116,7 +116,7 @@ Locker recovers the remaining bundle after the recovery time.
 | **Inputs** | One or more contract inputs. Locker's own UTxOs for fees. |
 | **Outputs** | No continuing output; the remainder flows to the locker. |
 | **Redeemer** | `Cancel`. |
-| **Validity range** | Lower bound finite and `>= recovery_time`. |
+| **Validity range** | Lower bound finite and **strictly** after `recovery_time` (`now > recovery_time`). A lower bound exactly at `recovery_time` is rejected; set it to `recovery_time + 1` ms or later. |
 | **Authorization** | The `locker` credential is satisfied (key signature, or script invoked), exactly as for the beneficiary in §4.2. |
 
 
@@ -130,7 +130,7 @@ A continuation is recognized only if its inline datum is **byte-identical** to t
 
 ### 5.2 Reading "now" from the validity range
 
-Scripts cannot read a clock; they read the transaction's validity range. The contract uses the **lower bound** as `now`. Because the ledger guarantees the real slot is `>= lower bound`, and `vested` is non-decreasing, using the lower bound guarantees the beneficiary can never withdraw more than has *actually* vested at inclusion time, and the locker can never `Cancel` before `recovery_time` has truly passed. The lower bound MUST be finite for a non-trivial claim; an unbounded-below range yields `now <= start` ⇒ zero vested.
+Scripts cannot read a clock; they read the transaction's validity range. The contract uses the **lower bound** as `now`. Because the ledger guarantees the real slot is `>= lower bound`, and `vested` is non-decreasing, using the lower bound guarantees the beneficiary can never withdraw more than has *actually* vested at inclusion time, and the locker can never `Cancel` until `recovery_time` has truly passed (the `Cancel` check requires the range to be *strictly* after `recovery_time`; see §4.3). The lower bound MUST be finite for a non-trivial claim; an unbounded-below range yields `now <= start` ⇒ zero vested.
 
 ## 6. Invariants
 
@@ -140,7 +140,7 @@ These hold for every valid action (`I1`–`I6`) and describe a well-formed insta
 - **I2 — No over-release.** After a `Claim` at reference time `now`, for every asset `(p, n, T)` in the datum, the continuations carrying that datum hold at least `k × (T - vested(T, start, end, now))`, where `k` is the number of contract inputs sharing that datum. Equivalently, no instance's cumulative removed amount can exceed `vested(...)`.
 - **I3 — Schedule integrity.** A continuation reproduces the datum exactly (same beneficiary, locker, `vesting` list, `start`/`end`/`recovery`). The schedule cannot be edited mid-flight.
 - **I4 — Full vesting ⇒ free.** When `now >= end_time`, the required remainder is zero, so the bundle may be fully withdrawn with no continuing output.
-- **I5 — Cancel authorization & timing.** A `Cancel` is valid only if the `locker` credential is satisfied and `now >= recovery_time`, with `start_time < end_time < recovery_time`. So the locker can recover only *after* full vesting plus the grace period, never *unvested* funds.
+- **I5 — Cancel authorization & timing.** A `Cancel` is valid only if the `locker` credential is satisfied and `now > recovery_time` (strictly; the validity range must be *entirely after* `recovery_time`), with `start_time < end_time < recovery_time`. So the locker can recover only *after* full vesting plus the grace period, never *unvested* funds.
 - **I6 — Composability.** The validator asserts only about its own inputs and continuing outputs (matched by credential and datum), the validity range, and the presence of the required authorization. It never asserts total transaction input/output counts or unrelated value.
 - **I7 — Well-formed instance.** A correctly locked instance has an inline datum with `start_time < end_time < recovery_time` and a value covering each `(p, n, T)` with quantity `>= T`. (Off-chain responsibility; the on-chain code defends the *spending* rules regardless.)
 
@@ -151,7 +151,7 @@ These hold for every valid action (`I1`–`I6`) and describe a well-formed insta
 - **Early / excessive withdrawal.** Bounded by `vested(now)` using the validity range lower bound (§5.2) and the floored vesting function, so a beneficiary cannot pull funds ahead of schedule. (I2)
 - **Schedule tampering.** A continuation must reproduce the datum verbatim, so a claimer cannot shrink totals or move dates to accelerate vesting. (I3)
 - **Unauthorized claim or cancel.** Pluggable credential checks: only the beneficiary can `Claim`, only the locker can `Cancel`. (I1, I5)
-- **Premature recovery.** `Cancel` requires `now >= recovery_time` and the datum is checked for `end_time < recovery_time`, so a locker cannot reclaim unvested funds, even with a malformed datum. (I5)
+- **Premature recovery.** `Cancel` requires `now > recovery_time` (strictly) and the datum is checked for `end_time < recovery_time`, so a locker cannot reclaim unvested funds, even with a malformed datum. (I5)
 - **Double satisfaction.** Continuations are matched by exact datum and scaled by `k`, so one output cannot satisfy several inputs. This holds even against deliberately crafted duplicate-datum instances, and without restricting input counts. (I2, §5.1)
 - **Datum-hash substitution.** Only inline datums are accepted; a claim whose contract input or continuing output uses a datum hash is rejected.
 
@@ -161,3 +161,67 @@ These hold for every valid action (`I1`–`I6`) and describe a well-formed insta
 - **Min-ada and "extra" value.** A vesting UTxO may hold ada beyond what the schedule vests (to satisfy min-ada). The contract only constrains the assets listed in `vesting`; any surplus is not schedule-protected and may be swept by the (authorized) beneficiary. Lock instances so that schedule-bearing assets are exactly the protected ones.
 - **Datum/value consistency at lock time** (I7) is not enforced on-chain. An instance locked with a datum total exceeding the actual value simply becomes unclaimable for that asset until late in the schedule; it never lets the beneficiary take *more* than is present.
 - **Schedule timing across identical honest instances.** The `k × required` rule keeps every instance's schedule intact even if two honestly-created instances happen to share a byte-identical datum, so no third party relying on aggregate unlock timing is affected.
+
+## 8. Completeness — when the validator returns `True` (must-accept)
+
+> For formal verification. This section gives, per redeemer, a **sufficient** condition: a conjunction Φ such that `accepts(tx, datum, redeemer) ⇐ Φ`. Proving it rules out *false negatives* (honest spends that get stuck, i.e. frozen funds). It is the `⇐` direction of the characterization `accepts ⟺ Φ`; §9 is the `⇒` direction.
+>
+> Throughout, `now ≜ lower_bound(validity_range)` (§5.2), and for a datum `d` spent by a contract input, `k` is the number of contract inputs in `tx` whose inline datum is byte-identical to `d`, and `required(p, n, T) ≜ T − vested(T, start_time, end_time, now)` for each asset `(p, n, T)` in `d.vesting`.
+
+### 8.1 `Claim`, partial (`start_time ≤ now < end_time`)
+
+The validator returns `True` if **all** of the following hold:
+
+- **C0 (schedule sanity).** The datum satisfies `start_time < end_time`.
+- **C1 (auth).** The `beneficiary` credential is satisfied: a verification-key beneficiary is in `extra_signatories` OR a script beneficiary is invoked via a withdrawal in `tx` (withdraw-0).
+- **C2 (datum form).** The spent contract input carries an **inline** datum, and every continuing output relied on for C3/C4 carries a datum **equal** to it; which, since the input datum is inline, forces those outputs to be inline too. *(§3.1)*
+- **C3 (continuation identity).** For each spent datum `d`, the continuing outputs recognized for `d` reproduce it byte-for-byte.
+- **C4 (no over-release).** For each spent datum `d` and each asset `(p, n, T) ∈ d.vesting`, the continuations carrying `d` hold in aggregate `≥ k · required(p, n, T)`.
+- **C5 (time read).** `validity_range` has a **finite** lower bound.
+
+### 8.2 `Claim`, full (`now ≥ end_time`)
+
+Returns `True` if **C0, C1, C2, C5** hold. **C3/C4 are vacuous**: `required(p, n, T) = T − T = 0` for every asset, so no continuing output is required and the entire bundle may be withdrawn. "Full" is not a distinct action, only the case of §8.1 where `vested(T, …, now) = T`.
+
+### 8.3 `Cancel`
+
+Returns `True` if **all** of:
+
+- **C6 (auth).** The `locker` credential is satisfied (key signature or script invocation, exactly as C1).
+- **C7 (timing).** `now > recovery_time` (**strictly**; the validity range is entirely after `recovery_time`, so an unbounded-below range is rejected). The datum must also satisfy `start_time < end_time < recovery_time`; the schedule ordering is a precondition of the action, not assumed from I7. *(I5)*
+- **C8 (datum form).** The spent datum is a well-formed `VestingDatum`. `Cancel` reads no contract output, so it imposes no constraint on output datums. *(§3.1)*
+
+`Cancel` requires **no** continuing output. *(I6, §5.1)*
+
+> **Boundary note.** The timing check is *strict*: a lower bound exactly at `recovery_time` is rejected, so the smallest accepting `now` is `recovery_time + 1` ms. A formalization should model the `Cancel` precondition as `now > recovery_time`, not `≥`.
+
+## 9. Soundness — when the validator returns `False` (must-reject)
+
+> The `⇒` direction: `accepts(tx, datum, redeemer) ⇒ Φ`, stated as its contrapositive so each clause is a separate *must-reject* obligation. Proving these rules out *false positives* (a malicious or malformed spend slipping through). Each is the negation of a completeness clause above; they are enumerated separately because each corresponds to a distinct attack and is typically discharged as its own lemma.
+
+The validator returns `False` (the spend is rejected) whenever **any** of the following holds:
+
+- **R1 (unauthorized `Claim`).** Redeemer is `Claim` and the `beneficiary` credential is **not** satisfied. *(¬C1, I1)*
+- **R2 (over-release).** Redeemer is `Claim`, `now < end_time`, and for some asset `(p, n, T)` the continuations carrying the spent datum hold `< k · required(p, n, T)`. *(¬C4, I2)*
+- **R3 (schedule tampering).** Redeemer is `Claim`, `now < end_time`, and no continuing output reproduces the spent datum byte-for-byte (any change to `beneficiary`, `locker`, `vesting`, `start_time`, `end_time`, or `recovery_time`). *(¬C3, I3)*
+- **R4 (datum-hash substitution).** A contract input spent under `Claim`, or a continuing output relied upon for C3/C4, uses a **datum hash** instead of an inline datum. *(¬C2, §3.1)*
+- **R5 (unauthorized `Cancel`).** Redeemer is `Cancel` and the `locker` credential is **not** satisfied. *(¬C6, I5)*
+- **R6 (premature recovery / malformed schedule on `Cancel`).** Redeemer is `Cancel` and `now ≤ recovery_time` (the validity range is not entirely after `recovery_time`, including the unbounded-below case), **or** the datum does not satisfy `start_time < end_time < recovery_time`. Either way the locker cannot reach *unvested* funds. *(¬C7, I5)*
+- **R7 (malformed schedule on `Claim`).** Redeemer is `Claim` and the datum does not satisfy `start_time < end_time`. *(¬C0, §3.3)*
+
+### Boundary lemmas (support R1–R6)
+
+These are properties of `vested` and of the time read; the prover uses them to close the cases above:
+
+- **B1 (floor).** `vested(T, start, end, now) ≤ T · (now − start) / (end − start)` and is integer-valued, so a `Claim` can never release more than the real-valued schedule. *(§3.3)*
+- **B2 (monotonicity).** `vested` is non-decreasing in `now`; combined with the ledger guarantee `real_slot ≥ lower_bound`, reading `now` as the lower bound means a `Claim` never releases more than has *actually* vested at inclusion. *(§5.2)*
+- **B3 (pre-start floor).** `now ≤ start_time ⇒ vested = 0 ⇒ required = T`, so an unbounded-below (or pre-start) validity range forces the full bundle to remain locked. *(§5.2)*
+
+### Scope of the formalization
+
+What is an **axiom** (assumed, not proven on-chain) versus a **proof obligation**:
+
+- **Lock is not validated on-chain** (§4.1). The well-formedness of an instance (I7: `start_time < end_time < recovery_time` and value covering each `T`) is a **precondition** supplied by the off-chain builder, not a theorem about the validator. The validator's defenses (R1–R6) hold *regardless* of whether I7 was honored; a malformed instance can only become unspendable for an asset, never over-releasable (B1–B3).
+- **Time is modeled as the validity lower bound** `now`, not a true clock (§5.2). The ledger guarantee `real_slot ≥ now` is an axiom.
+- **Value is modeled as the per-asset `(policy_id, asset_name, quantity)` bundle** of `vesting`; surplus value (e.g. min-ada) is outside the protected set (§7, "Min-ada and extra value") and is not constrained by R2.
+- **Composability** (I6): the validator quantifies only over its own inputs and the continuations matched by credential and datum, never over total `tx` input/output counts. Soundness proofs must therefore hold for an **arbitrary** number of co-spent instances and unrelated inputs/outputs (§5.1).
