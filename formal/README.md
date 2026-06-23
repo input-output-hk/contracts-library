@@ -105,10 +105,21 @@ encoding mirroring `onchain/lib/vesting/types.ak`. Their proofs are `sorry` with
 explicit `TODO`s, and a few modeling pieces are open. Per project policy,
 nothing here is presented as proved until it actually checks.
 
-Open `TODO`s blocking real proofs (all flagged in-file):
+The **validity-range encoding** (`Soundness.validRangeData`) is done: it builds
+`[now, +∞)` from the ledger library's `Time.after` and `toData`s it, so the
+encoding matches the ledger exactly.
 
-- **validity-range encoding** — `Soundness.validRangeData` must encode the
-  interval `[now, +∞)` as the validator reads it (§5.2). Currently `sorry`.
+The compiled validator is loaded once in **`Script.lean`** (`spendValidator`)
+and shared. `blaster` proofs must run against this *concrete* program — an
+abstract `validator : Program` gives the SMT backend nothing to execute and
+hangs. **`Completeness.claim_accept_concrete`** is a fully-literal acceptance
+check (fast) that exercises the whole pipeline. The **general** `∀`-quantified
+theorems (`claim_complete_partial`, `claim_sound_partial`) are too large for Z3
+even over the concrete validator, so they stay `sorry`; the plan is to
+generalize outward from the concrete instance one parameter at a time.
+
+Open `TODO`s blocking the remaining real proofs (all flagged in-file):
+
 - **script-credential auth** — only the verification-key branch is modeled;
   the withdraw-0 (script) branch via `txInfoWdrl` is TODO.
 - **value-bundle generality** — modeled per single asset; generalize to an
