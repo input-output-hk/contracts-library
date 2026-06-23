@@ -25,8 +25,6 @@ open Formal.Common (validatorAccepts)
 open Formal.Vesting.Linear.Spec
 open Formal.Vesting.Linear.Script (spendValidator)
 
-set_option warn.sorry false
-
 /-! ## Ledger-context scaffold (shared) -/
 
 /-- The script's own payment credential (the vesting script address). -/
@@ -36,10 +34,6 @@ def scriptAddress : Address := ⟨.ScriptCredential scriptHash, none⟩
 /-- Validity range `[now, +∞)`-/
 def validRangeData (now : Int) : Data :=
   IsData.toData (CardanoLedgerApi.V1.Time.after now)
-
-/-- Ada-only value of `lovelace`. -/
-def adaOnly (lovelace : Int) : Value :=
-  [(Data.B "", Data.Map [(Data.B "", Data.I lovelace)])]
 
 /-- Ada plus a single native asset `(policy, name) ↦ qty`.
 TODO: generalize to an arbitrary bundle (spec "arbitrary value bundle"). -/
@@ -172,18 +166,57 @@ theorem claim_sound_partial
       -- ... and keeps the required remainder (I2/B1).
       outQty ≥ required a.total d.startTime d.endTime now := by
   -- The general (∀ datum/amounts/addresses) version is too large for Z3 even
-  -- over the concrete validator (hangs for minutes). Left as `sorry`; see the
-  -- fully-concrete `Completeness.claim_accept_concrete` for a fast end-to-end
-  -- check, then generalize one parameter at a time from there.
+  -- over the concrete validator (hangs for minutes). Left as `sorry`; the
+  -- concrete instance `claim_sound_partial_concrete` below proves the soundness
+  -- direction for the fixed datum with symbolic (attacker-controlled) outputs.
   sorry
 
-/-- **Cancel soundness.** A `Cancel` that the validator accepts implies the
-schedule ordering and `now > recovery_time` (strict; spec §9 R6, C7).
-TODO: state over a cancel context and prove. -/
-theorem cancel_sound (_validator : Program) (_d : VestingDatum) :
-    True := by
-  -- TODO: build a cancel context (locker authorized, no continuation) and
-  -- conclude `validSchedule d ∧ recovery_time < now`. Placeholder.
-  trivial
+/-- **Partial-claim soundness (accepts ⇒ spec), concrete instance.** Fix the
+datum/schedule/`now`; leave the continuation's claimed amount `outQty` and datum
+`outDatum` **symbolic** (what an attacker controls). The output sits at the
+script address, so "is it a continuation" reduces to the datum check. Then: if
+the compiled validator accepts, the continuation reproduces the datum (I3) and
+holds at least the required remainder (50 at `now = 1500`; I2). Acceptance forces
+a correct continuation, so nothing is over-released.
+
+NOTE: the output value uses the concrete `withAsset` shape with a symbolic
+quantity, NOT a fully symbolic `Value`. A raw symbolic `Value` (arbitrary `Data`
+list) makes `blaster` reason about an unbounded value structure and it does not
+terminate; shaping the value keeps `quantity_of` concrete (= `outQty`). This is
+the positive form of `reject_datum_tamper` + `reject_over_release`, both of which
+close fast for the same reason. -/
+theorem claim_sound_partial_concrete (outQty : Int) (outDatum : Data) :
+    validatorAccepts
+      (mkClaimCtx dConcrete
+        (withAsset 2000000 "policyA" "assetA" 100)
+        scriptAddress
+        (withAsset 2000000 "policyA" "assetA" outQty)  -- concrete shape, symbolic amount
+        outDatum
+        1500
+        ["beneficiary_key_hash"]
+        claimRedeemer)
+      spendValidator →
+      outDatum = datumData dConcrete ∧ outQty ≥ 50 := by
+  blaster
+
+/-- **Cancel soundness (accepts ⇒ spec), concrete instance.** Fix the datum
+(recovery = 3000) and sign the locker (so acceptance is possible); leave `now`
+symbolic. If the validator accepts a `Cancel`, then `now > recovery_time`
+(`3000 < now`): the locker cannot recover before the recovery time (strict;
+spec §9 R6, C7). The positive form of `reject_premature_cancel`; together they
+give `accepts ⟺ 3000 < now` for the signed locker. -/
+theorem cancel_sound (now : Int) :
+    validatorAccepts
+      (mkClaimCtx dConcrete
+        (withAsset 2000000 "policyA" "assetA" 100)
+        scriptAddress
+        (withAsset 2000000 "policyA" "assetA" 100)
+        (datumData dConcrete)
+        now
+        ["locker_key_hash"]            -- locker authorized
+        cancelRedeemer)
+      spendValidator →
+      3000 < now := by
+  blaster
 
 end Formal.Vesting.Linear.Soundness

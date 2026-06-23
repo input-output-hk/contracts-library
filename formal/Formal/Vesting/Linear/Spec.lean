@@ -127,12 +127,34 @@ def cancelRedeemer : Data := Data.Constr 1 []
 def validSchedule (d : VestingDatum) : Prop :=
   d.startTime < d.endTime ∧ d.endTime < d.recoveryTime
 
-/-- The credential `c` is satisfied: a **key** credential by a signature in
-`sigs`; a **script** credential by a withdrawal keyed by it (withdraw-0), i.e.
-its hash is among `wdrlScripts`. Mirrors `authorization.is_authorized`. -/
-def authorized (c : Cred) (sigs wdrlScripts : List ByteString) : Prop :=
-  match c with
-  | .key h    => h ∈ sigs
-  | .script h => h ∈ wdrlScripts
+/-! ## 4. Concrete datum fixtures (shared by the proof modules) -/
+
+/-- Fully general single-asset datum: symbolic identities, total, AND schedule
+bounds (key-auth locker). -/
+def dSched (bene policy name : ByteString)
+    (total start finish recovery : Int) : VestingDatum :=
+  { beneficiary := .key bene,
+    locker := .key "locker_key_hash",
+    vesting := [{ policy := policy, name := name, total := total }],
+    startTime := start, endTime := finish, recoveryTime := recovery }
+
+/-- Symbolic identities and total; fixed schedule, key-auth locker. -/
+def dGen (bene policy name : ByteString) (total : Int) : VestingDatum :=
+  dSched bene policy name total 1000 2000 3000
+
+/-- Concrete identities, symbolic total. -/
+def dWithTotal (total : Int) : VestingDatum :=
+  dGen "beneficiary_key_hash" "policyA" "assetA" total
+
+/-- The fully fixed datum (total 100), used by the concrete-instance theorems. -/
+def dConcrete : VestingDatum := dWithTotal 100
+
+/-- Like `dConcrete` but the beneficiary is a **script** credential `bhash`
+(authorized via a withdrawal, not a signature). -/
+def dScript (bhash : ByteString) : VestingDatum :=
+  { beneficiary := .script bhash,
+    locker := .key "locker_key_hash",
+    vesting := [{ policy := "policyA", name := "assetA", total := 100 }],
+    startTime := 1000, endTime := 2000, recoveryTime := 3000 }
 
 end Formal.Vesting.Linear.Spec

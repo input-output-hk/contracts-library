@@ -25,8 +25,6 @@ open Formal.Vesting.Linear.Spec
 open Formal.Vesting.Linear.Soundness (mkClaimCtx mkClaimCtxW mkClaimCtxDouble withAsset scriptAddress)
 open Formal.Vesting.Linear.Script (spendValidator)
 
-set_option warn.sorry false
-
 /-- **Partial-claim completeness (spec ⇒ accepts).** Single-asset instance.
 
 A `Claim` that meets every §8 must-accept clause — beneficiary key signed (C1),
@@ -54,29 +52,6 @@ theorem claim_complete_partial
   -- concrete instance below is the fast end-to-end check; generalize from it
   -- one parameter at a time.
   sorry
-
-/-- Datum with symbolic identities (beneficiary key hash, asset policy/name) and
-total; fixed schedule, key-auth locker. -/
-def dGen (bene policy name : ByteString) (total : Int) : VestingDatum :=
-  { beneficiary := .key bene,
-    locker := .key "locker_key_hash",
-    vesting := [{ policy := policy, name := name, total := total }],
-    startTime := 1000, endTime := 2000, recoveryTime := 3000 }
-
-/-- Concrete identities, symbolic total (rung 5). -/
-def dWithTotal (total : Int) : VestingDatum :=
-  dGen "beneficiary_key_hash" "policyA" "assetA" total
-
-/-- The fully fixed datum used by the lower rungs: total 100. -/
-def dConcrete : VestingDatum := dWithTotal 100
-
-/-- Like `dConcrete` but the beneficiary is a **script** credential `bhash`
-(authorized via a withdrawal, not a signature). -/
-def dScript (bhash : ByteString) : VestingDatum :=
-  { beneficiary := .script bhash,
-    locker := .key "locker_key_hash",
-    vesting := [{ policy := "policyA", name := "assetA", total := 100 }],
-    startTime := 1000, endTime := 2000, recoveryTime := 3000 }
 
 /-- A specific, well-formed partial `Claim`, fully concrete:
 - one asset `assetA`, total 100, schedule `[1000, 2000]`, recovery 3000;
@@ -120,36 +95,39 @@ theorem claim_accept_anytime (now inLovelace outLovelace : Int) :
       spendValidator := by
   blaster
 
-/-- **Partial-claim completeness for the single-asset, fixed-schedule instance.**
-Everything except the schedule bounds is symbolic: beneficiary key hash, asset
-policy/name, `total`, `now` (in the window `(1000, 2000)`), and the claimed
-amount via `outQty ≥ required`. Subsumes the concrete-instance rungs that led
-here (fixed amount, fixed total, fixed identities), which were removed once this
-closed.
+/-- **Maximally general single-asset partial-claim completeness.** Everything is
+symbolic: beneficiary key hash, asset policy/name, `total`, the full schedule
+`start/finish/recovery`, `now` (in the open window `(start, finish)`), and the
+claimed amount via `outQty ≥ required`. This is the consolidated completeness
+result for a single-asset, key-auth claim; it subsumes the concrete-instance
+rungs that led here (fixed amount/total/identities/schedule), all removed once
+it closed.
 
-Notes:
-- The window bound keeps `now − start > 0`, so the validator's `divideInteger`
-  (floor) and our `Spec.vested`'s `Int./` agree and `vested` stays in its single
-  middle branch. `0 ≤ total` keeps the division numerator non-negative.
-- `policy ≠ ""` keeps the asset distinct from the ada entry so the value lookup
-  is unambiguous; `bene` appears in both the datum and the signatory list, so the
-  equality the validator's auth requires holds by construction. A green check
-  confirms the validator is credential- and asset-generic (no hardcoded key or
-  policy), per the pluggable-credential design (ARCHITECTURE §3). -/
-theorem claim_accept_generic_identities
-    (bene policy name : ByteString) (total now outQty : Int)
+`policy ≠ ""` keeps the asset distinct from the ada entry so the value lookup is
+unambiguous; `bene` appears in both the datum and the signatory list, so the
+auth equality holds by construction. The window `start < now < finish` keeps
+both `now − start > 0` and the divisor
+`finish − start > 0`, so the validator's `divideInteger` (floor) and our
+`Spec.vested`'s `Int./` agree, and `vested` is in its middle branch. The new
+difficulty over the `total` rung is the now-symbolic divisor `finish − start`;
+the validator's remainder and `Spec.required` are the same expression, so this
+closes iff `blaster` unifies the two divisions rather than reasoning about their
+value. -/
+theorem claim_accept_generic_schedule
+    (bene policy name : ByteString)
+    (total start finish recovery now outQty : Int)
     (hpol : policy ≠ "")
     (htot : 0 ≤ total)
-    (hlo : 1000 < now) (hhi : now < 2000)
-    (h : outQty ≥ required total 1000 2000 now) :
+    (hlo : start < now) (hhi : now < finish)
+    (h : outQty ≥ required total start finish now) :
     validatorAccepts
-      (mkClaimCtx (dGen bene policy name total)
+      (mkClaimCtx (dSched bene policy name total start finish recovery)
         (withAsset 2000000 policy name total)
         scriptAddress
         (withAsset 2000000 policy name outQty)
-        (datumData (dGen bene policy name total))
+        (datumData (dSched bene policy name total start finish recovery))
         now
-        [bene]                       -- beneficiary signs (equality by construction)
+        [bene]
         claimRedeemer)
       spendValidator := by
   blaster
@@ -191,17 +169,38 @@ theorem claim_accept_two_inputs :
       spendValidator := by
   blaster
 
-/-- **Full-claim completeness (spec §8.2 / I4).** When `now ≥ end_time` the
-required remainder is zero, so no continuing output is needed and the whole
-bundle may be withdrawn. TODO: state over a no-continuation context and prove. -/
-theorem claim_complete_full (_d : VestingDatum) : True := by
-  -- TODO: now ≥ end_time ⇒ required = 0 ⇒ accepts with no continuation.
-  trivial
+/-- **Full-claim completeness (spec §8.2 / I4).** At or after `end_time` the
+required remainder is zero, so the continuation constraint is trivially met for
+any non-negative `outQty` (including 0, i.e. taking the whole bundle). The claim
+is accepted for any `now ≥ end_time`. -/
+theorem claim_complete_full (now outQty : Int) (hge : 2000 ≤ now) (hq : 0 ≤ outQty) :
+    validatorAccepts
+      (mkClaimCtx dConcrete
+        (withAsset 2000000 "policyA" "assetA" 100)
+        scriptAddress
+        (withAsset 2000000 "policyA" "assetA" outQty)  -- required = 0, so any ≥ 0 works
+        (datumData dConcrete)
+        now
+        ["beneficiary_key_hash"]
+        claimRedeemer)
+      spendValidator := by
+  blaster
 
-/-- **Cancel completeness (spec §8.3).** Locker authorized, `now > recovery_time`
-(strict), schedule well-formed ⇒ accepts, no continuation required.
-TODO: state over a cancel context and prove. -/
-theorem cancel_complete (_d : VestingDatum) : True := by
-  trivial
+/-- **Cancel completeness (spec §8.3).** The authorized locker, at any
+`now > recovery_time` (strict; here `3000 < now`), with a well-formed schedule,
+can cancel. No continuation is required (the lone output is ignored on the
+`Cancel` path). -/
+theorem cancel_complete (now : Int) (hgt : 3000 < now) :
+    validatorAccepts
+      (mkClaimCtx dConcrete
+        (withAsset 2000000 "policyA" "assetA" 100)
+        scriptAddress
+        (withAsset 2000000 "policyA" "assetA" 100)
+        (datumData dConcrete)
+        now
+        ["locker_key_hash"]            -- locker authorized
+        cancelRedeemer)
+      spendValidator := by
+  blaster
 
 end Formal.Vesting.Linear.Completeness

@@ -27,9 +27,7 @@ open Formal.Common (validatorRejects)
 open Formal.Vesting.Linear.Spec
 open Formal.Vesting.Linear.Soundness (mkClaimCtx mkClaimCtxW mkClaimCtxHashInput mkClaimCtxDouble withAsset scriptAddress)
 open Formal.Vesting.Linear.Script (spendValidator)
-open Formal.Vesting.Linear.Completeness (dConcrete dScript)
-
-set_option warn.sorry false
+-- `dConcrete`/`dScript` come from `Spec` (opened above).
 
 /-- **R1 — unauthorized claim is rejected.** No signatory satisfies the
 beneficiary key ⇒ the validator rejects the `Claim`. General target; the
@@ -95,7 +93,10 @@ theorem reject_over_release
     d.vesting = [a] ∧ validSchedule d ∧ now < d.endTime ∧
     outQty < required a.total d.startTime d.endTime now →   -- too little kept
       validatorRejects ctx spendValidator := by
-  -- General version; see the concrete instance below.
+  -- Unproven (`sorry`): the ∀-quantified statement makes blaster execute the
+  -- CEK machine over an unconstrained datum/schedule/amounts, which does not
+  -- terminate. The concrete `reject_over_release_concrete` proves the same for
+  -- the standard instance.
   sorry
 
 /-- **R2, concrete: under-funded continuation ⇒ reject.** The honest claim, but
@@ -129,7 +130,9 @@ theorem reject_datum_tamper
     d.vesting = [a] ∧ validSchedule d ∧ now < d.endTime ∧
     outDatum ≠ datumData d →           -- tampered continuation datum
       validatorRejects ctx spendValidator := by
-  -- General version; see the concrete instance below.
+  -- Unproven (`sorry`): same reason as the other ∀ targets — symbolic execution
+  -- over an unconstrained datum/schedule does not terminate. The concrete
+  -- `reject_datum_tamper_concrete` proves the same for the standard instance.
   sorry
 
 /-- **R3, concrete: tampered continuation datum ⇒ reject.** The honest claim of
@@ -206,6 +209,23 @@ theorem reject_premature_cancel (now : Int) (hle : now ≤ 3000) :
         (datumData dConcrete)
         now
         ["locker_key_hash"]            -- locker authorized
+        cancelRedeemer)
+      spendValidator := by
+  blaster
+
+/-- **Unauthorized cancel is rejected (spec §9 I5).** A `Cancel` past
+`recovery_time` (so timing is fine, `3000 < now`) but with the locker credential
+**unsatisfied** (no signatory) is rejected. The dual of `cancel_complete`:
+together they isolate locker auth as the deciding factor on the cancel path. -/
+theorem reject_unauthorized_cancel (now : Int) (hgt : 3000 < now) :
+    validatorRejects
+      (mkClaimCtx dConcrete
+        (withAsset 2000000 "policyA" "assetA" 100)
+        scriptAddress
+        (withAsset 2000000 "policyA" "assetA" 100)
+        (datumData dConcrete)
+        now
+        []                             -- locker NOT authorized
         cancelRedeemer)
       spendValidator := by
   blaster

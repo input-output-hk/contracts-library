@@ -81,54 +81,38 @@ lake build       # type-check all modules and run every `blaster` proof
 A failing `blaster` goal can be debugged with its options, e.g.
 `blaster (verbose: 1)` or `blaster (gen-cex: 1)` to print a counterexample.
 
-## Status
+## How each contract is verified
 
-**Proved (pure-arithmetic core, `Spec.lean`).** The schedule function and its
-§3.3 / §9 boundary lemmas. These do not touch UPLC:
+For each contract the compiled validator is loaded once (via `#import_uplc`) and
+every theorem runs `blaster` against that concrete program; the
+datum/redeemer/value encodings mirror the on-chain types. Proofs are organized
+in three directions plus the pure spec arithmetic:
 
-| Theorem | Spec |
-|---|---|
-| `vested_preStart` | §9 B3 — nothing vests before `start` |
-| `vested_full` | §8.2, I4 — everything vests at/after `end` |
-| `vested_le_total` | §9 B1 — never releases more than the total |
-| `vested_nonneg` | bounds `vested` below by 0 |
-| `required_nonneg` | dual of B1 — remainder constraint satisfiable |
-| `vested_mono` | §9 B2 — `vested` non-decreasing in `now` |
+- **Spec** (`Spec.lean`): the contract's arithmetic and relations, no UPLC.
+- **Completeness** (`spec ⇒ accepts`, spec §8): honest actions are accepted.
+- **Soundness** (`accepts ⇒ spec`, spec §9): acceptance forces a correct outcome.
+- **Robustness** (rejection, spec §9): specific malformed or malicious actions
+  are rejected.
 
-(All `by blaster`; unverified here because the toolchain/Z3 build runs on your
-machine, not in this scaffold.)
+Each contract documents its own coverage as a traceability table mapping
+theorems to the spec clauses (invariants, the §8 C-clauses, the §9 R-clauses)
+they discharge.
 
-**Scaffolded, NOT yet proved (`Completeness`/`Soundness`/`Robustness`).** The
-transaction-level theorems are *stated* against the compiled validator
-(`Completeness.lean` loads it with `#import_uplc`), with the datum/redeemer
-encoding mirroring `onchain/lib/vesting/types.ak`. Their proofs are `sorry` with
-explicit `TODO`s, and a few modeling pieces are open. Per project policy,
-nothing here is presented as proved until it actually checks.
+## Notes on `blaster` tractability
 
-The **validity-range encoding** (`Soundness.validRangeData`) is done: it builds
-`[now, +∞)` from the ledger library's `Time.after` and `toData`s it, so the
-encoding matches the ledger exactly.
+These apply to any contract:
 
-The compiled validator is loaded once in **`Script.lean`** (`spendValidator`)
-and shared. `blaster` proofs must run against this *concrete* program — an
-abstract `validator : Program` gives the SMT backend nothing to execute and
-hangs. **`Completeness.claim_accept_concrete`** is a fully-literal acceptance
-check (fast) that exercises the whole pipeline. The **general** `∀`-quantified
-theorems (`claim_complete_partial`, `claim_sound_partial`) are too large for Z3
-even over the concrete validator, so they stay `sorry`; the plan is to
-generalize outward from the concrete instance one parameter at a time.
+- Prove against the **concrete** loaded validator. An abstract `validator :
+  Program` parameter gives the SMT backend nothing to execute and hangs.
+- Keep symbolic **structure** bounded. A fully symbolic `Value` (an arbitrary
+  `Data` list) makes `quantity_of` run over an unbounded structure and does not
+  terminate; shape values with builders and leave only Int/Datum leaves symbolic.
+- Fully `∀`-quantified statements over an unconstrained `ScriptContext` generally
+  do not terminate. Prove concrete instances; if a general statement is worth
+  recording, keep it as a documented `sorry` target (we leave
+  `warn.sorry` enabled so those surface as build warnings).
 
-Open `TODO`s blocking the remaining real proofs (all flagged in-file):
+## Contracts
 
-- **script-credential auth** — only the verification-key branch is modeled;
-  the withdraw-0 (script) branch via `txInfoWdrl` is TODO.
-- **value-bundle generality** — modeled per single asset; generalize to an
-  arbitrary bundle.
-- **`CardanoLedgerApi.V3` field names** — taken from the reference project;
-  verify against the actual library on first build.
-- **no-double-satisfaction** (`Robustness`, §5.1/I2) — needs a ≥2-input,
-  shared-datum context; the headline property and the hardest to model.
-
-The continuation datum is intentionally left **arbitrary** in Soundness and
-Robustness (the reference fixes it — `-- THIS IS CHEATING`), so the proofs must
-*derive* datum-reproduction rather than assume it.
+- **vesting/linear** — see [`Formal/Vesting/Linear/README.md`](Formal/Vesting/Linear/README.md)
+  for its coverage tables and open targets.
