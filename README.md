@@ -5,7 +5,7 @@
 
 **_A library of standardized, reusable smart contracts for Cardano._**
 
-ContractsLibrary provides battle-tested, ready-to-use contract implementations, shipped as **on-chain + off-chain pairs** with a decoupled formal **spec**. The goal is to reduce the time and risk of building on Cardano, especially for developers new to the ecosystem.
+ContractsLibrary provides battle-tested, ready-to-use contract implementations, shipped as **on-chain + off-chain pairs** with a decoupled formal **spec** and machine-checked **formal proofs**. The goal is to reduce the time and risk of building on Cardano, especially for developers new to the ecosystem.
 
 ## Why
 
@@ -27,13 +27,14 @@ You can choose how you want to use this library depending on your needs
 
 ## Anatomy of a contract
 
-Each contract ships as three parts:
+Each contract ships as four parts:
 
 | Part | Location | Role |
 |---|---|---|
 | **On-chain** | `onchain/` | Aiken validation logic the ledger enforces. The only part that carries security. |
 | **Off-chain** | `offchain/` | Transaction builders developers call. The primary developer-facing API. |
 | **Spec** | `specs/` | Implementation-independent description of behavior. The source of truth. |
+| **Formal proofs** | `formal/` | Machine-checked Lean 4 proofs *about the spec* (completeness, soundness, robustness). |
 
 
 Validators are written as well-behaved predicates that avoid global assumptions about transaction shape, so contracts compose freely in shared transactions. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the composability rules.
@@ -46,6 +47,7 @@ offchain/
   meshjs/     MeshJS implementations
   tx3/        Tx3 implementations
 specs/        decoupled per-contract specifications
+formal/       Lean 4 proofs of the specs (Lean-Blaster / Z3)
 docs/         PRD, ARCHITECTURE, contributor docs
 ```
 
@@ -77,6 +79,8 @@ The off-chain layer provides TypeScript builders (MeshJS) and Tx3 implementation
 - [Product Requirements (PRD)](docs/PRD.md) — what we ship, goals, catalog.
 - [Architecture](docs/ARCHITECTURE.md) — composability conventions every
   contract follows.
+- [Formal proofs](formal/README.md) — machine-checked Lean 4 proofs of the
+  specs, plus the build pipeline and `blaster` tractability notes.
 
 ## License
 
