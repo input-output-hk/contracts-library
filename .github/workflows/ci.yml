@@ -15,6 +15,15 @@ jobs:
       - uses: aiken-lang/setup-aiken@v1
         with:
           version: v1.1.21
+      # Cache fetched Aiken dependencies (the analog of node_modules), keyed on
+      # the resolved lockfile so a dependency bump invalidates it.
+      - name: Cache Aiken packages
+        uses: actions/cache@v4
+        with:
+          path: onchain/build/packages
+          key: ${{ runner.os }}-aiken-${{ hashFiles('onchain/aiken.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-aiken-
       - name: aiken check
         working-directory: onchain
         run: aiken check
@@ -30,6 +39,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: npm
+          cache-dependency-path: offchain/meshjs/lib/package-lock.json
       - name: Install
         working-directory: offchain/meshjs/lib
         run: npm ci
@@ -48,6 +59,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: npm
+          cache-dependency-path: offchain/meshjs/**/package-lock.json
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -62,7 +75,7 @@ jobs:
 
       - name: Install e2e deps
         working-directory: offchain/meshjs/e2e
-        run: npm install
+        run: npm ci
 
       # Starts an ephemeral devnet, runs the suite against it, always tears down.
       - name: Run e2e tests against an ephemeral devnet
