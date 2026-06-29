@@ -1,13 +1,13 @@
-name = "rober-m/onchain"
+name = "input-output-hk/contracts-library"
 version = "0.0.0"
 compiler = "v1.1.21"
 plutus = "v3"
 license = "Apache-2.0"
-description = "Aiken contracts for project 'rober-m/onchain'"
+description = "Standardized, reusable smart contracts for Cardano — on-chain validation layer."
 
 [repository]
-user = "rober-m"
-project = "onchain"
+user = "input-output-hk"
+project = "contracts-library"
 platform = "github"
 
 [[dependencies]]

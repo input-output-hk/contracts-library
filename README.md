@@ -21,9 +21,13 @@ Every contract supports a layered consumption model:
 1. **Compose:** Import lower-level validation functions and off-chain helpers to build something new.
 1. **Fork:** Copy the module(s) and modify for your needs.
 
-You can choose how you want to use this library depending on your needs
+You can choose how you want to use this library depending on your needs. While the packages are pre-release (not yet published to a registry), consume the library by cloning it:
 
-> TODO: Add proper instructions when ready
+1. **Use** — drive a finished contract through its off-chain builders. Each contract ships transaction builders under `offchain/`; for linear vesting see [`offchain/meshjs/lib`](offchain/meshjs/lib) (`buildLockTx` / `buildClaimTx` / `buildCancelTx`) and its [README](offchain/meshjs/lib/README.md).
+2. **Compose** — import the parameterized on-chain predicates from [`onchain/lib/<contract>/`](onchain/) and the off-chain helpers to build something new, instead of the ready-made validator.
+3. **Fork** — copy the contract's `onchain/`, `offchain/`, and `specs/` modules and modify them for your needs.
+
+Start from the contract's **spec** to understand the behavior, then pick a layer above. Compiled blueprints live in [`onchain/plutus.json`](onchain/plutus.json).
 
 ## Anatomy of a contract
 
