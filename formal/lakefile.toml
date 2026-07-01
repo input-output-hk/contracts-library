@@ -7,17 +7,19 @@ moreGlobalServerArgs = ["--threads=4"]
 
 # Lean-Blaster: SMT (Z3) backend for discharging properties via the `blaster`
 # tactic/command. Requires Z3 4.15.2 on PATH at build time. See README.md.
+# Will move back to main when merged
 [[require]]
 name = "Blaster"
 git = "https://github.com/input-output-hk/Lean-blaster"
-rev = "main"
+rev = "beta-lambda-cache-optimization"
 
 # UPLC AST + CEK machine — lets proofs load and execute the *compiled*
 # validator (`#import_uplc`, `cekExecuteProgram`).
+# Will move back to main when merged
 [[require]]
 name = "PlutusCore"
 git = "https://github.com/input-output-hk/PlutusCoreBlaster"
-rev = "main"
+rev = "feat/blueprint-parsing"
 
 # Cardano ledger types (V3 ScriptContext / TxInfo / TxOut / Value / Data) used
 # to build the script context the validator runs against.
