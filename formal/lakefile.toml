@@ -10,7 +10,7 @@ moreGlobalServerArgs = ["--threads=4"]
 [[require]]
 name = "Blaster"
 git = "https://github.com/input-output-hk/Lean-blaster"
-rev = "main"
+rev = "beta-lambda-cache-optimization"
 
 # UPLC AST + CEK machine — lets proofs load and execute the *compiled*
 # validator (`#import_uplc`, `cekExecuteProgram`).
