@@ -16,7 +16,7 @@ formal/
 ├── lakefile.toml            # depends on Blaster + PlutusCore + CardanoLedgerApi
 ├── lean-toolchain           # pinned Lean version
 ├── flake.nix                # elan + Z3 4.15.2 + gawk
-├── justfile                 # build -> flats -> verify pipeline
+├── justfile                 # build -> verify pipeline
 ├── scripts/
 │   └── annotate-blaster-logs.awk
 ├── Formal.lean              # root; imports every contract aggregator
@@ -26,7 +26,7 @@ formal/
         ├── Linear.lean      # aggregator for the vesting/linear contract
         └── Linear/
             ├── Spec.lean          # pure model: `vested`, datum encoding (no UPLC)
-            ├── Completeness.lean  # spec ⇒ accepts (§8); `#import_uplc`s the flat
+            ├── Completeness.lean  # spec ⇒ accepts (§8); `#import_blueprints` the validator
             ├── Soundness.lean     # accepts ⇒ spec (§9) + shared context scaffold
             └── Robustness.lean    # rejection theorems incl. no-double-satisfaction
 ```
@@ -60,13 +60,13 @@ Without Nix, install manually:
 
 ## Build
 
-The `justfile` in this directory drives the whole pipeline (compile Aiken →
-dump UPLC → encode to flat → check proofs):
+The `justfile` in this directory drives the whole pipeline (compile Aiken to a
+CIP-57 blueprint → check proofs):
 
 ```bash
 cd formal
 just deps        # once: fetch Blaster + PlutusCore + CardanoLedgerApi (lake update)
-just verify      # build -> flats -> lake build (annotated)
+just verify      # build -> lake build (annotated)
 ```
 
 Or directly, inside the dev shell:
@@ -83,7 +83,8 @@ A failing `blaster` goal can be debugged with its options, e.g.
 
 ## How each contract is verified
 
-For each contract the compiled validator is loaded once (via `#import_uplc`) and
+For each contract the compiled validator is loaded once (via
+`#import_blueprints`, straight from `../onchain/plutus.json`) and
 every theorem runs `blaster` against that concrete program; the
 datum/redeemer/value encodings mirror the on-chain types. Proofs are organized
 in three directions plus the pure spec arithmetic:

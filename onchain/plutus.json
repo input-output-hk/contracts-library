@@ -1,7 +1,7 @@
 {
   "preamble": {
-    "title": "rober-m/onchain",
-    "description": "Aiken contracts for project 'rober-m/onchain'",
+    "title": "input-output-hk/contracts-library",
+    "description": "Standardized, reusable smart contracts for Cardano — on-chain validation layer.",
     "version": "0.0.0",
     "plutusVersion": "v3",
     "compiler": {

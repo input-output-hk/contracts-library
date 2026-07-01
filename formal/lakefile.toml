@@ -14,7 +14,7 @@ git = "https://github.com/input-output-hk/Lean-blaster"
 rev = "beta-lambda-cache-optimization"
 
 # UPLC AST + CEK machine — lets proofs load and execute the *compiled*
-# validator (`#import_uplc`, `cekExecuteProgram`).
+# validator (`#import_blueprints`, `cekExecuteProgram`).
 # Will move back to main when merged
 [[require]]
 name = "PlutusCore"
