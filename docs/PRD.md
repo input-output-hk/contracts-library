@@ -1,7 +1,7 @@
 # ContractsLibrary: Product Requirements Document
 
 > Status: Draft · Owner: Robertino Martinez
-> Companion documents: [`ARCHITECTURE.md`](./ARCHITECTURE.md) (composability architecture), Roadmap (milestones & dates).
+> Companion documents: [`ARCHITECTURE.md`](./ARCHITECTURE.md) (composability architecture), [`ROADMAP.md`](./ROADMAP.md) (milestones & dates).
 
 ## 1. Summary
 
@@ -141,7 +141,7 @@ An **exploration** produces: a lightweight design sketch, a complexity/risk read
 
 ### 7.4 Catalog
 
-> Status reflects current understanding and changes as exploration/triage proceeds. Detailed scheduling lives in the Roadmap document. **Details** links to the in-depth explanation for each candidate (a GitHub issue, PR, or separate document) covering its exploration, design, and triage decision.
+> Status reflects current understanding and changes as exploration/triage proceeds. Detailed scheduling lives in the [Roadmap](./ROADMAP.md) document. **Details** links to the in-depth explanation for each candidate (a GitHub issue, PR, or separate document) covering its exploration, design, and triage decision.
 
 
 | Contract | Category | Description | Status | Details |
@@ -243,5 +243,5 @@ Directional (hard targets/dates live in the Roadmap):
 ## 15. Relationship to Other Documents & Libraries
 
 - **`ARCHITECTURE.md`**: defines the composability architecture and authorization system that all contracts in this catalog must follow. This PRD defers all composability/authorization specifics to it.
-- **Roadmap (separate doc)**: milestones, dates, and treasury deliverables.
+- [**`ROADMAP.md`**](./ROADMAP.md): milestones, dates, and treasury deliverables.
 - **vodka / design-patterns**: lower-level libraries we build on, not replace.
