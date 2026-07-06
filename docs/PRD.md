@@ -104,7 +104,7 @@ A layered model, with the **turnkey path as the headline newcomer experience**:
 
 ## 7. Contract Catalog
 
-This is the **only section that enumerates specific contracts.** The rest of the PRD is generic to any contract set. Contracts enter and exit this catalog freely; the rest of the document does not change when they do.
+This is the **only section that concerns specific contracts.** The enumeration itself lives in the source-of-truth tracker issue (§7.4); the rest of the PRD is generic to any contract set. Contracts enter and exit the catalog freely; this document does not change when they do.
 
 ### 7.1 Selection criteria
 
@@ -120,9 +120,9 @@ A candidate earns evaluation when it has (or seems to have):
 We do **not** treat the catalog as a fixed commitment. Instead, we:
 
 1. **Explore** many candidates with lightweight exploratory work.
-2. **Triage** each into **implement now / later / never**, recording the decision (and reason for "never") in the table.
+2. **Triage** each into **implement now / later / never**, recording the decision (and reason for "never") on the tracker (§7.4).
 
-An **exploration** produces: a lightweight design sketch, a complexity/risk read, a composability check against `ARCHITECTURE.md`, and a recommendation. Declined candidates **stay in the table** with a one-line reason so the decision is documented.
+An **exploration** produces: a lightweight design sketch, a complexity/risk read, a composability check against `ARCHITECTURE.md`, and a recommendation. Declined candidates **stay listed on the tracker** with a one-line reason so the decision is documented.
 
 ### 7.3 Status taxonomy
 
@@ -141,28 +141,7 @@ An **exploration** produces: a lightweight design sketch, a complexity/risk read
 
 ### 7.4 Catalog
 
-> Status reflects current understanding and changes as exploration/triage proceeds. Detailed scheduling lives in the [Roadmap](./ROADMAP.md) document. **Details** links to the in-depth explanation for each candidate (a GitHub issue, PR, or separate document) covering its exploration, design, and triage decision.
-
-
-| Contract | Category | Description | Status | Details |
-|---|---|---|---|---|
-| Native NFT collection | Native Tokens | Mint a Native NFT collection | Candidate | TBD |
-| Soulbound Tokens | Native Tokens | Tokens forever bound to an address | Candidate | TBD |
-| CIP-68 metadata | Token standard | Rich, updatable on-chain token metadata. | Candidate | TBD |
-| Programmable Tokens (CIP-113) substandards | Token standard | Permissioned / transfer-restricted tokens. ERC-20, ERC-721, ERC-1155, ERC-4626, ERC-6909 | Candidate | TBD |
-| CIP-113 to Native Token Vault | Token standard | Switch between CIP-113 and Native Tokens representations to use CIP-113 tokens with protocols that don't support them | Candidate | TBD |
-| Vesting | DeFi | Time-locked token release (linear / cliff). | In progress | [Linear vesting spec](../specs/vesting/linear-vesting.md) |
-| Escrow / Atomic Swap | DeFi | Trustless exchange of assets between parties. | Candidate | TBD |
-| AMM DEX / Liquidity Pool | DeFi | Automated market maker with liquidity pools. | Candidate | TBD |
-| Lending | DeFi | Collateralized and DeFi-kernel-based lending/borrowing. | Candidate | TBD |
-| Auction | DeFi | On-chain auctions (English/Dutch). | Candidate | TBD |
-| Order-book DEX | DeFi | Order-book-based exchange. | Candidate | TBD |
-| Crowdfund | DeFi | crowdfunding mechanism | Candidate | TBD |
-| Prediction Market | DeFi | Market to bet on the outcome of events | Candidate | TBD |
-| Multisig / Smart wallet | Building block | Script-based authorization schemes. | Candidate | TBD |
-| Oracle | Building block | On-chain data feed consumption pattern. | Candidate | TBD |
-| DAO | Governance | Used to govern projects with token-based voting | Candidate | TBD |
-
+The catalog and each candidate's exploration status are tracked in a single **source-of-truth GitHub issue**, [Tracking: Contract Candidate Catalog & Exploration Status](https://github.com/input-output-hk/contracts-library/issues/16). It is intentionally kept out of this document so the two cannot drift: each candidate links its own exploration issue, and status is updated on the tracker as exploration/triage proceeds. Detailed scheduling lives in the [Roadmap](./ROADMAP.md) document.
 
 *The committed set of "at least 5 ready-to-audit" contracts emerges from the explore/triage process; it is not fixed in advance.*
 
