@@ -1,4 +1,4 @@
-# Escrow Protocol — Exploration
+# Exploration: Escrow
 
 > Status: **Exploring** (pre-triage). Working design log, not a spec. Triage deferred to team discussion.
 
@@ -68,6 +68,6 @@ Mitigation: Require an **optional timeout**; if elapsed without arbiter action, 
 - **Other chains**: OpenZeppelin's `Escrow` / `ConditionalEscrow` / `RefundEscrow` utilities are the closest direct analogues; HTLC covers the hash/time-conditioned subset.
 - **Internal**: shares the lock-then-release skeleton with Linear Vesting and Atomic Swap (#5), but the release condition is external rather than a counterparty payment. Likely depends on the Multisig and Oracle contracts for its richer condition sources.
 
-## 6. Recommendation: Recommendation: Deferred
+## 6. Recommendation: Deferred
 
 Verdict: Deferred in favor of Order Book (#18).
