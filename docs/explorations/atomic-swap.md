@@ -59,7 +59,7 @@ pub type OrderRedeemer {
 ### 4.3 Risk summary
 
 | Risk | Severity | Mitigation | Status |
-|------|----------|------------|--------|
+| ---- | -------- | ---------- | ------ |
 | Double satisfaction | **High** | Tagged outputs (§4.1) | Designed |
 | Unauthorized Cancel | Low | Maker signature required | Mitigated |
 | Min-ADA | Low | Ledger-enforced; off-chain builder responsibility | Documented |
@@ -71,6 +71,7 @@ The validator asserts only properties of its own input and the designated tagged
 ## 6. Dependency map
 
 **None beyond the standard library.** No oracle, external batcher, or cross-contract reads. The validator depends only on Aiken's standard library modules for value and transaction inspection.
+> Note: the `is_authorized` function in `lib/authorization.ak` can be used to check that the maker signature is present on `Cancel`.
 
 ## 7. Open questions
 
@@ -78,7 +79,7 @@ The validator asserts only properties of its own input and the designated tagged
 | -- | -------- | --------------- | ------ |
 | Q-AUTH-1 | Open offer (any taker) vs. named taker | Open offer for v1 | Open |
 | Q-CANCEL-1 | Maker-only Cancel sufficient, or add an optional deadline after which the maker can always reclaim? | Maker-only for v1 | Open |
-| Q-ASSET-1 | Should tagged output allow more than two asset classes? | Strict shape is simple but limits composability | Open |
+| Q-ASSET-1 | One asset per side for v1, or allow bundles (multiple assets per leg)? | Single asset for v1 | Open |
 | Q-PARTIAL-1 | Partial fills? | Out of scope; push to order-book DEX | Confirmed |
 | Q-DS-1 | Double-satisfaction mitigation confirmed? | Redeemer designates a unique tagged output index per order | Designed |
 
