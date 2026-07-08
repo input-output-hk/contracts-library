@@ -26,6 +26,7 @@ No protocol-managed liquidity, no price oracle. The contract is purely a validat
 
 ```aiken
 use aiken/crypto.{VerificationKeyHash}
+use cardano/assets.{AssetName, PolicyId}
 
 pub type OrderDatum {
   maker: VerificationKeyHash,
