@@ -54,7 +54,7 @@ pub type OrderRedeemer {
 ### 4.2 Other considerations
 
 - **`Cancel` requires maker signature.** Only the swap maker can cancel the swap.
-- **Exact value shape.** The swap UTxO must have exactly two asset classes (lovelace and provided asset).
+- **Exact value shape.** The swap UTxO must have exactly two asset classes (lovelace and the offered asset).
 - **No time-lock.** The swap can be resolved or closed at any time.
 
 ### 4.3 Risk summary
@@ -72,7 +72,7 @@ The validator asserts only properties of its own input and the designated tagged
 ## 6. Dependency map
 
 **None beyond the standard library.** No oracle, external batcher, or cross-contract reads. The validator depends only on Aiken's standard library modules for value and transaction inspection.
-> Note: the `is_authorized` function in `lib/authorization.ak` can be used to check that the maker signature is present on `Cancel`.
+ > Note: the `is_authorized` function in `onchain/lib/authorization.ak` can be used to check that the maker signature is present on `Cancel`.
 
 ## 7. Open questions
 
