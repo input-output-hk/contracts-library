@@ -25,7 +25,7 @@ Polymarket, for instance, is a **conditional-token settlement layer** (Gnosis CT
 
 ### 3.1 How it works
 
-To take a position, lock 1 unit of collateral and mint a *complete set* of outcome tokens (1 YES + 1 NO). A complete set can always be burned back for 1 collateral. After resolution, the winning token redeems for 1 collateral and the losing token for 0. You express a view by holding/selling the side you want; your *odds* are the price at which you traded the token, **locked in at trade time**.
+To take a position, lock 1 unit of collateral and mint a *complete set* of outcome tokens (1 YES + 1 NO). A complete set can always be burned back for 1 collateral. A **time-gated minting policy** enforces complete-set mint/burn during the betting window; after the cutoff, no new tokens can be minted. An external **resolution authority** declares the winning outcome via a single **beacon-authenticated outcome UTxO** (written by a pluggable `outcome_credential`, read as a reference input). After resolution, the winning token redeems for 1 collateral and the losing token for 0. You express a view by holding/selling the side you want; your *odds* are the price at which you traded the token, **locked in at trade time**.
 
 ### 3.2 Why this is the recommended default
 
@@ -43,7 +43,6 @@ To take a position, lock 1 unit of collateral and mint a *complete set* of outco
 | **Parimutuel, trustless `m`** (sibling) | No | No | Outcome only | + linked-list fold, batcher | As above, minimal trust, high complexity |
 | **Native AMM/CLOB** | Yes | Yes (LPs/makers) | Outcome only | - | Rejected: duplicates DEX candidates |
 
-
 **Rejected: native continuously-priced market.** Building an AMM or order book *into* the prediction-market contract just reimplements the **AMM DEX** / **Order-book DEX** candidates. We prefer to **compose** those with this settlement layer rather than duplicate them. Not pursued as a standalone mechanism.
 
 **Current recommendation:** default to this conditional-token settlement layer, and keep the parimutuel design as the no-liquidity alternative for illiquid markets. The parimutuel's one durable advantage is needing no liquidity.
@@ -59,7 +58,49 @@ To take a position, lock 1 unit of collateral and mint a *complete set* of outco
 
 Not self-contained: a market with no liquidity venue and no counterparties is not tradable. Leans on several other catalog items. This is precisely the gap the parimutuel sibling fills.
 
-## 4. Resolution: pluggable authority via `Credential`
+## 4. Design sketch (Aiken)
+
+```aiken
+pub type AssetId { policy_id: PolicyId, asset_name: AssetName }
+pub type MarketId = ByteArray
+
+pub type Winner { Yes | No | Void }
+
+pub type MarketParams {
+  market_id: MarketId,
+  collateral: AssetId,
+  cutoff: Int,
+  outcome_credential: Credential,
+  beacon_policy: PolicyId,
+  resolution_timeout: Int,
+}
+
+pub type OutcomeDatum { market_id: MarketId, winner: Winner }
+
+pub type OutcomeRedeemer {
+  Resolve { winner: Winner }
+  TimeoutVoid
+}
+
+pub type RedemptionRedeemer {
+  RedeemWinner { output_index: Int }
+  BurnCompleteSet { output_index: Int }
+  RefundVoid { output_index: Int }
+}
+```
+
+**Complete-set minting policy:** mints `N` YES + `N` NO only while the validity range ends `<= cutoff`, in exchange for `N` collateral sent to the redemption script. Allows burning complete sets for refund, and burning winning/Void tokens when the redemption validator pays out.
+
+**Outcome validator:** `Resolve` requires `outcome_credential` authorization; `TimeoutVoid` is allowed after `resolution_timeout` and sets `winner = Void`. The beacon guarantees one live outcome UTxO per market.
+
+**Redemption validator:**
+
+- `RedeemWinner`: reference input shows the winner; burns winning tokens for 1 collateral each.
+- `BurnCompleteSet`: burns equal YES + NO for 1 collateral each.
+- `RefundVoid`: reference input shows `Void`; burns either token for 1 collateral each.
+- `output_index` prevents double satisfaction by tagging the exact payout output for each input.
+
+## 5. Resolution: pluggable authority via `Credential`
 
 No contract hardcodes *how* resolution is decided. The authority is a Cardano `Credential` supplied by the consumer (pubkey -> satisfied by a signature; script -> satisfied by a forwarded withdraw-zero validator, letting a committee/DAO/optimistic-oracle stand in). Same mechanism as Escrow (#6) and ARCHITECTURE.md §3.
 
@@ -67,7 +108,17 @@ The resolution result lives in a **beacon-authenticated UTxO** read by settlemen
 
 For conditional-token settlement this needs only a **single** `outcome_credential` attesting the winner in a single beacon-authenticated outcome UTxO. That is all settlement needs: there is no separate multiplier to attest (contrast the parimutuel sibling, which requires a second solvency-critical credential).
 
-## 5. Cross-cutting security must-fixes
+## 6. Cross-cutting security must-fixes
+
+The hazards are the familiar ones — double satisfaction on the payout path (same class as Atomic Swap #5), position authenticity (the mint must be time-gated so no one fabricates a winning position post-resolution), a mandatory Void/refund path, and resolution liveness (timeout fallback). No on-chain aggregation or solvency attestation is needed.
+
+| Risk | Severity | Mitigation | Status |
+|---|---|---|---|
+| Double satisfaction | **High** | Tagged-output design on redemption path | Designed (§5) |
+| Position fabrication | **High** | Time-gated minting policy (§3.1) | Designed |
+| Stuck funds (missing resolution) | Medium | Timeout fallback to Void/refund | Open (Q-ORACLE-1) |
+| Void path absent | **High** | Authority attests `Void`; refund via burning complete set | Designed |
+| Composability breakage | Medium | Reference-input resolution; no global transaction-shape assertions | Designed |
 
 - **Position/ticket authenticity.** Positions must be authenticated tokens minted under a policy that is **time-gated to the betting window**, so no one can fabricate a winning position after resolution. Here this is the complete-set mint. Without it, an attacker mints a "winning" position post-outcome and drains funds.
 - **Double satisfaction** on the payout path (same class as Atomic Swap #5): one output must not be credited to two redemptions.
@@ -75,12 +126,12 @@ For conditional-token settlement this needs only a **single** `outcome_credentia
 - **Resolution liveness.** If resolution never arrives, funds must not be stuck; likely a timeout fallback to Void/refund. Ties into resolver incentives (Q-ORACLE-1).
 - **Composability (ARCHITECTURE.md).** Settlement must assert only properties of its **own** UTxOs, never the total value/inputs/outputs of the transaction. The reference-input resolution design (§4) keeps reads composable.
 
-## 6. Outcome scope
+## 7. Outcome scope
 
 - **Binary (YES/NO):** v1.
 - **Categorical (N discrete outcomes):** a cheap generalization of the settlement layer (binary = N=2). `side`/`winner` becomes an index `0..N-1`; a complete set mints one token per outcome; the winning token redeems for 1 collateral. To investigate. Note the flagship platforms instead express multi-outcome as **linked binary markets** (Polymarket's NegRisk), so "binary + a linking convention" may be the more familiar shape.
 
-## 7. Open questions
+## 8. Open questions
 
 | ID | Question | Current leaning | Status |
 |----|----------|-----------------|--------|
@@ -90,8 +141,7 @@ For conditional-token settlement this needs only a **single** `outcome_credentia
 | Q-LIFECYCLE-1 | Cancellation: creator cancels a zero-position market? Refund-all before cutoff? | allow both | open |
 | Q-FEES-1 | Creator/protocol fees, and resolver incentive; where the cut goes. | tbd | open |
 
-
-## 8. Dependency map
+## 9. Dependency map
 
 - **Oracle** (candidate): resolution feed. Abstracted via `Credential` (§4).
 - **Multisig / Smart wallet** (candidate): committee/DAO resolver = a script credential.
@@ -99,7 +149,7 @@ For conditional-token settlement this needs only a **single** `outcome_credentia
 - **Order-book DEX / AMM DEX** (candidates) and **Atomic Swap** (#5): pricing/liquidity. Deliberately *composed*, not rebuilt.
 - **Escrow** (#6): shares the pluggable-`Credential` resolution approach.
 
-## 9. Prior art
+## 10. Prior art
 
 - **Polymarket:** CLOB over Gnosis Conditional Token Framework (1 YES + 1 NO redeem for 1 USDC); UMA optimistic oracle. Not parimutuel. Multi-outcome = linked binary markets via NegRisk. **This is the direct analogue of the design here.**
 - **Kalshi:** CFTC-regulated exchange; binary event contracts settling $1/$0 on a CLOB. (Third Circuit 2026: such contracts are swaps under the CEA; CFTC jurisdiction preempts state gambling law.)
@@ -107,6 +157,6 @@ For conditional-token settlement this needs only a **single** `outcome_credentia
 - **Omen / LMSR:** AMM-priced markets.
 - **Resolution feeds:** Charli3, Orcfax, Pyth.
 
-## 10. Regulatory / non-goal note
+## 11. Regulatory / non-goal note
 
 Prediction markets are regulated (as gambling and/or as derivatives) in many jurisdictions. The library ships **code only**; we never operate a market or custody funds (PRD §3.2). The fixed-payout event-contract shape reads as a derivative, but compliance is the deployer's concern.
