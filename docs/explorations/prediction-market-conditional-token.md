@@ -126,7 +126,7 @@ The hazards are the familiar ones — double satisfaction on the payout path (sa
 |---|---|---|---|
 | Double satisfaction | **High** | Tagged-output design on redemption path | Designed (§4) |
 | Position fabrication | **High** | Time-gated minting policy (§3.1) | Designed |
-| Stuck funds (missing resolution) | Medium | Timeout fallback to Void/refund | Open (Q-ORACLE-1) |
+| Stuck funds (missing resolution) | Medium | Timeout fallback to Void/refund | Designed (§4); incentives open (Q-ORACLE-1) |
 | Void path absent | **High** | Authority attests `Void`; refund via burning complete set | Designed |
 | Composability breakage | Medium | Reference-input resolution; no global transaction-shape assertions | Designed |
 
