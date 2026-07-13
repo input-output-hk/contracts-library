@@ -107,7 +107,7 @@ pub type RedemptionRedeemer {
 
 - `RedeemWinner`: reference input shows the winner; burns winning tokens for 1 collateral each.
 - `BurnCompleteSet`: burns equal YES + NO for 1 collateral each.
-- `RefundVoid`: reference input shows `Void`; burns either token for 1 collateral each.
+- `RefundVoid`: reference input shows `Void`; burns equal YES + NO for 1 collateral each (i.e., complete-set refund gated on `winner = Void`).
 - `output_index` prevents double satisfaction by tagging the exact payout output for each input.
 
 ## 5. Resolution: pluggable authority via `Credential`
@@ -145,7 +145,7 @@ The hazards are the familiar ones — double satisfaction on the payout path (sa
 
 | ID | Question | Current leaning | Status |
 |----|----------|-----------------|--------|
-| Q-SCOPE-1 | Confirm binary or categorical (§6) for v1. | binary v1 | open |
+| Q-SCOPE-1 | Confirm binary or categorical (§7) for v1. | binary v1 | open |
 | Q-ORACLE-1 | What makes the resolution authority report honestly + on time (bond/slash, reputation)? | tbd | open |
 | Q-DISPUTE-1 | Optimistic resolution window? (Outcome disputes are tractable.) | outcome-only dispute | open |
 | Q-LIFECYCLE-1 | Cancellation: creator cancels a zero-position market? Refund-all before cutoff? | allow both | open |
