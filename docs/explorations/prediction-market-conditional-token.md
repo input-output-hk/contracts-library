@@ -49,7 +49,7 @@ To take a position, lock 1 unit of collateral and mint a *complete set* of outco
 
 ### 3.4 Dependencies
 
-- **Oracle** (building-block candidate): reports the outcome. Abstracted via a `Credential` (§4).
+- **Oracle** (building-block candidate): reports the outcome. Abstracted via a `Credential` (§5).
 - **Outcome-token minting policy**: enforces complete-set mint/burn and time-gating. Can be built on **CIP-113 programmable tokens** (candidate) for permissioning/metadata, or plain native tokens for the minimal version.
 - **A pricing/liquidity venue** for entering/exiting: an **Order-book DEX** or **AMM DEX** (candidates), or **peer-to-peer** via **Atomic Swap** (#5) for illiquid markets. Trading is *delegated*, not reimplemented.
 - **Multisig** (candidate): optional, when the outcome authority is a committee.
@@ -58,24 +58,34 @@ To take a position, lock 1 unit of collateral and mint a *complete set* of outco
 
 Not self-contained: a market with no liquidity venue and no counterparties is not tradable. Leans on several other catalog items. This is precisely the gap the parimutuel sibling fills.
 
-## 4. Design sketch (Aiken)
+## 4. Design Sketch
 
 ```aiken
-pub type AssetId { policy_id: PolicyId, asset_name: AssetName }
-pub type MarketId = ByteArray
+pub type AssetId {
+  policy_id: PolicyId,
+  asset_name: AssetName,
+}
 
-pub type Winner { Yes | No | Void }
+pub type Winner {
+  Yes
+  No
+  Void
+}
 
 pub type MarketParams {
-  market_id: MarketId,
+  market_id: ByteArray,
   collateral: AssetId,
   cutoff: Int,
   outcome_credential: Credential,
   beacon_policy: PolicyId,
   resolution_timeout: Int,
+  redemption_script_hash: ScriptHash,
 }
 
-pub type OutcomeDatum { market_id: MarketId, winner: Winner }
+pub type OutcomeDatum {
+  market_id: ByteArray,
+  winner: Winner,
+}
 
 pub type OutcomeRedeemer {
   Resolve { winner: Winner }
@@ -114,7 +124,7 @@ The hazards are the familiar ones — double satisfaction on the payout path (sa
 
 | Risk | Severity | Mitigation | Status |
 |---|---|---|---|
-| Double satisfaction | **High** | Tagged-output design on redemption path | Designed (§5) |
+| Double satisfaction | **High** | Tagged-output design on redemption path | Designed (§4) |
 | Position fabrication | **High** | Time-gated minting policy (§3.1) | Designed |
 | Stuck funds (missing resolution) | Medium | Timeout fallback to Void/refund | Open (Q-ORACLE-1) |
 | Void path absent | **High** | Authority attests `Void`; refund via burning complete set | Designed |
@@ -143,11 +153,12 @@ The hazards are the familiar ones — double satisfaction on the payout path (sa
 
 ## 9. Dependency map
 
-- **Oracle** (candidate): resolution feed. Abstracted via `Credential` (§4).
+- **Oracle** (candidate): resolution feed. Abstracted via `Credential` (§5).
 - **Multisig / Smart wallet** (candidate): committee/DAO resolver = a script credential.
 - **CIP-113 programmable tokens** (candidate): outcome tokens (or native tokens for the minimal version).
 - **Order-book DEX / AMM DEX** (candidates) and **Atomic Swap** (#5): pricing/liquidity. Deliberately *composed*, not rebuilt.
 - **Escrow** (#6): shares the pluggable-`Credential` resolution approach.
+- **`authorization.ak`**: shared Credential authorization logic (already exists in on-chain library). Reused by the outcome validator.
 
 ## 10. Prior art
 
@@ -160,3 +171,30 @@ The hazards are the familiar ones — double satisfaction on the payout path (sa
 ## 11. Regulatory / non-goal note
 
 Prediction markets are regulated (as gambling and/or as derivatives) in many jurisdictions. The library ships **code only**; we never operate a market or custody funds (PRD §3.2). The fixed-payout event-contract shape reads as a derivative, but compliance is the deployer's concern.
+
+## 12. Composability check against ARCHITECTURE.md
+
+The settlement layer asserts only properties of its own UTxOs and explicitly consumer-provided references:
+
+| Assertion | Violates architecture? |
+|-----------|----------------------|
+| Collateral UTxO datum matches expected structure | No — own UTxO property |
+| Mint policy burns/mints correct token quantities | No — own UTxO property |
+| Outcome reference input is present with valid datum | No — explicit related UTxO reference |
+| Authorization on outcome UTxO spend (Resolve) | No — own UTxO authorization |
+| Validity range is before betting deadline | No — explicit time-dependent constraint |
+| **Not asserted:** total tx inputs/outputs, total value, signatory set beyond required authorization, unrelated UTxOs | — |
+
+The reference-input resolution pattern (§4) satisfies ARCHITECTURE.md §1.1 (validators must not assert global TX properties) and §3 (pluggable `Credential` authorization). The only cross-validator dependency is the mint policy + collateral validator pair, which agree on `market_id` and `redemption_script_hash` by sharing `MarketParams` — a standard pattern in the architecture.
+
+## 13. Recommendation
+
+**Verdict: Implement.** Design is complete for a binary v1. Core is small (two mint policies + two spend validators), security-critical but audit-tractable, and composes with existing catalog items. Follow the design sketch in §4 and the spec template from the Linear Vesting contract.
+
+**What defers.** The following are tracked for post-v1 layering:
+
+- Categorical outcomes (§7) — cheap generalization, but binary covers v1.
+- Resolver bond/slash mechanics (Q-ORACLE-1) — orthogonal to settlement; can wrap the resolution authority via a script `Credential`.
+- Creator/protocol fees (Q-FEES-1) — deferred; no fee path in v1.
+- Optimistic dispute window (Q-DISPUTE-1) — independent of settlement; can be wired as a script credential.
+- Market cancellation / pre-cutoff refund (Q-LIFECYCLE-1) — deferred; no `Cancel` spend path in v1.
