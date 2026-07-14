@@ -1,4 +1,6 @@
-# Explore: DAO
+# Exploration: DAO
+
+> Status: **Exploring** (pre-triage). Working design log, not a spec. Triage is deferred to team discussion.
 
 ## 1. Summary
 
@@ -69,8 +71,8 @@ This sketch positions v1 between the two poles: enforce execution on-chain, whil
 
 ### 4.1 Proposed v1 Position
 
-- On-chain enforce execution authority.
-- Keep vote lifecycle and tally model simple enough for tractable audit.
+- Enforce execution authority on-chain.
+- Keep voting lifecycle and tally model simple enough for tractable audit.
 - Avoid committing v1 to a high-contention shared-state pattern unless benchmarked and justified.
 
 ### 4.2 Lifecycle
