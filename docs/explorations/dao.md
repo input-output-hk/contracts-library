@@ -1,6 +1,6 @@
 # Explore: DAO
 
-## Summary
+## 1. Summary
 
 Token-based governance of a protocol and its treasury: token holders propose actions, vote with weight proportional to holdings, and, if thresholds are met, a proposal becomes executable.
 
@@ -16,18 +16,18 @@ For execution, two existing Cardano patterns are relevant:
 
 This item is one of the largest in the catalog. Existing frameworks are strong (Agora, WingRiders), so a useful v1 needs clear scope boundaries and composability-first interfaces rather than novelty.
 
-## Context and Prior Art
+## 2. Context and Prior Art
 
 - Agora (Liqwid): fully on-chain enforced governance, stake-lock voting, on-chain proposal state machine, GAT-authorized effects.
 - WingRiders on-chain-dao-governance: metadata votes, snapshot slot, off-chain tally backend, verifiable but not on-chain enforced outcome.
 - EVM references: Compound Governor and OpenZeppelin Governor + TimelockController, with checkpoint/snapshot voting patterns.
 - CIP-1694: protocol-layer governance vocabulary on Cardano; related conceptually but separate from application/treasury governance.
 
-## Central Design Axis: Enforced vs Verified
+## 3. Central Design Axis: Enforced vs Verified
 
 The main architectural decision is how much governance logic is on-chain enforced.
 
-### Pole A: Fully On-Chain Enforced (Agora-style)
+### 3.1 Pole A: Fully On-Chain Enforced (Agora-style)
 
 - Proposal lifecycle and tally enforced on-chain.
 - Voting power commonly represented by stake/lock UTxOs.
@@ -45,7 +45,7 @@ Cons:
 - Shared-state contention risk (for example, serialized proposal tally updates).
 - Higher operational complexity and cost.
 
-### Pole B: Verified, Not Enforced (WingRiders-style)
+### 3.2 Pole B: Verified, Not Enforced (WingRiders-style)
 
 - Votes recorded as signed metadata.
 - Snapshot slot defines voting power reference point.
@@ -63,17 +63,17 @@ Cons:
 - Outcome verification exists, but enforcement is external.
 - Trust assumptions shift to backend/operator process.
 
-## Lightweight Design Sketch (Deliverable)
+## 4. Lightweight Design Sketch (Deliverable)
 
 This sketch positions v1 between the two poles: enforce execution on-chain, while keeping tally complexity bounded.
 
-### Proposed v1 Position
+### 4.1 Proposed v1 Position
 
 - On-chain enforce execution authority.
 - Keep vote lifecycle and tally model simple enough for tractable audit.
 - Avoid committing v1 to a high-contention shared-state pattern unless benchmarked and justified.
 
-### Lifecycle
+### 4.2 Lifecycle
 
 - Draft: proposal is created and validated against static schema.
 - Voting: votes are accepted for a fixed window.
@@ -81,7 +81,7 @@ This sketch positions v1 between the two poles: enforce execution on-chain, whil
 - Execution: authorized action can be consumed by treasury/target.
 - Finalized: executed or failed/expired.
 
-### Voting and Double-Vote Approach
+### 4.3 Voting and Double-Vote Approach
 
 Two practical options for v1:
 
@@ -90,7 +90,7 @@ Two practical options for v1:
 
 Given complexity constraints, snapshot-based power with explicit assumptions is a strong v1 candidate, provided the trust model is documented.
 
-### Tally and Contention Approach
+### 4.4 Tally and Contention Approach
 
 Candidate implementations:
 
@@ -103,7 +103,7 @@ A layered route is recommended:
 - v1: choose one simple tally model and publish contention limits.
 - v2+: introduce contention-reduction patterns after measurement.
 
-### Execution Binding
+### 4.5 Execution Binding
 
 Execution should be bound to proposal payload hash and parameters so passed governance cannot be replayed or substituted with a different action.
 
@@ -114,13 +114,13 @@ Two compatible encodings:
 
 Both can coexist; standardizing one as the primary interface for this repository should be explicit.
 
-### Treasury Gating
+### 4.6 Treasury Gating
 
 Treasury spends must require governance authorization and validate that authorization corresponds exactly to the approved proposal action.
 
-## Complexity and Risk Read (Deliverable)
+## 5. Complexity and Risk Read (Deliverable)
 
-### Major Risks
+### 5.1 Major Risks
 
 - Vote contention: serialized shared proposal updates can degrade liveness/UX.
 - Tally completeness: aggregation/fold designs are correctness-sensitive.
@@ -128,20 +128,20 @@ Treasury spends must require governance authorization and validate that authoriz
 - Execution binding errors: approved action mismatch/replay/substitution.
 - Treasury custody concentration: governance failures have direct asset impact.
 
-### Additional Risks
+### 5.2 Additional Risks
 
 - Parameter misconfiguration (quorum, thresholds, windows, timelock).
 - Operator dependence for verified/off-chain tally variants.
 - Scope creep into "full governance platform" instead of composable authority module.
 
-### Suggested v1 Risk Boundary
+### 5.3 Suggested v1 Risk Boundary
 
 - Keep lifecycle and authorization path minimal.
 - Prefer transparent, inspectable proposal payload schema.
 - Defer advanced vote-power sources (LP, custom distributions, delegation) until baseline security and operability are validated.
 - Treat high-throughput contention handling as a later milestone.
 
-## Composability Check Against Architecture (Deliverable)
+## 6. Composability Check Against Architecture (Deliverable)
 
 Alignment with this repository's architecture and constraints:
 
@@ -161,7 +161,7 @@ Alignment with this repository's architecture and constraints:
 - No hidden coupling:
   - DAO should publish the minimal execution-proof interface (for example payload hash + authorization witness) so consumer contracts remain independent.
 
-## Open Questions to Resolve Before Implementation
+## 7. Open Questions to Resolve Before Implementation
 
 - Exact position on enforced-vs-verified tally for v1.
 - Primary execution authority encoding (GAT vs forwarding `Credential`) and composition strategy.
@@ -170,7 +170,7 @@ Alignment with this repository's architecture and constraints:
 - Treasury state model (single UTxO vs distributed) and contention implications.
 - Minimal parameter surface for safe defaults.
 
-## Recommendation (Deliverable)
+## 8. Recommendation (Deliverable)
 
 Recommendation: Implement **now**, in layers.
 
