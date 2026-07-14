@@ -86,6 +86,8 @@ The off-chain layer provides TypeScript builders (MeshJS) and Tx3 implementation
 - [Formal proofs](formal/README.md) — machine-checked Lean 4 proofs of the
   specs, plus the build pipeline and `blaster` tractability notes.
 
-## License
+## Related work
 
-**Apache-2.0** for all artifacts: on-chain, off-chain, specs, and docs.
+- [Learn how to develop on Cardano](https://developers.cardano.org/)
+- [21 most common blockchain use cases for Cardano](https://github.com/cardano-foundation/cardano-template-and-ecosystem-monitoring/)
+- [Design patterns library](https://github.com/Anastasia-Labs/design-patterns)
