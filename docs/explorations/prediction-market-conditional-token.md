@@ -133,8 +133,8 @@ pub type MintAction {
 
 #### Mint
 
-- `MintSet { market_id }`: mints `N` YES + `N` NO only while the validity range ends `<= cutoff`. Token names encode `market_id` (e.g., `YES_<market_id>`) so tokens are non-fungible across markets sharing the same mint policy.
-- `BurnSet { market_id }`: burns equal YES + NO quantities.
+- `MintSet { market_id }`: mints 1 YES + 1 NO tokens only while the validity range ends `<= cutoff`. Token names encode `market_id` (e.g., `YES_<market_id>`) so tokens are non-fungible across markets sharing the same mint policy.
+- `BurnSet { market_id }`: burns the complete YES + NO set.
 - `BurnWinner { market_id }`: burns only the winning token.
 
 #### Spend
