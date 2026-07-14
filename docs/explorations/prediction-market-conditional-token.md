@@ -60,10 +60,17 @@ Not self-contained: a market with no liquidity venue and no counterparties is no
 
 ## 4. Design Sketch
 
+Market-specific configuration lives in UTxO datums rather than compile-time validator parameters. Both validators are multivalidators, so only **2 scripts serve all markets** regardless of count.
+
 ```aiken
-pub type AssetId {
+pub type AssetClass {
   policy_id: PolicyId,
   asset_name: AssetName,
+}
+
+pub type CollateralUnit {
+  asset: AssetClass,
+  amount: Int,
 }
 
 pub type Winner {
@@ -72,19 +79,13 @@ pub type Winner {
   Void
 }
 
-pub type MarketParams {
-  market_id: ByteArray,
-  collateral: AssetId,
-  cutoff: Int,
-  outcome_credential: Credential,
-  beacon_policy: PolicyId,
-  resolution_timeout: Int,
-  redemption_script_hash: ScriptHash,
-}
+// Outcome validator
 
 pub type OutcomeDatum {
   market_id: ByteArray,
   winner: Winner,
+  outcome_credential: Credential,
+  resolution_timeout: Int,
 }
 
 pub type OutcomeRedeemer {
@@ -92,23 +93,55 @@ pub type OutcomeRedeemer {
   TimeoutVoid
 }
 
+pub type BeaconMintAction {
+  MintBeacon { market_id: ByteArray }
+}
+
+// Redemption validator
+
+pub type RedemptionDatum {
+  market_id: ByteArray,
+  collateral: CollateralUnit,
+  beacon_policy: PolicyId,
+}
+
 pub type RedemptionRedeemer {
   RedeemWinner { output_index: Int }
   BurnCompleteSet { output_index: Int }
   RefundVoid { output_index: Int }
 }
+
+pub type MintAction {
+  MintSet { market_id: ByteArray }
+  BurnSet { market_id: ByteArray }
+  BurnWinner { market_id: ByteArray }
+}
 ```
 
-**Complete-set minting policy:** mints `N` YES + `N` NO only while the validity range ends `<= cutoff`, in exchange for `N` collateral sent to the redemption script. Allows burning complete sets for refund, and burning winning/Void tokens when the redemption validator pays out.
+### Outcome validator
 
-**Outcome validator:** `Resolve` requires `outcome_credential` authorization; `TimeoutVoid` is allowed after `resolution_timeout` and sets `winner = Void`. The beacon guarantees one live outcome UTxO per market.
+#### Mint
 
-**Redemption validator:**
+- `MintBeacon { market_id }`: mints exactly 1 beacon token per market.
 
-- `RedeemWinner`: reference input shows the winner; burns winning tokens for 1 collateral each.
-- `BurnCompleteSet`: burns equal YES + NO for 1 collateral each.
-- `RefundVoid`: reference input shows `Void`; burns equal YES + NO for 1 collateral each (i.e., complete-set refund gated on `winner = Void`).
-- `output_index` prevents double satisfaction by tagging the exact payout output for each input.
+#### Spend
+
+- `Resolve { winner }`: requires `outcome_credential` authorization; preserves the beacon token and all datum fields except `winner` in a continuation UTxO.
+- `TimeoutVoid`: allowed after `resolution_timeout`; sets `winner = Void`.
+
+### Redemption validator
+
+#### Mint
+
+- `MintSet { market_id }`: mints `N` YES + `N` NO only while the validity range ends `<= cutoff`. Token names encode `market_id` (e.g., `YES_<market_id>`) so tokens are non-fungible across markets sharing the same mint policy.
+- `BurnSet { market_id }`: burns equal YES + NO quantities.
+- `BurnWinner { market_id }`: burns only the winning token.
+
+#### Spend
+
+- `RedeemWinner { output_index }`: reads the outcome UTxO via reference input; verifies the beacon token's actual policy matches `datum.beacon_policy`, cross-checks `market_id`, and pays 1 collateral per winning token burned. `output_index` tags the exact payout output (anti-double-satisfaction).
+- `BurnCompleteSet { output_index }`: burns equal YES + NO for 1 collateral each (pre-resolution exit).
+- `RefundVoid { output_index }`: gated on `winner == Void` in the outcome reference; burns equal YES + NO for 1 collateral each.
 
 ## 5. Resolution: pluggable authority via `Credential`
 
@@ -134,7 +167,7 @@ The hazards are the familiar ones — double satisfaction on the payout path (sa
 - **Double satisfaction** on the payout path (same class as Atomic Swap #5): one output must not be credited to two redemptions.
 - **Void / invalid outcome.** The authority can attest `Void`; everyone refunds by burning their complete set. Must exist.
 - **Resolution liveness.** If resolution never arrives, funds must not be stuck; likely a timeout fallback to Void/refund. Ties into resolver incentives (Q-ORACLE-1).
-- **Composability (ARCHITECTURE.md).** Settlement must assert only properties of its **own** UTxOs, never the total value/inputs/outputs of the transaction. The reference-input resolution design (§4) keeps reads composable.
+- **Composability (ARCHITECTURE.md).** Settlement must assert only properties of its **own** UTxOs, never the total value/inputs/outputs of the transaction. The reference-input resolution design (§5) keeps reads composable.
 
 ## 7. Outcome scope
 
@@ -178,23 +211,15 @@ The settlement layer asserts only properties of its own UTxOs and explicitly con
 
 | Assertion | Violates architecture? |
 |-----------|----------------------|
-| Collateral UTxO datum matches expected structure | No — own UTxO property |
+| UTxO datums match expected structure | No — own UTxO property |
 | Mint policy burns/mints correct token quantities | No — own UTxO property |
 | Outcome reference input is present with valid datum | No — explicit related UTxO reference |
 | Authorization on outcome UTxO spend (Resolve) | No — own UTxO authorization |
 | Validity range is before betting deadline | No — explicit time-dependent constraint |
 | **Not asserted:** total tx inputs/outputs, total value, signatory set beyond required authorization, unrelated UTxOs | — |
 
-The reference-input resolution pattern (§4) satisfies ARCHITECTURE.md §1.1 (validators must not assert global TX properties) and §3 (pluggable `Credential` authorization). The only cross-validator dependency is the mint policy + collateral validator pair, which agree on `market_id` and `redemption_script_hash` by sharing `MarketParams` — a standard pattern in the architecture.
+The reference-input resolution pattern (§5) satisfies ARCHITECTURE.md §1.1 (validators must not assert global TX properties) and §3 (pluggable `Credential` authorization).
 
 ## 13. Recommendation
 
-**Verdict: Implement.** Design is complete for a binary v1. Core is small (two mint policies + two spend validators), security-critical but audit-tractable, and composes with existing catalog items. Follow the design sketch in §4 and the spec template from the Linear Vesting contract.
-
-**What defers.** The following are tracked for post-v1 layering:
-
-- Categorical outcomes (§7) — cheap generalization, but binary covers v1.
-- Resolver bond/slash mechanics (Q-ORACLE-1) — orthogonal to settlement; can wrap the resolution authority via a script `Credential`.
-- Creator/protocol fees (Q-FEES-1) — deferred; no fee path in v1.
-- Optimistic dispute window (Q-DISPUTE-1) — independent of settlement; can be wired as a script credential.
-- Market cancellation / pre-cutoff refund (Q-LIFECYCLE-1) — deferred; no `Cancel` spend path in v1.
+**Verdict: Implement now.** Design is sketched for a binary v1. Core is small, security-critical but audit-tractable, and composes with existing catalog items. Implementation uses datum-level parameterization: 2 on-chain multivalidator scripts (Outcome with `spend` + `mint`, Redemption with `spend` + `mint`) serve any number of markets.
