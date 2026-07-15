@@ -60,7 +60,7 @@ Not self-contained: a market with no liquidity venue and no counterparties is no
 
 ## 4. Design Sketch
 
-Market-specific configuration lives in UTxO datums rather than compile-time validator parameters. Both validators are multivalidators, so only **2 scripts serve all markets** regardless of count.
+Market identity, authorization, and lifecycle parameters live in UTxO datums; the market address, setup fee, and per-redemption fee are compile-time validator parameters. Both validators are multivalidators, so only **2 scripts serve all markets** regardless of count, but each market is deployed with its own address and fee configuration baked into the scripts.
 
 ```aiken
 pub type AssetClass {
@@ -79,13 +79,14 @@ pub type Winner {
   Void
 }
 
-// Outcome validator
+// Outcome validator(market_address: Address, setup_fee: Int)
 
 pub type OutcomeDatum {
   market_id: ByteArray,
   winner: Winner,
   outcome_credential: Credential,
   resolution_timeout: Int,
+  collateral: CollateralUnit,
 }
 
 pub type OutcomeRedeemer {
@@ -97,11 +98,10 @@ pub type BeaconMintAction {
   MintBeacon { market_id: ByteArray }
 }
 
-// Redemption validator
+// Redemption validator(market_address: Address, market_fee: Int)
 
 pub type RedemptionDatum {
   market_id: ByteArray,
-  collateral: CollateralUnit,
   beacon_policy: PolicyId,
 }
 
@@ -120,6 +120,8 @@ pub type MintAction {
 
 ### Outcome validator
 
+Receives `market_address: Address` (where fees are sent) and `setup_fee: Int` (lovelace fee charged when a market is created/initialized).
+
 #### Mint
 
 - `MintBeacon { market_id }`: mints exactly 1 beacon token per market.
@@ -131,17 +133,19 @@ pub type MintAction {
 
 ### Redemption validator
 
+Receives `market_address: Address` (where fees are sent) and `market_fee: Int` (lovelace fee charged per redemption action).
+
 #### Mint
 
-- `MintSet { market_id }`: mints 1 YES + 1 NO tokens only while the validity range ends `<= cutoff`. Token names encode `market_id` (e.g., `YES_<market_id>`) so tokens are non-fungible across markets sharing the same mint policy.
-- `BurnSet { market_id }`: burns the complete YES + NO set.
-- `BurnWinner { market_id }`: burns only the winning token.
+- `MintSet { market_id }`: mints `N` YES + `N` NO tokens only while the validity range ends `<= cutoff`. Token names encode `market_id` (e.g., `YES_<market_id>`) so tokens are non-fungible across markets sharing the same mint policy.
+- `BurnSet { market_id }`: burns k YES + k NO tokens.
+- `BurnWinner { market_id }`: burns k winning tokens.
 
 #### Spend
 
-- `RedeemWinner { output_index }`: reads the outcome UTxO via reference input; verifies the beacon token's actual policy matches `datum.beacon_policy`, cross-checks `market_id`, and pays 1 collateral per winning token burned. `output_index` tags the exact payout output (anti-double-satisfaction).
-- `BurnCompleteSet { output_index }`: burns equal YES + NO for 1 collateral each (pre-resolution exit).
-- `RefundVoid { output_index }`: gated on `winner == Void` in the outcome reference; burns equal YES + NO for 1 collateral each.
+- `RedeemWinner { output_index }`: reads the outcome UTxO via reference input; verifies the beacon token's actual policy matches `datum.beacon_policy`, cross-checks `market_id`, extracts the `collateral` unit from the outcome datum, and pays 1 collateral per winning token burned. `output_index` tags the exact payout output (anti-double-satisfaction).
+- `BurnCompleteSet { output_index }`: reads the outcome UTxO via reference input to obtain the collateral unit; burns equal YES + NO for 1 collateral each (pre-resolution exit).
+- `RefundVoid { output_index }`: reads the outcome UTxO via reference input to obtain the collateral unit; gated on `winner == Void` in the outcome reference; burns equal YES + NO for 1 collateral each.
 
 ## 5. Resolution: pluggable authority via `Credential`
 
@@ -150,6 +154,8 @@ No contract hardcodes *how* resolution is decided. The authority is a Cardano `C
 The resolution result lives in a **beacon-authenticated UTxO** read by settlement as a **reference input**. Beacons are minted once at market genesis and parked, then moved into the resolution UTxO when the authority approves (one-shot by construction, no betting contention).
 
 For conditional-token settlement this needs only a **single** `outcome_credential` attesting the winner in a single beacon-authenticated outcome UTxO. That is all settlement needs: there is no separate multiplier to attest (contrast the parimutuel sibling, which requires a second solvency-critical credential).
+
+The outcome UTxO also serves as the reference input for any transaction that requires the collateral unit. All three redemption spend paths  read the outcome UTxO via reference input to obtain the `collateral` field from the outcome datum, so the redemption script can verify the collateral asset class and amount without hardcoding them in validator parameters.
 
 ## 6. Cross-cutting security must-fixes
 
@@ -214,6 +220,7 @@ The settlement layer asserts only properties of its own UTxOs and explicitly con
 | UTxO datums match expected structure | No — own UTxO property |
 | Mint policy burns/mints correct token quantities | No — own UTxO property |
 | Outcome reference input is present with valid datum | No — explicit related UTxO reference |
+| Collateral unit matched to outcome reference input datum | No — own-UTxO assertion, collateral identity from outcome datum |
 | Authorization on outcome UTxO spend (Resolve) | No — own UTxO authorization |
 | Validity range is before betting deadline | No — explicit time-dependent constraint |
 | **Not asserted:** total tx inputs/outputs, total value, signatory set beyond required authorization, unrelated UTxOs | — |
