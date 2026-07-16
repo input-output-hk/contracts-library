@@ -76,22 +76,22 @@ pub type CollateralUnit {
 pub type Winner {
   Yes
   No
-  Void
 }
 
 // Outcome validator(market_address: Address, setup_fee: Int)
 
 pub type OutcomeDatum {
   market_id: ByteArray,
-  winner: Winner,
+  cutoff: Int,
+  winner: Option<Winner>,
   outcome_credential: Credential,
   resolution_timeout: Int,
+  claim_deadline: Int,
   collateral: CollateralUnit,
 }
 
 pub type OutcomeRedeemer {
   Resolve { winner: Winner }
-  TimeoutVoid
 }
 
 pub type BeaconMintAction {
@@ -108,7 +108,8 @@ pub type RedemptionDatum {
 pub type RedemptionRedeemer {
   RedeemWinner { output_index: Int }
   BurnCompleteSet { output_index: Int }
-  RefundVoid { output_index: Int }
+  ClaimTimeout { output_index: Int }
+  SweepResidual { output_index: Int }
 }
 
 pub type MintAction {
@@ -128,8 +129,7 @@ Receives `market_address: Address` (where fees are sent) and `setup_fee: Int` (l
 
 #### Spend
 
-- `Resolve { winner }`: requires `outcome_credential` authorization; preserves the beacon token and all datum fields except `winner` in a continuation UTxO.
-- `TimeoutVoid`: allowed after `resolution_timeout`; sets `winner = Void`.
+- `Resolve { winner }`: requires `outcome_credential` authorization; preserves the beacon token and all datum fields except `winner` in a continuation UTxO, setting `winner` to `Some(winner)`.
 
 ### Redemption validator
 
@@ -143,9 +143,10 @@ Receives `market_address: Address` (where fees are sent) and `market_fee: Int` (
 
 #### Spend
 
-- `RedeemWinner { output_index }`: reads the outcome UTxO via reference input; verifies the beacon token's actual policy matches `datum.beacon_policy`, cross-checks `market_id`, extracts the `collateral` unit from the outcome datum, and pays 1 collateral per winning token burned. `output_index` tags the exact payout output (anti-double-satisfaction).
-- `BurnCompleteSet { output_index }`: reads the outcome UTxO via reference input to obtain the collateral unit; burns equal YES + NO for 1 collateral each (pre-resolution exit).
-- `RefundVoid { output_index }`: reads the outcome UTxO via reference input to obtain the collateral unit; gated on `winner == Void` in the outcome reference; burns equal YES + NO for 1 collateral each.
+- `RedeemWinner { output_index }`: reads the outcome UTxO via reference input; verifies the beacon token's actual policy matches `datum.beacon_policy`, cross-checks `market_id`, extracts the `collateral` unit from the outcome datum, requires `winner == Some(winning_side)` matching the token side, and pays 1 collateral per winning token burned. `output_index` tags the exact payout output (anti-double-satisfaction).
+- `BurnCompleteSet { output_index }`: reads the outcome UTxO via reference input to obtain the collateral unit; requires `winner == None` (pre-resolution); burns equal YES + NO for 1 collateral each.
+- `ClaimTimeout { output_index }`: valid only while the transaction validity range starts after `resolution_timeout` and ends before `claim_deadline`. Reads the outcome UTxO via reference input to obtain the collateral unit. Burns any single YES and/or NO tokens (no complete-set requirement) and pays 0.5 collateral per token burned, deducted from the redemption UTxO's value. Produces a continuation redemption UTxO with the remaining collateral. With N YES + N NO tokens minted, burning m YES + n NO yields (m+n)/2 collateral returned; the residual is N − (m+n)/2.
+- `SweepResidual { output_index }`: valid only when the transaction validity range starts after `claim_deadline`. Reads the outcome UTxO via reference input. Sends the entire remaining balance of the redemption UTxO to `market_address` (validator parameter). Destroys the redemption UTxO (no continuation).
 
 ## 5. Resolution: pluggable authority via `Credential`
 
@@ -155,24 +156,22 @@ The resolution result lives in a **beacon-authenticated UTxO** read by settlemen
 
 For conditional-token settlement this needs only a **single** `outcome_credential` attesting the winner in a single beacon-authenticated outcome UTxO. That is all settlement needs: there is no separate multiplier to attest (contrast the parimutuel sibling, which requires a second solvency-critical credential).
 
-The outcome UTxO also serves as the reference input for any transaction that requires the collateral unit. All three redemption spend paths  read the outcome UTxO via reference input to obtain the `collateral` field from the outcome datum, so the redemption script can verify the collateral asset class and amount without hardcoding them in validator parameters.
+The outcome UTxO also serves as the reference input for any transaction that requires the collateral unit. All four redemption spend paths — `RedeemWinner`, `BurnCompleteSet`, `ClaimTimeout`, and `SweepResidual` — read the outcome UTxO via reference input to obtain the `collateral` field from the outcome datum, so the redemption script can verify the collateral asset class and amount without hardcoding them in validator parameters.
 
 ## 6. Cross-cutting security must-fixes
 
-The hazards are the familiar ones — double satisfaction on the payout path (same class as Atomic Swap #5), position authenticity (the mint must be time-gated so no one fabricates a winning position post-resolution), a mandatory Void/refund path, and resolution liveness (timeout fallback). No on-chain aggregation or solvency attestation is needed.
+The hazards are the familiar ones — double satisfaction on the payout path (same class as Atomic Swap #5), position authenticity (the mint must be time-gated so no one fabricates a winning position post-resolution), and resolution liveness (timeout fallback). No on-chain aggregation or solvency attestation is needed.
 
 | Risk | Severity | Mitigation | Status |
 |---|---|---|---|
 | Double satisfaction | **High** | Tagged-output design on redemption path | Designed (§4) |
 | Position fabrication | **High** | Time-gated minting policy (§3.1) | Designed |
-| Stuck funds (missing resolution) | Medium | Timeout fallback to Void/refund | Designed (§4); incentives open (Q-ORACLE-1) |
-| Void path absent | **High** | Authority attests `Void`; refund via burning complete set | Designed |
+| Stuck funds (missing resolution) | Medium | Timeout fallback to half-claim via `ClaimTimeout`; residual sweeps to market after `claim_deadline` | Designed (§4); incentives open (Q-ORACLE-1) |
 | Composability breakage | Medium | Reference-input resolution; no global transaction-shape assertions | Designed |
 
 - **Position/ticket authenticity.** Positions must be authenticated tokens minted under a policy that is **time-gated to the betting window**, so no one can fabricate a winning position after resolution. Here this is the complete-set mint. Without it, an attacker mints a "winning" position post-outcome and drains funds.
 - **Double satisfaction** on the payout path (same class as Atomic Swap #5): one output must not be credited to two redemptions.
-- **Void / invalid outcome.** The authority can attest `Void`; everyone refunds by burning their complete set. Must exist.
-- **Resolution liveness.** If resolution never arrives, funds must not be stuck; likely a timeout fallback to Void/refund. Ties into resolver incentives (Q-ORACLE-1).
+- **Resolution liveness.** If resolution never arrives, funds must not be stuck: after `resolution_timeout`, `ClaimTimeout` allows single-token holders to claim 0.5 collateral per token; after `claim_deadline`, `SweepResidual` sends the remainder to `market_address`. Ties into resolver incentives (Q-ORACLE-1).
 - **Composability (ARCHITECTURE.md).** Settlement must assert only properties of its **own** UTxOs, never the total value/inputs/outputs of the transaction. The reference-input resolution design (§5) keeps reads composable.
 
 ## 7. Outcome scope
