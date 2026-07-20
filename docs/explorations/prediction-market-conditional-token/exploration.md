@@ -78,7 +78,7 @@ pub type Winner {
   No
 }
 
-// Outcome validator(market_address: Address, setup_fee: Int)
+// Outcome validator(market_address: Address, setup_fee: TokenInfo)
 
 pub type OutcomeDatum {
   market_id: ByteArray,
@@ -98,7 +98,7 @@ pub type BeaconMintAction {
   MintBeacon { market_id: ByteArray }
 }
 
-// Redemption validator(market_address: Address, market_fee: Int)
+// Redemption validator(market_address: Address, market_fee: TokenInfo)
 
 pub type RedemptionDatum {
   market_id: ByteArray,
@@ -121,7 +121,7 @@ pub type MintAction {
 
 ### Outcome validator
 
-Receives `market_address: Address` (where fees are sent) and `setup_fee: Int` (lovelace fee charged when a market is created/initialized).
+Receives `market_address: Address` (where fees are sent) and `setup_fee: TokenInfo` (fee charged when a market is created/initialized).
 
 #### Mint
 
@@ -133,7 +133,7 @@ Receives `market_address: Address` (where fees are sent) and `setup_fee: Int` (l
 
 ### Redemption validator
 
-Receives `market_address: Address` (where fees are sent) and `market_fee: Int` (lovelace fee charged per redemption action).
+Receives `market_address: Address` (where fees are sent) and `market_fee: TokenInfo` (fee charged per redemption action).
 
 #### Mint
 
