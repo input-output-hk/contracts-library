@@ -68,7 +68,7 @@ pub type AssetClass {
   asset_name: AssetName,
 }
 
-pub type CollateralUnit {
+pub type TokenInfo {
   asset: AssetClass,
   amount: Int,
 }
@@ -87,7 +87,7 @@ pub type OutcomeDatum {
   outcome_credential: Credential,
   resolution_timeout: Int,
   claim_deadline: Int,
-  collateral: CollateralUnit,
+  collateral: TokenInfo,
 }
 
 pub type OutcomeRedeemer {
