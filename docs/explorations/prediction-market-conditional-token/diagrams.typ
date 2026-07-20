@@ -13,7 +13,7 @@ UTxO with the winner `None`. One beacon exists per `market_id`._
       name: "Creator funds",
       wallet: true,
       address: "creator_addr",
-      value: ("ADA": "min_ada", "SetupFeeAsset": "setup_fee"),
+      value: ("ADA": "min_ada", "SetupFeeAsset": "s"),
     ),
   ),
   mint: (
@@ -38,7 +38,7 @@ UTxO with the winner `None`. One beacon exists per `market_id`._
       name: "Setup fee",
       wallet: true,
       address: "market_address",
-      value: ("SetupFeeAsset": "setup_fee"),
+      value: ("SetupFeeAsset": "s"),
     ),
   ),
   notes: [
@@ -61,7 +61,7 @@ _A participant locks N collateral and mints N YES + N NO. Only allowed before cu
       name: "Bettor funds",
       wallet: true,
       address: "bettor_addr",
-      value: ("Collateral": "N", "MarketFeeAsset": "market_fee"),
+      value: ("Collateral": "N", "MarketFeeAsset": "m"),
     ),
     (
       reference: true,
@@ -86,7 +86,7 @@ _A participant locks N collateral and mints N YES + N NO. Only allowed before cu
     (
       name: "Redemption",
       address: "redemption_script",
-      value: ("Collateral": "N", "MarketFeeAsset": "market_fee"),
+      value: ("Collateral": "N", "MarketFeeAsset": "m"),
       datum: (
         market_id: "ByteArray",
         beacon_policy: "PolicyId",
@@ -122,7 +122,7 @@ market resolves._
       name: "Bettor set",
       wallet: true,
       address: "bettor_addr",
-      value: ("YES_market_id": "k", "NO_market_id": "k", "MarketFeeAsset": "market_fee"),
+      value: ("YES_market_id": "k", "NO_market_id": "k", "MarketFeeAsset": "m"),
     ),
     (
       name: "Redemption",
@@ -157,7 +157,7 @@ market resolves._
     (
       name: "Redemption",
       address: "redemption_script",
-      value: ("Collateral": "N - k", "MarketFeeAsset": "market_fee"),
+      value: ("Collateral": "N - k", "MarketFeeAsset": "m"),
       datum: (
         market_id: "ByteArray",
         beacon_policy: "PolicyId",
@@ -267,7 +267,7 @@ each. The outcome UTxO is read as a reference input to learn the winner._
       name: "Winner tokens",
       wallet: true,
       address: "bettor_addr",
-      value: ("YES_market_id": "k", "MarketFeeAsset": "market_fee"),
+      value: ("YES_market_id": "k", "MarketFeeAsset": "m"),
     ),
   ),
   mint: (
@@ -277,7 +277,7 @@ each. The outcome UTxO is read as a reference input to learn the winner._
     (
       name: "Redemption",
       address: "redemption_script",
-      value: ("Collateral": "N - k", "MarketFeeAsset": "market_fee"),
+      value: ("Collateral": "N - k", "MarketFeeAsset": "m"),
       datum: (
         market_id: "ByteArray",
         beacon_policy: "PolicyId",
@@ -310,7 +310,7 @@ _When the market still has `None` as winner after `resolution_timeout` (and befo
       name: "Bettor set",
       wallet: true,
       address: "bettor_addr",
-      value: ("YES_market_id": "m", "NO_market_id": "n", "MarketFeeAsset": "market_fee"),
+      value: ("YES_market_id": "m", "NO_market_id": "n", "MarketFeeAsset": "m"),
     ),
     (
       name: "Redemption",
@@ -346,7 +346,7 @@ _When the market still has `None` as winner after `resolution_timeout` (and befo
     (
       name: "Redemption",
       address: "redemption_script",
-      value: ("Collateral": "N - (m + n) / 2", "MarketFeeAsset": "market_fee"),
+      value: ("Collateral": "N - (m + n) / 2", "MarketFeeAsset": "m"),
       datum: (
         market_id: "ByteArray",
         beacon_policy: "PolicyId",
@@ -374,7 +374,7 @@ _After the claim timeout, all accumulated fees and any residual collateral can b
     (
       name: "Redemption",
       address: "redemption_script",
-      value: ("Collateral": "k", "MarketFeeAsset": "fees"),
+      value: ("Collateral": "k", "MarketFeeAsset": "m"),
       datum: (
         market_id: "ByteArray",
         beacon_policy: "PolicyId",
@@ -388,7 +388,7 @@ _After the claim timeout, all accumulated fees and any residual collateral can b
       name: "Market payout",
       wallet: true,
       address: "market_addr",
-      value: ("Collateral": "k", "MarketFeeAsset": "fees"),
+      value: ("Collateral": "k", "MarketFeeAsset": "m"),
     ),
   ),
 )
