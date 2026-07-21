@@ -88,13 +88,13 @@ The off-chain layer provides TypeScript builders (MeshJS) and Tx3 implementation
 
 ## Ecosystem
 
-ContractsLibrary sits in the middle of a stack:
+This is how ContractsLibrary relates to other libraries in the ecosystem:
 
 ```mermaid
 flowchart TB
-    A["<b>Applications</b><br/>end-to-end dApps that consume contracts<br/><i>Cardano Foundation templates</i>"]
-    L["<b>ContractsLibrary</b> (this repo)<br/>complete use-case contracts, on-chain + off-chain<br/><i>use · compose · fork</i>"]
-    P["<b>Primitives</b><br/>low-level on-chain building blocks<br/><i>design-patterns · merkle patricia forestry</i>"]
+    A["<b>Cardano Foundation Templates</b><br/>end-to-end dApps that might consume these contracts"]
+    L["<b>ContractsLibrary</b><br/>complete use-case contracts, on-chain + off-chain"]
+    P["<b>Primitives</b><br/>low-level on-chain building blocks.<br/><i>design-patterns · merkle patricia forestry</i>"]
 
     A --> L --> P
 
