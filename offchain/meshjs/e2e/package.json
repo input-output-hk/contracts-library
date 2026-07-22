@@ -1,8 +1,8 @@
 {
-  "name": "@contracts-library/vesting-meshjs-e2e",
+  "name": "@contracts-library/meshjs-e2e",
   "version": "0.0.0",
   "private": true,
-  "description": "End-to-end tests for the vesting MeshJS library against a Yaci DevKit devnet",
+  "description": "End-to-end tests for the contracts-library MeshJS SDK against a Yaci DevKit devnet",
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
@@ -12,7 +12,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@contracts-library/vesting-meshjs": "file:../lib",
+    "@contracts-library/meshjs": "file:../lib",
     "@meshsdk/core": "^1.9.0"
   },
   "devDependencies": {

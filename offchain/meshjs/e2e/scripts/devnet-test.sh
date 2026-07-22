@@ -1,4 +1,4 @@
-# Ephemeral Yaci devnet lifecycle for the MeshJS vesting e2e tests.
+# Ephemeral Yaci devnet lifecycle for the MeshJS e2e tests.
 #
 # Starts a throwaway devnet, waits until its Blockfrost-compatible API is
 # serving blocks, runs the e2e suite against it, then ALWAYS tears it down.

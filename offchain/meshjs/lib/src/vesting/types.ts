@@ -3,14 +3,9 @@
  * See specs/vesting/linear-vesting.md §3.
  */
 
-/**
- * A beneficiary credential. A `key` credential authorizes a claim by signing;
- * a `script` credential authorizes by being invoked (withdraw-0) in the claim
- * transaction. Hashes are hex strings (Blake2b-224, 28 bytes / 56 hex chars).
- */
-export type Credential =
-    | { kind: "key"; hash: string }
-    | { kind: "script"; hash: string };
+import type { Credential } from "../common";
+
+export type { Credential };
 
 /**
  * One asset in the vesting bundle with its ORIGINAL total quantity. ada is the
