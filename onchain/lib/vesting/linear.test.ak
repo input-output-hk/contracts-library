@@ -310,6 +310,89 @@ test rejects_multi_asset_token_shortfall() fail {
   validate_claim(d, input.output, tx)
 }
 
+// -------------------------------------------- instance-count preservation (§5.1)
+//
+// Regression guard for the cross-transaction instance-merge over-release.
+//
+// Setup: two identical instances, each datum total=100, each holding 100 lovelace
+// (200 locked total). Schedule [1000, 2000]; at now=1500, vested(100)=50 each, so
+// the honest amount claimable across BOTH instances is 100.
+//
+// The attack was a two-step drain: (1) spend both inputs into a SINGLE continuation
+// of 100 — accepted under the old aggregate `k * required` rule — collapsing two
+// instances into one UTxO whose datum still says total=100; then (2) spend that
+// merged UTxO alone, where k has dropped to 1, so only 50 must stay and the other
+// 50 is swept as "surplus". Net: 150 pulled at now=1500 against 100 vested.
+//
+// The fix (option 1) requires >= k SEPARATE continuations, each holding the full
+// remainder, so step (1) can no longer concentrate the two instances. k can never
+// drop below the number of live instances, and the drain is impossible.
+
+test rejects_instance_merge() fail {
+  // Two identical inputs collapsed into ONE continuation of 100. Rejected: with
+  // k=2 the tx must carry >= 2 continuations, not 1.
+  let input0 = input_with(datum(), assets.from_lovelace(100), 0)
+  let input1 = input_with(datum(), assets.from_lovelace(100), 1)
+  let tx =
+    claim_tx(
+      1500,
+      [input0, input1],
+      [output_with(datum(), assets.from_lovelace(100))],
+      [beneficiary_key],
+    )
+  validate_claim(datum(), input0.output, tx)
+}
+
+test identical_instances_keep_separate_continuations_ok() {
+  // The honest shape: two identical instances stay as two continuations, each
+  // holding its own remainder (50). Batching identical instances still works;
+  // only collapsing them into fewer UTxOs is forbidden.
+  let input0 = input_with(datum(), assets.from_lovelace(100), 0)
+  let input1 = input_with(datum(), assets.from_lovelace(100), 1)
+  let tx =
+    claim_tx(
+      1500,
+      [input0, input1],
+      [
+        output_with(datum(), assets.from_lovelace(50)),
+        output_with(datum(), assets.from_lovelace(50)),
+      ],
+      [beneficiary_key],
+    )
+  validate_claim(datum(), input0.output, tx) && validate_claim(
+    datum(),
+    input1.output,
+    tx,
+  )
+}
+
+// ------------------------------------------------ end_time continuation boundary
+//
+// The continuation gate is `now >= end_time` (spec §8.2), not `now > end_time`.
+// These two tests pin that boundary from both sides.
+
+test full_claim_at_end_boundary_needs_no_continuation() {
+  // now == end_time: everything has vested, so even k=2 identical inputs can be
+  // fully claimed with NO continuation. A strict `>` gate would wrongly demand
+  // continuations at exactly end_time and reject this.
+  let input0 = input_with(datum(), assets.from_lovelace(100), 0)
+  let input1 = input_with(datum(), assets.from_lovelace(100), 1)
+  let tx = claim_tx(2000, [input0, input1], [], [beneficiary_key])
+  validate_claim(datum(), input0.output, tx) && validate_claim(
+    datum(),
+    input1.output,
+    tx,
+  )
+}
+
+test rejects_no_continuation_just_before_end() fail {
+  // now == end_time - 1: required is tiny (1) but non-zero, so a claim with NO
+  // continuation must still be rejected. Complements the boundary test above.
+  let input = input_with(datum(), assets.from_lovelace(100), 0)
+  let tx = claim_tx(1999, [input], [], [beneficiary_key])
+  validate_claim(datum(), input.output, tx)
+}
+
 // --------------------------------------------------------------------- cancel
 
 test cancel_after_recovery_ok() {
