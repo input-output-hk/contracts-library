@@ -214,7 +214,7 @@ fields except `winner` are preserved in a continuation UTxO._
       value: ("Beacon": "1"),
       datum: (
         market_id: "ByteArray",
-        winner: [*Yes / No*],
+        winner: [*Yes / No / Draw*],
         outcome_credential: "Credential",
         cutoff: "PosixTime",
         resolution_timeout: "PosixTime",
