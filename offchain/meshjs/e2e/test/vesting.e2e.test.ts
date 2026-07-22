@@ -22,7 +22,7 @@ import {
   vestingScriptAddress,
   type Credential,
   type VestingDatum,
-} from "@contracts-library/vesting-meshjs";
+} from "@contracts-library/meshjs";
 import { ALWAYS_TRUE, REJECT_WITHDRAW } from "../src/fixtures";
 import {
   unixTimeToEnclosingSlot,

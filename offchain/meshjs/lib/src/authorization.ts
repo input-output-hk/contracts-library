@@ -24,7 +24,7 @@ import {
   type UTxO,
 } from "@meshsdk/core";
 
-import type { Credential } from "./types";
+import type { Credential } from "./common";
 
 export type PlutusVersion = "V1" | "V2" | "V3";
 

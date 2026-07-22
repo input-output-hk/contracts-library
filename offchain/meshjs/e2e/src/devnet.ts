@@ -1,7 +1,7 @@
 /**
  * Helpers for driving a local Yaci DevKit devnet from the e2e tests.
  *
- * The test harness that stands in for "a developer with a wallet and a provider". 
+ * The test harness that stands in for "a developer with a wallet and a provider".
  * Configuration comes from env so the same tests run locally and in CI:
  *   - YACI_STORE_URL  (default http://localhost:8080/api/v1/)
  *   - YACI_ADMIN_URL  (default http://localhost:10000)
