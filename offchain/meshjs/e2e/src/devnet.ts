@@ -236,6 +236,32 @@ export async function scriptOutputOf(
 }
 
 /**
+ * Extract the lovelace quantity from a UTxO.
+ */
+export function lovelaceOf(utxo: UTxO): bigint {
+    const a = utxo.output.amount.find((x) => x.unit === "lovelace");
+    return BigInt(a?.quantity ?? "0");
+}
+
+/**
+ * Convenience: get the first collateral UTxO from an account.
+ */
+export async function collateralOf(account: Account): Promise<UTxO> {
+    return (await account.wallet.getCollateral())[0];
+}
+
+/**
+ * Sign a transaction with the account's wallet and submit it via the wallet
+ * (not the provider). Returns the tx hash.
+ */
+export async function signAndSubmit(
+    account: Account,
+    tx: string,
+): Promise<string> {
+    return account.wallet.submitTx(await account.wallet.signTx(tx, true));
+}
+
+/**
  * Register a (script) stake credential so its reward account exists and a
  * withdraw-0 against it is permitted by the ledger. Registration does not run
  * the credential's script, so it works even for the reject-withdraw fixture.
