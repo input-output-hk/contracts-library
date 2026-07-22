@@ -14,6 +14,7 @@ pub type TokenInfo {
 pub type Winner {
   Yes
   No
+  Draw
 }
 
 pub type OutcomeDatum {
@@ -43,6 +44,7 @@ pub type RedemptionRedeemer {
   RedeemWinner { output_index: Int }
   BurnCompleteSet { output_index: Int }
   ClaimTimeout { output_index: Int }
+  ClaimDraw { output_index: Int }
   SweepResidual { output_index: Int }
 }
 
