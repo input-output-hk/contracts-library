@@ -235,7 +235,7 @@ fields except `winner` are preserved in a continuation UTxO._
 #pagebreak()
 
 = Redeem winner
-_After resolution, the holder of the winning tokens burns them for 1 collateral
+_After a YES/NO resolution, the holder of the winning tokens burns them for 1 collateral
 each. The outcome UTxO is read as a reference input to learn the winner._
 
 #let redeem_tx = vanilla_transaction(
@@ -297,6 +297,71 @@ each. The outcome UTxO is read as a reference input to learn the winner._
 )
 
 #figure(redeem_tx, caption: [Redeem winner transaction]) <fig:redeem>
+
+#pagebreak()
+
+= Refund on Draw (Claim Draw)
+_When the market resolves to a `Draw`, every participant refunds by burning any amount of YES/NO tokens for half collateral each (before `claim_timeout`)._
+
+#let refund_tx = vanilla_transaction(
+  "Refund Draw (Claim Draw)",
+  inputs: (
+    (
+      name: "Bettor set",
+      wallet: true,
+      address: "bettor_addr",
+      value: ("YES_market_id": "m", "NO_market_id": "n", "MarketFeeAsset": "m"),
+    ),
+    (
+      name: "Redemption",
+      address: "redemption_script",
+      value: ("Collateral": "N"),
+      datum: (
+        market_id: "ByteArray",
+        beacon_policy: "PolicyId",
+      ),
+      redeemer: [ClaimDraw],
+    ),
+    (
+      reference: true,
+      name: "Outcome",
+      address: "outcome_script",
+      value: ("Beacon": "1"),
+      datum: (
+        market_id: "ByteArray",
+        winner: [*Draw*],
+        collateral: "TokenInfo",
+        resolution_timeout: "PosixTime",
+        claim_timeout: "PosixTime",
+        "...": [],
+      ),
+    ),
+  ),
+  mint: (
+    "YES_market_id": "-m",
+    "NO_market_id": "-n",
+  ),
+  validRange: (upper: "claim_timeout"),
+  outputs: (
+    (
+      name: "Redemption",
+      address: "redemption_script",
+      value: ("Collateral": "N - (m + n) / 2", "MarketFeeAsset": "m"),
+      datum: (
+        market_id: "ByteArray",
+        beacon_policy: "PolicyId",
+      ),
+    ),
+    (
+      name: "Bettor refund",
+      wallet: true,
+      address: "bettor_addr",
+      value: ("Collateral": "(m + n) / 2"),
+    ),
+  ),
+)
+
+#figure(refund_tx, caption: [Refund on Draw transaction]) <fig:refund>
 
 #pagebreak()
 

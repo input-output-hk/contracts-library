@@ -76,6 +76,7 @@ pub type TokenInfo {
 pub type Winner {
   Yes
   No
+  Draw
 }
 
 // Outcome validator(market_address: Address, setup_fee: TokenInfo)
@@ -109,6 +110,7 @@ pub type RedemptionRedeemer {
   RedeemWinner { output_index: Int }
   BurnCompleteSet { output_index: Int }
   ClaimTimeout { output_index: Int }
+  ClaimDraw { output_index: Int }
   SweepResidual { output_index: Int }
 }
 
@@ -143,9 +145,10 @@ Receives `market_address: Address` (where fees are sent) and `market_fee: TokenI
 
 #### Spend
 
-- `RedeemWinner { output_index }`: reads the outcome UTxO via reference input; verifies the beacon token's actual policy matches `datum.beacon_policy`, cross-checks `market_id`, extracts the `collateral` unit from the outcome datum, requires `winner == Some(winning_side)` matching the token side, and pays 1 collateral per winning token burned. `output_index` tags the exact payout output (anti-double-satisfaction).
+- `RedeemWinner { output_index }`: reads the outcome UTxO via reference input; verifies the beacon token's actual policy matches `datum.beacon_policy`, cross-checks `market_id`, extracts the `collateral` unit from the outcome datum, requires `winner == Some(winning_side)` (with `winning_side != Draw` and matching the token side), and pays 1 collateral per winning token burned. `output_index` tags the exact payout output (anti-double-satisfaction).
 - `BurnCompleteSet { output_index }`: reads the outcome UTxO via reference input to obtain the collateral unit; requires `winner == None` (pre-resolution); burns equal YES + NO for 1 collateral each.
 - `ClaimTimeout { output_index }`: valid only while the transaction validity range starts after `resolution_timeout` and ends before `claim_deadline`. Reads the outcome UTxO via reference input to obtain the collateral unit. Burns any single YES and/or NO tokens (no complete-set requirement) and pays 0.5 collateral per token burned, deducted from the redemption UTxO's value. Produces a continuation redemption UTxO with the remaining collateral. With N YES + N NO tokens minted, burning m YES + n NO yields (m+n)/2 collateral returned; the residual is N − (m+n)/2.
+- `ClaimDraw { output_index }`: analogous to `ClaimTimeout`, but valid only when the outcome is a `Draw` and the transaction validity range ends before `claim_deadline`.
 - `SweepResidual { output_index }`: valid only when the transaction validity range starts after `claim_deadline`. Reads the outcome UTxO via reference input. Sends the entire remaining balance of the redemption UTxO to `market_address` (validator parameter). Destroys the redemption UTxO (no continuation).
 
 ## 5. Resolution: pluggable authority via `Credential`
@@ -156,7 +159,7 @@ The resolution result lives in a **beacon-authenticated UTxO** read by settlemen
 
 For conditional-token settlement this needs only a **single** `outcome_credential` attesting the winner in a single beacon-authenticated outcome UTxO. That is all settlement needs: there is no separate multiplier to attest (contrast the parimutuel sibling, which requires a second solvency-critical credential).
 
-The outcome UTxO also serves as the reference input for any transaction that requires the collateral unit. All four redemption spend paths — `RedeemWinner`, `BurnCompleteSet`, `ClaimTimeout`, and `SweepResidual` — read the outcome UTxO via reference input to obtain the `collateral` field from the outcome datum, so the redemption script can verify the collateral asset class and amount without hardcoding them in validator parameters.
+The outcome UTxO also serves as the reference input for any transaction that requires the collateral unit. All redemption spend paths read the outcome UTxO via reference input to obtain the `collateral` field from the outcome datum, so the redemption script can verify the collateral asset class and amount without hardcoding them in validator parameters.
 
 ## 6. Cross-cutting security must-fixes
 
