@@ -4,6 +4,8 @@ These tests run the published library (`@contracts-library/meshjs`, consumed by 
 
 ## What they cover
 
+### Linear Vesting
+
 Through the public API (`buildLockTx` / `buildClaimTx` / `buildCancelTx`):
 
 - Lock, then **partial claim** mid-schedule (continuation keeps the required remainder);
