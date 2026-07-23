@@ -28,7 +28,14 @@
  *   BurnWinner            = Constr 2 [marketId]
  */
 
-import { mConStr, mConStr0, mConStr1, mConStr2, mConStr3, type Data } from "@meshsdk/core";
+import {
+  mConStr,
+  mConStr0,
+  mConStr1,
+  mConStr2,
+  mConStr3,
+  type Data,
+} from "@meshsdk/core";
 import type {
   AssetClass,
   MintAction,
@@ -55,6 +62,7 @@ export function tokenInfoToData(t: TokenInfo): Data {
 function winnerToData(w: Winner): Data {
   if (w === "Yes") return mConStr0([]);
   if (w === "No") return mConStr1([]);
+  if (w === "Draw") return mConStr2([]);
   return mConStr2([]);
 }
 
