@@ -10,3 +10,9 @@ Transaction builders for all the implemented contracts. These constitute the pri
 ```sh
 npm install @contracts-library/meshjs @meshsdk/core
 ```
+
+## Run unit tests
+
+```sh
+npm run test
+```
