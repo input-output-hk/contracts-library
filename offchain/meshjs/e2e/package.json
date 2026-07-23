@@ -8,7 +8,7 @@
   "scripts": {
     "pretest": "npm --prefix ../lib run build",
     "test": "vitest run",
-    "test:devnet": "sh scripts/devnet-test.sh",
+    "test:devnet": "bash scripts/devnet-test.sh",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
