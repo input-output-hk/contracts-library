@@ -1,16 +1,35 @@
+use cardano/address.{Address}
+use cardano/assets.{PolicyId}
 use cardano/transaction.{OutputReference, Transaction}
 use prediction_market_conditional_token/types.{
-  RedemptionDatum, RedemptionRedeemer,
+  BurnCompleteSet, BurnSet, BurnWinner, ClaimDraw, ClaimTimeout, MintAction,
+  MintSet, RedeemWinner, RedemptionDatum, RedemptionRedeemer, SweepResidual,
+  TokenInfo,
 }
 
-validator redemption {
+validator redemption(market_address: Address, market_fee: TokenInfo) {
   spend(
-    _datum: Option<RedemptionDatum>,
-    _redeemer: RedemptionRedeemer,
+    datum: Option<RedemptionDatum>,
+    redeemer: RedemptionRedeemer,
     _own_ref: OutputReference,
     _self: Transaction,
   ) {
-    True
+    expect Some(redemption_datum) = datum
+    when redeemer is {
+      RedeemWinner { output_index: _ } -> True
+      BurnCompleteSet { output_index: _ } -> True
+      ClaimTimeout { output_index: _ } -> True
+      ClaimDraw { output_index: _ } -> True
+      SweepResidual { output_index: _ } -> True
+    }
+  }
+
+  mint(redeemer: MintAction, _policy_id: PolicyId, _self: Transaction) {
+    when redeemer is {
+      MintSet { market_id: _ } -> True
+      BurnSet { market_id: _ } -> True
+      BurnWinner { market_id: _ } -> True
+    }
   }
 
   else(_) {
