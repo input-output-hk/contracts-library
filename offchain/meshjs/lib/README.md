@@ -17,7 +17,6 @@ npm install @contracts-library/vesting-meshjs @meshsdk/core
 
 ## API
 
-
 | Export | Purpose |
 |---|---|
 | `buildLockTx(params)` | Create a vesting instance. |
@@ -28,7 +27,6 @@ npm install @contracts-library/vesting-meshjs @meshsdk/core
 | `vestedQuantity(total, start, end, now)` | Schedule math (mirrors on-chain). |
 | `requiredRemainder(datum, now)` | Per-asset amount that must stay locked. |
 | `vestingDatumToData` / `claimRedeemer` | CBOR encoders matching the blueprint. |
-
 
 ### Datum shape
 
@@ -126,7 +124,6 @@ The same `authorizer` field works on `buildCancelTx` for a script `locker`. You 
 | `redeemer` | What the approving script expects. Defaults to unit. |
 | `version` | Plutus version of the authorizer. Default `"V3"`. |
 | `manual` | Escape hatch: set `true` if you attached the withdrawal to the `txBuilder` yourself. |
-
 
 > **Setup note:** the withdraw-0 pattern requires the authorizer's **stake script credential to be registered once** (a small one-time deposit). The builder produces the withdrawal; registering the credential is a one-time setup step the consumer performs. Adding a new authorization scheme never requires changing this library (ARCHITECTURE.md §3); you only pass its script and redeemer.
 
