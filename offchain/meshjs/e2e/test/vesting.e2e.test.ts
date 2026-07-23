@@ -11,6 +11,7 @@
  */
 
 import {
+  ADA,
   buildCancelTx,
   buildClaimTx,
   buildLockTx,
@@ -56,7 +57,6 @@ if (!reachable) {
       `Run \`npm run test:devnet\` (or start one and set INDEXER_URL / YACI_STORE_URL).`,
   );
 }
-const ADA = 1_000_000n;
 
 describe.skipIf(!reachable)("linear vesting e2e (Yaci devnet)", () => {
   let provider: ReturnType<typeof makeProvider>;
@@ -85,8 +85,10 @@ describe.skipIf(!reachable)("linear vesting e2e (Yaci devnet)", () => {
     const grantor = await fundedAccount(provider);
     const beneficiary = await fundedAccount(provider);
     const datum: VestingDatum = {
-      beneficiary:
-        opts.beneficiaryCredential ?? { kind: "key", hash: beneficiary.keyHash },
+      beneficiary: opts.beneficiaryCredential ?? {
+        kind: "key",
+        hash: beneficiary.keyHash,
+      },
       locker: { kind: "key", hash: grantor.keyHash },
       vesting: [{ policyId: "", assetName: "", total: opts.totalAda }],
       startTime: opts.startMs,
@@ -124,7 +126,9 @@ describe.skipIf(!reachable)("linear vesting e2e (Yaci devnet)", () => {
         p.vestingUtxo.output.address,
       )
       .txInInlineDatumPresent()
-      .txInRedeemerValue(p.action === "claim" ? claimRedeemer() : cancelRedeemer())
+      .txInRedeemerValue(
+        p.action === "claim" ? claimRedeemer() : cancelRedeemer(),
+      )
       .txInScript(vestingScript().code);
 
     if (p.continuation) {
@@ -283,7 +287,11 @@ describe.skipIf(!reachable)("linear vesting e2e (Yaci devnet)", () => {
       recoveryMs: now + 600_000,
       beneficiaryCredential: { kind: "script", hash: REJECT_WITHDRAW.hash },
     });
-    await registerStakeCredential(provider, ctx.beneficiary, REJECT_WITHDRAW.hash);
+    await registerStakeCredential(
+      provider,
+      ctx.beneficiary,
+      REJECT_WITHDRAW.hash,
+    );
 
     const claimNow = await chainNowMs();
     await expect(
@@ -363,7 +371,10 @@ describe.skipIf(!reachable)("linear vesting e2e (Yaci devnet)", () => {
     });
     const validityNow = await chainNowMs();
     // bring end_time forward so more appears "vested": continuation datum differs
-    const tampered: VestingDatum = { ...ctx.datum, endTime: ctx.datum.startTime + 1 };
+    const tampered: VestingDatum = {
+      ...ctx.datum,
+      endTime: ctx.datum.startTime + 1,
+    };
 
     await expect(
       rawSpend({
