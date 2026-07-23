@@ -75,6 +75,12 @@ run_file() {
   return $TEST_EXIT
 }
 
+if [[ $# -gt 0 && "$1" != -* ]]; then
+  TEST_FILES=("$1")
+  shift
+fi
+
+
 FAILED=0
 for file in "${TEST_FILES[@]}"; do
   run_file "$file" || FAILED=1
