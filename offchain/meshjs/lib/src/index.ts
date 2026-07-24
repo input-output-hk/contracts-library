@@ -5,6 +5,7 @@
  *
  * Submodules:
  *   - vesting/            Linear vesting
+ *   - settings/           Protocol settings
  */
 
 export * from "./common";
@@ -15,3 +16,4 @@ export {
 } from "./authorization";
 
 export * from "./vesting";
+export * from "./settings";
