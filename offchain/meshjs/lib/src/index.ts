@@ -1,31 +1,17 @@
 /**
- * Linear vesting — MeshJS off-chain package.
- * Spec: specs/vesting/linear-vesting.md
+ * Contracts Library — MeshJS off-chain package.
+ *
+ * Contains transaction builders for multiple Aiken validators.
+ *
+ * Submodules:
+ *   - vesting/            Linear vesting
  */
 
-export * from "./types";
+export * from "./common";
 export {
   applyAuthorization,
   type ScriptAuthorizer,
   type PlutusVersion,
 } from "./authorization";
-export {
-  credentialToData,
-  vestedAssetToData,
-  vestingDatumToData,
-  claimRedeemer,
-  cancelRedeemer,
-  vestedQuantity,
-  requiredRemainder,
-} from "./datum";
-export {
-  vestingScript,
-  vestingScriptAddress,
-  buildLockTx,
-  buildClaimTx,
-  buildCancelTx,
-  type LockParams,
-  type ClaimParams,
-  type CancelParams,
-} from "./vesting";
-export { validatorHash, plutusVersion } from "./blueprint";
+
+export * from "./vesting";
