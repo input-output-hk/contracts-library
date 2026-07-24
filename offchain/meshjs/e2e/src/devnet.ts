@@ -1,7 +1,7 @@
 /**
  * Helpers for driving a local Yaci DevKit devnet from the e2e tests.
  *
- * The test harness that stands in for "a developer with a wallet and a provider". 
+ * The test harness that stands in for "a developer with a wallet and a provider".
  * Configuration comes from env so the same tests run locally and in CI:
  *   - YACI_STORE_URL  (default http://localhost:8080/api/v1/)
  *   - YACI_ADMIN_URL  (default http://localhost:10000)
@@ -233,6 +233,32 @@ export async function scriptOutputOf(
     const found = outs.find((u) => u.output.address === scriptAddress);
     if (!found) throw new Error(`no script output at ${scriptAddress} in ${txHash}`);
     return found;
+}
+
+/**
+ * Extract the lovelace quantity from a UTxO.
+ */
+export function lovelaceOf(utxo: UTxO): bigint {
+    const a = utxo.output.amount.find((x) => x.unit === "lovelace");
+    return BigInt(a?.quantity ?? "0");
+}
+
+/**
+ * Convenience: get the first collateral UTxO from an account.
+ */
+export async function collateralOf(account: Account): Promise<UTxO> {
+    return (await account.wallet.getCollateral())[0];
+}
+
+/**
+ * Sign a transaction with the account's wallet and submit it via the wallet
+ * (not the provider). Returns the tx hash.
+ */
+export async function signAndSubmit(
+    account: Account,
+    tx: string,
+): Promise<string> {
+    return account.wallet.submitTx(await account.wallet.signTx(tx, true));
 }
 
 /**
