@@ -9,10 +9,7 @@
  */
 
 export * from "./common";
-export {
-  applyAuthorization,
-  type ScriptAuthorizer,
-} from "./authorization";
+export { applyAuthorization, type ScriptAuthorizer } from "./authorization";
 
 export * from "./vesting";
 export * from "./settings";
