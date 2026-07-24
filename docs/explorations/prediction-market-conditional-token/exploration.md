@@ -79,7 +79,7 @@ pub type Winner {
   Draw
 }
 
-// Outcome validator(market_address: Address, setup_fee: TokenInfo)
+// Outcome validator(protocol_address: Address, setup_fee: TokenInfo)
 
 pub type OutcomeDatum {
   market_id: ByteArray,
@@ -99,7 +99,7 @@ pub type BeaconMintAction {
   MintBeacon { market_id: ByteArray }
 }
 
-// Redemption validator(market_address: Address, market_fee: TokenInfo)
+// Redemption validator(protocol_address: Address, market_fee: TokenInfo)
 
 pub type RedemptionDatum {
   market_id: ByteArray,
@@ -123,7 +123,7 @@ pub type MintAction {
 
 ### Outcome validator
 
-Receives `market_address: Address` (where fees are sent) and `setup_fee: TokenInfo` (fee charged when a market is created/initialized).
+Receives `protocol_address: Address` (where fees are sent) and `setup_fee: TokenInfo` (fee charged when a market is created/initialized).
 
 #### Mint
 
@@ -135,7 +135,7 @@ Receives `market_address: Address` (where fees are sent) and `setup_fee: TokenIn
 
 ### Redemption validator
 
-Receives `market_address: Address` (where fees are sent) and `market_fee: TokenInfo` (fee charged per redemption action).
+Receives `protocol_address: Address` (where fees are sent) and `market_fee: TokenInfo` (fee charged per redemption action).
 
 #### Mint
 
@@ -149,7 +149,7 @@ Receives `market_address: Address` (where fees are sent) and `market_fee: TokenI
 - `BurnCompleteSet { output_index }`: reads the outcome UTxO via reference input to obtain the collateral unit; requires `winner == None` (pre-resolution); burns equal YES + NO for 1 collateral each.
 - `ClaimTimeout { output_index }`: valid only while the transaction validity range starts after `resolution_timeout` and ends before `claim_deadline`. Reads the outcome UTxO via reference input to obtain the collateral unit. Burns any single YES and/or NO tokens (no complete-set requirement) and pays 0.5 collateral per token burned, deducted from the redemption UTxO's value. Produces a continuation redemption UTxO with the remaining collateral. With N YES + N NO tokens minted, burning m YES + n NO yields (m+n)/2 collateral returned; the residual is N − (m+n)/2.
 - `ClaimDraw { output_index }`: analogous to `ClaimTimeout`, but valid only when the outcome is a `Draw` and the transaction validity range ends before `claim_deadline`.
-- `SweepResidual { output_index }`: valid only when the transaction validity range starts after `claim_deadline`. Reads the outcome UTxO via reference input. Sends the entire remaining balance of the redemption UTxO to `market_address` (validator parameter). Destroys the redemption UTxO (no continuation).
+- `SweepResidual { output_index }`: valid only when the transaction validity range starts after `claim_deadline`. Reads the outcome UTxO via reference input. Sends the entire remaining balance of the redemption UTxO to `protocol_address` (validator parameter). Destroys the redemption UTxO (no continuation).
 
 ## 5. Resolution: pluggable authority via `Credential`
 
@@ -174,7 +174,7 @@ The hazards are the familiar ones — double satisfaction on the payout path (sa
 
 - **Position/ticket authenticity.** Positions must be authenticated tokens minted under a policy that is **time-gated to the betting window**, so no one can fabricate a winning position after resolution. Here this is the complete-set mint. Without it, an attacker mints a "winning" position post-outcome and drains funds.
 - **Double satisfaction** on the payout path (same class as Atomic Swap #5): one output must not be credited to two redemptions.
-- **Resolution liveness.** If resolution never arrives, funds must not be stuck: after `resolution_timeout`, `ClaimTimeout` allows single-token holders to claim 0.5 collateral per token; after `claim_deadline`, `SweepResidual` sends the remainder to `market_address`. Ties into resolver incentives (Q-ORACLE-1).
+- **Resolution liveness.** If resolution never arrives, funds must not be stuck: after `resolution_timeout`, `ClaimTimeout` allows single-token holders to claim 0.5 collateral per token; after `claim_deadline`, `SweepResidual` sends the remainder to `protocol_address`. Ties into resolver incentives (Q-ORACLE-1).
 - **Composability (ARCHITECTURE.md).** Settlement must assert only properties of its **own** UTxOs, never the total value/inputs/outputs of the transaction. The reference-input resolution design (§5) keeps reads composable.
 
 ## 7. Outcome scope
