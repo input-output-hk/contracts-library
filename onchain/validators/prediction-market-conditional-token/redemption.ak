@@ -7,14 +7,14 @@ use prediction_market_conditional_token/types.{
   TokenInfo,
 }
 
-validator redemption(market_address: Address, market_fee: TokenInfo) {
+validator redemption(_market_address: Address, _market_fee: TokenInfo) {
   spend(
     datum: Option<RedemptionDatum>,
     redeemer: RedemptionRedeemer,
     _own_ref: OutputReference,
     _self: Transaction,
   ) {
-    expect Some(redemption_datum) = datum
+    expect Some(_redemption_datum) = datum
     when redeemer is {
       RedeemWinner { output_index: _ } -> True
       BurnCompleteSet { output_index: _ } -> True
