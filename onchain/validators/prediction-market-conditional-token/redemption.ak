@@ -7,7 +7,7 @@ use prediction_market_conditional_token/types.{
   TokenInfo,
 }
 
-validator redemption(_market_address: Address, _market_fee: TokenInfo) {
+validator redemption(_protocol_address: Address, _market_fee: TokenInfo) {
   spend(
     datum: Option<RedemptionDatum>,
     redeemer: RedemptionRedeemer,

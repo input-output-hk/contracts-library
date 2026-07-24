@@ -6,7 +6,7 @@ use prediction_market_conditional_token/types.{
   TokenInfo,
 }
 
-validator outcome(_market_address: Address, _setup_fee: TokenInfo) {
+validator outcome(_protocol_address: Address, _setup_fee: TokenInfo) {
   spend(
     datum: Option<OutcomeDatum>,
     redeemer: OutcomeRedeemer,
