@@ -12,7 +12,7 @@ A vesting UTxO locks a bundle of assets for a `beneficiary` and releases it line
 ## API
 
 | Export | Purpose |
-|---|---|
+| --- | --- |
 | `buildLockTx(params)` | Create a vesting instance. |
 | `buildClaimTx(params)` | Withdraw the vested portion (beneficiary; key or script via `authorizer`). |
 | `buildCancelTx(params)` | Recover the remainder after `recoveryTime` (locker; key or script via `authorizer`). |
@@ -111,7 +111,7 @@ The same `authorizer` field works on `buildCancelTx` for a script `locker`. You 
 `ScriptAuthorizer` options:
 
 | Field | Meaning |
-|---|---|
+| --- | --- |
 | `scriptCbor` | The approving script, inlined (hex). |
 | `reference` | Or a UTxO carrying it as a reference script (cheaper for reusable authorizers). |
 | `scriptHash` | Optional; computed from `scriptCbor`, or supplied with `reference`. |
