@@ -39,52 +39,158 @@
     {
       "title": "prediction_market_conditional_token/outcome.outcome.spend",
       "datum": {
-        "title": "_datum",
+        "title": "datum",
         "schema": {
           "$ref": "#/definitions/prediction_market_conditional_token~1types~1OutcomeDatum"
         }
       },
       "redeemer": {
-        "title": "_redeemer",
+        "title": "redeemer",
         "schema": {
           "$ref": "#/definitions/prediction_market_conditional_token~1types~1OutcomeRedeemer"
         }
       },
-      "compiledCode": "58d701010029800aba2aba1aab9faab9eaab9dab9a48888896600264653001300700198039804000cc01c0092225980099b8748008c01cdd500144ca60026016003300b300c0018a5148896600266e1d2000300b375400f132598009808000c4c8c96600266e1d20000018acc004c03cdd500140122c80822b30013370e9001000c566002601e6ea800a00916404115980099b87480100062b3001300f37540050048b20208b201a40348068c034dd50009807800c5900e18061baa0078b201418041baa0028b200c180380098019baa0078a4d13656400401",
-      "hash": "560917d5c1138a4e0e2297de75abae9afd0147e0a92f1ebc019b0596"
+      "parameters": [
+        {
+          "title": "_market_address",
+          "schema": {
+            "$ref": "#/definitions/cardano~1address~1Address"
+          }
+        },
+        {
+          "title": "_setup_fee",
+          "schema": {
+            "$ref": "#/definitions/prediction_market_conditional_token~1types~1TokenInfo"
+          }
+        }
+      ],
+      "compiledCode": "59011f0101002229800aba2aba1aab9faab9eaab9dab9a488888966002646465300130053754003370e90004c02000e601000491112cc004cdc3a400400913232332259800980398069baa0058992cc004c04800626464b3001300a0018acc004c044dd500140162c80922b30013370e9001000c56600260226ea800a00b16404915980099b87480100062b3001301137540050058b20248b201e403c8078c03cdd50009808800c5901018071baa0058b2018159800980298059baa0018a518b2014300e002300d300e001300a375400b159800980180244c966002600860146ea800a26464b300130100028a518b201c375c601c00260166ea800a2c8048dd7180618051baa0058b201040203007300800130070013003375400f149a26cac80081",
+      "hash": "45524a86693e500f63b955ba3e807248f23958135aeac1651c3ff676"
+    },
+    {
+      "title": "prediction_market_conditional_token/outcome.outcome.mint",
+      "redeemer": {
+        "title": "redeemer",
+        "schema": {
+          "$ref": "#/definitions/prediction_market_conditional_token~1types~1BeaconMintAction"
+        }
+      },
+      "parameters": [
+        {
+          "title": "_market_address",
+          "schema": {
+            "$ref": "#/definitions/cardano~1address~1Address"
+          }
+        },
+        {
+          "title": "_setup_fee",
+          "schema": {
+            "$ref": "#/definitions/prediction_market_conditional_token~1types~1TokenInfo"
+          }
+        }
+      ],
+      "compiledCode": "59011f0101002229800aba2aba1aab9faab9eaab9dab9a488888966002646465300130053754003370e90004c02000e601000491112cc004cdc3a400400913232332259800980398069baa0058992cc004c04800626464b3001300a0018acc004c044dd500140162c80922b30013370e9001000c56600260226ea800a00b16404915980099b87480100062b3001301137540050058b20248b201e403c8078c03cdd50009808800c5901018071baa0058b2018159800980298059baa0018a518b2014300e002300d300e001300a375400b159800980180244c966002600860146ea800a26464b300130100028a518b201c375c601c00260166ea800a2c8048dd7180618051baa0058b201040203007300800130070013003375400f149a26cac80081",
+      "hash": "45524a86693e500f63b955ba3e807248f23958135aeac1651c3ff676"
     },
     {
       "title": "prediction_market_conditional_token/outcome.outcome.else",
       "redeemer": {
         "schema": {}
       },
-      "compiledCode": "58d701010029800aba2aba1aab9faab9eaab9dab9a48888896600264653001300700198039804000cc01c0092225980099b8748008c01cdd500144ca60026016003300b300c0018a5148896600266e1d2000300b375400f132598009808000c4c8c96600266e1d20000018acc004c03cdd500140122c80822b30013370e9001000c566002601e6ea800a00916404115980099b87480100062b3001300f37540050048b20208b201a40348068c034dd50009807800c5900e18061baa0078b201418041baa0028b200c180380098019baa0078a4d13656400401",
-      "hash": "560917d5c1138a4e0e2297de75abae9afd0147e0a92f1ebc019b0596"
+      "parameters": [
+        {
+          "title": "_market_address",
+          "schema": {
+            "$ref": "#/definitions/cardano~1address~1Address"
+          }
+        },
+        {
+          "title": "_setup_fee",
+          "schema": {
+            "$ref": "#/definitions/prediction_market_conditional_token~1types~1TokenInfo"
+          }
+        }
+      ],
+      "compiledCode": "59011f0101002229800aba2aba1aab9faab9eaab9dab9a488888966002646465300130053754003370e90004c02000e601000491112cc004cdc3a400400913232332259800980398069baa0058992cc004c04800626464b3001300a0018acc004c044dd500140162c80922b30013370e9001000c56600260226ea800a00b16404915980099b87480100062b3001301137540050058b20248b201e403c8078c03cdd50009808800c5901018071baa0058b2018159800980298059baa0018a518b2014300e002300d300e001300a375400b159800980180244c966002600860146ea800a26464b300130100028a518b201c375c601c00260166ea800a2c8048dd7180618051baa0058b201040203007300800130070013003375400f149a26cac80081",
+      "hash": "45524a86693e500f63b955ba3e807248f23958135aeac1651c3ff676"
     },
     {
       "title": "prediction_market_conditional_token/redemption.redemption.spend",
       "datum": {
-        "title": "_datum",
+        "title": "datum",
         "schema": {
           "$ref": "#/definitions/prediction_market_conditional_token~1types~1RedemptionDatum"
         }
       },
       "redeemer": {
-        "title": "_redeemer",
+        "title": "redeemer",
         "schema": {
           "$ref": "#/definitions/prediction_market_conditional_token~1types~1RedemptionRedeemer"
         }
       },
-      "compiledCode": "59011901010029800aba2aba1aab9faab9eaab9dab9a48888896600264653001300700198039804000cc01c0092225980099b8748008c01cdd500144ca60026016003300b300c00198041baa0048a51488896600266e1d2000002899192cc004c04800a0071640406eb4c040004c034dd5004456600266e1d2002002899192cc004c04800a0071640406eb4c040004c034dd5004456600266e1d2004002899192cc004c04800a0071640406eb4c040004c034dd5004456600266e1d2006002899192cc004c04800a0071640406eb4c040004c034dd5004456600266e1d2008002899192cc004c04800a0071640406eb4c040004c034dd500445900b2016402c805900b0c020dd50014590060c01c004c00cdd5003c52689b2b200201",
-      "hash": "77d085a9bc16e5153cbfa0d947d0422eb1697f6a139e746d6678ed15"
+      "parameters": [
+        {
+          "title": "_market_address",
+          "schema": {
+            "$ref": "#/definitions/cardano~1address~1Address"
+          }
+        },
+        {
+          "title": "_market_fee",
+          "schema": {
+            "$ref": "#/definitions/prediction_market_conditional_token~1types~1TokenInfo"
+          }
+        }
+      ],
+      "compiledCode": "5902000101002229800aba2aba1aab9faab9eaab9dab9a48888896600330013003375400f370e90024dc3a4001370e9001244446465300130083754003300b00698058012444b30013006003899194c0045660026012601a6ea8006264b3001300a0018a518acc004c02400629462b3001300b0018a518acc004cdc3a400c00314a314a2806900d201a4034601a6ea800e2c8062601a6ea800e60200049112cc004c03000a26464b30013016002802c590141bad30140013011375400d159800980580144c8c966002602c0050058b2028375a602800260226ea801a2b3001300d002899192cc004c05800a00b1640506eb4c050004c044dd5003456600266e1d2006002899192cc004c05800a00b1640506eb4c050004c044dd5003456600266e1d2008002899192cc004c05800a00b1640506eb4c050004c044dd500345900f201e403c807900f0c03cc040004c030dd50024566002600e007198009bae300e300c3754009132598009804000c528c566002600e00314a314a2805900b18059baa00198059baa00148896600260140031323259800980a00140122c8090dd7180900098079baa0048acc004c02400626464b300130140028024590121bae3012001300f37540091598009805800c4c8c96600260280050048b2024375c6024002601e6ea80122c806900d201a45900a2014180518058009805002229344d95900101",
+      "hash": "4ddf98246be9c3d62d1c68ea17e123d5dd3f7b2053be75b119b82ffd"
+    },
+    {
+      "title": "prediction_market_conditional_token/redemption.redemption.mint",
+      "redeemer": {
+        "title": "redeemer",
+        "schema": {
+          "$ref": "#/definitions/prediction_market_conditional_token~1types~1MintAction"
+        }
+      },
+      "parameters": [
+        {
+          "title": "_market_address",
+          "schema": {
+            "$ref": "#/definitions/cardano~1address~1Address"
+          }
+        },
+        {
+          "title": "_market_fee",
+          "schema": {
+            "$ref": "#/definitions/prediction_market_conditional_token~1types~1TokenInfo"
+          }
+        }
+      ],
+      "compiledCode": "5902000101002229800aba2aba1aab9faab9eaab9dab9a48888896600330013003375400f370e90024dc3a4001370e9001244446465300130083754003300b00698058012444b30013006003899194c0045660026012601a6ea8006264b3001300a0018a518acc004c02400629462b3001300b0018a518acc004cdc3a400c00314a314a2806900d201a4034601a6ea800e2c8062601a6ea800e60200049112cc004c03000a26464b30013016002802c590141bad30140013011375400d159800980580144c8c966002602c0050058b2028375a602800260226ea801a2b3001300d002899192cc004c05800a00b1640506eb4c050004c044dd5003456600266e1d2006002899192cc004c05800a00b1640506eb4c050004c044dd5003456600266e1d2008002899192cc004c05800a00b1640506eb4c050004c044dd500345900f201e403c807900f0c03cc040004c030dd50024566002600e007198009bae300e300c3754009132598009804000c528c566002600e00314a314a2805900b18059baa00198059baa00148896600260140031323259800980a00140122c8090dd7180900098079baa0048acc004c02400626464b300130140028024590121bae3012001300f37540091598009805800c4c8c96600260280050048b2024375c6024002601e6ea80122c806900d201a45900a2014180518058009805002229344d95900101",
+      "hash": "4ddf98246be9c3d62d1c68ea17e123d5dd3f7b2053be75b119b82ffd"
     },
     {
       "title": "prediction_market_conditional_token/redemption.redemption.else",
       "redeemer": {
         "schema": {}
       },
-      "compiledCode": "59011901010029800aba2aba1aab9faab9eaab9dab9a48888896600264653001300700198039804000cc01c0092225980099b8748008c01cdd500144ca60026016003300b300c00198041baa0048a51488896600266e1d2000002899192cc004c04800a0071640406eb4c040004c034dd5004456600266e1d2002002899192cc004c04800a0071640406eb4c040004c034dd5004456600266e1d2004002899192cc004c04800a0071640406eb4c040004c034dd5004456600266e1d2006002899192cc004c04800a0071640406eb4c040004c034dd5004456600266e1d2008002899192cc004c04800a0071640406eb4c040004c034dd500445900b2016402c805900b0c020dd50014590060c01c004c00cdd5003c52689b2b200201",
-      "hash": "77d085a9bc16e5153cbfa0d947d0422eb1697f6a139e746d6678ed15"
+      "parameters": [
+        {
+          "title": "_market_address",
+          "schema": {
+            "$ref": "#/definitions/cardano~1address~1Address"
+          }
+        },
+        {
+          "title": "_market_fee",
+          "schema": {
+            "$ref": "#/definitions/prediction_market_conditional_token~1types~1TokenInfo"
+          }
+        }
+      ],
+      "compiledCode": "5902000101002229800aba2aba1aab9faab9eaab9dab9a48888896600330013003375400f370e90024dc3a4001370e9001244446465300130083754003300b00698058012444b30013006003899194c0045660026012601a6ea8006264b3001300a0018a518acc004c02400629462b3001300b0018a518acc004cdc3a400c00314a314a2806900d201a4034601a6ea800e2c8062601a6ea800e60200049112cc004c03000a26464b30013016002802c590141bad30140013011375400d159800980580144c8c966002602c0050058b2028375a602800260226ea801a2b3001300d002899192cc004c05800a00b1640506eb4c050004c044dd5003456600266e1d2006002899192cc004c05800a00b1640506eb4c050004c044dd5003456600266e1d2008002899192cc004c05800a00b1640506eb4c050004c044dd500345900f201e403c807900f0c03cc040004c030dd50024566002600e007198009bae300e300c3754009132598009804000c528c566002600e00314a314a2805900b18059baa00198059baa00148896600260140031323259800980a00140122c8090dd7180900098079baa0048acc004c02400626464b300130140028024590121bae3012001300f37540091598009805800c4c8c96600260280050048b2024375c6024002601e6ea80122c806900d201a45900a2014180518058009805002229344d95900101",
+      "hash": "4ddf98246be9c3d62d1c68ea17e123d5dd3f7b2053be75b119b82ffd"
     }
   ],
   "definitions": {
@@ -99,6 +205,29 @@
       "items": {
         "$ref": "#/definitions/vesting~1types~1VestedAsset"
       }
+    },
+    "Option<cardano/address/StakeCredential>": {
+      "title": "Option",
+      "anyOf": [
+        {
+          "title": "Some",
+          "description": "An optional value.",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "$ref": "#/definitions/cardano~1address~1StakeCredential"
+            }
+          ]
+        },
+        {
+          "title": "None",
+          "description": "Nothing.",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
     },
     "Option<prediction_market_conditional_token/types/Winner>": {
       "title": "Option",
@@ -131,6 +260,27 @@
       "title": "VerificationKeyHash",
       "dataType": "bytes"
     },
+    "cardano/address/Address": {
+      "title": "Address",
+      "description": "A Cardano `Address` typically holding one or two credential references.\n\n Note that legacy bootstrap addresses (a.k.a. 'Byron addresses') are\n completely excluded from Plutus contexts. Thus, from an on-chain\n perspective only exists addresses of type 00, 01, ..., 07 as detailed\n in [CIP-0019 :: Shelley Addresses](https://github.com/cardano-foundation/CIPs/tree/master/CIP-0019/#shelley-addresses).",
+      "anyOf": [
+        {
+          "title": "Address",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "payment_credential",
+              "$ref": "#/definitions/cardano~1address~1PaymentCredential"
+            },
+            {
+              "title": "stake_credential",
+              "$ref": "#/definitions/Option<cardano~1address~1StakeCredential>"
+            }
+          ]
+        }
+      ]
+    },
     "cardano/address/Credential": {
       "title": "Credential",
       "description": "A general structure for representing an on-chain `Credential`.\n\n Credentials are always one of two kinds: a direct public/private key\n pair, or a script (native or Plutus).",
@@ -152,6 +302,67 @@
           "fields": [
             {
               "$ref": "#/definitions/aiken~1crypto~1ScriptHash"
+            }
+          ]
+        }
+      ]
+    },
+    "cardano/address/PaymentCredential": {
+      "title": "PaymentCredential",
+      "description": "A general structure for representing an on-chain `Credential`.\n\n Credentials are always one of two kinds: a direct public/private key\n pair, or a script (native or Plutus).",
+      "anyOf": [
+        {
+          "title": "VerificationKey",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "$ref": "#/definitions/aiken~1crypto~1VerificationKeyHash"
+            }
+          ]
+        },
+        {
+          "title": "Script",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": [
+            {
+              "$ref": "#/definitions/aiken~1crypto~1ScriptHash"
+            }
+          ]
+        }
+      ]
+    },
+    "cardano/address/StakeCredential": {
+      "title": "StakeCredential",
+      "description": "Represent a type of object that can be represented either inline (by hash)\n or via a reference (i.e. a pointer to an on-chain location).\n\n This is mainly use for capturing pointers to a stake credential\n registration certificate in the case of so-called pointer addresses.",
+      "anyOf": [
+        {
+          "title": "Inline",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "$ref": "#/definitions/cardano~1address~1Credential"
+            }
+          ]
+        },
+        {
+          "title": "Pointer",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": [
+            {
+              "title": "slot_number",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "transaction_index",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "certificate_index",
+              "$ref": "#/definitions/Int"
             }
           ]
         }
@@ -180,6 +391,60 @@
             {
               "title": "asset_name",
               "$ref": "#/definitions/cardano~1assets~1AssetName"
+            }
+          ]
+        }
+      ]
+    },
+    "prediction_market_conditional_token/types/BeaconMintAction": {
+      "title": "BeaconMintAction",
+      "anyOf": [
+        {
+          "title": "MintBeacon",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "market_id",
+              "$ref": "#/definitions/ByteArray"
+            }
+          ]
+        }
+      ]
+    },
+    "prediction_market_conditional_token/types/MintAction": {
+      "title": "MintAction",
+      "anyOf": [
+        {
+          "title": "MintSet",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "market_id",
+              "$ref": "#/definitions/ByteArray"
+            }
+          ]
+        },
+        {
+          "title": "BurnSet",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": [
+            {
+              "title": "market_id",
+              "$ref": "#/definitions/ByteArray"
+            }
+          ]
+        },
+        {
+          "title": "BurnWinner",
+          "dataType": "constructor",
+          "index": 2,
+          "fields": [
+            {
+              "title": "market_id",
+              "$ref": "#/definitions/ByteArray"
             }
           ]
         }
