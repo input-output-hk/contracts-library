@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { requiredRemainder, vestedQuantity } from "../src/datum";
-import type { VestingDatum } from "../src/types";
+import { requiredRemainder, vestedQuantity } from "../../src/vesting/datum";
+import type { VestingDatum } from "../../src/vesting/types";
 
 describe("vestedQuantity (mirrors onchain lib/vesting/linear.ak)", () => {
   it("is zero at or before start", () => {

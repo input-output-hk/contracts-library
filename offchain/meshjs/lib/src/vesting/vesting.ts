@@ -22,7 +22,7 @@ import {
   type UTxO,
 } from "@meshsdk/core";
 
-import { applyAuthorization, type ScriptAuthorizer } from "./authorization";
+import { applyAuthorization, type ScriptAuthorizer } from "../authorization";
 import { compiledCode, plutusVersion } from "./blueprint";
 import {
   cancelRedeemer,

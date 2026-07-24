@@ -6,8 +6,8 @@ import {
 } from "@meshsdk/core";
 import { describe, expect, it } from "vitest";
 import { applyAuthorization } from "../src/authorization";
-import { compiledCode, validatorHash } from "../src/blueprint";
-import type { Credential } from "../src/types";
+import { compiledCode, validatorHash } from "../src/vesting/blueprint";
+import type { Credential } from "../src/vesting/types";
 
 /** A MeshTxBuilder stand-in that records the methods called on it. */
 function recorder() {
