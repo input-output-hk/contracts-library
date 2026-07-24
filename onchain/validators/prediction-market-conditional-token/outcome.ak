@@ -6,25 +6,24 @@ use prediction_market_conditional_token/types.{
   TokenInfo,
 }
 
-validator outcome(market_address: Address, setup_fee: TokenInfo) {
+validator outcome(_market_address: Address, _setup_fee: TokenInfo) {
   spend(
     datum: Option<OutcomeDatum>,
     redeemer: OutcomeRedeemer,
     _own_ref: OutputReference,
     _self: Transaction,
   ) {
-    expect Some(outcome_datum) = datum
-    when redeemer is {
-      Resolve { winner: _ } -> True
-    }
+    expect Some(_outcome_datum) = datum
+    let Resolve { winner: _ } = redeemer
+    True
   }
 
   mint(redeemer: BeaconMintAction, _policy_id: PolicyId, _self: Transaction) {
-    when redeemer is {
-      MintBeacon { market_id: _ } -> True
-    }
+    let MintBeacon { market_id: _ } = redeemer
+    True
   }
 
   else(_) {
     fail
   }
+}
