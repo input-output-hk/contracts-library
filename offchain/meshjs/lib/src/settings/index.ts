@@ -16,7 +16,7 @@ export {
 export {
   settingsScript,
   settingsScriptAddress,
-  buildMintTx,
+  buildLaunchTx,
   buildProposeTx,
   buildApplyTx,
   buildCloseTx,
