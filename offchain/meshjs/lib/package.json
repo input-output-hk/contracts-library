@@ -26,6 +26,7 @@
   "blueprint": {
     "validatorHash": "95da21788eb1f59f51aad9669eb8c8b7081ab618c1f29b871925894a",
     "vesting": "a916d73a133b6e6cfaaa3fb66f0bc2410359ffa0d6b6a2bc6f057263",
+    "settings": "2a3383d6501a474719e0d78bf73dfbdd1da254e03c0dd027015222d3",
     "compiler": "aiken-v1.1.21"
   }
 }
