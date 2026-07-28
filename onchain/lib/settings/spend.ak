@@ -116,11 +116,7 @@ pub fn validate_apply(
   }
 }
 
-pub fn validate_close(
-  _datum: Option<SettingsDatum>,
-  own_ref: OutputReference,
-  self: Transaction,
-) {
+pub fn validate_close(own_ref: OutputReference, self: Transaction) {
   let Transaction { inputs, mint, .. } = self
   expect Some(own_input) = find_input(inputs, own_ref)
   expect Script(own_hash) = own_input.output.address.payment_credential
