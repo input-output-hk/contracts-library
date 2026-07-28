@@ -60,3 +60,25 @@ pub fn validate_mint(
     correct_datum,
   }
 }
+
+pub fn validate_burn(
+  auth: Credential,
+  own_policy: PolicyId,
+  self: Transaction,
+  settings_token_name: AssetName,
+) {
+  let Transaction { mint, .. } = self
+
+  let correct_burn = {
+    expect [Pair(minted_token_name, quantity)] =
+      mint
+        |> assets.tokens(own_policy)
+        |> dict.to_pairs()
+    quantity == -1 && minted_token_name == settings_token_name
+  }
+
+  and {
+    is_authorized(auth, self.extra_signatories, self.withdrawals),
+    correct_burn,
+  }
+}
