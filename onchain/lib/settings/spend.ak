@@ -1,3 +1,4 @@
+use aiken/collection/dict
 use aiken/collection/list
 use aiken/interval.{Finite}
 use authorization.{is_authorized}
@@ -113,4 +114,23 @@ pub fn validate_apply(
     correct_datum,
     correct_apply_time,
   }
+}
+
+pub fn validate_close(
+  _datum: Option<SettingsDatum>,
+  own_ref: OutputReference,
+  self: Transaction,
+) {
+  let Transaction { inputs, mint, .. } = self
+  expect Some(own_input) = find_input(inputs, own_ref)
+  expect Script(own_hash) = own_input.output.address.payment_credential
+
+  let correct_burn = {
+    expect [Pair(_, quantity)] =
+      mint
+        |> assets.tokens(own_hash)
+        |> dict.to_pairs()
+    quantity < 0
+  }
+  correct_burn
 }

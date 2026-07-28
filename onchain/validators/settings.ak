@@ -43,7 +43,7 @@ validator settings(
           validate_datum,
         )
       Close ->
-        validate_close(apply_auth, datum, own_ref, self)
+        validate_close(datum, own_ref, self)
     }
   }
 
