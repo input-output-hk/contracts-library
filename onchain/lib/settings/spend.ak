@@ -116,7 +116,11 @@ pub fn validate_apply(
   }
 }
 
-pub fn validate_close(own_ref: OutputReference, self: Transaction) {
+pub fn validate_close(
+  auth: Credential,
+  own_ref: OutputReference,
+  self: Transaction,
+) {
   let Transaction { inputs, mint, .. } = self
   expect Some(own_input) = find_input(inputs, own_ref)
   expect Script(own_hash) = own_input.output.address.payment_credential
@@ -128,5 +132,9 @@ pub fn validate_close(own_ref: OutputReference, self: Transaction) {
         |> dict.to_pairs()
     quantity < 0
   }
-  correct_burn
+
+  and {
+    is_authorized(auth, self.extra_signatories, self.withdrawals),
+    correct_burn,
+  }
 }

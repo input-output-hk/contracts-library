@@ -61,7 +61,7 @@ pub fn validate_mint(
   }
 }
 
-pub fn validate_burn(auth: Credential, own_policy: PolicyId, self: Transaction) {
+pub fn validate_burn(own_policy: PolicyId, self: Transaction) {
   let Transaction { mint, .. } = self
 
   let correct_burn = {
@@ -72,8 +72,5 @@ pub fn validate_burn(auth: Credential, own_policy: PolicyId, self: Transaction) 
     quantity == -1
   }
 
-  and {
-    is_authorized(auth, self.extra_signatories, self.withdrawals),
-    correct_burn,
-  }
+  correct_burn
 }
