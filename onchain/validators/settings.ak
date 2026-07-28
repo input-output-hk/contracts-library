@@ -1,8 +1,8 @@
 use cardano/address.{Credential}
 use cardano/assets.{AssetName, PolicyId}
 use cardano/transaction.{OutputReference, Transaction}
-use settings/mint.{validate_mint}
-use settings/spend.{validate_apply, validate_propose}
+use settings/mint.{validate_burn, validate_mint}
+use settings/spend.{validate_apply, validate_close, validate_propose}
 use settings/types.{
   Apply, Burn, Close, Mint, MintRedeemer, Propose, SettingsDatum, SpendRedeemer,
 }
@@ -43,8 +43,7 @@ validator settings(
           validate_datum,
         )
       Close ->
-        // TODO: check NFT burning
-        True
+        validate_close(apply_auth, datum, own_ref, self)
     }
   }
 
@@ -61,8 +60,7 @@ validator settings(
           validate_datum,
         )
       Burn ->
-        // TODO: check mint quantity < 0
-        True
+        validate_burn(apply_auth, own_policy, self, settings_token_name)
     }
   }
 
