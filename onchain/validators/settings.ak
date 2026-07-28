@@ -42,8 +42,7 @@ validator settings(
           settings_token_name,
           validate_datum,
         )
-      Close ->
-        validate_close(datum, own_ref, self)
+      Close -> validate_close(own_ref, self)
     }
   }
 
@@ -59,8 +58,7 @@ validator settings(
           settings_token_name,
           validate_datum,
         )
-      Burn ->
-        validate_burn(apply_auth, own_policy, self, settings_token_name)
+      Burn -> validate_burn(apply_auth, own_policy, self)
     }
   }
 
