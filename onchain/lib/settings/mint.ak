@@ -8,6 +8,12 @@ use cardano/transaction.{
 }
 use settings/types.{SettingsDatum}
 
+/// Validate a settings NFT mint.
+///
+/// Requires exactly one token with the correct name to be minted,
+/// the seed UTxO to be spent, the continuation output at `out_ix`
+/// to carry the NFT with the expected address and a valid initial
+/// datum, and the caller to be authorized.
 pub fn validate_mint(
   seed_utxo: OutputReference,
   auth: Credential,
@@ -61,6 +67,9 @@ pub fn validate_mint(
   }
 }
 
+/// Validate a settings NFT burn.
+///
+/// Requires exactly one token to be burned under the own policy.
 pub fn validate_burn(own_policy: PolicyId, self: Transaction) {
   let Transaction { mint, .. } = self
 

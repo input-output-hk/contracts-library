@@ -1,14 +1,14 @@
 use aiken/collection/dict
-use aiken/collection/list
 use aiken/interval.{Finite}
 use authorization.{is_authorized}
 use cardano/address.{Credential, Script}
-use cardano/assets.{AssetName, has_nft_strict}
-use cardano/transaction.{
-  InlineDatum, Input, Output, OutputReference, Transaction, find_input,
-}
+use cardano/assets.{AssetName}
+use cardano/transaction.{OutputReference, Transaction, find_input}
 use settings/types.{SettingsDatum}
+use settings/utils.{expect_continuation}
 
+/// Validate a proposal to change settings.
+///
 pub fn validate_propose(
   auth: Credential,
   apply_delay: Int,
@@ -26,22 +26,8 @@ pub fn validate_propose(
   expect Some(input_datum) = datum
   let SettingsDatum { current, .. } = input_datum
 
-  expect Some(cont_output) = list.at(outputs, out_ix)
-  expect Some(own_input) = find_input(inputs, own_ref)
-
-  expect Script(own_hash) = own_input.output.address.payment_credential
-
-  // checks for continuation output
-  expect Output {
-    address: cont_addr,
-    value,
-    datum: InlineDatum(cont_datum),
-    reference_script: None,
-  } = cont_output
-
-  let correct_addr = cont_addr == own_input.output.address
-
-  let correct_value = has_nft_strict(value, own_hash, settings_token_name)
+  let cont_datum =
+    expect_continuation(inputs, outputs, own_ref, out_ix, settings_token_name)
 
   let correct_datum = {
     expect cont_datum: SettingsDatum = cont_datum
@@ -52,17 +38,17 @@ pub fn validate_propose(
         next_apply: Some(now + apply_delay),
       }
     expect Some(next_data) = cont_datum.next
-    cont_datum == expected_datum && validate_datum(next_data)
+    cont_datum == expected_datum && validate_datum(next_data) && next_data != current
   }
 
   and {
     is_authorized(auth, self.extra_signatories, self.withdrawals),
-    correct_addr,
-    correct_value,
     correct_datum,
   }
 }
 
+/// Validate applying a previously proposed setting.
+///
 pub fn validate_apply(
   auth: Credential,
   datum: Option<SettingsDatum>,
@@ -83,22 +69,8 @@ pub fn validate_apply(
   expect Some(next_apply_time) = next_apply
   let correct_apply_time = now >= next_apply_time
 
-  expect Some(cont_output) = list.at(outputs, out_ix)
-  expect Some(own_input) = find_input(inputs, own_ref)
-
-  expect Script(own_hash) = own_input.output.address.payment_credential
-
-  // checks for continuation output
-  expect Output {
-    address: cont_addr,
-    value,
-    datum: InlineDatum(cont_datum),
-    reference_script: None,
-  } = cont_output
-
-  let correct_addr = cont_addr == own_input.output.address
-
-  let correct_value = has_nft_strict(value, own_hash, settings_token_name)
+  let cont_datum =
+    expect_continuation(inputs, outputs, own_ref, out_ix, settings_token_name)
 
   let correct_datum = {
     expect cont_datum: SettingsDatum = cont_datum
@@ -109,13 +81,13 @@ pub fn validate_apply(
 
   and {
     is_authorized(auth, self.extra_signatories, self.withdrawals),
-    correct_addr,
-    correct_value,
     correct_datum,
     correct_apply_time,
   }
 }
 
+/// Validate closing the settings contract by burning the NFT.
+///
 pub fn validate_close(
   auth: Credential,
   own_ref: OutputReference,
