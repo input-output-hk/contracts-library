@@ -59,5 +59,6 @@ export function paramsToData(p: SettingsParams): Data[] {
     credentialToData(p.proposeAuth),
     credentialToData(p.applyAuth),
     p.applyDelay,
+    p.settingsTokenName,
   ];
 }
