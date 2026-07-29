@@ -187,3 +187,129 @@ Suggested delivery order:
 1. Define and lock the DAO-to-consumer authorization interface (execution proof shape, payload binding, timelock semantics).
 2. Implement a minimal governance core with conservative lifecycle and parameter set.
 3. Add advanced tally/throughput and flexible vote-power modules only after baseline audits and usage data.
+
+## 9. Design sketch
+
+We propose a design with a enforced tally design, credential based execution authority, stake-lock double-vote prevention and vote artifacts to prevent congestion.
+
+### 9.1 Stake contract
+In charge of storing users staked tokens, locking them after a vote has been cast.
+
+* **Datum**:
+```aiken
+type StakingPositionDatum = {
+  owner: Credential
+  delegatee: Maybe Credential
+  locks: [(ByteString, PosixTime, Integer)]
+}
+```
+
+Delegatee authorizes cosign/votes if set, if not that responsability lies with the owner,
+Owner must approve withdrawals and deposits.
+
+The locks stores tuples with the proposal token name, the unlock time and the used stake for that proposal. When cosign a proposal, you need to lock the tokens until the draft phase ends (startTime + draftLenght). Creating a proposal is treated the same way as cosigning it. For voting, the tokens get locked until the tally phase ends.
+After any opearation, expired locks must be removed from the locks datum.
+
+* **Redeemer**:
+
+```aiken
+type StakingPositionRedeemer = {
+  Deposit
+  Withdraw { amount: Integer }
+  Create
+  Cosign
+  Vote
+  UpdateVote
+  CancelVote
+}
+
+type StakingPositionTokenRedeemer = {
+  CreatePosition
+  ClosePosition
+}
+
+```
+
+### 9.2 Proposal contract
+
+Contains the proposal details and tracks it's lifecycle
+
+* **Datum**:
+
+```aiken
+type ProposalDatum = {
+  thresholds: ProposalThresholds
+  timingConfig: ProposalTimingConfig
+  startTime: PosixTime
+  status: ProposalStatus
+  // Mapping resultId to scriptHash to execute
+  results: Map Integer ScriptHash
+}
+
+type ProposalThresholds = {
+  // Tokens needed to create a proposal
+  create: Integer
+  // Tokens needed to cosign a proposal
+  cosign: Integer
+  // Tokens needed to move a proposal from draft to voting
+  accept: Integer
+  // Tokens needed to vote on a proposal
+  vote: Integer
+  // Votes needed to execute a proposal, if not enough votes, proposal fails
+  execute: Integer
+}
+
+type ProposalTimingConfig = {
+  draftLenght: PosixTime
+  votingLenght: PosixTime
+  tallyLenght: PosixTime
+}
+
+type ProposalStatus = {
+  Draft { cosigningStake: Integer }
+  Voting
+  // Mapping resultId to votes gathered
+  Tally { votes: Map Integer Integer }
+  Closed
+}
+
+```
+
+Thresholds, timingConfig and startTime get locked on proposal creation.
+
+* **Redeemer**:
+
+```aiken
+type ProposalRedeemer = {
+  Cosign
+  AcceptDraft
+  EndVotingStage
+  TallyVotes
+  EndTallyStage
+}
+
+type ProposalTokenRedeemer = {
+  CreateProposal
+  FinishProposal
+}
+```
+
+### 9.3 Vote Contract
+
+Created when a user votes, stores the staked token amount and gets destroyed once the votes get tallied
+
+* **Datum**:
+
+```aiken
+type VoteDatum = {
+  stakeOwner: Address
+  stakePosition: ByteArray
+  proposal: ByteString
+  votedOption: Integer
+  stake: Integer
+}
+```
+
+* **Redeemer**: Data
+
+Only one action in V1, tally the vote
