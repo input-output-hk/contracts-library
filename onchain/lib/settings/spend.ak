@@ -96,6 +96,8 @@ pub fn validate_apply(
   }
 }
 
+/// Validate closing the settings contract by burning the NFT.
+///
 pub fn validate_close(
   auth: Credential,
   own_ref: OutputReference,
