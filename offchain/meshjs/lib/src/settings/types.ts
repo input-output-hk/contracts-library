@@ -17,6 +17,7 @@ export interface SettingsParams {
   proposeAuth: Credential;
   applyAuth: Credential;
   applyDelay: number;
+  settingsTokenName: string;
 }
 
 export interface OutputRef {

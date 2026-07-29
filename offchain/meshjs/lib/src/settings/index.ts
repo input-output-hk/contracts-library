@@ -14,6 +14,7 @@ export {
   paramsToData,
 } from "./datum";
 export {
+  SETTINGS_TOKEN_NAME,
   settingsScript,
   settingsScriptAddress,
   buildLaunchTx,
