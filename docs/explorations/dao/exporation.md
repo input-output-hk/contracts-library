@@ -207,7 +207,7 @@ type StakingPositionDatum = {
 Delegatee authorizes cosign/votes if set, if not that responsability lies with the owner,
 Owner must approve withdrawals and deposits.
 
-The locks stores tuples with the proposal token name, the unlock time and the used stake for that proposal. When cosign a proposal, you need to lock the tokens until the draft phase ends (startTime + draftLenght). Creating a proposal is treated the same way as cosigning it. For voting, the tokens get locked until the tally phase ends.
+The locks stores tuples with the proposal token name, the unlock time and the used stake for that proposal. When cosign a proposal, you need to lock the tokens until the draft phase ends (startTime + draftlength). Creating a proposal is treated the same way as cosigning it. For voting, the tokens get locked until the tally phase ends.
 After any opearation, expired locks must be removed from the locks datum.
 
 * **Redeemer**:
@@ -215,10 +215,12 @@ After any opearation, expired locks must be removed from the locks datum.
 ```aiken
 type StakingPositionRedeemer = {
   Deposit
+  DelegateTo { delegatee: Option Credential }
   Withdraw { amount: Integer }
-  Create
-  Cosign
-  Vote
+  ClosePosition
+  CreateProposal
+  CosignProposal
+  VoteProposal
   UpdateVote
   CancelVote
 }
@@ -260,9 +262,9 @@ type ProposalThresholds = {
 }
 
 type ProposalTimingConfig = {
-  draftLenght: PosixTime
-  votingLenght: PosixTime
-  tallyLenght: PosixTime
+  draftLength: PosixTime
+  votingLength: PosixTime
+  tallyLength: PosixTime
 }
 
 type ProposalStatus = {
@@ -270,7 +272,6 @@ type ProposalStatus = {
   Voting
   // Mapping resultId to votes gathered
   Tally { votes: Map Integer Integer }
-  Closed
 }
 
 ```
@@ -283,9 +284,10 @@ Thresholds, timingConfig and startTime get locked on proposal creation.
 type ProposalRedeemer = {
   Cosign
   AcceptDraft
+  RejectDraft
   EndVotingStage
   TallyVotes
-  EndTallyStage
+  EndProposal
 }
 
 type ProposalTokenRedeemer = {
@@ -303,8 +305,7 @@ Created when a user votes, stores the staked token amount and gets destroyed onc
 ```aiken
 type VoteDatum = {
   stakeOwner: Address
-  stakePosition: ByteArray
-  proposal: ByteString
+  proposal: ByteArray
   votedOption: Integer
   stake: Integer
 }
