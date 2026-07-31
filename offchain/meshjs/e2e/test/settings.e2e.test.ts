@@ -61,7 +61,7 @@ describe.skipIf(!reachable)("settings e2e (Yaci devnet)", () => {
 
   beforeAll(async () => {
     provider = makeProvider();
-    slotConfig = await fetchDevnetSlotConfig();
+    slotConfig = await devnetSlotConfig();
   });
 
   async function setup(): Promise<{
