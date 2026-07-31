@@ -43,7 +43,7 @@ function networkIdOf(network: Network): 0 | 1 {
 
 const DEFAULT_MIN_UTXO_LOVELACE = 1_500_000n;
 
-const SETTINGS_TOKEN_NAME = "73657474696e6773"; // hex-encoded "settings"
+export const SETTINGS_TOKEN_NAME = "73657474696e6773"; // hex-encoded "settings"
 
 export function settingsScript(params: SettingsParams): PlutusScript {
   const code = applyParamsToScript(compiledCode, paramsToData(params), "Mesh");

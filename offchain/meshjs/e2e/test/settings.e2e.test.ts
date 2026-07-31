@@ -12,6 +12,7 @@ import {
   buildProposeTx,
   buildApplyTx,
   buildCloseTx,
+  SETTINGS_TOKEN_NAME,
   settingsDatumToData,
   settingsScript,
   settingsScriptAddress,
@@ -56,9 +57,11 @@ const VALUE_B: Data = mConStr0([2n]);
 
 describe.skipIf(!reachable)("settings e2e (Yaci devnet)", () => {
   let provider: ReturnType<typeof makeProvider>;
+  let slotConfig: SlotConfig;
 
   beforeAll(async () => {
     provider = makeProvider();
+    slotConfig = await fetchDevnetSlotConfig();
   });
 
   async function setup(): Promise<{
@@ -83,6 +86,7 @@ describe.skipIf(!reachable)("settings e2e (Yaci devnet)", () => {
       proposeAuth: { kind: "key", hash: proposer.keyHash },
       applyAuth: { kind: "key", hash: applier.keyHash },
       applyDelay: 4_000,
+      settingsTokenName: SETTINGS_TOKEN_NAME,
     };
 
     const script = settingsScript(params);
@@ -112,7 +116,6 @@ describe.skipIf(!reachable)("settings e2e (Yaci devnet)", () => {
     outputIndex: number;
     requiredSigner?: string;
   }): Promise<string> {
-    const slotConfig = await devnetSlotConfig();
     const tb = newTxBuilder(provider);
 
     tb.spendingPlutusScriptV3()
@@ -232,7 +235,7 @@ describe.skipIf(!reachable)("settings e2e (Yaci devnet)", () => {
       collateralUtxo: await collateralOf(ctx.proposer),
       proposeAuth: { kind: "key", hash: ctx.proposer.keyHash },
       applyDelay: ctx.applyDelay,
-      customSlotConfig: await devnetSlotConfig(),
+      customSlotConfig: slotConfig,
     });
     const proposeHash = await signAndSubmit(ctx.proposer, proposeTx);
     await waitForTx(provider, proposeHash);
@@ -262,7 +265,7 @@ describe.skipIf(!reachable)("settings e2e (Yaci devnet)", () => {
       changeAddress: ctx.applier.address,
       collateralUtxo: await collateralOf(ctx.applier),
       applyAuth: { kind: "key", hash: ctx.applier.keyHash },
-      customSlotConfig: await devnetSlotConfig(),
+      customSlotConfig: slotConfig,
     });
     const applyHash = await signAndSubmit(ctx.applier, applyTx);
     await waitForTx(provider, applyHash);
@@ -319,7 +322,11 @@ describe.skipIf(!reachable)("settings e2e (Yaci devnet)", () => {
     });
     const mintHash = await signAndSubmit(ctx.applier, mintTx);
     await waitForTx(provider, mintHash);
-    const settingsUtxo = await scriptOutputOf(provider, mintHash, ctx.scriptAddr);
+    const settingsUtxo = await scriptOutputOf(
+      provider,
+      mintHash,
+      ctx.scriptAddr,
+    );
 
     const proposeNow = await chainNowMs();
     const proposeTx = await buildProposeTx({
@@ -335,11 +342,15 @@ describe.skipIf(!reachable)("settings e2e (Yaci devnet)", () => {
       collateralUtxo: await collateralOf(ctx.proposer),
       proposeAuth: { kind: "key", hash: ctx.proposer.keyHash },
       applyDelay: ctx.applyDelay,
-      customSlotConfig: await devnetSlotConfig(),
+      customSlotConfig: slotConfig,
     });
     const proposeHash = await signAndSubmit(ctx.proposer, proposeTx);
     await waitForTx(provider, proposeHash);
-    const proposedUtxo = await scriptOutputOf(provider, proposeHash, ctx.scriptAddr);
+    const proposedUtxo = await scriptOutputOf(
+      provider,
+      proposeHash,
+      ctx.scriptAddr,
+    );
 
     const proposedDatum: SettingsDatum = {
       current: VALUE_A,
@@ -389,7 +400,11 @@ describe.skipIf(!reachable)("settings e2e (Yaci devnet)", () => {
     });
     const mintHash = await signAndSubmit(ctx.applier, mintTx);
     await waitForTx(provider, mintHash);
-    const settingsUtxo = await scriptOutputOf(provider, mintHash, ctx.scriptAddr);
+    const settingsUtxo = await scriptOutputOf(
+      provider,
+      mintHash,
+      ctx.scriptAddr,
+    );
 
     await expect(
       rawApply({
