@@ -1,22 +1,332 @@
-party Sender;
+// Settings — configuration-parameter management (Tx3 off-chain).
+//
+// Reference Tx3 implementation of the settings protocol, mirroring the
+// on-chain validators in `onchain/validators/settings.ak` and the MeshJS
+// builders in `offchain/meshjs/lib/src/settings/`.
+//
+// The settings contract is a single Plutus V3 script that acts both as a
+// minting policy (a unique settings NFT) and as the spending validator for
+// the UTxO that carries the current configuration. Governance uses a
+// delayed-apply pattern:
+//
+//   - `launch`  mint the settings NFT and create the state UTxO.
+//   - `propose` record a proposed `next` value together with the earliest
+//               time it may be applied (`now + apply_delay`).
+//   - `apply`   promote a matured `next` value to `current`.
+//   - `close`   burn the NFT and tear down the settings instance.
+//
+// Datum / redeemer CBOR layout (must match the Aiken blueprint):
+//   SettingsDatum = Constr 0 [current, next: Option, next_apply: Option<Int>]
+//   Propose       = Constr 0 [out_ix]
+//   Apply         = Constr 1 [out_ix]
+//   Close         = Constr 2 []
+//   Mint          = Constr 0 [out_ix]
+//   Burn          = Constr 1 []
+//
+// The configuration value (`current` / `next`) is protocol-defined and opaque
+// to the validator (`validate_datum` accepts anything). This reference models
+// it as an `Int` — a numeric protocol parameter — which is the common case;
+// swap the `SettingsValue` alias below for a richer type if you need one.
 
-party Receiver;
+env {
+    settings_hash: Bytes,
+    settings_script: Bytes,
+    apply_delay: Int,
+}
 
-tx transfer(
-    quantity: Int
+/// The party authorized to `propose` new values (the `propose_auth` credential).
+party Proposer;
+
+/// The party authorized to `launch`, `apply`, and `close` (the `apply_auth`
+/// credential).
+party Applier;
+
+// The settings validator, referenced by its on-chain hash. The script bytes
+// are supplied inline via `cardano::plutus_witness` in each action.
+policy Settings {
+    hash: settings_hash,
+}
+
+// A protocol configuration value. Opaque to the validator; modeled here as an
+// integer protocol parameter.
+type SettingsValue = Int;
+
+// `Option<Int>` in the Aiken sense: `Some` is constructor 0, `None` is
+// constructor 1 — the encoding the on-chain `Option` uses.
+type OptionalInt {
+    Some {
+        value: Int,
+    },
+    None,
+}
+
+// The inline datum carried by the settings UTxO.
+//
+// `current` is the active value. `next` / `next_apply`, when present, describe
+// a pending proposal and the earliest time it may be applied.
+type SettingsDatum {
+    current: SettingsValue,
+    next: OptionalInt,
+    next_apply: OptionalInt,
+}
+
+// Redeemer for the spend endpoint.
+type SpendRedeemer {
+    Propose {
+        out_ix: Int,
+    },
+    Apply {
+        out_ix: Int,
+    },
+    Close,
+}
+
+// Redeemer for the mint endpoint.
+type MintRedeemer {
+    Mint {
+        out_ix: Int,
+    },
+    Burn,
+}
+
+/// Create a settings instance: mint the unique settings NFT and produce the
+/// state UTxO with the initial value and no pending proposal.
+///
+/// `validate_mint` requires the `apply_auth` (Applier) signature, that the
+/// `seed` UTxO is spent, and that the continuation at `out_ix` carries the NFT
+/// and a fresh datum (`next == None`, `next_apply == None`).
+tx launch(
+    /// The UTxO consumed as the mint seed. Must equal the `seed_utxo` the
+    /// validator was parameterized with.
+    seed: UtxoRef,
+    /// Initial configuration value.
+    initial_value: SettingsValue,
+    /// Index of the settings output within the transaction outputs.
+    out_ix: Int,
 ) {
-    input source {
-        from: Sender,
-        min_amount: Ada(quantity) + fees,
+    input funding {
+        from: Applier,
+        ref: seed,
+        min_amount: Ada(2000000) + fees,
+    }
+
+    mint {
+        amount: AnyAsset(settings_hash, "settings", 1),
+        redeemer: MintRedeemer::Mint {
+            out_ix: out_ix,
+        },
+    }
+
+    output settings_out {
+        to: Settings,
+        amount: AnyAsset(settings_hash, "settings", 1) + Ada(2000000),
+        datum: SettingsDatum {
+            current: initial_value,
+            next: OptionalInt::None {},
+            next_apply: OptionalInt::None {},
+        },
     }
 
     output {
-        to: Receiver,
-        amount: Ada(quantity),
+        to: Applier,
+        amount: funding - Ada(2000000) - fees,
+    }
+
+    collateral {
+        from: Applier,
+        min_amount: fees,
+    }
+
+    signers {
+        Applier,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: settings_script,
+    }
+}
+
+/// Propose a new value. Writes `next` and `next_apply = now + apply_delay` into
+/// the continuation datum, preserving `current` and the NFT.
+///
+/// `validate_propose` requires the `propose_auth` (Proposer) signature and that
+/// the continuation datum equals `SettingsDatum { current, next: Some(new),
+/// next_apply: Some(now + apply_delay) }` with `new != current`, where `now` is
+/// the lower bound of the validity range.
+tx propose(
+    /// The settings UTxO to update.
+    settings_ref: UtxoRef,
+    /// Proposed new value. Must differ from the current value.
+    new_value: SettingsValue,
+    /// POSIX time (milliseconds) of the validity lower bound. Used to compute
+    /// `next_apply`; must correspond to `since_slot`.
+    now_ms: Int,
+    /// Slot of the validity lower bound. Must denote the same instant as
+    /// `now_ms`.
+    since_slot: Int,
+    /// Index of the continuation output within the transaction outputs.
+    out_ix: Int,
+) {
+    input settings_in {
+        from: Settings,
+        ref: settings_ref,
+        datum_is: SettingsDatum,
+        redeemer: SpendRedeemer::Propose {
+            out_ix: out_ix,
+        },
+    }
+
+    input gas {
+        from: Proposer,
+        min_amount: fees,
+    }
+
+    output settings_out {
+        to: Settings,
+        amount: settings_in,
+        datum: SettingsDatum {
+            current: settings_in.current,
+            next: OptionalInt::Some {
+                value: new_value,
+            },
+            next_apply: OptionalInt::Some {
+                value: now_ms + apply_delay,
+            },
+        },
     }
 
     output {
-        to: Sender,
-        amount: source - Ada(quantity) - fees,
+        to: Proposer,
+        amount: gas - fees,
+    }
+
+    validity {
+        since_slot: since_slot,
+    }
+
+    collateral {
+        from: Proposer,
+        min_amount: fees,
+    }
+
+    signers {
+        Proposer,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: settings_script,
+    }
+}
+
+/// Apply a matured proposal: promote `next` to `current` and clear the pending
+/// fields. `new_current` must equal the previously proposed `next` value.
+///
+/// `validate_apply` requires the `apply_auth` (Applier) signature, that the
+/// validity lower bound is `>= next_apply`, and that the continuation datum
+/// equals `SettingsDatum { current: next, next: None, next_apply: None }`.
+tx apply(
+    /// The settings UTxO with the pending proposal.
+    settings_ref: UtxoRef,
+    /// The proposed value being promoted to `current`. Must equal the datum's
+    /// pending `next`.
+    new_current: SettingsValue,
+    /// Slot of the validity lower bound. Must be at or after the proposal's
+    /// `next_apply` time.
+    since_slot: Int,
+    /// Index of the continuation output within the transaction outputs.
+    out_ix: Int,
+) {
+    input settings_in {
+        from: Settings,
+        ref: settings_ref,
+        datum_is: SettingsDatum,
+        redeemer: SpendRedeemer::Apply {
+            out_ix: out_ix,
+        },
+    }
+
+    input gas {
+        from: Applier,
+        min_amount: fees,
+    }
+
+    output settings_out {
+        to: Settings,
+        amount: settings_in,
+        datum: SettingsDatum {
+            current: new_current,
+            next: OptionalInt::None {},
+            next_apply: OptionalInt::None {},
+        },
+    }
+
+    output {
+        to: Applier,
+        amount: gas - fees,
+    }
+
+    validity {
+        since_slot: since_slot,
+    }
+
+    collateral {
+        from: Applier,
+        min_amount: fees,
+    }
+
+    signers {
+        Applier,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: settings_script,
+    }
+}
+
+/// Close the settings instance: burn the NFT and recover the locked lovelace.
+///
+/// `validate_close` requires the `apply_auth` (Applier) signature and that the
+/// settings NFT is burned under the script's own policy.
+tx close(
+    /// The settings UTxO to tear down.
+    settings_ref: UtxoRef,
+) {
+    input settings_in {
+        from: Settings,
+        ref: settings_ref,
+        datum_is: SettingsDatum,
+        redeemer: SpendRedeemer::Close {},
+    }
+
+    input gas {
+        from: Applier,
+        min_amount: fees,
+    }
+
+    burn {
+        amount: AnyAsset(settings_hash, "settings", 1),
+        redeemer: MintRedeemer::Burn {},
+    }
+
+    output {
+        to: Applier,
+        amount: gas + settings_in - AnyAsset(settings_hash, "settings", 1) - fees,
+    }
+
+    collateral {
+        from: Applier,
+        min_amount: fees,
+    }
+
+    signers {
+        Applier,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: settings_script,
     }
 }
