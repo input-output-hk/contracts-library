@@ -284,6 +284,7 @@ describe.skipIf(!reachable)("settings e2e (Yaci devnet)", () => {
       utxos: await ctx.applier.wallet.getUtxos(),
       changeAddress: ctx.applier.address,
       collateralUtxo: await collateralOf(ctx.applier),
+      applyAuth: { kind: "key", hash: ctx.applier.keyHash },
     });
     const closeHash = await signAndSubmit(ctx.applier, closeTx);
     await waitForTx(provider, closeHash);
