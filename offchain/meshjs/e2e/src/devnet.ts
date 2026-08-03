@@ -223,7 +223,7 @@ async function waitForUtxoCount(
     throw new Error(`address ${address} never reached ${atLeast} UTxOs`);
 }
 
-/** The single output of `txHash` that sits at `scriptAddress` (our vesting UTxO). */
+/** The single output of `txHash` that sits at `scriptAddress`. */
 export async function scriptOutputOf(
     provider: YaciProvider,
     txHash: string,
