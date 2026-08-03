@@ -141,12 +141,15 @@ export async function buildProposeTx(p: ProposeParams): Promise<string> {
   const networkId = networkIdOf(network);
   const slotConfig = p.customSlotConfig ?? SLOT_CONFIG_NETWORK[network];
   const lowerBoundSlot = unixTimeToEnclosingSlot(p.now, slotConfig);
+  const slotStartMs =
+    slotConfig.zeroTime +
+    (lowerBoundSlot - slotConfig.zeroSlot) * slotConfig.slotLength;
   const scriptAddr = settingsScriptAddress(p.script, networkId);
 
   const newDatum: SettingsDatum = {
     current: p.datum.current,
     next: p.newValue,
-    nextApply: p.now + p.applyDelay,
+    nextApply: slotStartMs + p.applyDelay,
   };
 
   applyAuthorization(p.txBuilder, p.proposeAuth, p.authorizer, networkId);
@@ -200,16 +203,21 @@ export async function buildApplyTx(p: ApplyParams): Promise<string> {
   if (p.datum.next === null || p.datum.nextApply === null) {
     throw new Error("No pending proposal to apply");
   }
-  if (p.now < p.datum.nextApply) {
-    throw new Error(
-      `Cannot apply before next_apply (${p.datum.nextApply}, now ${p.now})`,
-    );
-  }
 
   const network = p.network ?? "preprod";
   const networkId = networkIdOf(network);
   const slotConfig = p.customSlotConfig ?? SLOT_CONFIG_NETWORK[network];
   const lowerBoundSlot = unixTimeToEnclosingSlot(p.now, slotConfig);
+  const slotStartMs =
+    slotConfig.zeroTime +
+    (lowerBoundSlot - slotConfig.zeroSlot) * slotConfig.slotLength;
+
+  if (slotStartMs < p.datum.nextApply) {
+    throw new Error(
+      `Cannot apply before next_apply (${p.datum.nextApply}, now ${slotStartMs})`,
+    );
+  }
+
   const scriptAddr = settingsScriptAddress(p.script, networkId);
 
   const newDatum: SettingsDatum = {
