@@ -420,4 +420,32 @@ describe.skipIf(!reachable)("settings e2e (Yaci devnet)", () => {
       }),
     ).rejects.toThrow();
   });
+
+  it("rejects propose with same value as current", async () => {
+    const ctx = await setup();
+
+    const datum: SettingsDatum = {
+      current: VALUE_A,
+      next: null,
+      nextApply: null,
+    };
+
+    await expect(
+      buildProposeTx({
+        txBuilder: newTxBuilder(provider),
+        script: ctx.script,
+        settingsUtxo: (await ctx.proposer.wallet.getUtxos())[0],
+        datum,
+        newValue: VALUE_A,
+        now: await chainNowMs(),
+        outputIndex: 0,
+        utxos: await ctx.proposer.wallet.getUtxos(),
+        changeAddress: ctx.proposer.address,
+        collateralUtxo: await collateralOf(ctx.proposer),
+        proposeAuth: { kind: "key", hash: ctx.proposer.keyHash },
+        applyDelay: ctx.applyDelay,
+        customSlotConfig: slotConfig,
+      }),
+    ).rejects.toThrow();
+  });
 });
