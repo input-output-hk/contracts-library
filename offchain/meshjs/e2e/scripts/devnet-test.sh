@@ -19,7 +19,41 @@ LOG=".yaci-devnet.log"
 
 TEST_FILES=(
   "test/vesting.e2e.test.ts"
+  "test/settings.e2e.test.ts"
 )
+
+# Genesis overrides for the ephemeral devnet.
+#
+# The yaci-devkit npm launcher (start.mjs) injects its *bundled* config via
+# `-Dspring.config.import=<install>/config/node.properties`, which ships
+# `conwayHardForkAtEpoch=1` + `shiftStartTimeBehind=true`. That combination
+# time-travels the genesis start ~1 epoch (600 slots x 1s = ~600s) behind
+# wall-clock to reach the Conway era quickly. The side effect: the node's
+# ledger clock (used for phase-2 script validation at submit time) ends up
+# ~600000ms out of step with the Yaci Store clock that the offchain builder
+# and evaluator use. Datums that bake an absolute time (e.g. settings
+# `next_apply == now + apply_delay`) then pass offchain evaluation but fail
+# on-chain at submit.
+#
+# The launcher spawns the CLI with an empty environment, so env vars and the
+# workspace `./config/node.properties` are ignored. The only reliable override
+# channel is JVM system properties passed *before* the `up` subcommand: Spring
+# ranks system properties above config files, so these win over the bundled
+# node.properties. We read the values from config/node.properties to keep a
+# single source of truth (see its comment for rationale).
+GENESIS_OVERRIDES=()
+NODE_PROPS="config/node.properties"
+if [ -f "$NODE_PROPS" ]; then
+  while IFS='=' read -r key val; do
+    key="${key//[[:space:]]/}"
+    val="${val//[[:space:]]/}"
+    case "$key" in
+      shiftStartTimeBehind|conwayHardForkAtEpoch)
+        GENESIS_OVERRIDES+=("-D${key}=${val}")
+        ;;
+    esac
+  done < <(grep -E '^[[:space:]]*(shiftStartTimeBehind|conwayHardForkAtEpoch)[[:space:]]*=' "$NODE_PROPS")
+fi
 
 if ! command -v yaci-devkit >/dev/null 2>&1; then
   echo "• yaci-devkit not installed. Running the suite without a devnet (it will skip)."
@@ -43,7 +77,7 @@ run_file() {
   echo "  $TEST_FILE"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-  nohup yaci-devkit up --enable-yaci-store >"$LOG" 2>&1 &
+  nohup yaci-devkit "${GENESIS_OVERRIDES[@]+"${GENESIS_OVERRIDES[@]}"}" up --enable-yaci-store >"$LOG" 2>&1 &
   CURRENT_DEVNET_PID=$!
 
   echo "Waiting for the devnet API (up to 150s) ..."
