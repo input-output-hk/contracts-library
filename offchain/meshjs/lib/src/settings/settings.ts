@@ -27,6 +27,7 @@ import type { Credential } from "../common";
 import { compiledCode, plutusVersion } from "./blueprint";
 import {
   applyRedeemer,
+  burnRedeemer,
   closeRedeemer,
   mintRedeemer,
   paramsToData,
@@ -255,10 +256,18 @@ export interface CloseParams {
   utxos: UTxO[];
   changeAddress: string;
   collateralUtxo: UTxO;
+  authorizer?: ScriptAuthorizer;
+  applyAuth: Credential;
   network?: Network;
 }
 
 export async function buildCloseTx(p: CloseParams): Promise<string> {
+  const network = p.network ?? "preprod";
+  const networkId = networkIdOf(network);
+  const policyId = resolveScriptHash(p.script.code, p.script.version);
+
+  applyAuthorization(p.txBuilder, p.applyAuth, p.authorizer, networkId);
+
   p.txBuilder
     .spendingPlutusScriptV3()
     .txIn(
@@ -269,7 +278,11 @@ export async function buildCloseTx(p: CloseParams): Promise<string> {
     )
     .txInInlineDatumPresent()
     .txInRedeemerValue(closeRedeemer())
-    .txInScript(p.script.code);
+    .txInScript(p.script.code)
+    .mintPlutusScriptV3()
+    .mint("-1", policyId, SETTINGS_TOKEN_NAME)
+    .mintRedeemerValue(burnRedeemer())
+    .mintingScript(p.script.code);
 
   return await p.txBuilder
     .txInCollateral(
