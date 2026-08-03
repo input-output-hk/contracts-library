@@ -1,12 +1,11 @@
 [protocol]
 name = "config-parameter-management"
 scope = ""
-version = "0.0.0"
-description = ""
+version = "0.1.0"
+description = "Settings contract: delayed-apply governance of a protocol configuration value (launch, propose, apply, close)."
 main = "main.tx3"
 
 [ledger]
 family = "cardano"
-
 [[codegen]]
 plugin = "ts-client"
