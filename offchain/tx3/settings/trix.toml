@@ -1,0 +1,12 @@
+[protocol]
+name = "config-parameter-management"
+scope = ""
+version = "0.0.0"
+description = ""
+main = "main.tx3"
+
+[ledger]
+family = "cardano"
+
+[[codegen]]
+plugin = "ts-client"
