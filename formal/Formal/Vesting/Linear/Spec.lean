@@ -37,42 +37,36 @@ def required (T start finish now : Int) : Int :=
 /-- **B3 (pre-start floor).** Spec §9 B3, §5.2. -/
 theorem vested_preStart (T start finish now : Int) (h : now ≤ start) :
     vested T start finish now = 0 := by
-  unfold vested
   blaster
 
 /-- **Full vesting ⇒ free.** Spec §8.2, I4. -/
 theorem vested_full (T start finish now : Int)
     (hs : start < finish) (h : finish ≤ now) :
     vested T start finish now = T := by
-  unfold vested
   blaster
 
 /-- **B1 (floor / no over-release).** Spec §9 B1. -/
 theorem vested_le_total (T start finish now : Int)
     (hT : 0 ≤ T) (hs : start < finish) :
     vested T start finish now ≤ T := by
-  unfold vested
   blaster
 
 /-- Required remainder is non-negative — the dual of B1. -/
 theorem required_nonneg (T start finish now : Int)
     (hT : 0 ≤ T) (hs : start < finish) :
     0 ≤ required T start finish now := by
-  unfold required vested
   blaster
 
 /-- A claim never releases a negative amount. -/
 theorem vested_nonneg (T start finish now : Int)
     (hT : 0 ≤ T) (hs : start < finish) :
     0 ≤ vested T start finish now := by
-  unfold vested
   blaster
 
 /-- **B2 (monotonicity).** Spec §9 B2, §5.2. -/
 theorem vested_mono (T start finish n₁ n₂ : Int)
     (hT : 0 ≤ T) (hs : start < finish) (h : n₁ ≤ n₂) :
     vested T start finish n₁ ≤ vested T start finish n₂ := by
-  unfold vested
   blaster
 
 /-! ## 2. Datum / redeemer encoding (spec §3.1-§3.2)
@@ -113,7 +107,7 @@ def datumData (d : VestingDatum) : Data :=
   Data.Constr 0
     [ credData d.beneficiary,
       credData d.locker,
-      Data.List (d.vesting.map assetData),
+      Data.List (Recursor.map x in d.vesting with assetData x),
       Data.I d.startTime,
       Data.I d.endTime,
       Data.I d.recoveryTime ]
