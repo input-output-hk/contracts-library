@@ -320,3 +320,43 @@ tx close() {
         script: settings_script,
     }
 }
+
+/// Attack-only variant of `close`: spends with `Close` redeemer but does not
+/// burn the settings NFT.
+///
+/// This exists strictly for negative e2e coverage; it should fail phase-2
+/// validation because `validate_close` requires a negative mint quantity for
+/// the script policy token.
+tx close_without_burn_attack() {
+    // Resolver-selected: the unique settings UTxO at the script address.
+    input settings_in {
+        from: Settings,
+        datum_is: SettingsDatum,
+        min_amount: AnyAsset(settings_hash, "settings", 1),
+        redeemer: SpendRedeemer::Close {},
+    }
+
+    input gas {
+        from: Applier,
+        min_amount: fees,
+    }
+
+    output {
+        to: Applier,
+        amount: gas + settings_in - fees,
+    }
+
+    collateral {
+        from: Applier,
+        min_amount: fees,
+    }
+
+    signers {
+        Applier,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: settings_script,
+    }
+}

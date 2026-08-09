@@ -52,8 +52,13 @@ interface Instance {
   seedRef: string;
 }
 
+interface ConfigureOptions {
+  proposerParty?: Party;
+  applierParty?: Party;
+}
+
 /** Parameterize the settings script for this run and wire up a client. */
-async function configure(): Promise<Instance> {
+async function configure(options: ConfigureOptions = {}): Promise<Instance> {
   const proposer = devnet.wallet('proposer');
   const applier = devnet.wallet('applier');
   const seed = await devnet.seedUtxo('applier');
@@ -71,8 +76,8 @@ async function configure(): Promise<Instance> {
   const scriptAddr = settingsScriptAddress(script);
 
   const client = new Client({ endpoint: devnet.trpUrl }, 'local')
-    .withProposer(proposer.party)
-    .withApplier(applier.party)
+    .withProposer(options.proposerParty ?? proposer.party)
+    .withApplier(options.applierParty ?? applier.party)
     .withSettings(Party.address(scriptAddr));
 
   return {
@@ -96,6 +101,7 @@ type LaunchArgs = Parameters<Client['launch']>[0];
 type ProposeArgs = Parameters<Client['propose']>[0];
 type ApplyArgs = Parameters<Client['apply']>[0];
 type CloseArgs = Parameters<Client['close']>[0];
+type CloseWithoutBurnAttackArgs = Parameters<Client['closeWithoutBurnAttack']>[0];
 
 function launchTx(inst: Instance, value: number) {
   return inst.client
@@ -106,18 +112,18 @@ function launchTx(inst: Instance, value: number) {
     .then((s) => s.submit());
 }
 
-function proposeTx(inst: Instance, newValue: number, nowMs: number, sinceSlot: number) {
+function proposeTx(inst: Instance, newValue: number, nowMs: number, sinceSlot: number, outIx = 0) {
   return inst.client
-    .propose({ new_value: newValue, now_ms: nowMs, since_slot: sinceSlot, out_ix: 0 } as unknown as ProposeArgs)
+    .propose({ new_value: newValue, now_ms: nowMs, since_slot: sinceSlot, out_ix: outIx } as unknown as ProposeArgs)
     .env(inst.env)
     .resolve()
     .then((r) => r.sign())
     .then((s) => s.submit());
 }
 
-function applyTx(inst: Instance, newCurrent: number, sinceSlot: number) {
+function applyTx(inst: Instance, newCurrent: number, sinceSlot: number, outIx = 0) {
   return inst.client
-    .apply({ new_current: newCurrent, since_slot: sinceSlot, out_ix: 0 } as unknown as ApplyArgs)
+    .apply({ new_current: newCurrent, since_slot: sinceSlot, out_ix: outIx } as unknown as ApplyArgs)
     .env(inst.env)
     .resolve()
     .then((r) => r.sign())
@@ -127,6 +133,15 @@ function applyTx(inst: Instance, newCurrent: number, sinceSlot: number) {
 function closeTx(inst: Instance) {
   return inst.client
     .close({} as unknown as CloseArgs)
+    .env(inst.env)
+    .resolve()
+    .then((r) => r.sign())
+    .then((s) => s.submit());
+}
+
+function closeWithoutBurnAttackTx(inst: Instance) {
+  return inst.client
+    .closeWithoutBurnAttack({} as unknown as CloseWithoutBurnAttackArgs)
     .env(inst.env)
     .resolve()
     .then((r) => r.sign())
@@ -206,4 +221,37 @@ test('rejects propose with same value as current', async () => {
   // Proposing the current value is a no-op the validator forbids.
   const tip = await devnet.tip();
   await expect(proposeTx(inst, VALUE_A, tip.timeMs, tip.slot)).rejects.toThrow();
+}, 60_000);
+
+test('rejects propose signed by a non-proposer credential', async () => {
+  const applier = devnet.wallet('applier');
+  const inst = await configure({ proposerParty: applier.party });
+  await confirm(launchTx(inst, VALUE_A));
+
+  // Script params bind propose auth to `proposer`; using `applier` to propose
+  // must fail validator authorization.
+  const tip = await devnet.tip();
+  await expect(proposeTx(inst, VALUE_B, tip.timeMs, tip.slot)).rejects.toThrow();
+}, 60_000);
+
+test('rejects apply with an invalid continuation output index', async () => {
+  const inst = await configure();
+  await confirm(launchTx(inst, VALUE_A));
+
+  const proposeTip = await devnet.tip();
+  await confirm(proposeTx(inst, VALUE_B, proposeTip.timeMs, proposeTip.slot));
+  const nextApplyMs = proposeTip.timeMs + APPLY_DELAY;
+
+  await devnet.waitForChainTimeMs(nextApplyMs + 2_000);
+  const applyTip = await devnet.tip();
+
+  // `out_ix=1` points away from the continuation output in this tx layout.
+  await expect(applyTx(inst, VALUE_B, applyTip.slot, 1)).rejects.toThrow();
+}, 60_000);
+
+test('rejects close without burning the settings NFT', async () => {
+  const inst = await configure();
+  await confirm(launchTx(inst, VALUE_A));
+
+  await expect(closeWithoutBurnAttackTx(inst)).rejects.toThrow();
 }, 60_000);
