@@ -263,8 +263,14 @@ export class TestDevnet {
         proc.stderr?.on("data", capture);
 
         let exited: { code: number | null; signal: NodeJS.Signals | null } | undefined;
+        let spawnError: Error | undefined;
         proc.on("exit", (code, signal) => {
             exited = { code, signal };
+        });
+        // spawn emits `error` (not `exit`) when the binary is missing/unexecutable;
+        // capture it so startup fails fast instead of polling until the timeout.
+        proc.on("error", (err) => {
+            spawnError = err;
         });
 
         const trpUrl = `http://localhost:${trpPort}`;
@@ -274,6 +280,12 @@ export class TestDevnet {
         // Wait until it is serving blocks.
         const deadline = Date.now() + (options.startupTimeoutSeconds ?? 60) * 1000;
         for (;;) {
+            if (spawnError) {
+                cleanupDir(workdir);
+                throw new Error(
+                    `failed to spawn dolos (${resolveDolosBin()}): ${spawnError.message}`,
+                );
+            }
             if (exited) {
                 cleanupDir(workdir);
                 throw new Error(
