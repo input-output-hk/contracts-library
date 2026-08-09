@@ -25,8 +25,7 @@
 //
 // The configuration value (`current` / `next`) is protocol-defined and opaque
 // to the validator (`validate_datum` accepts anything). This reference models
-// it as an `Int` — a numeric protocol parameter — which is the common case;
-// swap the `SettingsValue` alias below for a richer type if you need one.
+// it as an `Int` — a numeric protocol parameter.
 
 env {
     settings_hash: Bytes,
@@ -41,15 +40,9 @@ party Proposer;
 /// credential).
 party Applier;
 
-// The settings validator, referenced by its on-chain hash. The script bytes
-// are supplied inline via `cardano::plutus_witness` in each action.
-policy Settings {
-    hash: settings_hash,
-}
-
-// A protocol configuration value. Opaque to the validator; modeled here as an
-// integer protocol parameter.
-type SettingsValue = Int;
+/// The party that receives the settings UTxO and holds the NFT (the `settings`
+/// credential).
+party Settings;
 
 // `Option<Int>` in the Aiken sense: `Some` is constructor 0, `None` is
 // constructor 1 — the encoding the on-chain `Option` uses.
@@ -65,7 +58,7 @@ type OptionalInt {
 // `current` is the active value. `next` / `next_apply`, when present, describe
 // a pending proposal and the earliest time it may be applied.
 type SettingsDatum {
-    current: SettingsValue,
+    current: Int,
     next: OptionalInt,
     next_apply: OptionalInt,
 }
@@ -100,7 +93,7 @@ tx launch(
     /// validator was parameterized with.
     seed: UtxoRef,
     /// Initial configuration value.
-    initial_value: SettingsValue,
+    initial_value: Int,
     /// Index of the settings output within the transaction outputs.
     out_ix: Int,
 ) {
@@ -155,10 +148,8 @@ tx launch(
 /// next_apply: Some(now + apply_delay) }` with `new != current`, where `now` is
 /// the lower bound of the validity range.
 tx propose(
-    /// The settings UTxO to update.
-    settings_ref: UtxoRef,
     /// Proposed new value. Must differ from the current value.
-    new_value: SettingsValue,
+    new_value: Int,
     /// POSIX time (milliseconds) of the validity lower bound. Used to compute
     /// `next_apply`; must correspond to `since_slot`.
     now_ms: Int,
@@ -168,10 +159,12 @@ tx propose(
     /// Index of the continuation output within the transaction outputs.
     out_ix: Int,
 ) {
+    // The settings UTxO is the unique NFT-bearing UTxO at the script address,
+    // so it is selected by the resolver rather than passed as a `UtxoRef`.
     input settings_in {
         from: Settings,
-        ref: settings_ref,
         datum_is: SettingsDatum,
+        min_amount: AnyAsset(settings_hash, "settings", 1),
         redeemer: SpendRedeemer::Propose {
             out_ix: out_ix,
         },
@@ -227,21 +220,20 @@ tx propose(
 /// validity lower bound is `>= next_apply`, and that the continuation datum
 /// equals `SettingsDatum { current: next, next: None, next_apply: None }`.
 tx apply(
-    /// The settings UTxO with the pending proposal.
-    settings_ref: UtxoRef,
     /// The proposed value being promoted to `current`. Must equal the datum's
     /// pending `next`.
-    new_current: SettingsValue,
+    new_current: Int,
     /// Slot of the validity lower bound. Must be at or after the proposal's
     /// `next_apply` time.
     since_slot: Int,
     /// Index of the continuation output within the transaction outputs.
     out_ix: Int,
 ) {
+    // Resolver-selected: the unique settings UTxO at the script address.
     input settings_in {
         from: Settings,
-        ref: settings_ref,
         datum_is: SettingsDatum,
+        min_amount: AnyAsset(settings_hash, "settings", 1),
         redeemer: SpendRedeemer::Apply {
             out_ix: out_ix,
         },
@@ -290,14 +282,12 @@ tx apply(
 ///
 /// `validate_close` requires the `apply_auth` (Applier) signature and that the
 /// settings NFT is burned under the script's own policy.
-tx close(
-    /// The settings UTxO to tear down.
-    settings_ref: UtxoRef,
-) {
+tx close() {
+    // Resolver-selected: the unique settings UTxO at the script address.
     input settings_in {
         from: Settings,
-        ref: settings_ref,
         datum_is: SettingsDatum,
+        min_amount: AnyAsset(settings_hash, "settings", 1),
         redeemer: SpendRedeemer::Close {},
     }
 
