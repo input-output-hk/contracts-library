@@ -6,7 +6,7 @@
  * `TestDevnet.start(...)` boots a throwaway {@link https://github.com/txpipe/dolos | Dolos}
  * node (the same engine `trix devnet` uses) in a temp directory:
  *   - genesis comes from the committed static template in `devnet/genesis`,
- *   - each requested wallet is funded with a single genesis UTxO (`custom_utxos`),
+ *   - each requested wallet is funded with one or more UTxOs (`custom_utxos`),
  *   - the node serves TRP (for the SDK), minibf (for balance queries) and gRPC.
  *
  * The wallets are plain Ed25519 enterprise-address keys owned by the harness, so
@@ -319,7 +319,7 @@ export class TestDevnet {
     }
 
     /** Total lovelace held at an address (0 if the address has no UTxOs). */
-    async balanceOf(address: string): Promise<{ lovelace: bigint }> {
+    async lovelaceBalanceOf(address: string): Promise<{ lovelace: bigint }> {
         const res = await fetch(`${this.minibfUrl}/addresses/${address}`);
         if (res.status === 404) return { lovelace: 0n };
         if (!res.ok) throw new Error(`balance query failed for ${address}: HTTP ${res.status}`);
@@ -351,13 +351,12 @@ export class TestDevnet {
     }
 
     /**
-     * Convenience: the wallet's primary UTxO (output index 0), suitable as a
-     * mint seed. Fund the wallet with a second UTxO if the transaction also
-     * needs collateral (Plutus scripts do). Throws if the wallet has none.
+     * Returns the first UTxO of the wallet, suitable as a seed for transactions.
+     * Throws if the wallet has no UTxOs.
      */
     async seedUtxo(name: string): Promise<DevnetUtxo> {
         const utxos = await this.utxosOf(this.wallet(name).address);
-        const seed = utxos.find((u) => u.outputIndex === 0) ?? utxos[0];
+        const seed = utxos[0];
         if (!seed) throw new Error(`wallet ${name} has no UTxOs to use as a seed`);
         return seed;
     }
