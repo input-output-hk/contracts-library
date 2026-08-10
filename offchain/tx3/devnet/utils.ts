@@ -107,6 +107,17 @@ export interface ChainTip {
 
 const toHex = (bytes: Uint8Array): string => Buffer.from(bytes).toString("hex");
 
+/**
+ * Strip a single CBOR byte-string wrapper from a hex-encoded script.
+ * Some tooling emits a double-CBOR ("cbor") wrapper; the on-chain witness
+ * often needs the inner single-CBOR flat script.
+ */
+export function unwrapCborBytes(hex: string): string {
+    const tag = Number.parseInt(hex.slice(0, 2), 16);
+    const headerHexLen = tag === 0x58 ? 4 : tag === 0x59 ? 6 : tag === 0x5a ? 10 : 0;
+    return hex.slice(headerHexLen);
+}
+
 /** Deterministic 32-byte Ed25519 key from a wallet name (stable across runs). */
 function deriveKey(name: string): Uint8Array {
     return blake2b(new TextEncoder().encode(`tx3-test-devnet:${name}`), { dkLen: 32 });
