@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from 'vitest';
-import { TestDevnet, DEVNET_POLL } from '../../devnet/utils';
+import { TestDevnet, DEVNET_POLL, unwrapCborBytes } from '../../devnet/utils';
 import {
   type SettingsParams,
   plutusVersion,
@@ -14,17 +14,6 @@ import { resolveScriptHash, PlutusScript } from '@meshsdk/core';
 const APPLY_DELAY = 4_000;
 const VALUE_A = 1;
 const VALUE_B = 2;
-
-/**
- * Strip a single CBOR byte-string wrapper from a hex-encoded script.
- * `applyParamsToScript` emits a double-CBOR ("cbor") wrapper; the on-chain
- * Plutus witness must be the inner single-CBOR flat script.
- */
-function unwrapCborBytes(hex: string): string {
-  const tag = parseInt(hex.slice(0, 2), 16);
-  const headerHexLen = tag === 0x58 ? 4 : tag === 0x59 ? 6 : tag === 0x5a ? 10 : 0;
-  return hex.slice(headerHexLen);
-}
 
 let devnet: TestDevnet;
 
