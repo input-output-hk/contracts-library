@@ -1,7 +1,0 @@
-[[utxos]]
-address = "@applier"
-value = 100000000000
-
-[[utxos]]
-address = "@proposer"
-value = 100000000000
