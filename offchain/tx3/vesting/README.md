@@ -5,8 +5,8 @@ vesting action set.
 
 Per the PRD (§6.3), v1 ships two reference off-chain implementations — MeshJS
 and Tx3 — both implementing the same language-agnostic spec
-([`specs/vesting/linear-vesting.md`](../../specs/vesting/linear-vesting.md) §4).
-The MeshJS implementation is in [`../meshjs`](../meshjs); the Tx3 implementation
+([`specs/vesting/linear-vesting.md`](../../../specs/vesting/linear-vesting.md) §4).
+The MeshJS implementation is in [`../../meshjs`](../../meshjs); the Tx3 implementation
 is not started yet.
 
 When implemented, it must cover the same actions against the same pinned
