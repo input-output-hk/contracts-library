@@ -68,6 +68,17 @@ Check your current version any time with `dolos --version` or
 
 ## Running the tests
 
+> **Before the tests:** generate the TypeScript client (the tests import it from
+> `settings/.tx3/codegen/ts-client/...`, which is gitignored). Run from the
+> `settings` directory where `trix.toml` lives:
+
+```bash
+cd offchain/tx3/settings
+trix codegen --plugin ts-client
+```
+
+Then run the tests:
+
 ```bash
 cd offchain/tx3
 
