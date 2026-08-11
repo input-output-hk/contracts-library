@@ -92,7 +92,7 @@ Withdraws the vested portion. Two cases:
 | | |
 |---|---|
 | **Inputs** | One or more contract inputs. Each contributes its own continuation; multiple distinct instances may be claimed in one transaction (see §5.1). Beneficiary's own UTxOs for fees. |
-| **Outputs** | For each spent instance, a **continuing contract output** at the same script payment credential, with the **same datum**, holding at least `total - vested(now)` of every asset in `vesting`. If `k` spent inputs share an identical datum, the continuations carrying that datum must hold at least `k × (total - vested(now))` per asset. The claimed remainder may go anywhere (typically the beneficiary). |
+| **Outputs** | For each spent instance, a **continuing contract output** at the same script payment credential, with the **same datum**, holding at least `total - vested(now)` of every asset in `vesting`. If `k` spent inputs share an identical datum, the transaction must carry at least `k` such continuations, **each** holding at least `total - vested(now)` per asset (not merely `k ×` that in aggregate). Preserving the count stops several instances from being merged into fewer UTxOs. The claimed remainder may go anywhere (typically the beneficiary). |
 | **Redeemer** | `Claim`. |
 | **Validity range** | Lower bound finite and set to a time `>= start_time` for any non-zero claim. The off-chain sets the lower bound to the desired "now"; see §5.2. |
 | **Authorization** | If `beneficiary` is a key: the key is in `extra_signatories`. If a script: that script is invoked via a **withdrawal** in the same transaction (withdraw-0 pattern). |
@@ -124,9 +124,12 @@ Locker recovers the remaining bundle after the recovery time.
 
 ### 5.1 Multiple contract inputs and double satisfaction
 
-A transaction may spend **any number** of this script's UTxOs (the contract makes no assertion about input or output counts, per `ARCHITECTURE.md` §1.1, so instances compose and batch freely). Double satisfaction is prevented without limiting inputs:
+A transaction may spend **any number** of this script's UTxOs (the contract makes no assertion about input or output counts, per `ARCHITECTURE.md` §1.1, so instances compose and batch freely). Two failure modes must be prevented for inputs that share a byte-identical datum, without limiting inputs:
 
-A continuation is recognized only if its inline datum is **byte-identical** to the spent input's datum, so two inputs can share one continuation only when their datums are identical. To stop that, each `Claim` input requires the continuations carrying its datum to hold `k × required`, where `k` is the number of contract inputs sharing that exact datum and `required = total - vested(now)`. All `k` inputs compute the same `k` and the same `required`, so the only way to satisfy them is to lock `k × required` in total; one shared output cannot cover several inputs. `Cancel` produces no continuation, so it has no double-satisfaction surface.
+- **Double satisfaction** — one continuing output counted toward several inputs.
+- **Merging** — several instances collapsed into fewer UTxOs. A merge is dangerous because the surviving UTxO would hold more schedule-bearing value than its datum's `total` accounts for; on a later spend `k` drops, less is required to stay, and the excess (which belonged to another instance's schedule) is swept as unprotected surplus (§7). This over-releases across transactions even though no single transaction over-releases.
+
+Both are closed by one rule. A continuation is recognized only if its inline datum is **byte-identical** to the spent input's datum. Each `Claim` input then requires **at least `k` continuations** carrying its datum, **each** holding `required = total - vested(now)` per asset, where `k` is the number of contract inputs sharing that exact datum. All `k` inputs compute the same `k` and the same `required`. Because each continuation independently holds `required`, one output cannot cover several inputs (no double satisfaction); and because the number of continuations can never fall below `k`, the `k` instances can never be reduced to fewer UTxOs (no merge), so `k` cannot shrink on any later spend. `Cancel` produces no continuation, so it has no continuation-side surface.
 
 ### 5.2 Reading "now" from the validity range
 
@@ -137,7 +140,7 @@ Scripts cannot read a clock; they read the transaction's validity range. The con
 These hold for every valid action (`I1`–`I6`) and describe a well-formed instance (`I7`):
 
 - **I1 — Claim authorization.** A `Claim` is valid only if the `beneficiary` credential is satisfied (key signature present, or script invoked).
-- **I2 — No over-release.** After a `Claim` at reference time `now`, for every asset `(p, n, T)` in the datum, the continuations carrying that datum hold at least `k × (T - vested(T, start, end, now))`, where `k` is the number of contract inputs sharing that datum. Equivalently, no instance's cumulative removed amount can exceed `vested(...)`.
+- **I2 — No over-release.** After a `Claim` at reference time `now`, for every asset `(p, n, T)` in the datum, there are at least `k` continuations carrying that datum and **each** holds at least `T - vested(T, start, end, now)`, where `k` is the number of contract inputs sharing that datum. Preserving the count (not just the aggregate) stops `k` instances from being merged into fewer UTxOs, so no instance's cumulative removed amount can exceed `vested(...)`, even across transactions.
 - **I3 — Schedule integrity.** A continuation reproduces the datum exactly (same beneficiary, locker, `vesting` list, `start`/`end`/`recovery`). The schedule cannot be edited mid-flight.
 - **I4 — Full vesting ⇒ free.** When `now >= end_time`, the required remainder is zero, so the bundle may be fully withdrawn with no continuing output.
 - **I5 — Cancel authorization & timing.** A `Cancel` is valid only if the `locker` credential is satisfied and `now > recovery_time` (strictly; the validity range must be *entirely after* `recovery_time`), with `start_time < end_time < recovery_time`. So the locker can recover only *after* full vesting plus the grace period, never *unvested* funds.
@@ -152,15 +155,15 @@ These hold for every valid action (`I1`–`I6`) and describe a well-formed insta
 - **Schedule tampering.** A continuation must reproduce the datum verbatim, so a claimer cannot shrink totals or move dates to accelerate vesting. (I3)
 - **Unauthorized claim or cancel.** Pluggable credential checks: only the beneficiary can `Claim`, only the locker can `Cancel`. (I1, I5)
 - **Premature recovery.** `Cancel` requires `now > recovery_time` (strictly) and the datum is checked for `end_time < recovery_time`, so a locker cannot reclaim unvested funds, even with a malformed datum. (I5)
-- **Double satisfaction.** Continuations are matched by exact datum and scaled by `k`, so one output cannot satisfy several inputs. This holds even against deliberately crafted duplicate-datum instances, and without restricting input counts. (I2, §5.1)
+- **Double satisfaction and instance merging.** Continuations are matched by exact datum, and each `Claim` input requires at least `k` continuations that each hold the full remainder. So one output cannot satisfy several inputs, and several instances cannot be collapsed into fewer UTxOs (which would later let one instance's remainder be swept as another's surplus). This holds even against deliberately crafted duplicate-datum instances, and without restricting input counts. (I2, §5.1)
 - **Datum-hash substitution.** Only inline datums are accepted; a claim whose contract input or continuing output uses a datum hash is rejected.
 
 ### Assumptions / out of scope
 
 - **Recovery is the only locker power.** There is no clawback of *unvested* funds and no cancel *before* `recovery_time`. If the beneficiary loses their key, funds are claimable by that (lost) credential until `recovery_time`, after which the locker can recover them.
-- **Min-ada and "extra" value.** A vesting UTxO may hold ada beyond what the schedule vests (to satisfy min-ada). The contract only constrains the assets listed in `vesting`; any surplus is not schedule-protected and may be swept by the (authorized) beneficiary. Lock instances so that schedule-bearing assets are exactly the protected ones.
+- **Min-ada and "extra" value.** A vesting UTxO may hold ada beyond what the schedule vests (to satisfy min-ada). The contract only constrains the assets listed in `vesting`; any surplus is not schedule-protected and may be swept by the (authorized) beneficiary. Lock instances so that schedule-bearing assets are exactly the protected ones. Surplus can only come from over-funding a single instance at lock time, never from merging: the count-preserving rule (§5.1) forbids collapsing `k` instances into fewer UTxOs, so a beneficiary cannot turn another instance's still-vesting funds into sweepable surplus.
 - **Datum/value consistency at lock time** (I7) is not enforced on-chain. An instance locked with a datum total exceeding the actual value simply becomes unclaimable for that asset until late in the schedule; it never lets the beneficiary take *more* than is present.
-- **Schedule timing across identical honest instances.** The `k × required` rule keeps every instance's schedule intact even if two honestly-created instances happen to share a byte-identical datum, so no third party relying on aggregate unlock timing is affected.
+- **Schedule timing across identical honest instances.** The count-preserving continuation rule (§5.1) keeps every instance's schedule intact even if two honestly-created instances happen to share a byte-identical datum: they cannot be merged, so no third party relying on aggregate unlock timing is affected.
 
 ## 8. Completeness — when the validator returns `True` (must-accept)
 
@@ -176,7 +179,7 @@ The validator returns `True` if **all** of the following hold:
 - **C1 (auth).** The `beneficiary` credential is satisfied: a verification-key beneficiary is in `extra_signatories` OR a script beneficiary is invoked via a withdrawal in `tx` (withdraw-0).
 - **C2 (datum form).** The spent contract input carries an **inline** datum, and every continuing output relied on for C3/C4 carries a datum **equal** to it; which, since the input datum is inline, forces those outputs to be inline too. *(§3.1)*
 - **C3 (continuation identity).** For each spent datum `d`, the continuing outputs recognized for `d` reproduce it byte-for-byte.
-- **C4 (no over-release).** For each spent datum `d` and each asset `(p, n, T) ∈ d.vesting`, the continuations carrying `d` hold in aggregate `≥ k · required(p, n, T)`.
+- **C4 (no over-release, count-preserving).** For each spent datum `d`, at least `k` continuations carry `d`, and **each** such continuation holds `≥ required(p, n, T)` for every asset `(p, n, T) ∈ d.vesting`. This implies the aggregate `≥ k · required(p, n, T)`, and additionally forbids collapsing the `k` instances into fewer continuations (the merge attack).
 - **C5 (time read).** `validity_range` has a **finite** lower bound.
 
 ### 8.2 `Claim`, full (`now ≥ end_time`)
@@ -202,7 +205,7 @@ Returns `True` if **all** of:
 The validator returns `False` (the spend is rejected) whenever **any** of the following holds:
 
 - **R1 (unauthorized `Claim`).** Redeemer is `Claim` and the `beneficiary` credential is **not** satisfied. *(¬C1, I1)*
-- **R2 (over-release).** Redeemer is `Claim`, `now < end_time`, and for some asset `(p, n, T)` the continuations carrying the spent datum hold `< k · required(p, n, T)`. *(¬C4, I2)*
+- **R2 (over-release or merge).** Redeemer is `Claim`, `now < end_time`, and either fewer than `k` continuations carry the spent datum, **or** some continuation carrying it holds `< required(p, n, T)` for some asset `(p, n, T)`. Either disjunct fails the count-preserving remainder check: the first is the merge attempt, the second is a plain shortfall. *(¬C4, I2)*
 - **R3 (schedule tampering).** Redeemer is `Claim`, `now < end_time`, and no continuing output reproduces the spent datum byte-for-byte (any change to `beneficiary`, `locker`, `vesting`, `start_time`, `end_time`, or `recovery_time`). *(¬C3, I3)*
 - **R4 (datum-hash substitution).** A contract input spent under `Claim`, or a continuing output relied upon for C3/C4, uses a **datum hash** instead of an inline datum. *(¬C2, §3.1)*
 - **R5 (unauthorized `Cancel`).** Redeemer is `Cancel` and the `locker` credential is **not** satisfied. *(¬C6, I5)*

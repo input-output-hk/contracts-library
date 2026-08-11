@@ -155,6 +155,90 @@ describe.skipIf(!reachable)("linear vesting e2e (Yaci devnet)", () => {
     return provider.submitTx(await p.signer.wallet.signTx(unsigned, true));
   }
 
+  /**
+   * Lock two **byte-identical** instances (same beneficiary, locker, schedule
+   * and bundle) for one beneficiary, in two sequential Lock transactions.
+   * Returns both script UTxOs. Identical datums are exactly the precondition the
+   * instance-merge exploit needed (spec §5.1).
+   */
+  async function lockIdenticalPair(opts: {
+    totalAda: bigint;
+    startMs: number;
+    endMs: number;
+    recoveryMs: number;
+  }) {
+    const grantor = await fundedAccount(provider);
+    const beneficiary = await fundedAccount(provider);
+    const datum: VestingDatum = {
+      beneficiary: { kind: "key", hash: beneficiary.keyHash },
+      locker: { kind: "key", hash: grantor.keyHash },
+      vesting: [{ policyId: "", assetName: "", total: opts.totalAda }],
+      startTime: opts.startMs,
+      endTime: opts.endMs,
+      recoveryTime: opts.recoveryMs,
+    };
+    const lockOne = async () => {
+      const lockTx = await buildLockTx({
+        txBuilder: newTxBuilder(provider),
+        datum,
+        utxos: await grantor.wallet.getUtxos(),
+        changeAddress: grantor.address,
+        networkId: NETWORK_ID,
+      });
+      const hash = await grantor.wallet.submitTx(
+        await grantor.wallet.signTx(lockTx, true),
+      );
+      await waitForTx(provider, hash);
+      return scriptOutputOf(provider, hash, scriptAddr);
+    };
+    const utxoA = await lockOne();
+    const utxoB = await lockOne();
+    return { grantor, beneficiary, datum, utxoA, utxoB };
+  }
+
+  /**
+   * A raw `Claim` spending several vesting inputs at once and emitting the given
+   * continuing outputs (each carrying `datum`, holding `lovelace`). An attacker
+   * chooses the number and size of continuations; the validator decides.
+   */
+  async function rawBatchClaim(p: {
+    signer: Account;
+    datum: VestingDatum;
+    inputs: UTxO[];
+    validityNow: number;
+    continuations: bigint[];
+  }): Promise<string> {
+    const tb = newTxBuilder(provider);
+    for (const u of p.inputs) {
+      tb.spendingPlutusScriptV3()
+        .txIn(u.input.txHash, u.input.outputIndex, u.output.amount, u.output.address)
+        .txInInlineDatumPresent()
+        .txInRedeemerValue(claimRedeemer())
+        .txInScript(vestingScript().code);
+    }
+    for (const lovelace of p.continuations) {
+      tb.txOut(scriptAddr, [
+        { unit: "lovelace", quantity: String(lovelace) },
+      ]).txOutInlineDatumValue(vestingDatumToData(p.datum));
+    }
+    tb.invalidBefore(unixTimeToEnclosingSlot(p.validityNow, slotConfig));
+    tb.requiredSignerHash(p.signer.keyHash);
+
+    const col = (await p.signer.wallet.getCollateral())[0];
+    const unsigned = await tb
+      .txInCollateral(
+        col.input.txHash,
+        col.input.outputIndex,
+        col.output.amount,
+        col.output.address,
+      )
+      .changeAddress(p.signer.address)
+      .selectUtxosFrom(await p.signer.wallet.getUtxos())
+      .complete();
+
+    return provider.submitTx(await p.signer.wallet.signTx(unsigned, true));
+  }
+
   // ----------------------------------------------------------- happy paths
 
   it("locks then partially claims mid-schedule", async () => {
@@ -430,5 +514,68 @@ describe.skipIf(!reachable)("linear vesting e2e (Yaci devnet)", () => {
         validityNow,
       }),
     ).rejects.toThrow();
+  });
+
+  // ---------------------------------------- instance merge (spec §5.1, I2)
+
+  it("rejects merging two identical instances into one continuation", async () => {
+    // The fixed exploit: a beneficiary with two byte-identical instances tries to
+    // collapse them into a SINGLE continuation holding the combined remainder
+    // (2 * required). Under the count-preserving rule the validator demands at
+    // least k=2 continuations for k=2 shared-datum inputs, so this is rejected —
+    // which stops the later "sweep the surplus" step and the net over-release.
+    const now = await chainNowMs();
+    const ctx = await lockIdenticalPair({
+      totalAda: 60n * ADA,
+      startMs: now - 60_000,
+      endMs: now + 60_000,
+      recoveryMs: now + 600_000,
+    });
+    const validityNow = await chainNowMs();
+    const required = requiredRemainder(ctx.datum, validityNow)[0].total;
+
+    await expect(
+      rawBatchClaim({
+        signer: ctx.beneficiary,
+        datum: ctx.datum,
+        inputs: [ctx.utxoA, ctx.utxoB],
+        validityNow,
+        continuations: [2n * required], // one merged UTxO instead of two
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("allows batching two identical instances into two continuations", async () => {
+    // Positive control: the honest shape (one continuation per instance) is still
+    // accepted, so the fix rejects merging specifically, not multi-input claims.
+    const now = await chainNowMs();
+    const ctx = await lockIdenticalPair({
+      totalAda: 60n * ADA,
+      startMs: now - 60_000,
+      endMs: now + 60_000,
+      recoveryMs: now + 600_000,
+    });
+    const validityNow = await chainNowMs();
+    const required = requiredRemainder(ctx.datum, validityNow)[0].total;
+    // Keep comfortably above `required` per instance; the buffer absorbs any
+    // slot-rounding of on-chain "now" (which can only raise the requirement).
+    const keep = required + 5n * ADA;
+
+    const hash = await rawBatchClaim({
+      signer: ctx.beneficiary,
+      datum: ctx.datum,
+      inputs: [ctx.utxoA, ctx.utxoB],
+      validityNow,
+      continuations: [keep, keep],
+    });
+    await waitForTx(provider, hash);
+
+    const scriptOuts = (await provider.fetchUTxOs(hash)).filter(
+      (u) => u.output.address === scriptAddr,
+    );
+    expect(scriptOuts.length).toBe(2);
+    for (const u of scriptOuts) {
+      expect(lovelaceOf(u)).toBeGreaterThanOrEqual(required);
+    }
   });
 });

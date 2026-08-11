@@ -86,6 +86,28 @@ The off-chain layer provides TypeScript builders (MeshJS) and Tx3 implementation
 - [Formal proofs](formal/README.md) — machine-checked Lean 4 proofs of the
   specs, plus the build pipeline and `blaster` tractability notes.
 
-## License
+## Ecosystem
 
-**Apache-2.0** for all artifacts: on-chain, off-chain, specs, and docs.
+This is how ContractsLibrary relates to other libraries in the ecosystem:
+
+```mermaid
+flowchart TB
+    A["<b>Cardano Foundation Templates</b><br/>end-to-end dApps that might consume these contracts"]
+    L["<b>ContractsLibrary</b><br/>complete use-case contracts, on-chain + off-chain"]
+    P["<b>Primitives</b><br/>low-level on-chain building blocks.<br/><i>design-patterns · merkle patricia forestry</i>"]
+
+    A --> L --> P
+
+    style L fill:#0033ad,stroke:#001f6b,color:#fff
+```
+
+- **Below** ([design-patterns](https://github.com/Anastasia-Labs/design-patterns), [merkle patricia forestry](https://github.com/aiken-lang/merkle-patricia-forestry)) are lower-level building blocks (stake validators, batching, linked lists, authenticated key/value stores) that a contract may compose with, and in some cases depend on, rather than complete use cases.
+- **Above** ([Cardano Foundation templates](https://github.com/cardano-foundation/cardano-templates)) are end-to-end examples that wire finished contracts into working applications.
+
+## Related work
+
+- [Learn how to develop on Cardano](https://developers.cardano.org/)
+- [21 most common blockchain use cases for Cardano](https://github.com/cardano-foundation/cardano-template-and-ecosystem-monitoring/)
+- [Design patterns library](https://github.com/Anastasia-Labs/design-patterns)
+- [Merkle Patricia Forestry](https://github.com/aiken-lang/merkle-patricia-forestry)
+- [Cardano Foundation templates](https://github.com/cardano-foundation/cardano-templates)

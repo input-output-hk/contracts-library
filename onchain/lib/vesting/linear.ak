@@ -17,14 +17,16 @@ pub fn validate_claim(
   own_input: Output,
   tx: Transaction,
 ) -> Bool {
-  let Transaction {
-    inputs,
-    outputs,
-    validity_range,
-    extra_signatories,
-    withdrawals,
-    ..
-  } = tx
+  let  
+      Transaction {
+        inputs,
+        outputs,
+        validity_range,
+        extra_signatories,
+        withdrawals,
+        ..
+      }
+    = tx
 
   // I1 — the beneficiary credential must be satisfied.
   expect
@@ -45,9 +47,9 @@ pub fn validate_claim(
   expect InlineDatum(_) = own_input.datum
   let own_credential = own_input.address.payment_credential
 
-  // I2/I3/I4 — every asset's required remainder stays in a continuing output
-  // that reproduces the datum verbatim. Scaled by the number of contract inputs
-  // sharing this datum (anti double-satisfaction without input-count limits).
+  // I2/I3/I4 — every asset's required remainder stays in continuing outputs that
+  // reproduce the datum verbatim, one per contract input sharing this datum
+  // (anti double-satisfaction and anti-merge, without input-count limits).
   remainders_preserved(datum, own_input, inputs, outputs, own_credential, now)
 }
 
@@ -99,9 +101,18 @@ fn shared_input_count(
   )
 }
 
-/// Sum the value of all continuing outputs — those at this script's payment
-/// credential carrying the *same* (inline) datum — and require that each vested
-/// asset's required remainder is still present.
+/// Enforce, for the instance being spent, that its schedule-bearing value stays
+/// locked in continuing outputs — those at this script's payment credential
+/// carrying the *same* (inline) datum.
+///
+/// **Instance-count preservation (spec §5.1).** Each continuation must
+/// *independently* hold the full per-asset remainder, and there must be at least
+/// `k` of them, where `k` is the number of contract inputs sharing this datum.
+/// Requiring `k` *separate* continuations (rather than only an aggregate
+/// `k × required`) forbids collapsing several instances into a single UTxO: a
+/// merge would drop `k` to 1 on a later spend and let the remainder that belonged
+/// to the other instances be swept as unprotected surplus. Keeping the count
+/// pinned means `k` can never shrink below the number of live instances.
 fn remainders_preserved(
   datum: VestingDatum,
   own_input: Output,
@@ -112,36 +123,41 @@ fn remainders_preserved(
 ) -> Bool {
   let k = shared_input_count(inputs, own_credential, own_input.datum)
 
-  let continued_value =
-    outputs
-      |> list.filter(
-          fn(output) {
-            output.address.payment_credential == own_credential && output.datum == own_input.datum
-          },
-        )
-      |> fn(outputs: List<Output>) {
-          when outputs is {
-            [o] -> o.value
-            _ ->
-              list.foldr(
-                outputs,
-                assets.zero,
-                fn(output, acc) { assets.merge(acc, output.value) },
-              )
-          }
-        }
+  // Continuing outputs for this instance: same script credential, datum
+  // byte-identical to the spent input's (so inline, reproduced verbatim).
+  let continuations = list.filter(
+    outputs,
+    fn(output) {
+      output.address.payment_credential == own_credential && output.datum == own_input.datum
+    },
+  )
 
-  list.all(
-    datum.vesting,
-    fn(asset) {
-      let required =
-        asset.total - vested_quantity(
+  // Each continuation must, on its own, hold `required` of every vested asset.
+  let holds_full_remainder = fn(output: Output) {
+    list.all(
+      datum.vesting,
+      fn(asset) {
+        let required = asset.total - vested_quantity(
           asset.total,
           datum.start_time,
           datum.end_time,
           now,
         )
-      assets.quantity_of(continued_value, asset.policy, asset.name) >= k * required
-    },
-  )
+        assets.quantity_of(output.value, asset.policy, asset.name) >= required
+      },
+    )
+  }
+
+  // Spec §8.2 — at or after `end_time` every asset has fully vested (required = 0
+  // for all), so no continuation is required and the whole bundle may be taken
+  // (full claim, I4). Strictly before `end_time`, require `k` separate
+  // continuations that each hold the full remainder.
+  if now >= datum.end_time {
+    True
+  } else {
+    list.length(continuations) >= k && list.all(
+      continuations,
+      holds_full_remainder,
+    )
+  }
 }
