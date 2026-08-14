@@ -207,7 +207,7 @@ type StakingPositionDatum = {
 Delegatee authorizes cosign/votes if set, if not that responsability lies with the owner,
 Owner must approve withdrawals and deposits.
 
-The locks stores tuples with the proposal token name, the unlock time and the used stake for that proposal. When cosign a proposal, you need to lock the tokens until the draft phase ends (startTime + draftlength). Creating a proposal is treated the same way as cosigning it. For voting, the tokens get locked until the tally phase ends.
+The locks stores tuples with the proposal token name, the unlock time and the used stake for that proposal. When cosign a proposal, you need to lock the tokens until the draft phase ends (startTime + draftlength). Creating a proposal is treated the same way as cosigning it. For voting, the tokens get locked until the voting phase ends.
 After any opearation, expired locks must be removed from the locks datum.
 
 * **Redeemer**:

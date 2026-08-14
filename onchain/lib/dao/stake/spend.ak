@@ -146,10 +146,8 @@ pub fn validate_stake_spend(
       let settings = get_dao_settings(self, settings_utxo, settings_token_name)
       let (p_id, proposal) =
         proposal_with_nft(reference_inputs, settings.proposal_validator)
-      // Locked until the tally phase ends (design §9.1): the stake stays frozen
-      // for the whole draft + voting + tally window of the voted proposal.
       let unlock =
-        proposal.start_time + settings.timings.draft_length + settings.timings.voting_length + settings.timings.tally_length
+        proposal.start_time + settings.timings.draft_length + settings.timings.voting_length
       let new_lock = (p_id, unlock, in_stake)
       let out = continuation(outputs, own_addr)
       let cont = out_datum(out)
