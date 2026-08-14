@@ -13,6 +13,7 @@ validator proposal(
   stake_nft_name: AssetName,
   stake_token_policy: PolicyId,
   stake_token_name: AssetName,
+  settings_token_name: AssetName,
 ) {
   mint(redeemer: ProposalTokenRedeemer, own_policy: PolicyId, self: Transaction) {
     when redeemer is {
@@ -23,6 +24,7 @@ validator proposal(
           stake_nft_name,
           stake_token_policy,
           stake_token_name,
+          settings_token_name,
           own_policy,
           self,
         )
@@ -42,6 +44,7 @@ validator proposal(
       stake_nft_policy,
       stake_token_policy,
       stake_token_name,
+      settings_token_name,
       proposal_datum,
       redeemer,
       own_ref,
