@@ -12,6 +12,348 @@
   },
   "validators": [
     {
+      "title": "dao/proposal.proposal.mint",
+      "redeemer": {
+        "title": "redeemer",
+        "schema": {
+          "$ref": "#/definitions/dao~1types~1ProposalTokenRedeemer"
+        }
+      },
+      "parameters": [
+        {
+          "title": "settings_utxo",
+          "schema": {
+            "$ref": "#/definitions/cardano~1transaction~1OutputReference"
+          }
+        },
+        {
+          "title": "stake_nft_policy",
+          "schema": {
+            "$ref": "#/definitions/cardano~1assets~1PolicyId"
+          }
+        },
+        {
+          "title": "stake_nft_name",
+          "schema": {
+            "$ref": "#/definitions/cardano~1assets~1AssetName"
+          }
+        },
+        {
+          "title": "stake_token_policy",
+          "schema": {
+            "$ref": "#/definitions/cardano~1assets~1PolicyId"
+          }
+        },
+        {
+          "title": "stake_token_name",
+          "schema": {
+            "$ref": "#/definitions/cardano~1assets~1AssetName"
+          }
+        }
+      ],
+      "compiledCode": "5901810101002222229800aba2aba1aab9faab9eaab9dab9a9bae0059bae0049bae0039bae0024888888888966002646465300130093754003370e90004dc3a4005300c0039806001244444b300130040058cc004dd7180898079baa0068acc004c010c038dd5000c528c528a01a98071baa001488966002600e00315980098091baa0048014590134566002600c00315980098091baa00480145901345901020204566002600600b1323298008acc004c018c040dd5000c4c928980998089baa0018b201e98081baa00398098012444b300130090028acc004c050dd5003400e2c80aa2b300130080028acc004c050dd5003400e2c80aa2b30013370e9002001456600260286ea801a00716405515980099b874801800a2b30013014375400d0038b202a8acc004cdc3a4010005159800980a1baa006801c59015456600266e1d200a0028acc004c050dd5003400e2c80aa2c80910122024404880910120c048c04c004c03cdd500345900d201a18059806000980580098039baa00b8a4d13656401401",
+      "hash": "76caa2f2d4e96faf1cd874bb70463b5a0c3de3aa813b7019498edac8"
+    },
+    {
+      "title": "dao/proposal.proposal.spend",
+      "datum": {
+        "title": "datum",
+        "schema": {
+          "$ref": "#/definitions/dao~1types~1ProposalDatum"
+        }
+      },
+      "redeemer": {
+        "title": "redeemer",
+        "schema": {
+          "$ref": "#/definitions/dao~1types~1ProposalRedeemer"
+        }
+      },
+      "parameters": [
+        {
+          "title": "settings_utxo",
+          "schema": {
+            "$ref": "#/definitions/cardano~1transaction~1OutputReference"
+          }
+        },
+        {
+          "title": "stake_nft_policy",
+          "schema": {
+            "$ref": "#/definitions/cardano~1assets~1PolicyId"
+          }
+        },
+        {
+          "title": "stake_nft_name",
+          "schema": {
+            "$ref": "#/definitions/cardano~1assets~1AssetName"
+          }
+        },
+        {
+          "title": "stake_token_policy",
+          "schema": {
+            "$ref": "#/definitions/cardano~1assets~1PolicyId"
+          }
+        },
+        {
+          "title": "stake_token_name",
+          "schema": {
+            "$ref": "#/definitions/cardano~1assets~1AssetName"
+          }
+        }
+      ],
+      "compiledCode": "5901810101002222229800aba2aba1aab9faab9eaab9dab9a9bae0059bae0049bae0039bae0024888888888966002646465300130093754003370e90004dc3a4005300c0039806001244444b300130040058cc004dd7180898079baa0068acc004c010c038dd5000c528c528a01a98071baa001488966002600e00315980098091baa0048014590134566002600c00315980098091baa00480145901345901020204566002600600b1323298008acc004c018c040dd5000c4c928980998089baa0018b201e98081baa00398098012444b300130090028acc004c050dd5003400e2c80aa2b300130080028acc004c050dd5003400e2c80aa2b30013370e9002001456600260286ea801a00716405515980099b874801800a2b30013014375400d0038b202a8acc004cdc3a4010005159800980a1baa006801c59015456600266e1d200a0028acc004c050dd5003400e2c80aa2c80910122024404880910120c048c04c004c03cdd500345900d201a18059806000980580098039baa00b8a4d13656401401",
+      "hash": "76caa2f2d4e96faf1cd874bb70463b5a0c3de3aa813b7019498edac8"
+    },
+    {
+      "title": "dao/proposal.proposal.else",
+      "redeemer": {
+        "schema": {}
+      },
+      "parameters": [
+        {
+          "title": "settings_utxo",
+          "schema": {
+            "$ref": "#/definitions/cardano~1transaction~1OutputReference"
+          }
+        },
+        {
+          "title": "stake_nft_policy",
+          "schema": {
+            "$ref": "#/definitions/cardano~1assets~1PolicyId"
+          }
+        },
+        {
+          "title": "stake_nft_name",
+          "schema": {
+            "$ref": "#/definitions/cardano~1assets~1AssetName"
+          }
+        },
+        {
+          "title": "stake_token_policy",
+          "schema": {
+            "$ref": "#/definitions/cardano~1assets~1PolicyId"
+          }
+        },
+        {
+          "title": "stake_token_name",
+          "schema": {
+            "$ref": "#/definitions/cardano~1assets~1AssetName"
+          }
+        }
+      ],
+      "compiledCode": "5901810101002222229800aba2aba1aab9faab9eaab9dab9a9bae0059bae0049bae0039bae0024888888888966002646465300130093754003370e90004dc3a4005300c0039806001244444b300130040058cc004dd7180898079baa0068acc004c010c038dd5000c528c528a01a98071baa001488966002600e00315980098091baa0048014590134566002600c00315980098091baa00480145901345901020204566002600600b1323298008acc004c018c040dd5000c4c928980998089baa0018b201e98081baa00398098012444b300130090028acc004c050dd5003400e2c80aa2b300130080028acc004c050dd5003400e2c80aa2b30013370e9002001456600260286ea801a00716405515980099b874801800a2b30013014375400d0038b202a8acc004cdc3a4010005159800980a1baa006801c59015456600266e1d200a0028acc004c050dd5003400e2c80aa2c80910122024404880910120c048c04c004c03cdd500345900d201a18059806000980580098039baa00b8a4d13656401401",
+      "hash": "76caa2f2d4e96faf1cd874bb70463b5a0c3de3aa813b7019498edac8"
+    },
+    {
+      "title": "dao/stake.stake.mint",
+      "redeemer": {
+        "title": "redeemer",
+        "schema": {
+          "$ref": "#/definitions/dao~1types~1StakePositionTokenRedeemer"
+        }
+      },
+      "parameters": [
+        {
+          "title": "stake_token_policy",
+          "schema": {
+            "$ref": "#/definitions/cardano~1assets~1PolicyId"
+          }
+        },
+        {
+          "title": "stake_token_name",
+          "schema": {
+            "$ref": "#/definitions/cardano~1assets~1AssetName"
+          }
+        },
+        {
+          "title": "settings_utxo",
+          "schema": {
+            "$ref": "#/definitions/cardano~1transaction~1OutputReference"
+          }
+        }
+      ],
+      "compiledCode": "59022601010022229800aba2aba1aab9faab9eaab9dab9a9bae0049bae00348888888966002646465300130073754003370e90004dc3a4005300a0039805001244444b300130040058cc004dd7180798069baa0068acc004c010c030dd5000c528c528a01698061baa001488966002600e00315980098081baa0048014590114566002600c00315980098081baa00480145901145900e201c4566002600600b1323298008acc004c018c038dd5000c4c928980898079baa0018b201a98071baa00398088012444b300130090028acc004c048dd5003400e2c809a2b300130080028992cc004c05800626464b3001300c0018992cc004c06400626464b3001300f001899192cc004c07400a01716406c6eb8c06c004c060dd50014566002601c0031323259800980e801402e2c80d8dd7180d800980c1baa0028b202c4058602c6ea8004c0600062c80b8c054dd500145660026016003159800980a9baa002803459016459013202630133754002602a00316405060246ea801a2b30013370e900200144c8c966002602e0050058b202a375a602a00260246ea801a2b30013370e9003001456600260246ea801a00716404d15980099b874802000a2b30013012375400d0038b20268acc004cdc3a401400515980098091baa006801c59013456600266e1d200c0028acc004c048dd5003400e2c809a2c808101020204040808101020201808180880098069baa0068b2016402c3009300a001300900130053754013149a26cac80181",
+      "hash": "8f43904c1edc421822f4637195ee020989e64136bc731535897b7e53"
+    },
+    {
+      "title": "dao/stake.stake.spend",
+      "datum": {
+        "title": "datum",
+        "schema": {
+          "$ref": "#/definitions/dao~1types~1StakePositionDatum"
+        }
+      },
+      "redeemer": {
+        "title": "redeemer",
+        "schema": {
+          "$ref": "#/definitions/dao~1types~1StakeRedeemer"
+        }
+      },
+      "parameters": [
+        {
+          "title": "stake_token_policy",
+          "schema": {
+            "$ref": "#/definitions/cardano~1assets~1PolicyId"
+          }
+        },
+        {
+          "title": "stake_token_name",
+          "schema": {
+            "$ref": "#/definitions/cardano~1assets~1AssetName"
+          }
+        },
+        {
+          "title": "settings_utxo",
+          "schema": {
+            "$ref": "#/definitions/cardano~1transaction~1OutputReference"
+          }
+        }
+      ],
+      "compiledCode": "59022601010022229800aba2aba1aab9faab9eaab9dab9a9bae0049bae00348888888966002646465300130073754003370e90004dc3a4005300a0039805001244444b300130040058cc004dd7180798069baa0068acc004c010c030dd5000c528c528a01698061baa001488966002600e00315980098081baa0048014590114566002600c00315980098081baa00480145901145900e201c4566002600600b1323298008acc004c018c038dd5000c4c928980898079baa0018b201a98071baa00398088012444b300130090028acc004c048dd5003400e2c809a2b300130080028992cc004c05800626464b3001300c0018992cc004c06400626464b3001300f001899192cc004c07400a01716406c6eb8c06c004c060dd50014566002601c0031323259800980e801402e2c80d8dd7180d800980c1baa0028b202c4058602c6ea8004c0600062c80b8c054dd500145660026016003159800980a9baa002803459016459013202630133754002602a00316405060246ea801a2b30013370e900200144c8c966002602e0050058b202a375a602a00260246ea801a2b30013370e9003001456600260246ea801a00716404d15980099b874802000a2b30013012375400d0038b20268acc004cdc3a401400515980098091baa006801c59013456600266e1d200c0028acc004c048dd5003400e2c809a2c808101020204040808101020201808180880098069baa0068b2016402c3009300a001300900130053754013149a26cac80181",
+      "hash": "8f43904c1edc421822f4637195ee020989e64136bc731535897b7e53"
+    },
+    {
+      "title": "dao/stake.stake.else",
+      "redeemer": {
+        "schema": {}
+      },
+      "parameters": [
+        {
+          "title": "stake_token_policy",
+          "schema": {
+            "$ref": "#/definitions/cardano~1assets~1PolicyId"
+          }
+        },
+        {
+          "title": "stake_token_name",
+          "schema": {
+            "$ref": "#/definitions/cardano~1assets~1AssetName"
+          }
+        },
+        {
+          "title": "settings_utxo",
+          "schema": {
+            "$ref": "#/definitions/cardano~1transaction~1OutputReference"
+          }
+        }
+      ],
+      "compiledCode": "59022601010022229800aba2aba1aab9faab9eaab9dab9a9bae0049bae00348888888966002646465300130073754003370e90004dc3a4005300a0039805001244444b300130040058cc004dd7180798069baa0068acc004c010c030dd5000c528c528a01698061baa001488966002600e00315980098081baa0048014590114566002600c00315980098081baa00480145901145900e201c4566002600600b1323298008acc004c018c038dd5000c4c928980898079baa0018b201a98071baa00398088012444b300130090028acc004c048dd5003400e2c809a2b300130080028992cc004c05800626464b3001300c0018992cc004c06400626464b3001300f001899192cc004c07400a01716406c6eb8c06c004c060dd50014566002601c0031323259800980e801402e2c80d8dd7180d800980c1baa0028b202c4058602c6ea8004c0600062c80b8c054dd500145660026016003159800980a9baa002803459016459013202630133754002602a00316405060246ea801a2b30013370e900200144c8c966002602e0050058b202a375a602a00260246ea801a2b30013370e9003001456600260246ea801a00716404d15980099b874802000a2b30013012375400d0038b20268acc004cdc3a401400515980098091baa006801c59013456600266e1d200c0028acc004c048dd5003400e2c809a2c808101020204040808101020201808180880098069baa0068b2016402c3009300a001300900130053754013149a26cac80181",
+      "hash": "8f43904c1edc421822f4637195ee020989e64136bc731535897b7e53"
+    },
+    {
+      "title": "dao/vote.vote.mint",
+      "redeemer": {
+        "title": "redeemer",
+        "schema": {
+          "$ref": "#/definitions/dao~1types~1VoteTokenRedeemer"
+        }
+      },
+      "parameters": [
+        {
+          "title": "stake_nft_policy",
+          "schema": {
+            "$ref": "#/definitions/cardano~1assets~1PolicyId"
+          }
+        },
+        {
+          "title": "stake_token_policy",
+          "schema": {
+            "$ref": "#/definitions/cardano~1assets~1PolicyId"
+          }
+        },
+        {
+          "title": "stake_token_name",
+          "schema": {
+            "$ref": "#/definitions/cardano~1assets~1AssetName"
+          }
+        },
+        {
+          "title": "proposal_policy",
+          "schema": {
+            "$ref": "#/definitions/cardano~1assets~1PolicyId"
+          }
+        }
+      ],
+      "compiledCode": "590102010100222229800aba2aba1aab9faab9eaab9dab9a9bae0059bae0049bae0039bae0024888888888966002646465300130093754003370e90004c03000e601800491112cc004c00c01233001375c6020601c6ea80162b30013003300d375400314a314a28062601a6ea8005222598009803000c56600260226ea801200516404915980099b87480080062b3001301137540090028b20248b201e403c8acc004cdc3a4004009132332259800980318081baa0048acc004c044dd50024566002600c60206ea8006264944c04cc044dd5000c5900f45901245900f18088009808980900098071baa0058b20184030300b300c001300b00130073754017149a26cac8029",
+      "hash": "0fedb79ded71964b40930acab324c6e415f87659165863679c269d16"
+    },
+    {
+      "title": "dao/vote.vote.spend",
+      "datum": {
+        "title": "datum",
+        "schema": {
+          "$ref": "#/definitions/dao~1types~1VoteDatum"
+        }
+      },
+      "redeemer": {
+        "title": "redeemer",
+        "schema": {
+          "$ref": "#/definitions/dao~1types~1VoteRedeemer"
+        }
+      },
+      "parameters": [
+        {
+          "title": "stake_nft_policy",
+          "schema": {
+            "$ref": "#/definitions/cardano~1assets~1PolicyId"
+          }
+        },
+        {
+          "title": "stake_token_policy",
+          "schema": {
+            "$ref": "#/definitions/cardano~1assets~1PolicyId"
+          }
+        },
+        {
+          "title": "stake_token_name",
+          "schema": {
+            "$ref": "#/definitions/cardano~1assets~1AssetName"
+          }
+        },
+        {
+          "title": "proposal_policy",
+          "schema": {
+            "$ref": "#/definitions/cardano~1assets~1PolicyId"
+          }
+        }
+      ],
+      "compiledCode": "590102010100222229800aba2aba1aab9faab9eaab9dab9a9bae0059bae0049bae0039bae0024888888888966002646465300130093754003370e90004c03000e601800491112cc004c00c01233001375c6020601c6ea80162b30013003300d375400314a314a28062601a6ea8005222598009803000c56600260226ea801200516404915980099b87480080062b3001301137540090028b20248b201e403c8acc004cdc3a4004009132332259800980318081baa0048acc004c044dd50024566002600c60206ea8006264944c04cc044dd5000c5900f45901245900f18088009808980900098071baa0058b20184030300b300c001300b00130073754017149a26cac8029",
+      "hash": "0fedb79ded71964b40930acab324c6e415f87659165863679c269d16"
+    },
+    {
+      "title": "dao/vote.vote.else",
+      "redeemer": {
+        "schema": {}
+      },
+      "parameters": [
+        {
+          "title": "stake_nft_policy",
+          "schema": {
+            "$ref": "#/definitions/cardano~1assets~1PolicyId"
+          }
+        },
+        {
+          "title": "stake_token_policy",
+          "schema": {
+            "$ref": "#/definitions/cardano~1assets~1PolicyId"
+          }
+        },
+        {
+          "title": "stake_token_name",
+          "schema": {
+            "$ref": "#/definitions/cardano~1assets~1AssetName"
+          }
+        },
+        {
+          "title": "proposal_policy",
+          "schema": {
+            "$ref": "#/definitions/cardano~1assets~1PolicyId"
+          }
+        }
+      ],
+      "compiledCode": "590102010100222229800aba2aba1aab9faab9eaab9dab9a9bae0059bae0049bae0039bae0024888888888966002646465300130093754003370e90004c03000e601800491112cc004c00c01233001375c6020601c6ea80162b30013003300d375400314a314a28062601a6ea8005222598009803000c56600260226ea801200516404915980099b87480080062b3001301137540090028b20248b201e403c8acc004cdc3a4004009132332259800980318081baa0048acc004c044dd50024566002600c60206ea8006264944c04cc044dd5000c5900f45901245900f18088009808980900098071baa0058b20184030300b300c001300b00130073754017149a26cac8029",
+      "hash": "0fedb79ded71964b40930acab324c6e415f87659165863679c269d16"
+    },
+    {
       "title": "linear_vesting.linear_vesting.spend",
       "datum": {
         "title": "datum",
@@ -35,89 +377,6 @@
       },
       "compiledCode": "59057901010029800aba2aba1aba0aab9faab9eaab9dab9a488888896600264653001300800198041804800cdc3a400530080024888966002600460106ea800e2653001300d00198069807000cdc3a400091119912cc004c00c0062b3001300f37540150028b20208acc004c0200062b3001300f37540150028b20208b201a40342b30013001300c375400519800980818069baa0029112cc004c010c03cdd5001c4c8c8cc004004010896600200314a115980099b8f375c602c00200714a31330020023017001404480a0dd7180998081baa00389919800800801112cc00400629422b30013375e00a6022602a00314a313300200230160014040809900e48c044c048c048c04800646022602460246024602400323011301200148888966002600c60226ea8036264b300130073012375400319800912cc0040062900044cdc02400466004004603200280b244646600200200644b30010018a518acc004c00cc068006266004004603600314a080a901848c05cc060c060006600460266ea8c058c04cdd5000cc04cdd5005a4444464646644b30019800980f980e1baa00f9bac301f30200029bab301f003403915980099b88375a601a60386ea803cdd69806180e1baa00f8992cc004c058c070dd5000c56600266e1d2004301c37546010603a6ea801e330013758604000d3758604000b3020301d37546040603a6ea801e6eb4c080c074dd5000a444464b3001337126eb4c048c088dd500a8014528c56600266e24c8c8cc00400401c896600200314800226644b30015980099baf302a302737546054604e6ea8c058c09cdd500100444cdd7980918139baa30163027375400400b14a0812a266e0000520028800a04a30280013300200230290014098601a60446ea8030c01c00626601c00246601e6eb0c038c08cdd500b119b89337026eb4c03cc090dd5000cc004dd6980798121baa0019bad30153024375402f375a602860486ea805d2225980099b890070028a400115980099b890010078801c4cdc199b820033370200e00466e04004009025204a4c004dd5980998121baa0029bae302730243754003375c602660486ea8006290002444466446600200200464646600200200c44b3001001801c4c8c96600266e440200062b30013371e01000313756605a00500540ad133004004303100340ac6eb8c0ac004c0b800502c0a5eb7bdb1808966002003003899192cc004cdc8803000c56600266e3c01800626eb4c0b000a00a815226600800860600068150dd718150009816800a056452820404080646600200200844b30010018a5eb8226644b30015980099baf3028302537546050604a6ea800801a266ebcc040c094dd5001180818129baa00f8a50408d13302700233004004001899802002000a0463026001302700140908b20368b2036301f301c3754603e60386ea8c07c00a2c80d22c80d0c078004c01c01cc074c074c074c074004c070c07000516404464660020026eb0c058c04cdd5005912cc0040062980103d87a80008992cc004cdd7980c180a9baa00100b899ba548000cc05c0052f5c11330030033019002404c602e00280aa2646644b300198009802180a9baa0089bac301830190029bab3018003401d15980099b88375a600c602a6ea8020dd69802980a9baa0088acc004cdc41bad3005301537540106eb4c004c054dd500444c8c8cc89660026024005132598009809980c9baa3009301a3754603a60346ea8016266e20008006266e240080050181bad301c30193754007159800980680145284528a02e405c602c6ea8004dd69801980b9baa00a3019301637546032602c6ea8004c06000a2c809a2c809a2c8098c05c0048c05cc060c060c060c060c060004c058c058c058c058c058c058c048dd5005202045900b18061baa00818049baa0038b200e180400098019baa0088a4d13656400401",
       "hash": "04db07309575750ccd88405477502dc29fa0b5ce7e9d057194ce6e2e"
-    },
-    {
-      "title": "proposal.proposal.mint",
-      "redeemer": {
-        "title": "redeemer",
-        "schema": {
-          "$ref": "#/definitions/dao~1proposal~1types~1ProposalTokenRedeemer"
-        }
-      },
-      "parameters": [
-        {
-          "title": "settings_utxo",
-          "schema": {
-            "$ref": "#/definitions/cardano~1transaction~1OutputReference"
-          }
-        },
-        {
-          "title": "stake_nft_policy",
-          "schema": {
-            "$ref": "#/definitions/cardano~1assets~1PolicyId"
-          }
-        },
-        {
-          "title": "stake_nft_name",
-          "schema": {
-            "$ref": "#/definitions/cardano~1assets~1AssetName"
-          }
-        },
-        {
-          "title": "stake_token_policy",
-          "schema": {
-            "$ref": "#/definitions/cardano~1assets~1PolicyId"
-          }
-        },
-        {
-          "title": "stake_token_name",
-          "schema": {
-            "$ref": "#/definitions/cardano~1assets~1AssetName"
-          }
-        }
-      ],
-      "compiledCode": "59074b0101002222229800aba4aba2aba1aba0aab9faab9eaab9dab9a9bae0059bae0049bae0039bae00248888888888896600264653001300c00198061806800cdc3a4001300c0024888966002600460186ea800e264b30013003300d375400b15980098071baa0058cc00488c8c8cc0040040108966002003003899192cc004cdc8803000c56600266e3c01800626eacc05400a00a809a26600800860320068098dd71809800980b000a02814bd6f7b63048966002600a601e6ea800a26464653001375a602c003375a602c007375a602c0049112cc004c06801200f16405c30160013015001301037540051640392259800980298079baa002899191919194c004dd6980c000cdd6980c002cdd6980c0024dd6980c001cdd6980c001244444b3001301e006805c5901b0c060004c05c004c058004c054004c040dd500145900e4dd2a40012301230130019b874800a44646600200200644660060026004005300e3754004911111111991194c004c070c064dd5180e180c9baa301c301d301d301d001911919800800801912cc0040062980103d87a80008992cc004c0100062601a6604000297ae0899801801981100120383020001407922230099800801c00a0028031222598009804980d9baa003899914c004dca1bb33021301e375400598009bab300c301e37546018603c6ea800a03301840213259800980a180f1baa0018992cc004c00cc07cdd5000c4c8c966002602e60426ea800a26464646644b3001302b00389919912cc004c07c00a26464b30013030002801c5902d181700098151baa0038acc004c05c00a2b3001302a37540070018b20568b205040a0604e6ea80044c966002603c00313232598009817801402a2c8160dd6981680098149baa0048acc004c0580062b3001302937540090088b20548b204e409c604e6ea800cc0a80122c8140c0a0004c0a000cc0a0004c09c004c088dd50014590200992cc004c05cc084dd5000c4c8c8c9660026052005133015302800313301600110048b204c3027001302700130223754003164080604860426ea8004c08cc080dd5000c5901e181118119811980f9baa300d301f37546044603e6ea80062c80e8cc010dd618109811180f1baa01223375e6044603e6ea80040aa6eb4c084c078dd5002a4444b3001337126eb4c094c088dd5181298111baa0020038acc004c966002604e0031325980098089bad3024001899b8f375c604600200d14a08110c0980062c8120cc050dd5981280500ac4c8c8c8c9660026012604a6ea80062b30013013302537546052605400515980099baf302930263754605200866e95200233028375203297ae08acc004cc896600200514a11329800992cc004c07cc0a4dd5000c4dd6981518169bab302d302a37540031480010281816000cdd798161816800cdd5801a444b30010018acc004c00801a26600a0069000452820548992cc004cdd7a61014000302c0018acc004cc018010dd6981698181bab302d001898019ba630310028a5040ad1598009980300224001130030078a5040ac8158c0bc00502d0ca60020033756605800d223302d0023302d374c00297ae04004444b3001002899800a60103d87a80004bd6f7b63044c8cc896600266e452201000028acc004cdc7a44100002899802180e998181817001a5eb80006266008980103d87a800000540b1198008034006446600c0046606400a002803102c1bae302b0013030003302e00240b114a114a114a08168dd31981419bb037520326e98cc0a0cdd81ba90084c010101004bd6f7b63025eb7bdb1808928c4c9660026038604c6ea80062646464646530013756605e003302f0049bad302f003981780124444b300130340058998101819804899810801899912cc004c09c00626464b300130380028024590351bad303600130323754007159800980f800c56600260646ea800e0051640cd159800980a800c4c966002606e00313301f3756606c00244b3001002802c4c8cc88c010c0f0014dd6981a8009bad3036001303800240d91640d060646ea800e2c8181030206013301c004225980080144cdd780618109981a181a98191baa01233034302030323754024660686ea0044cc0d0c084cc0d0dd4009a5eb80cc0d1300101a0004bd7044c8cc88c010c0e4014dd698190009bae3033001303500240cc605e6ea80062c8188605e002605c002605a0026058002604e6ea80062c8128c0a4c098dd5000c5902445902445902445902418140009814000981380098111baa3259800980c18111baa0018981318119baa0018b2042330083758604a016530013756602260466ea800602d005402114a081022c810064b30013012301c375400313020301d375400316406c660046eb0c07c01ca60026eacc02cc074dd51805980e9baa00180d40650021b87480122c80d0603860380024446466446600400400244b3001001801c4c8c96600266e440180062b30013371e00c0031375a603c0050054071133004004302200340706eb8c070004c07c00501d198060020018a4000603460340028b201e8b2018375c6020601a6ea800e2c80586018002600e6ea803629344d9590051",
-      "hash": "adb51eff9ea495a47632325ad235670b63a45e0394e084d5076013dd"
-    },
-    {
-      "title": "proposal.proposal.else",
-      "redeemer": {
-        "schema": {}
-      },
-      "parameters": [
-        {
-          "title": "settings_utxo",
-          "schema": {
-            "$ref": "#/definitions/cardano~1transaction~1OutputReference"
-          }
-        },
-        {
-          "title": "stake_nft_policy",
-          "schema": {
-            "$ref": "#/definitions/cardano~1assets~1PolicyId"
-          }
-        },
-        {
-          "title": "stake_nft_name",
-          "schema": {
-            "$ref": "#/definitions/cardano~1assets~1AssetName"
-          }
-        },
-        {
-          "title": "stake_token_policy",
-          "schema": {
-            "$ref": "#/definitions/cardano~1assets~1PolicyId"
-          }
-        },
-        {
-          "title": "stake_token_name",
-          "schema": {
-            "$ref": "#/definitions/cardano~1assets~1AssetName"
-          }
-        }
-      ],
-      "compiledCode": "59074b0101002222229800aba4aba2aba1aba0aab9faab9eaab9dab9a9bae0059bae0049bae0039bae00248888888888896600264653001300c00198061806800cdc3a4001300c0024888966002600460186ea800e264b30013003300d375400b15980098071baa0058cc00488c8c8cc0040040108966002003003899192cc004cdc8803000c56600266e3c01800626eacc05400a00a809a26600800860320068098dd71809800980b000a02814bd6f7b63048966002600a601e6ea800a26464653001375a602c003375a602c007375a602c0049112cc004c06801200f16405c30160013015001301037540051640392259800980298079baa002899191919194c004dd6980c000cdd6980c002cdd6980c0024dd6980c001cdd6980c001244444b3001301e006805c5901b0c060004c05c004c058004c054004c040dd500145900e4dd2a40012301230130019b874800a44646600200200644660060026004005300e3754004911111111991194c004c070c064dd5180e180c9baa301c301d301d301d001911919800800801912cc0040062980103d87a80008992cc004c0100062601a6604000297ae0899801801981100120383020001407922230099800801c00a0028031222598009804980d9baa003899914c004dca1bb33021301e375400598009bab300c301e37546018603c6ea800a03301840213259800980a180f1baa0018992cc004c00cc07cdd5000c4c8c966002602e60426ea800a26464646644b3001302b00389919912cc004c07c00a26464b30013030002801c5902d181700098151baa0038acc004c05c00a2b3001302a37540070018b20568b205040a0604e6ea80044c966002603c00313232598009817801402a2c8160dd6981680098149baa0048acc004c0580062b3001302937540090088b20548b204e409c604e6ea800cc0a80122c8140c0a0004c0a000cc0a0004c09c004c088dd50014590200992cc004c05cc084dd5000c4c8c8c9660026052005133015302800313301600110048b204c3027001302700130223754003164080604860426ea8004c08cc080dd5000c5901e181118119811980f9baa300d301f37546044603e6ea80062c80e8cc010dd618109811180f1baa01223375e6044603e6ea80040aa6eb4c084c078dd5002a4444b3001337126eb4c094c088dd5181298111baa0020038acc004c966002604e0031325980098089bad3024001899b8f375c604600200d14a08110c0980062c8120cc050dd5981280500ac4c8c8c8c9660026012604a6ea80062b30013013302537546052605400515980099baf302930263754605200866e95200233028375203297ae08acc004cc896600200514a11329800992cc004c07cc0a4dd5000c4dd6981518169bab302d302a37540031480010281816000cdd798161816800cdd5801a444b30010018acc004c00801a26600a0069000452820548992cc004cdd7a61014000302c0018acc004cc018010dd6981698181bab302d001898019ba630310028a5040ad1598009980300224001130030078a5040ac8158c0bc00502d0ca60020033756605800d223302d0023302d374c00297ae04004444b3001002899800a60103d87a80004bd6f7b63044c8cc896600266e452201000028acc004cdc7a44100002899802180e998181817001a5eb80006266008980103d87a800000540b1198008034006446600c0046606400a002803102c1bae302b0013030003302e00240b114a114a114a08168dd31981419bb037520326e98cc0a0cdd81ba90084c010101004bd6f7b63025eb7bdb1808928c4c9660026038604c6ea80062646464646530013756605e003302f0049bad302f003981780124444b300130340058998101819804899810801899912cc004c09c00626464b300130380028024590351bad303600130323754007159800980f800c56600260646ea800e0051640cd159800980a800c4c966002606e00313301f3756606c00244b3001002802c4c8cc88c010c0f0014dd6981a8009bad3036001303800240d91640d060646ea800e2c8181030206013301c004225980080144cdd780618109981a181a98191baa01233034302030323754024660686ea0044cc0d0c084cc0d0dd4009a5eb80cc0d1300101a0004bd7044c8cc88c010c0e4014dd698190009bae3033001303500240cc605e6ea80062c8188605e002605c002605a0026058002604e6ea80062c8128c0a4c098dd5000c5902445902445902445902418140009814000981380098111baa3259800980c18111baa0018981318119baa0018b2042330083758604a016530013756602260466ea800602d005402114a081022c810064b30013012301c375400313020301d375400316406c660046eb0c07c01ca60026eacc02cc074dd51805980e9baa00180d40650021b87480122c80d0603860380024446466446600400400244b3001001801c4c8c96600266e440180062b30013371e00c0031375a603c0050054071133004004302200340706eb8c070004c07c00501d198060020018a4000603460340028b201e8b2018375c6020601a6ea800e2c80586018002600e6ea803629344d9590051",
-      "hash": "adb51eff9ea495a47632325ad235670b63a45e0394e084d5076013dd"
     },
     {
       "title": "settings.settings.spend",
@@ -396,6 +655,12 @@
     "Int": {
       "dataType": "integer"
     },
+    "List<Tuple<<ByteArray,Int,Int>>>": {
+      "dataType": "list",
+      "items": {
+        "$ref": "#/definitions/Tuple<<ByteArray,Int,Int>>"
+      }
+    },
     "List<vesting/types/VestedAsset>": {
       "dataType": "list",
       "items": {
@@ -448,6 +713,87 @@
         }
       ]
     },
+    "Option<cardano/address/Credential>": {
+      "title": "Option",
+      "anyOf": [
+        {
+          "title": "Some",
+          "description": "An optional value.",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "$ref": "#/definitions/cardano~1address~1Credential"
+            }
+          ]
+        },
+        {
+          "title": "None",
+          "description": "Nothing.",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
+    },
+    "Option<cardano/address/StakeCredential>": {
+      "title": "Option",
+      "anyOf": [
+        {
+          "title": "Some",
+          "description": "An optional value.",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "$ref": "#/definitions/cardano~1address~1StakeCredential"
+            }
+          ]
+        },
+        {
+          "title": "None",
+          "description": "Nothing.",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
+    },
+    "Pairs<Int,Int>": {
+      "title": "Pairs<Int, Int>",
+      "dataType": "map",
+      "keys": {
+        "$ref": "#/definitions/Int"
+      },
+      "values": {
+        "$ref": "#/definitions/Int"
+      }
+    },
+    "Pairs<Int,aiken/crypto/ScriptHash>": {
+      "title": "Pairs<Int, ScriptHash>",
+      "dataType": "map",
+      "keys": {
+        "$ref": "#/definitions/Int"
+      },
+      "values": {
+        "$ref": "#/definitions/aiken~1crypto~1ScriptHash"
+      }
+    },
+    "Tuple<<ByteArray,Int,Int>>": {
+      "title": "Tuple",
+      "dataType": "list",
+      "items": [
+        {
+          "$ref": "#/definitions/ByteArray"
+        },
+        {
+          "$ref": "#/definitions/Int"
+        },
+        {
+          "$ref": "#/definitions/Int"
+        }
+      ]
+    },
     "aiken/crypto/ScriptHash": {
       "title": "ScriptHash",
       "dataType": "bytes"
@@ -455,6 +801,27 @@
     "aiken/crypto/VerificationKeyHash": {
       "title": "VerificationKeyHash",
       "dataType": "bytes"
+    },
+    "cardano/address/Address": {
+      "title": "Address",
+      "description": "A Cardano `Address` typically holding one or two credential references.\n\n Note that legacy bootstrap addresses (a.k.a. 'Byron addresses') are\n completely excluded from Plutus contexts. Thus, from an on-chain\n perspective only exists addresses of type 00, 01, ..., 07 as detailed\n in [CIP-0019 :: Shelley Addresses](https://github.com/cardano-foundation/CIPs/tree/master/CIP-0019/#shelley-addresses).",
+      "anyOf": [
+        {
+          "title": "Address",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "payment_credential",
+              "$ref": "#/definitions/cardano~1address~1PaymentCredential"
+            },
+            {
+              "title": "stake_credential",
+              "$ref": "#/definitions/Option<cardano~1address~1StakeCredential>"
+            }
+          ]
+        }
+      ]
     },
     "cardano/address/Credential": {
       "title": "Credential",
@@ -477,6 +844,67 @@
           "fields": [
             {
               "$ref": "#/definitions/aiken~1crypto~1ScriptHash"
+            }
+          ]
+        }
+      ]
+    },
+    "cardano/address/PaymentCredential": {
+      "title": "PaymentCredential",
+      "description": "A general structure for representing an on-chain `Credential`.\n\n Credentials are always one of two kinds: a direct public/private key\n pair, or a script (native or Plutus).",
+      "anyOf": [
+        {
+          "title": "VerificationKey",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "$ref": "#/definitions/aiken~1crypto~1VerificationKeyHash"
+            }
+          ]
+        },
+        {
+          "title": "Script",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": [
+            {
+              "$ref": "#/definitions/aiken~1crypto~1ScriptHash"
+            }
+          ]
+        }
+      ]
+    },
+    "cardano/address/StakeCredential": {
+      "title": "StakeCredential",
+      "description": "Represent a type of object that can be represented either inline (by hash)\n or via a reference (i.e. a pointer to an on-chain location).\n\n This is mainly use for capturing pointers to a stake credential\n registration certificate in the case of so-called pointer addresses.",
+      "anyOf": [
+        {
+          "title": "Inline",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "$ref": "#/definitions/cardano~1address~1Credential"
+            }
+          ]
+        },
+        {
+          "title": "Pointer",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": [
+            {
+              "title": "slot_number",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "transaction_index",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "certificate_index",
+              "$ref": "#/definitions/Int"
             }
           ]
         }
@@ -511,14 +939,347 @@
         }
       ]
     },
-    "dao/proposal/types/ProposalTokenRedeemer": {
+    "dao/types/ProposalDatum": {
+      "title": "ProposalDatum",
+      "description": "Immutable proposal state, written once at creation. `thresholds`,\n `timing_config`, `start_time` and `results` are locked on creation;\n only `status` evolves.",
+      "anyOf": [
+        {
+          "title": "ProposalDatum",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "thresholds",
+              "$ref": "#/definitions/dao~1types~1ProposalThresholds"
+            },
+            {
+              "title": "timing_config",
+              "$ref": "#/definitions/dao~1types~1ProposalTimingConfig"
+            },
+            {
+              "title": "start_time",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "status",
+              "$ref": "#/definitions/dao~1types~1ProposalStatus"
+            },
+            {
+              "title": "results",
+              "$ref": "#/definitions/Pairs<Int,aiken~1crypto~1ScriptHash>"
+            }
+          ]
+        }
+      ]
+    },
+    "dao/types/ProposalRedeemer": {
+      "title": "ProposalRedeemer",
+      "description": "Spent proposal UTxO actions.",
+      "anyOf": [
+        {
+          "title": "Cosign",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "AcceptDraft",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        },
+        {
+          "title": "RejectDraft",
+          "dataType": "constructor",
+          "index": 2,
+          "fields": []
+        },
+        {
+          "title": "EndVotingStage",
+          "dataType": "constructor",
+          "index": 3,
+          "fields": []
+        },
+        {
+          "title": "TallyVotes",
+          "dataType": "constructor",
+          "index": 4,
+          "fields": []
+        },
+        {
+          "title": "EndProposal",
+          "dataType": "constructor",
+          "index": 5,
+          "fields": []
+        }
+      ]
+    },
+    "dao/types/ProposalStatus": {
+      "title": "ProposalStatus",
+      "description": "Lifecycle status of a proposal.",
+      "anyOf": [
+        {
+          "title": "Draft",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "cosigning_stake",
+              "$ref": "#/definitions/Int"
+            }
+          ]
+        },
+        {
+          "title": "Voting",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        },
+        {
+          "title": "Tally",
+          "dataType": "constructor",
+          "index": 2,
+          "fields": [
+            {
+              "title": "votes",
+              "$ref": "#/definitions/Pairs<Int,Int>"
+            }
+          ]
+        }
+      ]
+    },
+    "dao/types/ProposalThresholds": {
+      "title": "ProposalThresholds",
+      "description": "Governance thresholds required at each stage of a proposal's lifecycle.\n All quantities are in staked-token units.",
+      "anyOf": [
+        {
+          "title": "ProposalThresholds",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "create",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "cosign",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "accept",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "vote",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "execute",
+              "$ref": "#/definitions/Int"
+            }
+          ]
+        }
+      ]
+    },
+    "dao/types/ProposalTimingConfig": {
+      "title": "ProposalTimingConfig",
+      "description": "Phase durations (POSIX **milliseconds**) for a proposal's lifecycle.",
+      "anyOf": [
+        {
+          "title": "ProposalTimingConfig",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "draft_length",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "voting_length",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "tally_length",
+              "$ref": "#/definitions/Int"
+            }
+          ]
+        }
+      ]
+    },
+    "dao/types/ProposalTokenRedeemer": {
       "title": "ProposalTokenRedeemer",
       "description": "Redeemer for the proposal token minting policy.",
       "anyOf": [
         {
-          "title": "CreateProposal",
+          "title": "MintProposal",
           "dataType": "constructor",
           "index": 0,
+          "fields": []
+        },
+        {
+          "title": "BurnProposal",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
+    },
+    "dao/types/StakePositionDatum": {
+      "title": "StakePositionDatum",
+      "description": "Stake position state.",
+      "anyOf": [
+        {
+          "title": "StakePositionDatum",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "owner",
+              "$ref": "#/definitions/cardano~1address~1Credential"
+            },
+            {
+              "title": "delegatee",
+              "$ref": "#/definitions/Option<cardano~1address~1Credential>"
+            },
+            {
+              "title": "locks",
+              "$ref": "#/definitions/List<Tuple<<ByteArray,Int,Int>>>"
+            }
+          ]
+        }
+      ]
+    },
+    "dao/types/StakePositionTokenRedeemer": {
+      "title": "StakePositionTokenRedeemer",
+      "description": "Redeemer for the stake position NFT minting policy.",
+      "anyOf": [
+        {
+          "title": "CreatePosition",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "CloseStakePosition",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
+    },
+    "dao/types/StakeRedeemer": {
+      "title": "StakeRedeemer",
+      "description": "Actions on a stake position UTxO.",
+      "anyOf": [
+        {
+          "title": "Deposit",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "DelegateTo",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": [
+            {
+              "title": "delegatee",
+              "$ref": "#/definitions/Option<cardano~1address~1Credential>"
+            }
+          ]
+        },
+        {
+          "title": "Withdraw",
+          "dataType": "constructor",
+          "index": 2,
+          "fields": [
+            {
+              "title": "amount",
+              "$ref": "#/definitions/Int"
+            }
+          ]
+        },
+        {
+          "title": "ClosePosition",
+          "dataType": "constructor",
+          "index": 3,
+          "fields": []
+        },
+        {
+          "title": "CreateProposal",
+          "dataType": "constructor",
+          "index": 4,
+          "fields": []
+        },
+        {
+          "title": "CosignProposal",
+          "dataType": "constructor",
+          "index": 5,
+          "fields": []
+        },
+        {
+          "title": "VoteProposal",
+          "dataType": "constructor",
+          "index": 6,
+          "fields": []
+        }
+      ]
+    },
+    "dao/types/VoteDatum": {
+      "title": "VoteDatum",
+      "description": "Vote artifact datum.",
+      "anyOf": [
+        {
+          "title": "VoteDatum",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "stake_owner",
+              "$ref": "#/definitions/cardano~1address~1Address"
+            },
+            {
+              "title": "proposal",
+              "$ref": "#/definitions/ByteArray"
+            },
+            {
+              "title": "voted_option",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "stake",
+              "$ref": "#/definitions/Int"
+            }
+          ]
+        }
+      ]
+    },
+    "dao/types/VoteRedeemer": {
+      "title": "VoteRedeemer",
+      "description": "Actions on a vote artifact UTxO.",
+      "anyOf": [
+        {
+          "title": "TallyVote",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        }
+      ]
+    },
+    "dao/types/VoteTokenRedeemer": {
+      "title": "VoteTokenRedeemer",
+      "description": "Redeemer for the vote NFT minting policy.",
+      "anyOf": [
+        {
+          "title": "MintVote",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "BurnVotes",
+          "dataType": "constructor",
+          "index": 1,
           "fields": []
         }
       ]
