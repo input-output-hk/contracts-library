@@ -14,6 +14,7 @@ validator stake(
   stake_token_policy: PolicyId,
   stake_token_name: AssetName,
   settings_utxo: OutputReference,
+  settings_token_name: AssetName,
 ) {
   mint(
     redeemer: StakePositionTokenRedeemer,
@@ -37,6 +38,7 @@ validator stake(
       stake_token_policy,
       stake_token_name,
       settings_utxo,
+      settings_token_name,
       stake_datum,
       redeemer,
       own_ref,

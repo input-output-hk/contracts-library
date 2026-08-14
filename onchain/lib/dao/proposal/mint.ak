@@ -3,9 +3,10 @@ use aiken/interval.{Finite}
 use cardano/address.{Script}
 use cardano/assets
 use cardano/transaction.{InlineDatum, Output, OutputReference, Transaction}
-use dao/types.{ProposalDatum, ProposalStatus}
+use dao/types.{CreateProposal, ProposalDatum, ProposalStatus, StakeRedeemer}
 use dao/utils.{
-  find_proposal_output, find_stake_input, get_dao_settings, proposal_token_name,
+  find_proposal_input, find_proposal_output, find_stake_input, get_dao_settings,
+  proposal_token_name, spend_redeemer,
 }
 
 /// Validate the mint of a proposal NFT: the first step of creating a proposal.
@@ -25,6 +26,7 @@ pub fn validate_create_proposal(
   stake_nft_name: assets.AssetName,
   stake_token_policy: assets.PolicyId,
   stake_token_name: assets.AssetName,
+  settings_token_name: assets.AssetName,
   own_policy: assets.PolicyId,
   self: Transaction,
 ) {
@@ -50,11 +52,19 @@ pub fn validate_create_proposal(
       stake_token_name,
     )
 
-  let settings = get_dao_settings(self, settings_utxo)
+  let settings = get_dao_settings(self, settings_utxo, settings_token_name)
 
   expect stake_amount >= settings.thresholds.create
 
   let proposal_output = find_proposal_output(outputs, own_policy, token_name)
+
+  // The stake must be consumed with `CreateProposal`, so the stake validator
+  // enforces the matching lock `(token_name, now + draft_length, stake_amount)`.
+  let stake_creating = {
+    expect action: StakeRedeemer =
+      spend_redeemer(self, stake_input.output_reference)
+    action == CreateProposal
+  }
 
   let correct_datum = {
     expect Output {
@@ -84,5 +94,30 @@ pub fn validate_create_proposal(
   and {
     correct_mint,
     correct_datum,
+    stake_creating,
   }
+}
+
+/// Validate the burning of a proposal NFT when a proposal is rejected or
+/// otherwise closed. The burn must target a spent proposal UTxO under the same
+/// policy and carry the exact token name that was minted for that proposal.
+pub fn validate_finish_proposal(
+  own_policy: assets.PolicyId,
+  self: Transaction,
+) {
+  let Transaction { inputs, mint, .. } = self
+
+  let correct_burn = {
+    expect [Pair(minted_name, quantity)] =
+      mint
+        |> assets.tokens(own_policy)
+        |> dict.to_pairs()
+    quantity == -1 && {
+      let proposal_input = find_proposal_input(inputs, own_policy, minted_name)
+      expect Script(own_hash) = proposal_input.output.address.payment_credential
+      own_hash == own_policy
+    }
+  }
+
+  correct_burn
 }
