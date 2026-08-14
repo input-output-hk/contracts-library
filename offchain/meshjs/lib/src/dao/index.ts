@@ -1,0 +1,83 @@
+/**
+ * DAO governance (proposal / stake / vote) — MeshJS off-chain submodule.
+ */
+
+export * from "./types";
+export {
+  addressToData,
+  burnProposalRedeemer,
+  burnVotesRedeemer,
+  closeStakePositionRedeemer,
+  cosignRedeemer,
+  createPositionRedeemer,
+  daoSettingsToData,
+  acceptDraftRedeemer,
+  endProposalRedeemer,
+  endVotingStageRedeemer,
+  mintProposalRedeemer,
+  mintVoteRedeemer,
+  proposalDatumToData,
+  proposalParamsToData,
+  proposalRedeemerToData,
+  proposalStatusToData,
+  proposalThresholdsToData,
+  proposalTimingConfigToData,
+  proposalTokenRedeemerToData,
+  rejectDraftRedeemer,
+  stakeParamsToData,
+  stakePositionDatumToData,
+  stakePositionTokenRedeemerToData,
+  stakeRedeemerToData,
+  tallyVotesRedeemer,
+  tallyVoteRedeemer,
+  voteDatumToData,
+  voteParamsToData,
+  voteRedeemerToData,
+  voteTokenRedeemerToData,
+} from "./datum";
+export {
+  buildCreateStakePositionTx,
+  buildDepositTx,
+  buildDelegateTx,
+  buildWithdrawTx,
+  buildClosePositionTx,
+  stakeScript,
+  stakeScriptAddress,
+  type ClosePositionParams,
+  type CreateStakePositionParams,
+  type DelegateParams,
+  type DepositParams,
+  type StakeSpendParams,
+  type WithdrawParams,
+} from "./stake";
+export {
+  buildAcceptDraftTx,
+  buildCosignProposalTx,
+  buildCreateProposalTx,
+  buildEndProposalTx,
+  buildEndVotingStageTx,
+  buildRejectDraftTx,
+  buildTallyTx,
+  proposalScript,
+  proposalScriptAddress,
+  type CosignProposalParams,
+  type CreateProposalParams,
+  type ProposalSpendParams,
+  type SimpleProposalParams,
+  type TallyParams,
+} from "./proposal";
+export {
+  buildVoteTx,
+  voteScript,
+  voteScriptAddress,
+  type VoteBuilderParams,
+} from "./vote";
+export {
+  proposalCompiledCode as proposalCode,
+  proposalValidatorHash,
+  stakeCompiledCode as stakeCode,
+  stakeValidatorHash,
+  voteCompiledCode as voteCode,
+  voteValidatorHash,
+  plutusVersion as daoPlutusVersion,
+} from "./blueprint";
