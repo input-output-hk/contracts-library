@@ -1,5 +1,7 @@
 use aiken/interval
-use cardano/address.{Credential, VerificationKey, from_script}
+use cardano/address.{
+  Credential, VerificationKey, from_script, from_verification_key,
+}
 use cardano/assets.{Value}
 use cardano/transaction.{
   InlineDatum, Input, NoDatum, Output, OutputReference, Transaction, placeholder,
@@ -427,7 +429,7 @@ test rejects_cosign_same_proposal_twice() {
 
 test vote_proposal_ok() {
   let start = 500
-  let unlock = start + 1000 + 2000 + 3000
+  let unlock = start + 1000 + 2000
   let new_lock = (prop_nft, unlock, 20)
   let d = stake_datum(None, [])
   let out = pos_output(20, stake_datum(None, [new_lock]))
@@ -439,13 +441,14 @@ test vote_proposal_ok() {
       outputs: [out],
       mint: assets.from_asset(vote_policy, "V", 1),
       extra_signatories: [owner_hash],
+      validity_range: interval.before(unlock),
     }
   spend(d, VoteProposal, tx)
 }
 
 test rejects_vote_when_not_voting_stage() {
   let start = 500
-  let unlock = start + 1000 + 2000 + 3000
+  let unlock = start + 1000 + 2000
   let new_lock = (prop_nft, unlock, 20)
   let d = stake_datum(None, [])
   let out = pos_output(20, stake_datum(None, [new_lock]))
@@ -457,6 +460,7 @@ test rejects_vote_when_not_voting_stage() {
       outputs: [out],
       mint: assets.from_asset(vote_policy, "V", 1),
       extra_signatories: [owner_hash],
+      validity_range: interval.before(unlock),
     }
   !spend(d, VoteProposal, tx)
 }
@@ -470,7 +474,7 @@ test create_position_ok() {
     Input {
       output_reference: seed,
       output: Output {
-        address: from_script(gov_policy),
+        address: from_verification_key(owner_hash),
         value: assets.from_lovelace(2_000_000),
         datum: NoDatum,
         reference_script: None,
@@ -479,7 +483,9 @@ test create_position_ok() {
   let position =
     Output {
       address: from_script(stake_hash),
-      value: assets.from_asset(stake_hash, name, 1),
+      value: assets.from_asset(stake_hash, name, 1)
+        |> assets.add(gov_policy, gov_name, 1)
+        |> assets.merge(assets.from_lovelace(2_000_000)),
       datum: InlineDatum(stake_datum(None, [])),
       reference_script: None,
     }
@@ -490,7 +496,7 @@ test create_position_ok() {
       outputs: [position],
       mint: assets.from_asset(stake_hash, name, 1),
     }
-  validate_create_position(stake_hash, tx)
+  validate_create_position(gov_policy, gov_name, seed, stake_hash, 0, tx)
 }
 
 test rejects_create_position_with_locks() {
@@ -500,7 +506,7 @@ test rejects_create_position_with_locks() {
     Input {
       output_reference: seed,
       output: Output {
-        address: from_script(gov_policy),
+        address: from_verification_key(owner_hash),
         value: assets.from_lovelace(2_000_000),
         datum: NoDatum,
         reference_script: None,
@@ -509,7 +515,9 @@ test rejects_create_position_with_locks() {
   let position =
     Output {
       address: from_script(stake_hash),
-      value: assets.from_asset(stake_hash, name, 1),
+      value: assets.from_asset(stake_hash, name, 1)
+        |> assets.add(gov_policy, gov_name, 1)
+        |> assets.merge(assets.from_lovelace(2_000_000)),
       datum: InlineDatum(stake_datum(None, [(prop_nft, 1, 1)])),
       reference_script: None,
     }
@@ -520,7 +528,7 @@ test rejects_create_position_with_locks() {
       outputs: [position],
       mint: assets.from_asset(stake_hash, name, 1),
     }
-  !validate_create_position(stake_hash, tx)
+  !validate_create_position(gov_policy, gov_name, seed, stake_hash, 0, tx)
 }
 
 test close_position_mint_ok() {
