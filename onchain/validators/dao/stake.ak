@@ -6,6 +6,7 @@ use dao/types.{
   CloseStakePosition, CreatePosition, StakePositionDatum,
   StakePositionTokenRedeemer, StakeRedeemer,
 }
+use dao/utils.{get_dao_settings}
 
 /// Stake position script: its hash is the stake NFT policy id and the address
 /// where positions live. Governance parameters and sibling script hashes are
@@ -42,11 +43,11 @@ validator stake(
     self: Transaction,
   ) {
     expect Some(stake_datum) = datum
+    let settings = get_dao_settings(self, settings_utxo, settings_token_name)
     validate_stake_spend(
+      settings,
       staked_token_policy,
       staked_token_name,
-      settings_utxo,
-      settings_token_name,
       stake_datum,
       redeemer,
       own_ref,

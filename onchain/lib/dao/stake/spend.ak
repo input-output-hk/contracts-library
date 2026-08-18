@@ -9,11 +9,11 @@ use cardano/transaction.{
 }
 use dao/locks.{free_stake, has_proposal, prune_expired}
 use dao/types.{
-  ClosePosition, CosignProposal, CreateProposal, DelegateTo, Deposit,
-  ProposalDatum, ProposalStatus, StakePositionDatum, StakeRedeemer, VoteProposal,
-  Withdraw,
+  ClosePosition, CosignProposal, CreateProposal, DaoSettings, DelegateTo,
+  Deposit, ProposalDatum, ProposalStatus, StakePositionDatum, StakeRedeemer,
+  VoteProposal, Withdraw,
 }
-use dao/utils.{get_dao_settings, proposal_token_name, single_nft_name}
+use dao/utils.{proposal_token_name, single_nft_name}
 
 /// Spending logic for a stake position UTxO.
 ///
@@ -24,10 +24,9 @@ use dao/utils.{get_dao_settings, proposal_token_name, single_nft_name}
 /// governance parameters and sibling script hashes are read from the settings
 /// UTxO at `settings_utxo`.
 pub fn validate_stake_spend(
+  settings: DaoSettings,
   staked_token_policy: PolicyId,
   staked_token_name: AssetName,
-  settings_utxo: OutputReference,
-  settings_token_name: AssetName,
   datum: StakePositionDatum,
   redeemer: StakeRedeemer,
   own_ref: OutputReference,
@@ -106,7 +105,6 @@ pub fn validate_stake_spend(
     }
     CreateProposal -> {
       expect Finite(now) = validity_range.lower_bound.bound_type
-      let settings = get_dao_settings(self, settings_utxo, settings_token_name)
       let p_id = proposal_token_name(own_ref)
       let new_lock = (p_id, now + settings.timings.draft_length, in_stake)
       let out = continuation(outputs, own_addr)
@@ -123,7 +121,6 @@ pub fn validate_stake_spend(
       }
     }
     CosignProposal -> {
-      let settings = get_dao_settings(self, settings_utxo, settings_token_name)
       let (p_id, proposal) =
         proposal_with_nft(inputs, settings.proposal_validator)
       let new_lock =
@@ -144,7 +141,6 @@ pub fn validate_stake_spend(
     }
     VoteProposal -> {
       expect Finite(upper) = validity_range.upper_bound.bound_type
-      let settings = get_dao_settings(self, settings_utxo, settings_token_name)
       let (p_id, proposal) =
         proposal_with_nft(reference_inputs, settings.proposal_validator)
       let unlock =

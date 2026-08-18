@@ -12,16 +12,15 @@ use dao/types.{
   ProposalDatum, ProposalRedeemer, ProposalStatus, RejectDraft, StakeRedeemer,
   TallyVotes, VoteDatum,
 }
-use dao/utils.{find_input_by_policy, get_dao_settings, single_nft_name, spend_redeemer}
+use dao/utils.{find_input_by_policy, single_nft_name, spend_redeemer}
 
 /// Spending logic for a proposal UTxO. The proposal validator's own hash is the
 /// proposal NFT policy id, so the UTxO carries one NFT under `own_hash`.
 pub fn validate_proposal_spend(
-  settings_utxo: OutputReference,
+  vote_policy: PolicyId,
   stake_nft_policy: PolicyId,
   stake_token_policy: PolicyId,
   stake_token_name: AssetName,
-  settings_token_name: AssetName,
   datum: ProposalDatum,
   redeemer: ProposalRedeemer,
   own_ref: OutputReference,
@@ -87,16 +86,15 @@ pub fn validate_proposal_spend(
     }
     TallyVotes -> {
       expect ProposalStatus.Tally { votes } = datum.status
-      let settings = get_dao_settings(self, settings_utxo, settings_token_name)
-      let vote_policy = settings.vote_validator
+      expect Finite(upper) = validity_range.upper_bound.bound_type
       let cont = continuation(outputs, own_addr, own_hash, p_id)
       let vote_inputs =
         list.filter(inputs, fn(i) { is_vote_for(vote_policy, p_id, i) })
       let counted = tally(votes, vote_inputs)
       let burned = mint |> assets.tokens(vote_policy) |> dict.to_pairs()
-      let all_burned =
-        list.all(burned, fn(entry) { entry.2nd == -1 })
+      let all_burned = list.all(burned, fn(entry) { entry.2nd == -1 })
       and {
+        upper <= datum.start_time + datum.timing_config.draft_length + datum.timing_config.voting_length + datum.timing_config.tally_length,
         // every consumed vote is refunded to its owner and its NFT burned; the
         // number of burns must match the votes consumed so none slip through
         list.length(vote_inputs) > 0,
@@ -164,7 +162,9 @@ fn immutables_ok(cont: ProposalDatum, datum: ProposalDatum) -> Bool {
 /// Is `input` a vote artifact belonging to proposal `p_id`?
 fn is_vote_for(vote_policy: PolicyId, p_id: AssetName, input: Input) -> Bool {
   let has_vote_nft =
-    when input.output.value |> assets.tokens(vote_policy) |> dict.to_pairs() is {
+    when
+      input.output.value |> assets.tokens(vote_policy) |> dict.to_pairs()
+    is {
       [Pair(_, q)] -> q == 1
       _ -> False
     }
@@ -214,9 +214,7 @@ fn refunds_ok(vote_inputs: List<Input>, outputs: List<Output>) -> Bool {
       let owed = lovelace_of(input.output.value)
       list.any(
         outputs,
-        fn(o) {
-          o.address == vote.stake_owner && lovelace_of(o.value) >= owed
-        },
+        fn(o) { o.address == vote.stake_owner && lovelace_of(o.value) >= owed },
       )
     },
   )
