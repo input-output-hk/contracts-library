@@ -1,8 +1,10 @@
 use aiken/collection/dict
 use aiken/collection/list
-use cardano/address.{Script}
-use cardano/assets.{PolicyId, quantity_of}
-use cardano/transaction.{InlineDatum, Transaction}
+use cardano/address.{Address, Script}
+use cardano/assets.{AssetName, PolicyId, has_nft, quantity_of}
+use cardano/transaction.{
+  InlineDatum, Output, OutputReference, Transaction, find_input,
+}
 use dao/types.{StakePositionDatum}
 use dao/utils.{nft_name_from_ref}
 
@@ -10,24 +12,65 @@ use dao/utils.{nft_name_from_ref}
 ///
 /// Mints exactly one NFT whose name is the hash of a consumed input (unique and
 /// unforgeable), and requires the position output to sit at this script's own
-/// address carrying that NFT and a fresh datum with no locks.
-pub fn validate_create_position(own_policy: PolicyId, self: Transaction) -> Bool {
+/// address carrying that NFT and a fresh datum with no locks. Also deposits
+/// at least one staked token into the position output.
+pub fn validate_create_position(
+  staked_token_policy: PolicyId,
+  staked_token_name: AssetName,
+  owner_utxo: OutputReference,
+  own_policy: PolicyId,
+  out_idx: Int,
+  self: Transaction,
+) -> Bool {
   let Transaction { inputs, outputs, mint, .. } = self
-  expect [Pair(name, 1)] =
-    mint
-      |> assets.tokens(own_policy)
-      |> dict.to_pairs()
-  let seeded =
-    list.any(inputs, fn(i) { nft_name_from_ref(i.output_reference) == name })
-  expect Some(position) =
-    list.find(outputs, fn(o) { quantity_of(o.value, own_policy, name) == 1 })
-  expect Script(hash) = position.address.payment_credential
-  expect InlineDatum(d) = position.datum
-  expect sd: StakePositionDatum = d
+
+  let stake_nft_name = nft_name_from_ref(owner_utxo)
+
+  let correct_mint = {
+    expect [Pair(minted_token_name, quantity)] =
+      mint
+        |> assets.tokens(own_policy)
+        |> dict.to_pairs()
+    quantity == 1 && minted_token_name == stake_nft_name
+  }
+
+  // owner utxo is spent
+  expect Some(owner_input) = find_input(inputs, owner_utxo)
+
+  // newly created stake position output
+  expect Some(stake_position) = list.at(outputs, out_idx)
+
+  // checks for stake position output
+  expect Output {
+    address: stake_address,
+    value: stake_value,
+    datum: InlineDatum(stake_datum),
+    reference_script: None,
+  } = stake_position
+
+  let correct_address = stake_address.payment_credential == Script(own_policy)
+
+  let correct_value =
+    has_nft(stake_value, own_policy, stake_nft_name) && quantity_of(
+      stake_value,
+      staked_token_policy,
+      staked_token_name,
+    ) >= 1 && list.length(assets.flatten(stake_value)) == 3
+
+  let correct_datum = {
+    expect StakePositionDatum { owner, delegatee, locks } = stake_datum
+    and {
+      owner == owner_input.output.address.payment_credential,
+      delegatee == None,
+      locks == [],
+    }
+  }
+
   and {
-    seeded,
-    hash == own_policy,
-    sd.locks == [],
+    correct_mint,
+    correct_address,
+    correct_value,
+    correct_datum,
   }
 }
 

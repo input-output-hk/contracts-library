@@ -24,8 +24,8 @@ use dao/utils.{get_dao_settings, proposal_token_name, single_nft_name}
 /// governance parameters and sibling script hashes are read from the settings
 /// UTxO at `settings_utxo`.
 pub fn validate_stake_spend(
-  stake_token_policy: PolicyId,
-  stake_token_name: AssetName,
+  staked_token_policy: PolicyId,
+  staked_token_name: AssetName,
   settings_utxo: OutputReference,
   settings_token_name: AssetName,
   datum: StakePositionDatum,
@@ -49,7 +49,7 @@ pub fn validate_stake_spend(
   expect Script(own_hash) = own_addr.payment_credential
   let nft = single_nft_name(own_input.output.value, own_hash)
   let in_stake =
-    quantity_of(own_input.output.value, stake_token_policy, stake_token_name)
+    quantity_of(own_input.output.value, staked_token_policy, staked_token_name)
 
   when redeemer is {
     Deposit -> {
@@ -60,7 +60,7 @@ pub fn validate_stake_spend(
         cont.owner == datum.owner,
         cont.delegatee == datum.delegatee,
         cont.locks == datum.locks,
-        quantity_of(out.value, stake_token_policy, stake_token_name) >= in_stake,
+        quantity_of(out.value, staked_token_policy, staked_token_name) >= in_stake,
         quantity_of(out.value, own_hash, nft) == 1,
       }
     }
@@ -72,7 +72,7 @@ pub fn validate_stake_spend(
         cont.owner == datum.owner,
         cont.delegatee == delegatee,
         cont.locks == datum.locks,
-        quantity_of(out.value, stake_token_policy, stake_token_name) == in_stake,
+        quantity_of(out.value, staked_token_policy, staked_token_name) == in_stake,
         quantity_of(out.value, own_hash, nft) == 1,
       }
     }
@@ -89,7 +89,7 @@ pub fn validate_stake_spend(
         cont.owner == datum.owner,
         cont.delegatee == datum.delegatee,
         cont.locks == pruned,
-        quantity_of(out.value, stake_token_policy, stake_token_name) == in_stake - amount,
+        quantity_of(out.value, staked_token_policy, staked_token_name) == in_stake - amount,
         quantity_of(out.value, own_hash, nft) == 1,
       }
     }
@@ -118,7 +118,7 @@ pub fn validate_stake_spend(
         cont.owner == datum.owner,
         cont.delegatee == datum.delegatee,
         cont.locks == list.concat(datum.locks, [new_lock]),
-        quantity_of(out.value, stake_token_policy, stake_token_name) == in_stake,
+        quantity_of(out.value, staked_token_policy, staked_token_name) == in_stake,
         quantity_of(out.value, own_hash, nft) == 1,
       }
     }
@@ -138,11 +138,12 @@ pub fn validate_stake_spend(
         cont.owner == datum.owner,
         cont.delegatee == datum.delegatee,
         cont.locks == list.concat(datum.locks, [new_lock]),
-        quantity_of(out.value, stake_token_policy, stake_token_name) == in_stake,
+        quantity_of(out.value, staked_token_policy, staked_token_name) == in_stake,
         quantity_of(out.value, own_hash, nft) == 1,
       }
     }
     VoteProposal -> {
+      expect Finite(upper) = validity_range.upper_bound.bound_type
       let settings = get_dao_settings(self, settings_utxo, settings_token_name)
       let (p_id, proposal) =
         proposal_with_nft(reference_inputs, settings.proposal_validator)
@@ -164,10 +165,11 @@ pub fn validate_stake_spend(
         in_stake >= settings.thresholds.vote,
         !has_proposal(datum.locks, p_id),
         vote_minted,
+        upper <= unlock,
         cont.owner == datum.owner,
         cont.delegatee == datum.delegatee,
         cont.locks == list.concat(datum.locks, [new_lock]),
-        quantity_of(out.value, stake_token_policy, stake_token_name) == in_stake,
+        quantity_of(out.value, staked_token_policy, staked_token_name) == in_stake,
         quantity_of(out.value, own_hash, nft) == 1,
       }
     }

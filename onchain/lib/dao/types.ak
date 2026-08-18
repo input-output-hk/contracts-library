@@ -3,6 +3,7 @@
 
 use aiken/crypto.{ScriptHash}
 use cardano/address.{Address, Credential}
+use cardano/transaction.{OutputReference}
 
 /// Stake position state.
 pub type StakePositionDatum {
@@ -24,7 +25,7 @@ pub type StakeRedeemer {
 
 /// Redeemer for the stake position NFT minting policy.
 pub type StakePositionTokenRedeemer {
-  CreatePosition
+  CreatePosition { owner_utxo: OutputReference, out_idx: Int }
   CloseStakePosition
 }
 
