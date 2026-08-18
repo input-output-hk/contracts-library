@@ -39,12 +39,14 @@ pub fn expect_continuation(
   expect Some(own_input) = find_input(inputs, own_ref)
   expect Script(own_hash) = own_input.output.address.payment_credential
 
-  expect Output {
-    address: cont_addr,
-    value,
-    datum: InlineDatum(cont_datum),
-    reference_script: None,
-  } = cont_output
+  expect  
+      Output {
+        address: cont_addr,
+        value,
+        datum: InlineDatum(cont_datum),
+        reference_script: None,
+      }
+    = cont_output
 
   expect cont_addr == own_input.output.address
   expect has_nft_strict(value, own_hash, settings_token_name)

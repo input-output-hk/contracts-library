@@ -26,17 +26,21 @@ pub fn validate_propose(
   expect Some(input_datum) = datum
   let SettingsDatum { current, .. } = input_datum
 
-  let cont_datum =
-    expect_continuation(inputs, outputs, own_ref, out_ix, settings_token_name)
+  let cont_datum = expect_continuation(
+    inputs,
+    outputs,
+    own_ref,
+    out_ix,
+    settings_token_name,
+  )
 
   let correct_datum = {
     expect cont_datum: SettingsDatum = cont_datum
-    let expected_datum =
-      SettingsDatum {
-        current,
-        next: cont_datum.next,
-        next_apply: Some(now + apply_delay),
-      }
+    let expected_datum = SettingsDatum {
+      current,
+      next: cont_datum.next,
+      next_apply: Some(now + apply_delay),
+    }
     expect Some(next_data) = cont_datum.next
     cont_datum == expected_datum && validate_datum(next_data) && next_data != current
   }
@@ -69,13 +73,21 @@ pub fn validate_apply(
   expect Some(next_apply_time) = next_apply
   let correct_apply_time = now >= next_apply_time
 
-  let cont_datum =
-    expect_continuation(inputs, outputs, own_ref, out_ix, settings_token_name)
+  let cont_datum = expect_continuation(
+    inputs,
+    outputs,
+    own_ref,
+    out_ix,
+    settings_token_name,
+  )
 
   let correct_datum = {
     expect cont_datum: SettingsDatum = cont_datum
-    let expected_datum =
-      SettingsDatum { current: next_data, next: None, next_apply: None }
+    let expected_datum = SettingsDatum {
+      current: next_data,
+      next: None,
+      next_apply: None,
+    }
     cont_datum == expected_datum && validate_datum(next_data)
   }
 
@@ -98,10 +110,9 @@ pub fn validate_close(
   expect Script(own_hash) = own_input.output.address.payment_credential
 
   let correct_burn = {
-    expect [Pair(_, quantity)] =
-      mint
-        |> assets.tokens(own_hash)
-        |> dict.to_pairs()
+    expect [Pair(_, quantity)] = mint
+      |> assets.tokens(own_hash)
+      |> dict.to_pairs()
     quantity < 0
   }
 

@@ -134,13 +134,12 @@ test prop_monotonic_non_decreasing((total, start, end, now) via scenario()) {
 
 test partial_claim_ok() {
   let input = input_with(datum(), assets.from_lovelace(100), 0)
-  let tx =
-    claim_tx(
-      1500,
-      [input],
-      [output_with(datum(), assets.from_lovelace(50))],
-      [beneficiary_key],
-    )
+  let tx = claim_tx(
+    1500,
+    [input],
+    [output_with(datum(), assets.from_lovelace(50))],
+    [beneficiary_key],
+  )
   validate_claim(datum(), input.output, tx)
 }
 
@@ -152,45 +151,40 @@ test full_claim_takes_everything() {
 
 test claim_at_start_must_keep_all() {
   let input = input_with(datum(), assets.from_lovelace(100), 0)
-  let tx =
-    claim_tx(
-      1000,
-      [input],
-      [output_with(datum(), assets.from_lovelace(100))],
-      [beneficiary_key],
-    )
+  let tx = claim_tx(
+    1000,
+    [input],
+    [output_with(datum(), assets.from_lovelace(100))],
+    [beneficiary_key],
+  )
   validate_claim(datum(), input.output, tx)
 }
 
 test script_beneficiary_claim_ok() {
   let d = VestingDatum { ..datum(), beneficiary: Script(auth_script) }
   let input = input_with(d, assets.from_lovelace(100), 0)
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [input],
-      outputs: [output_with(d, assets.from_lovelace(50))],
-      validity_range: interval.after(1500),
-      withdrawals: [Pair(Script(auth_script), 0)],
-    }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [input],
+    outputs: [output_with(d, assets.from_lovelace(50))],
+    validity_range: interval.after(1500),
+    withdrawals: [Pair(Script(auth_script), 0)],
+  }
   validate_claim(d, input.output, tx)
 }
 
 test multi_asset_partial_ok() {
-  let d =
-    VestingDatum {
-      ..datum(),
-      vesting: [
-        VestedAsset { policy: "", name: "", total: 100 },
-        VestedAsset { policy: token_policy, name: "TOKEN", total: 10 },
-      ],
-    }
-  let locked =
-    assets.from_lovelace(100)
-      |> assets.merge(assets.from_asset(token_policy, "TOKEN", 10))
-  let kept =
-    assets.from_lovelace(50)
-      |> assets.merge(assets.from_asset(token_policy, "TOKEN", 5))
+  let d = VestingDatum {
+    ..datum(),
+    vesting: [
+      VestedAsset { policy: "", name: "", total: 100 },
+      VestedAsset { policy: token_policy, name: "TOKEN", total: 10 },
+    ],
+  }
+  let locked = assets.from_lovelace(100)
+    |> assets.merge(assets.from_asset(token_policy, "TOKEN", 10))
+  let kept = assets.from_lovelace(50)
+    |> assets.merge(assets.from_asset(token_policy, "TOKEN", 5))
   let input = input_with(d, locked, 0)
   let tx = claim_tx(1500, [input], [output_with(d, kept)], [beneficiary_key])
   validate_claim(d, input.output, tx)
@@ -203,16 +197,15 @@ test batched_distinct_instances_ok() {
   let d_b = VestingDatum { ..datum(), recovery_time: 3001 }
   let in_a = input_with(d_a, assets.from_lovelace(100), 0)
   let in_b = input_with(d_b, assets.from_lovelace(100), 1)
-  let tx =
-    claim_tx(
-      1500,
-      [in_a, in_b],
-      [
-        output_with(d_a, assets.from_lovelace(50)),
-        output_with(d_b, assets.from_lovelace(50)),
-      ],
-      [beneficiary_key],
-    )
+  let tx = claim_tx(
+    1500,
+    [in_a, in_b],
+    [
+      output_with(d_a, assets.from_lovelace(50)),
+      output_with(d_b, assets.from_lovelace(50)),
+    ],
+    [beneficiary_key],
+  )
   validate_claim(d_a, in_a.output, tx) && validate_claim(d_b, in_b.output, tx)
 }
 
@@ -220,38 +213,35 @@ test batched_distinct_instances_ok() {
 
 test rejects_overclaim() fail {
   let input = input_with(datum(), assets.from_lovelace(100), 0)
-  let tx =
-    claim_tx(
-      1500,
-      [input],
-      [output_with(datum(), assets.from_lovelace(40))],
-      [beneficiary_key],
-    )
+  let tx = claim_tx(
+    1500,
+    [input],
+    [output_with(datum(), assets.from_lovelace(40))],
+    [beneficiary_key],
+  )
   validate_claim(datum(), input.output, tx)
 }
 
 test rejects_without_authorization() fail {
   let input = input_with(datum(), assets.from_lovelace(100), 0)
-  let tx =
-    claim_tx(
-      1500,
-      [input],
-      [output_with(datum(), assets.from_lovelace(50))],
-      [],
-    )
+  let tx = claim_tx(
+    1500,
+    [input],
+    [output_with(datum(), assets.from_lovelace(50))],
+    [],
+  )
   validate_claim(datum(), input.output, tx)
 }
 
 test rejects_schedule_tampering() fail {
   let mutated = VestingDatum { ..datum(), end_time: 1100 }
   let input = input_with(datum(), assets.from_lovelace(100), 0)
-  let tx =
-    claim_tx(
-      1500,
-      [input],
-      [output_with(mutated, assets.from_lovelace(50))],
-      [beneficiary_key],
-    )
+  let tx = claim_tx(
+    1500,
+    [input],
+    [output_with(mutated, assets.from_lovelace(50))],
+    [beneficiary_key],
+  )
   validate_claim(datum(), input.output, tx)
 }
 
@@ -262,49 +252,41 @@ test rejects_shared_continuation() fail {
   // schedule.
   let input0 = input_with(datum(), assets.from_lovelace(100), 0)
   let input1 = input_with(datum(), assets.from_lovelace(100), 1)
-  let tx =
-    claim_tx(
-      1500,
-      [input0, input1],
-      [output_with(datum(), assets.from_lovelace(50))],
-      [beneficiary_key],
-    )
+  let tx = claim_tx(
+    1500,
+    [input0, input1],
+    [output_with(datum(), assets.from_lovelace(50))],
+    [beneficiary_key],
+  )
   validate_claim(datum(), input0.output, tx)
 }
 
 test rejects_datum_hash_input() fail {
-  let input =
-    Input {
-      output_reference: OutputReference {
-        transaction_id: tx_id,
-        output_index: 0,
-      },
-      output: Output {
-        address: from_script(own_script),
-        value: assets.from_lovelace(100),
-        datum: DatumHash(tx_id),
-        reference_script: None,
-      },
-    }
+  let input = Input {
+    output_reference: OutputReference { transaction_id: tx_id, output_index: 0 },
+    output: Output {
+      address: from_script(own_script),
+      value: assets.from_lovelace(100),
+      datum: DatumHash(tx_id),
+      reference_script: None,
+    },
+  }
   let tx = claim_tx(2000, [input], [], [beneficiary_key])
   validate_claim(datum(), input.output, tx)
 }
 
 test rejects_multi_asset_token_shortfall() fail {
-  let d =
-    VestingDatum {
-      ..datum(),
-      vesting: [
-        VestedAsset { policy: "", name: "", total: 100 },
-        VestedAsset { policy: token_policy, name: "TOKEN", total: 10 },
-      ],
-    }
-  let locked =
-    assets.from_lovelace(100)
-      |> assets.merge(assets.from_asset(token_policy, "TOKEN", 10))
-  let kept =
-    assets.from_lovelace(50)
-      |> assets.merge(assets.from_asset(token_policy, "TOKEN", 4))
+  let d = VestingDatum {
+    ..datum(),
+    vesting: [
+      VestedAsset { policy: "", name: "", total: 100 },
+      VestedAsset { policy: token_policy, name: "TOKEN", total: 10 },
+    ],
+  }
+  let locked = assets.from_lovelace(100)
+    |> assets.merge(assets.from_asset(token_policy, "TOKEN", 10))
+  let kept = assets.from_lovelace(50)
+    |> assets.merge(assets.from_asset(token_policy, "TOKEN", 4))
   let input = input_with(d, locked, 0)
   let tx = claim_tx(1500, [input], [output_with(d, kept)], [beneficiary_key])
   validate_claim(d, input.output, tx)
@@ -333,13 +315,12 @@ test rejects_instance_merge() fail {
   // k=2 the tx must carry >= 2 continuations, not 1.
   let input0 = input_with(datum(), assets.from_lovelace(100), 0)
   let input1 = input_with(datum(), assets.from_lovelace(100), 1)
-  let tx =
-    claim_tx(
-      1500,
-      [input0, input1],
-      [output_with(datum(), assets.from_lovelace(100))],
-      [beneficiary_key],
-    )
+  let tx = claim_tx(
+    1500,
+    [input0, input1],
+    [output_with(datum(), assets.from_lovelace(100))],
+    [beneficiary_key],
+  )
   validate_claim(datum(), input0.output, tx)
 }
 
@@ -349,16 +330,15 @@ test identical_instances_keep_separate_continuations_ok() {
   // only collapsing them into fewer UTxOs is forbidden.
   let input0 = input_with(datum(), assets.from_lovelace(100), 0)
   let input1 = input_with(datum(), assets.from_lovelace(100), 1)
-  let tx =
-    claim_tx(
-      1500,
-      [input0, input1],
-      [
-        output_with(datum(), assets.from_lovelace(50)),
-        output_with(datum(), assets.from_lovelace(50)),
-      ],
-      [beneficiary_key],
-    )
+  let tx = claim_tx(
+    1500,
+    [input0, input1],
+    [
+      output_with(datum(), assets.from_lovelace(50)),
+      output_with(datum(), assets.from_lovelace(50)),
+    ],
+    [beneficiary_key],
+  )
   validate_claim(datum(), input0.output, tx) && validate_claim(
     datum(),
     input1.output,
