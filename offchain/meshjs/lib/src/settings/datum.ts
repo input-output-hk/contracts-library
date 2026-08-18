@@ -10,55 +10,55 @@
  *   Burn          = Constr 1 []
  */
 
-import { mConStr0, mConStr1, mConStr2, type Data } from "@meshsdk/core";
+import { mConStr0, mConStr1, mConStr2, TxInput, type Data } from "@meshsdk/core";
 
 import { credentialToData } from "../common";
-import type { OutputRef, SettingsDatum, SettingsParams } from "./types";
+import type { SettingsDatum, SettingsParams } from "./types";
 
 export { credentialToData };
 
 function optional<T>(value: T | null, wrap: (v: T) => Data): Data {
-  return value === null ? mConStr1([]) : mConStr0([wrap(value)]);
+    return value === null ? mConStr1([]) : mConStr0([wrap(value)]);
 }
 
 export function settingsDatumToData(d: SettingsDatum): Data {
-  return mConStr0([
-    d.current,
-    optional(d.next, (v) => v),
-    optional(d.nextApply, (v) => v),
-  ]);
+    return mConStr0([
+        d.current,
+        optional(d.next, (v) => v),
+        optional(d.nextApply, (v) => v),
+    ]);
 }
 
 export function proposeRedeemer(outIx: number): Data {
-  return mConStr0([outIx]);
+    return mConStr0([outIx]);
 }
 
 export function applyRedeemer(outIx: number): Data {
-  return mConStr1([outIx]);
+    return mConStr1([outIx]);
 }
 
 export function closeRedeemer(): Data {
-  return mConStr2([]);
+    return mConStr2([]);
 }
 
 export function mintRedeemer(outIx: number): Data {
-  return mConStr0([outIx]);
+    return mConStr0([outIx]);
 }
 
 export function burnRedeemer(): Data {
-  return mConStr1([]);
+    return mConStr1([]);
 }
 
-export function outputRefToData(ref: OutputRef): Data {
-  return mConStr0([ref.transactionId, ref.outputIndex]);
+export function outputRefToData(ref: TxInput): Data {
+    return mConStr0([ref.txHash, ref.outputIndex]);
 }
 
 export function paramsToData(p: SettingsParams): Data[] {
-  return [
-    outputRefToData(p.seedUtxo),
-    credentialToData(p.proposeAuth),
-    credentialToData(p.applyAuth),
-    p.applyDelay,
-    p.settingsTokenName,
-  ];
+    return [
+        outputRefToData(p.seedUtxo),
+        credentialToData(p.proposeAuth),
+        credentialToData(p.applyAuth),
+        p.applyDelay,
+        p.settingsTokenName,
+    ];
 }

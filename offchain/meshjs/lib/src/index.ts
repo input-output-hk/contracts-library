@@ -10,9 +10,8 @@
 
 export * from "./common";
 export {
-  applyAuthorization,
-  type ScriptAuthorizer,
-  type PlutusVersion,
+    applyAuthorization,
+    type ScriptAuthorizer,
 } from "./authorization";
 
 export * from "./vesting";
