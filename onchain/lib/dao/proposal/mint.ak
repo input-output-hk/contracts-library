@@ -16,8 +16,9 @@ use dao/utils.{
 /// Requires:
 /// - exactly one token minted under `own_policy`, whose name is the hash of the
 ///   creating stake UTxO's output reference;
-/// - that stake UTxO to be spent and to hold `stake_token` worth at least
-///   `thresholds.create`;
+/// - that stake UTxO to be spent and to hold the staked token
+///   (`staked_token_policy` / `staked_token_name`) worth at least
+///   `settings.thresholds.create`;
 /// - a proposal output at this script's address carrying the NFT and a valid
 ///   initial `ProposalDatum` (Draft status, empty results, start_time = now).
 pub fn validate_create_proposal(
@@ -59,7 +60,8 @@ pub fn validate_create_proposal(
   let proposal_output = find_proposal_output(outputs, own_policy, token_name)
 
   // The stake must be consumed with `CreateProposal`, so the stake validator
-  // enforces the matching lock `(token_name, now + draft_length, stake_amount)`.
+  // enforces the matching lock
+  // `(token_name, now + settings.timings.draft_length, stake_amount)`.
   let stake_creating = {
     expect action: StakeRedeemer =
       spend_redeemer(self, stake_input.output_reference)
