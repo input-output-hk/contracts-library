@@ -55,22 +55,6 @@ pub fn proposal_token_name(stake_ref: OutputReference) -> AssetName {
   nft_name_from_ref(stake_ref)
 }
 
-/// Locate the stake UTxO among the spent inputs by its NFT.
-pub fn find_stake_input(
-  inputs: List<Input>,
-  stake_nft_policy: PolicyId,
-  stake_nft_name: AssetName,
-) -> Input {
-  expect Some(stake_input) =
-    list.find(
-      inputs,
-      fn(input) {
-        has_nft(input.output.value, stake_nft_policy, stake_nft_name)
-      },
-    )
-  stake_input
-}
-
 /// Locate the proposal output among the transaction outputs by its NFT.
 pub fn find_proposal_output(
   outputs: List<Output>,

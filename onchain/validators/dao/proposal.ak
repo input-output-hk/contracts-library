@@ -6,25 +6,22 @@ use dao/types.{
   BurnProposal, MintProposal, ProposalDatum, ProposalRedeemer,
   ProposalTokenRedeemer,
 }
+use dao/utils.{get_dao_settings}
 
 validator proposal(
+  staked_token_policy: PolicyId,
+  staked_token_name: AssetName,
   settings_utxo: OutputReference,
-  stake_nft_policy: PolicyId,
-  stake_nft_name: AssetName,
-  stake_token_policy: PolicyId,
-  stake_token_name: AssetName,
   settings_token_name: AssetName,
 ) {
   mint(redeemer: ProposalTokenRedeemer, own_policy: PolicyId, self: Transaction) {
+    let settings = get_dao_settings(self, settings_utxo, settings_token_name)
     when redeemer is {
       MintProposal ->
         validate_create_proposal(
-          settings_utxo,
-          stake_nft_policy,
-          stake_nft_name,
-          stake_token_policy,
-          stake_token_name,
-          settings_token_name,
+          settings,
+          staked_token_policy,
+          staked_token_name,
           own_policy,
           self,
         )
@@ -39,12 +36,12 @@ validator proposal(
     self: Transaction,
   ) {
     expect Some(proposal_datum) = datum
+    let settings = get_dao_settings(self, settings_utxo, settings_token_name)
     validate_proposal_spend(
-      settings_utxo,
-      stake_nft_policy,
-      stake_token_policy,
-      stake_token_name,
-      settings_token_name,
+      settings.vote_validator,
+      settings.stake_validator,
+      staked_token_policy,
+      staked_token_name,
       proposal_datum,
       redeemer,
       own_ref,
