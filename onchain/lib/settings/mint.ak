@@ -2,7 +2,7 @@ use aiken/collection/dict
 use aiken/collection/list
 use authorization.{is_authorized}
 use cardano/address.{Credential, Script}
-use cardano/assets.{AssetName, PolicyId, has_nft_strict}
+use cardano/assets.{AssetName, PolicyId, has_nft_strict, tokens}
 use cardano/transaction.{
   InlineDatum, Output, OutputReference, Transaction, find_input,
 }
@@ -26,10 +26,9 @@ pub fn validate_mint(
   let Transaction { inputs, outputs, mint, .. } = self
 
   let correct_mint = {
-    expect [Pair(minted_token_name, quantity)] =
-      mint
-        |> assets.tokens(own_policy)
-        |> dict.to_pairs()
+    expect [Pair(minted_token_name, quantity)] = mint
+      |> tokens(own_policy)
+      |> dict.to_pairs()
     quantity == 1 && minted_token_name == settings_token_name
   }
 
@@ -39,12 +38,14 @@ pub fn validate_mint(
   expect Some(settings_output) = list.at(outputs, out_ix)
 
   // checks for settings output
-  expect Output {
-    address: addr,
-    value,
-    datum: InlineDatum(datum),
-    reference_script: None,
-  } = settings_output
+  expect  
+      Output {
+        address: addr,
+        value,
+        datum: InlineDatum(datum),
+        reference_script: None,
+      }
+    = settings_output
 
   let correct_addr = addr.payment_credential == Script(own_policy)
 
@@ -74,10 +75,9 @@ pub fn validate_burn(own_policy: PolicyId, self: Transaction) {
   let Transaction { mint, .. } = self
 
   let correct_burn = {
-    expect [Pair(_, quantity)] =
-      mint
-        |> assets.tokens(own_policy)
-        |> dict.to_pairs()
+    expect [Pair(_, quantity)] = mint
+      |> tokens(own_policy)
+      |> dict.to_pairs()
     quantity == -1
   }
 
