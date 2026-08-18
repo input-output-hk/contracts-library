@@ -12,7 +12,7 @@ use settings/types.{SettingsDatum}
 ///
 /// Requires exactly one token with the correct name to be minted,
 /// the seed UTxO to be spent, the continuation output at `out_ix`
-/// to carry the NFT with the expected address and a valid initial
+/// to carry the NFT with the expected address, a valid initial
 /// datum, and the caller to be authorized.
 pub fn validate_mint(
   seed_utxo: OutputReference,
