@@ -14,7 +14,7 @@ use dao/types.{
   ProposalThresholds, ProposalTimingConfig, RejectDraft, TallyVotes, VoteDatum,
   Voting,
 }
-use dao/utils.{proposal_token_name}
+use dao/utils.{get_dao_settings, proposal_token_name}
 use settings/types as settings_types
 
 // ------------------------------------------------------------------- fixtures
@@ -220,11 +220,10 @@ fn refund(lovelace: Int) -> Output {
 
 fn spend(d: ProposalDatum, r: ProposalRedeemer, self: Transaction) -> Bool {
   validate_proposal_spend(
-    settings_ref(),
+    vote_policy,
     stake_hash,
     gov_policy,
     gov_name,
-    settings_name,
     d,
     r,
     prop_ref(),
@@ -289,16 +288,8 @@ fn create_tx(create: Int, stake: Int, now: Int) -> Transaction {
 }
 
 fn validate_mint(tx: Transaction) -> Bool {
-  validate_create_proposal(
-    settings_ref(),
-    stake_hash,
-    stake_nft,
-    gov_policy,
-    gov_name,
-    settings_name,
-    proposal_policy,
-    tx,
-  )
+  let settings = get_dao_settings(tx, settings_ref(), settings_name)
+  validate_create_proposal(settings, gov_policy, gov_name, proposal_policy, tx)
 }
 
 // --------------------------------------------------------------------- Cosign
@@ -442,6 +433,7 @@ test tally_votes_ok() {
       reference_inputs: [settings_input()],
       outputs: [cont, refund(2_000_000)],
       mint: assets.from_asset(vote_policy, "V", -1),
+      validity_range: interval.before(start + 6000),
     }
   spend(d, TallyVotes, tx)
 }
@@ -457,6 +449,7 @@ test rejects_tally_without_refund() {
       reference_inputs: [settings_input()],
       outputs: [cont],
       mint: assets.from_asset(vote_policy, "V", -1),
+      validity_range: interval.before(start + 6000),
     }
   !spend(d, TallyVotes, tx)
 }
@@ -471,6 +464,7 @@ test rejects_tally_without_burn() {
       inputs: [prop_input(d), vote_input(2, 1, 5, 2_000_000)],
       reference_inputs: [settings_input()],
       outputs: [cont, refund(2_000_000)],
+      validity_range: interval.before(start + 6000),
     }
   !spend(d, TallyVotes, tx)
 }
