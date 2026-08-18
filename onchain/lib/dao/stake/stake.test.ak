@@ -168,10 +168,9 @@ fn proposal_utxo(status: ProposalStatus, start: Int) -> Input {
 
 fn spend(d: StakePositionDatum, r: StakeRedeemer, self: Transaction) -> Bool {
   validate_stake_spend(
+    dao_settings(),
     gov_policy,
     gov_name,
-    settings_ref(),
-    settings_name,
     d,
     r,
     pos_ref(),
