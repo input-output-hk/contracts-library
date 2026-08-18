@@ -1,19 +1,24 @@
 use aiken/collection/dict
 use aiken/collection/list
 use cardano/address.{Script}
-use cardano/assets.{AssetName, PolicyId, quantity_of}
+use cardano/assets.{AssetName, PolicyId, has_nft_strict, quantity_of}
 use cardano/transaction.{InlineDatum, Transaction}
 use dao/types.{
   ProposalDatum, ProposalStatus, StakeRedeemer, VoteDatum, VoteProposal,
 }
-use dao/utils.{find_input_by_policy, single_nft_name, spend_redeemer}
+use dao/utils.{
+  find_input_by_policy, nft_name_from_ref, single_nft_name, spend_redeemer,
+}
 
 /// Validate minting a vote NFT (`MintVote`).
 ///
 /// Requires the voting stake to be consumed with `VoteProposal` (so the stake
 /// validator records the lock preventing a second vote), and the vote artifact
 /// output to faithfully record the referenced Voting proposal and the exact
-/// staked amount that will weight the vote at tally time.
+/// staked amount that will weight the vote at tally time. The vote NFT name is
+/// the hash of the spent stake UTxO's output reference, so every vote is
+/// globally unique (a reference is spent at most once) and the vote UTxO holds
+/// nothing but its NFT and lovelace.
 pub fn validate_mint_vote(
   stake_nft_policy: PolicyId,
   stake_token_policy: PolicyId,
@@ -58,7 +63,10 @@ pub fn validate_mint_vote(
   and {
     stake_voting,
     proposal_voting,
+    vote_name == nft_name_from_ref(stake_input.output_reference),
     hash == own_policy,
+    has_nft_strict(vote_output.value, own_policy, vote_name),
+    vote_output.reference_script == None,
     vote.proposal == p_id,
     vote.stake == stake,
   }
