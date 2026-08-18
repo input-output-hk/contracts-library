@@ -21,8 +21,8 @@ use dao/utils.{proposal_token_name, single_nft_name}
 /// position UTxO holds one NFT under `own_hash`. Governance actions
 /// (`CreateProposal`, `CosignProposal`, `VoteProposal`) record locks that
 /// freeze the committed stake until the relevant proposal phase ends; the
-/// governance parameters and sibling script hashes are read from the settings
-/// UTxO at `settings_utxo`.
+/// governance parameters (`settings`) are resolved from the settings UTxO by
+/// the validator wrapper before this function is called.
 pub fn validate_stake_spend(
   settings: DaoSettings,
   staked_token_policy: PolicyId,
