@@ -6,6 +6,7 @@ use cardano/assets.{Value}
 use cardano/transaction.{
   InlineDatum, Input, NoDatum, Output, OutputReference, Transaction, placeholder,
 }
+use dao/locks.{Lock}
 use dao/stake/mint.{validate_close_position, validate_create_position}
 use dao/stake/spend.{validate_stake_spend}
 use dao/types.{
@@ -112,7 +113,7 @@ fn pos_value(stake: Int) -> Value {
 
 fn stake_datum(
   delegatee: Option<Credential>,
-  locks: List<(ByteArray, Int, Int)>,
+  locks: List<Lock>,
 ) {
   StakePositionDatum { owner: owner(), delegatee, locks }
 }
