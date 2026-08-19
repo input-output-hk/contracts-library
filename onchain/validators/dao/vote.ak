@@ -1,25 +1,27 @@
 use cardano/assets.{AssetName, PolicyId}
 use cardano/transaction.{OutputReference, Transaction}
 use dao/types.{BurnVotes, MintVote, VoteDatum, VoteRedeemer, VoteTokenRedeemer}
+use dao/utils.{get_dao_settings}
 use dao/vote/mint.{validate_burn_votes, validate_mint_vote}
 use dao/vote/spend.{validate_vote_spend}
 
 /// Vote artifact script: its hash is the vote NFT policy id and the address
 /// where vote artifacts live while awaiting tally.
 validator vote(
-  stake_nft_policy: PolicyId,
-  stake_token_policy: PolicyId,
-  stake_token_name: AssetName,
-  proposal_policy: PolicyId,
+  staked_token_policy: PolicyId,
+  staked_token_name: AssetName,
+  settings_utxo: OutputReference,
+  settings_token_name: AssetName,
 ) {
   mint(redeemer: VoteTokenRedeemer, own_policy: PolicyId, self: Transaction) {
+    let settings = get_dao_settings(self, settings_utxo, settings_token_name)
     when redeemer is {
       MintVote ->
         validate_mint_vote(
-          stake_nft_policy,
-          stake_token_policy,
-          stake_token_name,
-          proposal_policy,
+          settings.proposal_validator,
+          settings.stake_validator,
+          staked_token_policy,
+          staked_token_name,
           own_policy,
           self,
         )
@@ -34,7 +36,14 @@ validator vote(
     self: Transaction,
   ) {
     expect Some(vote_datum) = datum
-    validate_vote_spend(proposal_policy, vote_datum, redeemer, own_ref, self)
+    let settings = get_dao_settings(self, settings_utxo, settings_token_name)
+    validate_vote_spend(
+      settings.proposal_validator,
+      vote_datum,
+      redeemer,
+      own_ref,
+      self,
+    )
   }
 
   else(_) {
