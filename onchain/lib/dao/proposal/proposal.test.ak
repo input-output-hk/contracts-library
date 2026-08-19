@@ -198,7 +198,7 @@ fn vote_input(i: Int, option: Int, s: Int, lovelace: Int) -> Input {
         |> assets.add(vote_policy, "V", 1),
       datum: InlineDatum(
         VoteDatum {
-          stake_owner: from_script(voter_hash),
+          stake_owner: Script(voter_hash),
           proposal: prop_nft,
           voted_option: option,
           stake: s,
