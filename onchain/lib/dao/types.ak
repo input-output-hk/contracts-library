@@ -2,7 +2,7 @@
 //// See `docs/explorations/dao/exporation.md` §9.
 
 use aiken/crypto.{ScriptHash}
-use cardano/address.{Address, Credential}
+use cardano/address.{Credential}
 use cardano/transaction.{OutputReference}
 
 /// Stake position state.
@@ -20,7 +20,7 @@ pub type StakeRedeemer {
   ClosePosition
   CreateProposal
   CosignProposal
-  VoteProposal
+  VoteProposal { voted_option: Int }
 }
 
 /// Redeemer for the stake position NFT minting policy.
@@ -97,7 +97,7 @@ pub type ProposalRedeemer {
 
 /// Vote artifact datum.
 pub type VoteDatum {
-  stake_owner: Address,
+  stake_owner: Credential,
   proposal: ByteArray,
   voted_option: Int,
   stake: Int,

@@ -214,7 +214,11 @@ fn refunds_ok(vote_inputs: List<Input>, outputs: List<Output>) -> Bool {
       let owed = lovelace_of(input.output.value)
       list.any(
         outputs,
-        fn(o) { o.address == vote.stake_owner && lovelace_of(o.value) >= owed },
+        fn(o) {
+          o.address.payment_credential == vote.stake_owner && lovelace_of(
+            o.value,
+          ) >= owed
+        },
       )
     },
   )
