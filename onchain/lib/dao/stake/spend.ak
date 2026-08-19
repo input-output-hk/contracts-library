@@ -139,7 +139,7 @@ pub fn validate_stake_spend(
         quantity_of(out.value, own_hash, nft) == 1,
       }
     }
-    VoteProposal -> {
+    VoteProposal { voted_option: _option } -> {
       expect Finite(upper) = validity_range.upper_bound.bound_type
       let (p_id, proposal) =
         proposal_with_nft(reference_inputs, settings.proposal_validator)

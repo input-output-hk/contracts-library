@@ -4,7 +4,8 @@ use cardano/address.{Script}
 use cardano/assets.{AssetName, PolicyId, has_nft_strict, quantity_of}
 use cardano/transaction.{InlineDatum, Transaction}
 use dao/types.{
-  ProposalDatum, ProposalStatus, StakeRedeemer, VoteDatum, VoteProposal,
+  ProposalDatum, ProposalStatus, StakePositionDatum, StakeRedeemer, VoteDatum,
+  VoteProposal,
 }
 use dao/utils.{
   find_input_by_policy, nft_name_from_ref, single_nft_name, spend_redeemer,
@@ -35,17 +36,19 @@ pub fn validate_mint_vote(
       |> dict.to_pairs()
 
   let stake_input = find_input_by_policy(inputs, stake_policy)
-  let stake_voting = {
-    expect action: StakeRedeemer =
-      spend_redeemer(self, stake_input.output_reference)
-    action == VoteProposal
-  }
+
+  // stake input is consumed with `VoteProposal`
+  expect action: StakeRedeemer =
+    spend_redeemer(self, stake_input.output_reference)
+  expect VoteProposal { voted_option } = action
   let stake =
     quantity_of(
       stake_input.output.value,
       staked_token_policy,
       staked_token_name,
     )
+  expect InlineDatum(stake_datum) = stake_input.output.datum
+  expect StakePositionDatum { owner, .. } = stake_datum
 
   let proposal_ref = find_input_by_policy(reference_inputs, proposal_policy)
   let p_id = single_nft_name(proposal_ref.output.value, proposal_policy)
@@ -65,13 +68,14 @@ pub fn validate_mint_vote(
   expect vote: VoteDatum = vote_data
 
   and {
-    stake_voting,
     proposal_voting,
     vote_name == nft_name_from_ref(stake_input.output_reference),
     hash == own_policy,
     has_nft_strict(vote_output.value, own_policy, vote_name),
     vote_output.reference_script == None,
+    vote.stake_owner == owner,
     vote.proposal == p_id,
+    vote.voted_option == voted_option,
     vote.stake == stake,
   }
 }
