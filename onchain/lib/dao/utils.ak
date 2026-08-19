@@ -3,7 +3,9 @@ use aiken/collection/dict
 use aiken/collection/list
 use aiken/collection/pairs
 use aiken/crypto.{blake2b_256}
-use cardano/assets.{AssetName, PolicyId, Value, has_nft, has_nft_strict}
+use cardano/assets.{
+  AssetName, PolicyId, Value, has_any_nft, has_nft, has_nft_strict,
+}
 use cardano/transaction.{Input, Output, OutputReference, Spend, Transaction}
 use dao/types.{DaoSettings}
 use settings/utils.{get_settings_datum}
@@ -29,15 +31,7 @@ pub fn spend_redeemer(self: Transaction, ref: OutputReference) -> Data {
 /// Locate an input holding exactly one NFT under `policy` (any name).
 pub fn find_input_by_policy(inputs: List<Input>, policy: PolicyId) -> Input {
   expect Some(input) =
-    list.find(
-      inputs,
-      fn(input) {
-        when input.output.value |> assets.tokens(policy) |> dict.to_pairs() is {
-          [Pair(_, q)] -> q == 1
-          _ -> False
-        }
-      },
-    )
+    list.find(inputs, fn(input) { has_any_nft(input.output.value, policy) })
   input
 }
 
