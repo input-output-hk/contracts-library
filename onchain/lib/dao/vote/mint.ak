@@ -8,7 +8,8 @@ use dao/types.{
   VoteProposal,
 }
 use dao/utils.{
-  find_input_by_policy, nft_name_from_ref, single_nft_name, spend_redeemer,
+  find_input_by_policy, nft_name_from_ref, single_minted, single_nft_name,
+  spend_redeemer,
 }
 
 /// Validate minting a vote NFT (`MintVote`).
@@ -31,10 +32,7 @@ pub fn validate_mint_vote(
 ) -> Bool {
   let Transaction { inputs, reference_inputs, outputs, mint, .. } = self
 
-  expect [Pair(vote_name, 1)] =
-    mint
-      |> assets.tokens(own_policy)
-      |> dict.to_pairs()
+  expect (vote_name, 1) = single_minted(mint, own_policy)
 
   let stake_input = find_input_by_policy(inputs, stake_policy)
 
@@ -59,7 +57,6 @@ pub fn validate_mint_vote(
     proposal.status == ProposalStatus.Voting
   }
 
-  // newly created vote output
   expect Some(vote_output) = list.at(outputs, out_idx)
   expect Script(hash) = vote_output.address.payment_credential
   expect InlineDatum(vote_data) = vote_output.datum

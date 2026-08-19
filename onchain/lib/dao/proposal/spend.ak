@@ -3,7 +3,7 @@ use aiken/collection/list
 use aiken/collection/pairs
 use aiken/interval.{Finite}
 use cardano/address.{Address, Script}
-use cardano/assets.{AssetName, PolicyId, lovelace_of, quantity_of}
+use cardano/assets.{AssetName, PolicyId, has_any_nft, lovelace_of, quantity_of}
 use cardano/transaction.{
   InlineDatum, Input, Output, OutputReference, Transaction, find_input,
 }
@@ -12,7 +12,10 @@ use dao/types.{
   ProposalDatum, ProposalRedeemer, ProposalStatus, RejectDraft, StakeRedeemer,
   TallyVotes, VoteDatum,
 }
-use dao/utils.{find_input_by_policy, single_nft_name, spend_redeemer}
+use dao/utils.{
+  find_continuation_output, find_input_by_policy, single_nft_name,
+  spend_redeemer,
+}
 
 /// Spending logic for a proposal UTxO. The proposal validator's own hash is the
 /// proposal NFT policy id, so the UTxO carries one NFT under `own_hash`.
@@ -33,10 +36,14 @@ pub fn validate_proposal_spend(
   expect Script(own_hash) = own_addr.payment_credential
   let p_id = single_nft_name(own_input.output.value, own_hash)
 
+  let draft_end = datum.start_time + datum.timing_config.draft_length
+  let voting_end = draft_end + datum.timing_config.voting_length
+  let tally_end = voting_end + datum.timing_config.tally_length
+
   when redeemer is {
     Cosign -> {
       expect ProposalStatus.Draft { cosigning_stake: n } = datum.status
-      let cont = continuation(outputs, own_addr, own_hash, p_id)
+      let cont = continuation_datum(outputs, own_addr, own_hash, p_id)
       let stake_input = find_input_by_policy(inputs, stake_policy)
       let s =
         quantity_of(
@@ -58,10 +65,10 @@ pub fn validate_proposal_spend(
     AcceptDraft -> {
       expect ProposalStatus.Draft { cosigning_stake: n } = datum.status
       expect Finite(upper) = validity_range.upper_bound.bound_type
-      let cont = continuation(outputs, own_addr, own_hash, p_id)
+      let cont = continuation_datum(outputs, own_addr, own_hash, p_id)
       and {
         n >= datum.thresholds.accept,
-        upper <= datum.start_time + datum.timing_config.draft_length,
+        upper <= draft_end,
         cont.status == ProposalStatus.Voting,
         immutables_ok(cont, datum),
       }
@@ -70,16 +77,16 @@ pub fn validate_proposal_spend(
       expect ProposalStatus.Draft { .. } = datum.status
       expect Finite(lower) = validity_range.lower_bound.bound_type
       and {
-        lower >= datum.start_time + datum.timing_config.draft_length,
+        lower >= draft_end,
         quantity_of(mint, own_hash, p_id) == -1,
       }
     }
     EndVotingStage -> {
       expect ProposalStatus.Voting = datum.status
       expect Finite(lower) = validity_range.lower_bound.bound_type
-      let cont = continuation(outputs, own_addr, own_hash, p_id)
+      let cont = continuation_datum(outputs, own_addr, own_hash, p_id)
       and {
-        lower >= datum.start_time + datum.timing_config.draft_length + datum.timing_config.voting_length,
+        lower >= voting_end,
         cont.status == ProposalStatus.Tally { votes: [] },
         immutables_ok(cont, datum),
       }
@@ -87,14 +94,14 @@ pub fn validate_proposal_spend(
     TallyVotes -> {
       expect ProposalStatus.Tally { votes } = datum.status
       expect Finite(upper) = validity_range.upper_bound.bound_type
-      let cont = continuation(outputs, own_addr, own_hash, p_id)
+      let cont = continuation_datum(outputs, own_addr, own_hash, p_id)
       let vote_inputs =
         list.filter(inputs, fn(i) { is_vote_for(vote_policy, p_id, i) })
       let counted = tally(votes, vote_inputs)
       let burned = mint |> assets.tokens(vote_policy) |> dict.to_pairs()
       let all_burned = list.all(burned, fn(entry) { entry.2nd == -1 })
       and {
-        upper <= datum.start_time + datum.timing_config.draft_length + datum.timing_config.voting_length + datum.timing_config.tally_length,
+        upper <= tally_end,
         // every consumed vote is refunded to its owner and its NFT burned; the
         // number of burns must match the votes consumed so none slip through
         list.length(vote_inputs) > 0,
@@ -108,8 +115,7 @@ pub fn validate_proposal_spend(
     EndProposal -> {
       expect ProposalStatus.Tally { votes } = datum.status
       expect Finite(lower) = validity_range.lower_bound.bound_type
-      let time_ok =
-        lower >= datum.start_time + datum.timing_config.draft_length + datum.timing_config.voting_length + datum.timing_config.tally_length
+      let time_ok = lower >= tally_end
       let burned = quantity_of(mint, own_hash, p_id) == -1
       let execution =
         when winner(votes) is {
@@ -136,13 +142,13 @@ pub fn validate_proposal_spend(
 
 /// The continuing proposal output: verifies the NFT is preserved and returns
 /// its datum.
-fn continuation(
+fn continuation_datum(
   outputs: List<Output>,
   own_addr: Address,
   own_hash: PolicyId,
   p_id: AssetName,
 ) -> ProposalDatum {
-  expect Some(out) = list.find(outputs, fn(o) { o.address == own_addr })
+  let out = find_continuation_output(outputs, own_addr)
   expect quantity_of(out.value, own_hash, p_id) == 1
   expect InlineDatum(d) = out.datum
   expect cd: ProposalDatum = d
@@ -161,14 +167,7 @@ fn immutables_ok(cont: ProposalDatum, datum: ProposalDatum) -> Bool {
 
 /// Is `input` a vote artifact belonging to proposal `p_id`?
 fn is_vote_for(vote_policy: PolicyId, p_id: AssetName, input: Input) -> Bool {
-  let has_vote_nft =
-    when
-      input.output.value |> assets.tokens(vote_policy) |> dict.to_pairs()
-    is {
-      [Pair(_, q)] -> q == 1
-      _ -> False
-    }
-  if has_vote_nft {
+  if has_any_nft(input.output.value, vote_policy) {
     expect InlineDatum(d) = input.output.datum
     expect vote: VoteDatum = d
     vote.proposal == p_id

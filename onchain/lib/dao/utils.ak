@@ -3,6 +3,7 @@ use aiken/collection/dict
 use aiken/collection/list
 use aiken/collection/pairs
 use aiken/crypto.{blake2b_256}
+use cardano/address.{Address}
 use cardano/assets.{AssetName, PolicyId, Value, has_any_nft, has_nft_strict}
 use cardano/transaction.{Input, Output, OutputReference, Spend, Transaction}
 use dao/types.{DaoSettings}
@@ -16,6 +17,25 @@ pub fn single_nft_name(value: Value, policy: PolicyId) -> AssetName {
       |> assets.tokens(policy)
       |> dict.to_pairs()
   name
+}
+
+/// The single mint entry under `policy` as `(name, quantity)`. Fails unless
+/// exactly one token of that policy is minted or burned.
+pub fn single_minted(mint: Value, policy: PolicyId) -> (AssetName, Int) {
+  expect [Pair(name, quantity)] =
+    mint
+      |> assets.tokens(policy)
+      |> dict.to_pairs()
+  (name, quantity)
+}
+
+/// The unique continuation output at `own_addr`, if any.
+pub fn find_continuation_output(
+  outputs: List<Output>,
+  own_addr: Address,
+) -> Output {
+  expect Some(out) = list.find(outputs, fn(o) { o.address == own_addr })
+  out
 }
 
 /// The redeemer data attached to the spend of the input at `ref`. Lets one
