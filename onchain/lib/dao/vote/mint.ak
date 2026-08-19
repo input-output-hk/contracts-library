@@ -26,6 +26,7 @@ pub fn validate_mint_vote(
   staked_token_name: AssetName,
   proposal_policy: PolicyId,
   own_policy: PolicyId,
+  out_idx: Int,
   self: Transaction,
 ) -> Bool {
   let Transaction { inputs, reference_inputs, outputs, mint, .. } = self
@@ -58,11 +59,8 @@ pub fn validate_mint_vote(
     proposal.status == ProposalStatus.Voting
   }
 
-  expect Some(vote_output) =
-    list.find(
-      outputs,
-      fn(o) { quantity_of(o.value, own_policy, vote_name) == 1 },
-    )
+  // newly created vote output
+  expect Some(vote_output) = list.at(outputs, out_idx)
   expect Script(hash) = vote_output.address.payment_credential
   expect InlineDatum(vote_data) = vote_output.datum
   expect vote: VoteDatum = vote_data

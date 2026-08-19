@@ -7,9 +7,7 @@ use cardano/transaction.{InlineDatum, Output, Transaction}
 use dao/types.{
   CreateProposal, DaoSettings, ProposalDatum, ProposalStatus, StakeRedeemer,
 }
-use dao/utils.{
-  find_proposal_input, find_proposal_output, proposal_token_name, spend_redeemer,
-}
+use dao/utils.{find_proposal_input, proposal_token_name, spend_redeemer}
 
 /// Validate the mint of a proposal NFT: the first step of creating a proposal.
 ///
@@ -26,6 +24,7 @@ pub fn validate_create_proposal(
   staked_token_policy: assets.PolicyId,
   staked_token_name: assets.AssetName,
   own_policy: assets.PolicyId,
+  out_idx: Int,
   self: Transaction,
 ) {
   let Transaction { inputs, outputs, mint, validity_range, .. } = self
@@ -57,7 +56,8 @@ pub fn validate_create_proposal(
 
   expect staked_amount >= settings.thresholds.create
 
-  let proposal_output = find_proposal_output(outputs, own_policy, token_name)
+  // newly created proposal output
+  expect Some(proposal_output) = list.at(outputs, out_idx)
 
   // The stake must be consumed with `CreateProposal`, so the stake validator
   // enforces the matching lock
