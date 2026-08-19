@@ -230,6 +230,7 @@ test mint_vote_ok() {
     gov_name,
     proposal_policy,
     vote_policy,
+    0,
     tx,
   )
 }
@@ -257,6 +258,7 @@ test rejects_mint_vote_wrong_token_name() {
     gov_name,
     proposal_policy,
     vote_policy,
+    0,
     tx,
   )
 }
@@ -285,6 +287,7 @@ test rejects_mint_vote_extra_token_output() {
     gov_name,
     proposal_policy,
     vote_policy,
+    0,
     tx,
   )
 }
@@ -307,6 +310,7 @@ test rejects_mint_vote_wrong_stake_record() {
     gov_name,
     proposal_policy,
     vote_policy,
+    0,
     tx,
   )
 }
@@ -330,6 +334,7 @@ test rejects_mint_vote_when_not_voting() {
     gov_name,
     proposal_policy,
     vote_policy,
+    0,
     tx,
   )
 }
@@ -353,6 +358,7 @@ test rejects_mint_vote_reference_script_output() {
     gov_name,
     proposal_policy,
     vote_policy,
+    0,
     tx,
   )
 }
