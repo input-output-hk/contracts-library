@@ -442,7 +442,7 @@ test vote_proposal_ok() {
       extra_signatories: [owner_hash],
       validity_range: interval.before(unlock),
     }
-  spend(d, VoteProposal, tx)
+  spend(d, VoteProposal { voted_option: 1 }, tx)
 }
 
 test rejects_vote_when_not_voting_stage() {
@@ -461,7 +461,7 @@ test rejects_vote_when_not_voting_stage() {
       extra_signatories: [owner_hash],
       validity_range: interval.before(unlock),
     }
-  !spend(d, VoteProposal, tx)
+  !spend(d, VoteProposal { voted_option: 1 }, tx)
 }
 
 // ------------------------------------------------------ position NFT minting
