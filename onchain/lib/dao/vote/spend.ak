@@ -3,7 +3,7 @@ use cardano/address.{Script}
 use cardano/assets.{PolicyId, quantity_of}
 use cardano/transaction.{OutputReference, Transaction, find_input}
 use dao/types.{ProposalRedeemer, TallyVotes, VoteDatum, VoteRedeemer}
-use dao/utils.{single_nft_name, spend_redeemer}
+use dao/utils.{find_proposal_input, single_nft_name, spend_redeemer}
 
 /// Spending logic for a vote artifact UTxO.
 ///
@@ -24,13 +24,8 @@ pub fn validate_vote_spend(
   expect Script(own_hash) = own_input.output.address.payment_credential
   let own_nft = single_nft_name(own_input.output.value, own_hash)
 
-  expect Some(proposal_input) =
-    list.find(
-      inputs,
-      fn(i) {
-        quantity_of(i.output.value, proposal_policy, datum.proposal) == 1
-      },
-    )
+  let proposal_input =
+    find_proposal_input(inputs, proposal_policy, datum.proposal)
   expect Script(policy) = proposal_input.output.address.payment_credential
 
   let tallied = {
