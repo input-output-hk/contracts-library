@@ -20,9 +20,9 @@ use dao/utils.{
 /// globally unique (a reference is spent at most once) and the vote UTxO holds
 /// nothing but its NFT and lovelace.
 pub fn validate_mint_vote(
-  stake_nft_policy: PolicyId,
-  stake_token_policy: PolicyId,
-  stake_token_name: AssetName,
+  stake_policy: PolicyId,
+  staked_token_policy: PolicyId,
+  staked_token_name: AssetName,
   proposal_policy: PolicyId,
   own_policy: PolicyId,
   self: Transaction,
@@ -34,14 +34,18 @@ pub fn validate_mint_vote(
       |> assets.tokens(own_policy)
       |> dict.to_pairs()
 
-  let stake_input = find_input_by_policy(inputs, stake_nft_policy)
+  let stake_input = find_input_by_policy(inputs, stake_policy)
   let stake_voting = {
     expect action: StakeRedeemer =
       spend_redeemer(self, stake_input.output_reference)
     action == VoteProposal
   }
   let stake =
-    quantity_of(stake_input.output.value, stake_token_policy, stake_token_name)
+    quantity_of(
+      stake_input.output.value,
+      staked_token_policy,
+      staked_token_name,
+    )
 
   let proposal_ref = find_input_by_policy(reference_inputs, proposal_policy)
   let p_id = single_nft_name(proposal_ref.output.value, proposal_policy)

@@ -18,9 +18,9 @@ use dao/utils.{find_input_by_policy, single_nft_name, spend_redeemer}
 /// proposal NFT policy id, so the UTxO carries one NFT under `own_hash`.
 pub fn validate_proposal_spend(
   vote_policy: PolicyId,
-  stake_nft_policy: PolicyId,
-  stake_token_policy: PolicyId,
-  stake_token_name: AssetName,
+  stake_policy: PolicyId,
+  staked_token_policy: PolicyId,
+  staked_token_name: AssetName,
   datum: ProposalDatum,
   redeemer: ProposalRedeemer,
   own_ref: OutputReference,
@@ -37,12 +37,12 @@ pub fn validate_proposal_spend(
     Cosign -> {
       expect ProposalStatus.Draft { cosigning_stake: n } = datum.status
       let cont = continuation(outputs, own_addr, own_hash, p_id)
-      let stake_input = find_input_by_policy(inputs, stake_nft_policy)
+      let stake_input = find_input_by_policy(inputs, stake_policy)
       let s =
         quantity_of(
           stake_input.output.value,
-          stake_token_policy,
-          stake_token_name,
+          staked_token_policy,
+          staked_token_name,
         )
       let cosigning = {
         expect action: StakeRedeemer =
