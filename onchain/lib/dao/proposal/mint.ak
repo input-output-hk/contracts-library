@@ -1,4 +1,3 @@
-use aiken/collection/dict
 use aiken/collection/list
 use aiken/interval.{Finite}
 use cardano/address.{Script}
@@ -7,7 +6,9 @@ use cardano/transaction.{InlineDatum, Output, Transaction}
 use dao/types.{
   CreateProposal, DaoSettings, ProposalDatum, ProposalStatus, StakeRedeemer,
 }
-use dao/utils.{find_proposal_input, proposal_token_name, spend_redeemer}
+use dao/utils.{
+  find_proposal_input, proposal_token_name, single_minted, spend_redeemer,
+}
 
 /// Validate the mint of a proposal NFT: the first step of creating a proposal.
 ///
@@ -31,6 +32,8 @@ pub fn validate_create_proposal(
 
   expect Finite(now) = validity_range.lower_bound.bound_type
 
+  // The stake position is matched loosely (any NFT under the stake policy);
+  // its own spend validator re-checks the detailed constraints on that input.
   expect Some(stake_input) =
     list.find(
       inputs,
@@ -40,10 +43,7 @@ pub fn validate_create_proposal(
   let token_name = proposal_token_name(stake_input.output_reference)
 
   let correct_mint = {
-    expect [Pair(minted_name, quantity)] =
-      mint
-        |> assets.tokens(own_policy)
-        |> dict.to_pairs()
+    let (minted_name, quantity) = single_minted(mint, own_policy)
     quantity == 1 && minted_name == token_name
   }
 
@@ -56,7 +56,6 @@ pub fn validate_create_proposal(
 
   expect staked_amount >= settings.thresholds.create
 
-  // newly created proposal output
   expect Some(proposal_output) = list.at(outputs, out_idx)
 
   // The stake must be consumed with `CreateProposal`, so the stake validator
@@ -108,10 +107,7 @@ pub fn validate_finish_proposal(own_policy: assets.PolicyId, self: Transaction) 
   let Transaction { inputs, mint, .. } = self
 
   let correct_burn = {
-    expect [Pair(minted_name, quantity)] =
-      mint
-        |> assets.tokens(own_policy)
-        |> dict.to_pairs()
+    let (minted_name, quantity) = single_minted(mint, own_policy)
     quantity == -1 && {
       let proposal_input = find_proposal_input(inputs, own_policy, minted_name)
       expect Script(own_hash) = proposal_input.output.address.payment_credential

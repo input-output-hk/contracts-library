@@ -4,12 +4,13 @@
 use aiken/crypto.{ScriptHash}
 use cardano/address.{Credential}
 use cardano/transaction.{OutputReference}
+use dao/locks.{Lock}
 
 /// Stake position state.
 pub type StakePositionDatum {
   owner: Credential,
   delegatee: Option<Credential>,
-  locks: List<(ByteArray, Int, Int)>,
+  locks: List<Lock>,
 }
 
 /// Actions on a stake position UTxO.

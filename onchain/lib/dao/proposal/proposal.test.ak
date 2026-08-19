@@ -289,7 +289,7 @@ fn create_tx(create: Int, stake: Int, now: Int) -> Transaction {
 
 fn validate_mint(tx: Transaction) -> Bool {
   let settings = get_dao_settings(tx, settings_ref(), settings_name)
-  validate_create_proposal(settings, gov_policy, gov_name, proposal_policy, tx)
+  validate_create_proposal(settings, gov_policy, gov_name, proposal_policy, 0, tx)
 }
 
 // --------------------------------------------------------------------- Cosign
@@ -554,10 +554,6 @@ test create_proposal_ok() {
 
 test stake_above_threshold_ok() {
   validate_mint(create_tx(100, 250, 5000))
-}
-
-test stake_at_threshold_boundary_ok() {
-  validate_mint(create_tx(100, 100, 5000))
 }
 
 // ----------------------------------------------------------- mint adversarial

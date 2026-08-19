@@ -3,7 +3,7 @@ use aiken/collection/list
 use aiken/interval.{Finite}
 use authorization.{is_authorized}
 use cardano/address.{Address, Credential, Script}
-use cardano/assets.{AssetName, PolicyId, quantity_of}
+use cardano/assets.{AssetName, PolicyId, has_any_nft, quantity_of}
 use cardano/transaction.{
   InlineDatum, Input, Output, OutputReference, Transaction, find_input,
 }
@@ -13,7 +13,7 @@ use dao/types.{
   Deposit, ProposalDatum, ProposalStatus, StakePositionDatum, StakeRedeemer,
   VoteProposal, Withdraw,
 }
-use dao/utils.{proposal_token_name, single_nft_name}
+use dao/utils.{find_continuation_output, proposal_token_name, single_nft_name}
 
 /// Spending logic for a stake position UTxO.
 ///
@@ -52,7 +52,7 @@ pub fn validate_stake_spend(
 
   when redeemer is {
     Deposit -> {
-      let out = continuation(outputs, own_addr)
+      let out = find_continuation_output(outputs, own_addr)
       let cont = out_datum(out)
       and {
         is_authorized(datum.owner, extra_signatories, withdrawals),
@@ -64,7 +64,7 @@ pub fn validate_stake_spend(
       }
     }
     DelegateTo { delegatee } -> {
-      let out = continuation(outputs, own_addr)
+      let out = find_continuation_output(outputs, own_addr)
       let cont = out_datum(out)
       and {
         is_authorized(datum.owner, extra_signatories, withdrawals),
@@ -79,7 +79,7 @@ pub fn validate_stake_spend(
       expect Finite(now) = validity_range.lower_bound.bound_type
       let pruned = prune_expired(datum.locks, now)
       let free = free_stake(in_stake, pruned)
-      let out = continuation(outputs, own_addr)
+      let out = find_continuation_output(outputs, own_addr)
       let cont = out_datum(out)
       and {
         amount >= 0,
@@ -94,8 +94,7 @@ pub fn validate_stake_spend(
     }
     ClosePosition -> {
       expect Finite(now) = validity_range.lower_bound.bound_type
-      let all_locks_expired =
-        list.all(datum.locks, fn(lock) { lock.2nd <= now })
+      let all_locks_expired = prune_expired(datum.locks, now) == []
       let must_burn_stake_nft = quantity_of(mint, own_hash, nft) == -1
       and {
         all_locks_expired,
@@ -107,7 +106,7 @@ pub fn validate_stake_spend(
       expect Finite(now) = validity_range.lower_bound.bound_type
       let p_id = proposal_token_name(own_ref)
       let new_lock = (p_id, now + settings.timings.draft_length, in_stake)
-      let out = continuation(outputs, own_addr)
+      let out = find_continuation_output(outputs, own_addr)
       let cont = out_datum(out)
       and {
         is_authorized(datum.owner, extra_signatories, withdrawals),
@@ -125,7 +124,7 @@ pub fn validate_stake_spend(
         proposal_with_nft(inputs, settings.proposal_validator)
       let new_lock =
         (p_id, proposal.start_time + settings.timings.draft_length, in_stake)
-      let out = continuation(outputs, own_addr)
+      let out = find_continuation_output(outputs, own_addr)
       let cont = out_datum(out)
       and {
         is_authorized(vote_auth(datum), extra_signatories, withdrawals),
@@ -146,7 +145,7 @@ pub fn validate_stake_spend(
       let unlock =
         proposal.start_time + settings.timings.draft_length + settings.timings.voting_length
       let new_lock = (p_id, unlock, in_stake)
-      let out = continuation(outputs, own_addr)
+      let out = find_continuation_output(outputs, own_addr)
       let cont = out_datum(out)
       let vote_minted =
         when
@@ -187,11 +186,6 @@ fn is_draft(status: ProposalStatus) -> Bool {
   }
 }
 
-fn continuation(outputs: List<Output>, own_addr: Address) -> Output {
-  expect Some(out) = list.find(outputs, fn(o) { o.address == own_addr })
-  out
-}
-
 fn out_datum(out: Output) -> StakePositionDatum {
   expect InlineDatum(d) = out.datum
   expect sd: StakePositionDatum = d
@@ -203,15 +197,7 @@ fn proposal_with_nft(
   policy: PolicyId,
 ) -> (AssetName, ProposalDatum) {
   expect Some(input) =
-    list.find(
-      inputs,
-      fn(i) {
-        when i.output.value |> assets.tokens(policy) |> dict.to_pairs() is {
-          [Pair(_, q)] -> q == 1
-          _ -> False
-        }
-      },
-    )
+    list.find(inputs, fn(input) { has_any_nft(input.output.value, policy) })
   let name = single_nft_name(input.output.value, policy)
   expect InlineDatum(d) = input.output.datum
   expect pd: ProposalDatum = d

@@ -6,7 +6,7 @@ use cardano/transaction.{
   InlineDatum, Output, OutputReference, Transaction, find_input,
 }
 use dao/types.{StakePositionDatum}
-use dao/utils.{nft_name_from_ref}
+use dao/utils.{nft_name_from_ref, single_minted}
 
 /// Validate minting a stake position NFT (`CreatePosition`).
 ///
@@ -27,17 +27,12 @@ pub fn validate_create_position(
   let stake_nft_name = nft_name_from_ref(owner_utxo)
 
   let correct_mint = {
-    expect [Pair(minted_token_name, quantity)] =
-      mint
-        |> assets.tokens(own_policy)
-        |> dict.to_pairs()
+    let (minted_token_name, quantity) = single_minted(mint, own_policy)
     quantity == 1 && minted_token_name == stake_nft_name
   }
 
-  // owner utxo is spent
   expect Some(owner_input) = find_input(inputs, owner_utxo)
 
-  // newly created stake position output
   expect Some(stake_position) = list.at(outputs, out_idx)
 
   // checks for stake position output
@@ -50,6 +45,9 @@ pub fn validate_create_position(
 
   let correct_address = stake_address.payment_credential == Script(own_policy)
 
+  // `flatten` yields one entry per asset plus lovelace (under the empty
+  // policy), so exactly 3 entries means the position holds nothing but its
+  // NFT, the staked token, and lovelace.
   let correct_value =
     has_nft(stake_value, own_policy, stake_nft_name) && quantity_of(
       stake_value,
