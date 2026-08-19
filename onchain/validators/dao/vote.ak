@@ -16,13 +16,14 @@ validator vote(
   mint(redeemer: VoteTokenRedeemer, own_policy: PolicyId, self: Transaction) {
     let settings = get_dao_settings(self, settings_utxo, settings_token_name)
     when redeemer is {
-      MintVote ->
+      MintVote { out_idx } ->
         validate_mint_vote(
           settings.proposal_validator,
           settings.stake_validator,
           staked_token_policy,
           staked_token_name,
           own_policy,
+          out_idx,
           self,
         )
       BurnVotes -> validate_burn_votes(own_policy, self)

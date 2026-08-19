@@ -81,7 +81,7 @@ pub type DaoSettings {
 
 /// Redeemer for the proposal token minting policy.
 pub type ProposalTokenRedeemer {
-  MintProposal
+  MintProposal { out_idx: Int }
   BurnProposal
 }
 
@@ -110,6 +110,6 @@ pub type VoteRedeemer {
 
 /// Redeemer for the vote NFT minting policy.
 pub type VoteTokenRedeemer {
-  MintVote
+  MintVote { out_idx: Int }
   BurnVotes
 }
