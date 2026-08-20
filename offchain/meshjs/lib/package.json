@@ -26,6 +26,7 @@
   "blueprint": {
     "vesting": "a916d73a133b6e6cfaaa3fb66f0bc2410359ffa0d6b6a2bc6f057263",
     "settings": "4829c5417ff3b8803091bc4825c263d3eeed7756201f4494167ec609",
+    "settings_typed": "07ac3b4d3f718c96218063ae42e10edf53c5c820840ab11ac69688f5",
     "compiler": "aiken-v1.1.21"
   }
 }
