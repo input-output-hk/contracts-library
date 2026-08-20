@@ -16,11 +16,13 @@ import {
   settingsDatumToData,
   settingsScript,
   settingsScriptAddress,
+  settingsTypedScript,
   type SettingsDatum,
   type SettingsParams,
 } from "@contracts-library/meshjs";
 import {
   mConStr0,
+  mConStr1,
   type Data,
   type SlotConfig,
   type UTxO,
@@ -65,7 +67,11 @@ describe.skipIf(!reachable)("settings e2e (Yaci devnet)", () => {
     slotConfig = await devnetSlotConfig();
   });
 
-  async function setup(): Promise<{
+  async function setup(
+    scriptFactory: (
+      params: SettingsParams,
+    ) => ReturnType<typeof settingsScript> = settingsScript,
+  ): Promise<{
     proposer: Account;
     applier: Account;
     seedUtxo: TxInput;
@@ -87,7 +93,7 @@ describe.skipIf(!reachable)("settings e2e (Yaci devnet)", () => {
       settingsTokenName: SETTINGS_TOKEN_NAME,
     };
 
-    const script = settingsScript(params);
+    const script = scriptFactory(params);
     const scriptAddr = settingsScriptAddress(script, NETWORK_ID);
 
     return {
@@ -482,5 +488,100 @@ describe.skipIf(!reachable)("settings e2e (Yaci devnet)", () => {
         requiredSigner: ctx.applier.keyHash,
       }),
     ).rejects.toThrow();
+  });
+
+  // ---------------------------------------------------------------------------
+  // `validate_datum` with a concrete shape (`settings_typed` fork).
+  //
+  // The reference validator ships `validate_datum = True` (spec §7), so R7 is
+  // untestable with it. `settings_typed` requires the setting value to be a
+  // single-field constructor `Constr(0, [_])`. These cases exercise the launch
+  // (M4) and propose (P4) paths of that predicate; apply-time validation (A5)
+  // is inherently covered by propose, since a pending `next` is already
+  // validated when it is proposed.
+  describe("settings_typed (validate_datum requires Constr(0, [_]))", () => {
+    async function setupTyped() {
+      return setup(settingsTypedScript);
+    }
+
+    // ---- happy paths -------------------------------------------------------
+
+    it("mints a typed instance with an in-shape value", async () => {
+      const ctx = await setupTyped();
+      const settingsUtxo = await launchSettings(ctx, initialDatum());
+      expect(settingsUtxo).toBeDefined();
+    });
+
+    it("proposes an in-shape value on a typed instance", async () => {
+      const ctx = await setupTyped();
+      const { proposedUtxo } = await launchAndProposeSettings({
+        ctx,
+        newValue: VALUE_B,
+      });
+      expect(proposedUtxo).toBeDefined();
+    });
+
+    // ---- R7: invalid setting value ----------------------------------------
+
+    it("rejects a typed launch whose current value is a bare int (not Constr(0,[_]))", async () => {
+      const ctx = await setupTyped();
+      const datum: SettingsDatum = {
+        current: 1n,
+        next: null,
+        nextApply: null,
+      };
+
+      await expect(launchSettings(ctx, datum)).rejects.toThrow();
+    });
+
+    it("rejects a typed launch whose current value has the wrong constructor index", async () => {
+      const ctx = await setupTyped();
+      const datum: SettingsDatum = {
+        current: mConStr1([1n]), // Constr(1, [1]) — not Constr(0, [_])
+        next: null,
+        nextApply: null,
+      };
+
+      await expect(launchSettings(ctx, datum)).rejects.toThrow();
+    });
+
+    it("rejects a typed propose whose new value is out of shape", async () => {
+      const ctx = await setupTyped();
+      const settingsUtxo = await launchSettings(ctx, initialDatum());
+
+      await expect(
+        buildProposeTx({
+          txBuilder: newTxBuilder(provider),
+          script: ctx.script,
+          settingsUtxo,
+          datum: initialDatum(),
+          newValue: 1n, // not Constr(0, [_])
+          now: await chainNowMs(),
+          outputIndex: 0,
+          utxos: await ctx.proposer.wallet.getUtxos(),
+          changeAddress: ctx.proposer.address,
+          collateralUtxo: await collateralOf(ctx.proposer),
+          proposeAuth: { kind: "key", hash: ctx.proposer.keyHash },
+          applyDelay: ctx.applyDelay,
+          customSlotConfig: slotConfig,
+        }),
+      ).rejects.toThrow();
+    });
+
+    // ---- contrast control --------------------------------------------------
+
+    it("accepts the same out-of-shape value under the reference (untyped) validator", async () => {
+      // Control: `settings_typed` differs from `settings` only in its
+      // `validate_datum`. If the reference validator also rejected a bare-int
+      // `current`, the rejection above would be from shared machinery, not the
+      // predicate. Here we prove the reference validator accepts it.
+      const ctx = await setup(settingsScript);
+      const settingsUtxo = await launchSettings(ctx, {
+        current: 1n,
+        next: null,
+        nextApply: null,
+      });
+      expect(settingsUtxo).toBeDefined();
+    });
   });
 });

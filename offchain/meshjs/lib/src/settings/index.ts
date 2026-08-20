@@ -16,6 +16,7 @@ export {
 export {
   SETTINGS_TOKEN_NAME,
   settingsScript,
+  settingsTypedScript,
   settingsScriptAddress,
   buildLaunchTx,
   buildProposeTx,
@@ -29,5 +30,7 @@ export {
 export {
   compiledCode as settingsCode,
   validatorHash as settingsValidatorHash,
+  typedCompiledCode as settingsTypedCode,
+  typedValidatorHash as settingsTypedValidatorHash,
   plutusVersion as settingsPlutusVersion,
 } from "./blueprint";
