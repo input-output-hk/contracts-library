@@ -11,7 +11,7 @@ ContractsLibrary provides battle-tested, ready-to-use contract implementations, 
 
 The EVM ecosystem matured in part because OpenZeppelin gave developers vetted, reusable contracts. Cardano lacks an equivalent: teams repeatedly re-implement the same primitives (vesting, escrow, token standards, AMMs), each time re-incurring design and security risk.
 
-Existing Cardano libraries operate at a *lower* level of abstraction (on-chain utilities and generic patterns). **ContractsLibrary operates at the use-case level**: complete contracts, both on-chain and off-chain. We are very grateful to and stand on the shoulders of libraries like [vodka](https://github.com/sidan-lab/vodka) and [Anastasia Labs' design-patterns](https://github.com/Anastasia-Labs/design-patterns).
+Existing Cardano libraries operate at a _lower_ level of abstraction (on-chain utilities and generic patterns). **ContractsLibrary operates at the use-case level**: complete contracts, both on-chain and off-chain. We are very grateful to and stand on the shoulders of libraries like [vodka](https://github.com/sidan-lab/vodka) and [Anastasia Labs' design-patterns](https://github.com/Anastasia-Labs/design-patterns).
 
 ## How you use it
 
@@ -34,12 +34,11 @@ Start from the contract's **spec** to understand the behavior, then pick a layer
 Each contract ships as four parts:
 
 | Part | Location | Role |
-|---|---|---|
+| --- | --- | --- |
 | **On-chain** | `onchain/` | Aiken validation logic the ledger enforces. The only part that carries security. |
 | **Off-chain** | `offchain/` | Transaction builders developers call. The primary developer-facing API. |
 | **Spec** | `specs/` | Implementation-independent description of behavior. The source of truth. |
-| **Formal proofs** | `formal/` | Machine-checked Lean 4 proofs *about the spec* (completeness, soundness, robustness). |
-
+| **Formal proofs** | `formal/` | Machine-checked Lean 4 proofs _about the spec_ (completeness, soundness, robustness). |
 
 Validators are written as well-behaved predicates that avoid global assumptions about transaction shape, so contracts compose freely in shared transactions. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the composability rules.
 
@@ -62,7 +61,6 @@ The full, status-tracked catalog lives in the [PRD](docs/PRD.md#7-contract-catal
 | Contract | Category | Status | Spec |
 |---|---|---|---|
 | Linear vesting | DeFi | In progress | [spec](specs/vesting/linear-vesting.md) |
-
 
 More candidates (escrow, AMM, CIP-68, programmable tokens, multisig, DAO, …) are explored and triaged in the PRD.
 
