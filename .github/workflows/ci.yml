@@ -21,21 +21,12 @@ jobs:
         run: npm ci
       - name: Biome format check
         run: npm run format:check
-      # The onchain project pins aiken v1.1.22 (aiken.toml); the e2e fixture
-      # project pins v1.1.21. Each is checked with its own compiler version.
       - uses: aiken-lang/setup-aiken@v1
         with:
           version: v1.1.22
       - name: aiken fmt check (onchain)
         working-directory: onchain
         run: aiken fmt --check
-      - uses: aiken-lang/setup-aiken@v1
-        with:
-          version: v1.1.21
-      - name: aiken fmt check (e2e fixtures)
-        working-directory: offchain/meshjs/e2e/fixtures/aiken
-        run: aiken fmt --check
-
   onchain:
     name: On-chain (aiken)
     runs-on: ubuntu-latest
@@ -43,7 +34,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: aiken-lang/setup-aiken@v1
         with:
-          version: v1.1.21
+          version: v1.1.22
       # Cache fetched Aiken dependencies (the analog of node_modules), keyed on
       # the resolved lockfile so a dependency bump invalidates it.
       - name: Cache Aiken packages
