@@ -2,3 +2,5 @@
 !docs/*
 !specs/*
 .claude
+
+node_modules/

@@ -78,6 +78,20 @@ aiken check    # run tests
 
 The off-chain layer provides TypeScript builders (MeshJS) and Tx3 implementations under `offchain/`.
 
+## Formatting
+
+Formatting is enforced automatically:
+
+- **TypeScript/JSON/Markdown/YAML** — [Biome](https://biomejs.dev) with the repo-level `biome.json` config.
+- **Aiken** — `aiken fmt` with the compiler version pinned in `onchain/aiken.toml`.
+
+A pre-commit hook (Husky + lint-staged) formats staged files on every commit, and CI fails on unformatted code. To format everything at once:
+
+```sh
+npm install    # once, from the repo root
+npm run format
+```
+
 ## Documentation
 
 - [Product Requirements (PRD)](docs/PRD.md) — what we ship, goals, catalog.
