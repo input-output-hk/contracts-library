@@ -25,7 +25,7 @@ import {
 
 import { applyAuthorization, type ScriptAuthorizer } from "../authorization";
 import type { Credential } from "../common";
-import { compiledCode, plutusVersion } from "./blueprint";
+import { compiledCode, plutusVersion, typedCompiledCode } from "./blueprint";
 import {
   applyRedeemer,
   burnRedeemer,
@@ -47,6 +47,20 @@ export const SETTINGS_TOKEN_NAME = "73657474696e6773"; // hex-encoded "settings"
 
 export function settingsScript(params: SettingsParams): PlutusScript {
   const code = applyParamsToScript(compiledCode, paramsToData(params), "Mesh");
+  return { code: code, version: plutusVersion };
+}
+
+/**
+ * Parameterized script for the `settings_typed` fork, whose `validate_datum`
+ * requires the setting value to be `Constr(0, [Int])` (spec §3.1, §7 R7).
+ * Everything else behaves like the reference `settings` contract.
+ */
+export function settingsTypedScript(params: SettingsParams): PlutusScript {
+  const code = applyParamsToScript(
+    typedCompiledCode,
+    paramsToData(params),
+    "Mesh",
+  );
   return { code: code, version: plutusVersion };
 }
 
