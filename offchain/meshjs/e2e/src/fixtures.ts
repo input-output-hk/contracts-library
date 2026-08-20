@@ -2,7 +2,7 @@
  * Test-only authorizer scripts for the script-credential (withdraw-0) path.
  *
  * These are NOT part of the library. They are compiled from
- * `fixtures/aiken/validators/authorizers.ak` (Aiken v1.1.21, Plutus V3); the
+ * `fixtures/aiken/validators/authorizers.ak` (Aiken v1.1.22, Plutus V3); the
  * raw compiled code is embedded below so CI needs no Aiken toolchain. The cbor
  * (double-CBOR-encoded, as MeshJS expects) and the script hash are derived here
  * so they always agree with what the library's `applyAuthorization` computes.
