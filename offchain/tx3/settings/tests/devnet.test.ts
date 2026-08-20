@@ -1,15 +1,15 @@
-import { afterEach, beforeEach, expect, test } from 'vitest';
-import { TestDevnet, DEVNET_POLL, unwrapCborBytes } from '../../devnet/utils';
+import { afterEach, beforeEach, expect, test } from "vitest";
+import { TestDevnet, DEVNET_POLL, unwrapCborBytes } from "../../devnet/utils";
 import {
   type SettingsParams,
   plutusVersion,
   settingsScript,
   settingsScriptAddress,
   SETTINGS_TOKEN_NAME,
-} from '@contracts-library/meshjs';
-import { Party } from 'tx3-sdk';
-import { Client } from '../.tx3/codegen/ts-client/config-parameter-management/protocol'; // trix codegen ts-client
-import { resolveScriptHash, PlutusScript } from '@meshsdk/core';
+} from "@contracts-library/meshjs";
+import { Party } from "tx3-sdk";
+import { Client } from "../.tx3/codegen/ts-client/config-parameter-management/protocol"; // trix codegen ts-client
+import { resolveScriptHash, PlutusScript } from "@meshsdk/core";
 
 const APPLY_DELAY = 4_000;
 const VALUE_A = 1;
@@ -48,14 +48,14 @@ interface ConfigureOptions {
 
 /** Parameterize the settings script for this run and wire up a client. */
 async function configure(options: ConfigureOptions = {}): Promise<Instance> {
-  const proposer = devnet.wallet('proposer');
-  const applier = devnet.wallet('applier');
-  const seed = await devnet.seedUtxo('applier');
+  const proposer = devnet.wallet("proposer");
+  const applier = devnet.wallet("applier");
+  const seed = await devnet.seedUtxo("applier");
 
   const params: SettingsParams = {
     seedUtxo: { transactionId: seed.txHash, outputIndex: seed.outputIndex },
-    proposeAuth: { kind: 'key', hash: proposer.keyHash },
-    applyAuth: { kind: 'key', hash: applier.keyHash },
+    proposeAuth: { kind: "key", hash: proposer.keyHash },
+    applyAuth: { kind: "key", hash: applier.keyHash },
     applyDelay: APPLY_DELAY,
     settingsTokenName: SETTINGS_TOKEN_NAME,
   };
@@ -64,7 +64,7 @@ async function configure(options: ConfigureOptions = {}): Promise<Instance> {
   const scriptHash = resolveScriptHash(script.code, plutusVersion);
   const scriptAddr = settingsScriptAddress(script);
 
-  const client = new Client({ endpoint: devnet.trpUrl }, 'local')
+  const client = new Client({ endpoint: devnet.trpUrl }, "local")
     .withProposer(options.proposerParty ?? proposer.party)
     .withApplier(options.applierParty ?? applier.party)
     .withSettings(Party.address(scriptAddr));
@@ -86,33 +86,59 @@ async function configure(options: ConfigureOptions = {}): Promise<Instance> {
 
 // The tx3 template's runtime arg names are snake_case, but the generated params
 // types mistakenly declare camelCase — cast past them at each call site.
-type LaunchArgs = Parameters<Client['launch']>[0];
-type ProposeArgs = Parameters<Client['propose']>[0];
-type ApplyArgs = Parameters<Client['apply']>[0];
-type CloseArgs = Parameters<Client['close']>[0];
-type CloseWithoutBurnAttackArgs = Parameters<Client['closeWithoutBurnAttack']>[0];
+type LaunchArgs = Parameters<Client["launch"]>[0];
+type ProposeArgs = Parameters<Client["propose"]>[0];
+type ApplyArgs = Parameters<Client["apply"]>[0];
+type CloseArgs = Parameters<Client["close"]>[0];
+type CloseWithoutBurnAttackArgs = Parameters<
+  Client["closeWithoutBurnAttack"]
+>[0];
 
 function launchTx(inst: Instance, value: number) {
   return inst.client
-    .launch({ seed: inst.seedRef, initial_value: value, out_ix: 0 } as unknown as LaunchArgs)
+    .launch({
+      seed: inst.seedRef,
+      initial_value: value,
+      out_ix: 0,
+    } as unknown as LaunchArgs)
     .env(inst.env)
     .resolve()
     .then((r) => r.sign())
     .then((s) => s.submit());
 }
 
-function proposeTx(inst: Instance, newValue: number, nowMs: number, sinceSlot: number, outIx = 0) {
+function proposeTx(
+  inst: Instance,
+  newValue: number,
+  nowMs: number,
+  sinceSlot: number,
+  outIx = 0,
+) {
   return inst.client
-    .propose({ new_value: newValue, now_ms: nowMs, since_slot: sinceSlot, out_ix: outIx } as unknown as ProposeArgs)
+    .propose({
+      new_value: newValue,
+      now_ms: nowMs,
+      since_slot: sinceSlot,
+      out_ix: outIx,
+    } as unknown as ProposeArgs)
     .env(inst.env)
     .resolve()
     .then((r) => r.sign())
     .then((s) => s.submit());
 }
 
-function applyTx(inst: Instance, newCurrent: number, sinceSlot: number, outIx = 0) {
+function applyTx(
+  inst: Instance,
+  newCurrent: number,
+  sinceSlot: number,
+  outIx = 0,
+) {
   return inst.client
-    .apply({ new_current: newCurrent, since_slot: sinceSlot, out_ix: outIx } as unknown as ApplyArgs)
+    .apply({
+      new_current: newCurrent,
+      since_slot: sinceSlot,
+      out_ix: outIx,
+    } as unknown as ApplyArgs)
     .env(inst.env)
     .resolve()
     .then((r) => r.sign())
@@ -149,7 +175,7 @@ async function settingsUtxoExists(inst: Instance): Promise<boolean> {
 
 // ------------------------------------------------------------- happy paths
 
-test('launches a settings instance', async () => {
+test("launches a settings instance", async () => {
   const inst = await configure();
 
   await confirm(launchTx(inst, VALUE_A));
@@ -157,7 +183,7 @@ test('launches a settings instance', async () => {
   expect(await settingsUtxoExists(inst)).toBe(true);
 }, 60_000);
 
-test('launches, proposes, applies, and closes', async () => {
+test("launches, proposes, applies, and closes", async () => {
   const inst = await configure();
 
   // 1. Launch — current = A.
@@ -182,7 +208,7 @@ test('launches, proposes, applies, and closes', async () => {
 
 // ------------------------------------------------------------- attack paths
 
-test('rejects apply before next_apply', async () => {
+test("rejects apply before next_apply", async () => {
   const inst = await configure();
   await confirm(launchTx(inst, VALUE_A));
 
@@ -194,7 +220,7 @@ test('rejects apply before next_apply', async () => {
   await expect(applyTx(inst, VALUE_B, tip.slot)).rejects.toThrow();
 }, 60_000);
 
-test('rejects apply with no pending proposal', async () => {
+test("rejects apply with no pending proposal", async () => {
   const inst = await configure();
   await confirm(launchTx(inst, VALUE_A));
 
@@ -203,27 +229,31 @@ test('rejects apply with no pending proposal', async () => {
   await expect(applyTx(inst, VALUE_B, tip.slot)).rejects.toThrow();
 }, 60_000);
 
-test('rejects propose with same value as current', async () => {
+test("rejects propose with same value as current", async () => {
   const inst = await configure();
   await confirm(launchTx(inst, VALUE_A));
 
   // Proposing the current value is a no-op the validator forbids.
   const tip = await devnet.tip();
-  await expect(proposeTx(inst, VALUE_A, tip.timeMs, tip.slot)).rejects.toThrow();
+  await expect(
+    proposeTx(inst, VALUE_A, tip.timeMs, tip.slot),
+  ).rejects.toThrow();
 }, 60_000);
 
-test('rejects propose signed by a non-proposer credential', async () => {
-  const applier = devnet.wallet('applier');
+test("rejects propose signed by a non-proposer credential", async () => {
+  const applier = devnet.wallet("applier");
   const inst = await configure({ proposerParty: applier.party });
   await confirm(launchTx(inst, VALUE_A));
 
   // Script params bind propose auth to `proposer`; using `applier` to propose
   // must fail validator authorization.
   const tip = await devnet.tip();
-  await expect(proposeTx(inst, VALUE_B, tip.timeMs, tip.slot)).rejects.toThrow();
+  await expect(
+    proposeTx(inst, VALUE_B, tip.timeMs, tip.slot),
+  ).rejects.toThrow();
 }, 60_000);
 
-test('rejects apply with an invalid continuation output index', async () => {
+test("rejects apply with an invalid continuation output index", async () => {
   const inst = await configure();
   await confirm(launchTx(inst, VALUE_A));
 
@@ -238,7 +268,7 @@ test('rejects apply with an invalid continuation output index', async () => {
   await expect(applyTx(inst, VALUE_B, applyTip.slot, 1)).rejects.toThrow();
 }, 60_000);
 
-test('rejects close without burning the settings NFT', async () => {
+test("rejects close without burning the settings NFT", async () => {
   const inst = await configure();
   await confirm(launchTx(inst, VALUE_A));
 

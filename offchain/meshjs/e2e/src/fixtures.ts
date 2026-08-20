@@ -19,9 +19,7 @@ function fixture(rawCompiledCode: string) {
   return { cbor, hash: resolveScriptHash(cbor, "V3") };
 }
 
-export const ALWAYS_TRUE = fixture(
-  "5101010023259800a518a4d136564004ae69",
-);
+export const ALWAYS_TRUE = fixture("5101010023259800a518a4d136564004ae69");
 
 export const REJECT_WITHDRAW = fixture(
   "585301010029800aba2aba1aab9eaab9dab9a4888896600264653001300600198031803800cc0180092225980099b8748010c01cdd500144c928180498041baa0028a51401830060013003375400d149a26cac8009",
