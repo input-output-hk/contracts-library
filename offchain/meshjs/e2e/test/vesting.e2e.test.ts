@@ -211,7 +211,12 @@ describe.skipIf(!reachable)("linear vesting e2e (Yaci devnet)", () => {
     const tb = newTxBuilder(provider);
     for (const u of p.inputs) {
       tb.spendingPlutusScriptV3()
-        .txIn(u.input.txHash, u.input.outputIndex, u.output.amount, u.output.address)
+        .txIn(
+          u.input.txHash,
+          u.input.outputIndex,
+          u.output.amount,
+          u.output.address,
+        )
         .txInInlineDatumPresent()
         .txInRedeemerValue(claimRedeemer())
         .txInScript(vestingScript().code);
