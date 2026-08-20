@@ -6,3 +6,5 @@
 .opencode
 .agents
 .claude
+
+node_modules/
