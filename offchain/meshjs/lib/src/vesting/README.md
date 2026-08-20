@@ -3,7 +3,7 @@
 Transaction builders for the [linear vesting](../../../specs/vesting/linear-vesting.md) contract. This is the primary developer-facing API: you can lock and claim vested funds without reading the Aiken validator.
 
 - **Spec**: [`specs/vesting/linear-vesting.md`](../../../specs/vesting/linear-vesting.md)
-- **On-chain**: [`onchain/`](../../../onchain), pinned via `./blueprint.ts` (validator hash `fa1144f1…`, Aiken v1.1.21, Plutus V3).
+- **On-chain**: [`onchain/`](../../../onchain), pinned via `./blueprint.ts` (validator hash `fa1144f1…`, Aiken v1.1.22, Plutus V3).
 
 ## The model in one paragraph
 
