@@ -146,12 +146,44 @@
   notes: [
     - `settings_addr`: payment is `settings_hash`, staking is any
     - `settings_nft`: policy is `settings_hash`, token name is `settings_token_name`
-    - `settings_hash = hash(settings_validator(seed_utxo, propose_auth, apply_auth, apply_delay))`
+    - `settings_hash = hash(settings_validator(seed_utxo, propose_auth, apply_auth, apply_delay, settings_token_name))`
     - delay must have expired: `now >= timestamp`
   ],
 )
 
 #figure(apply_tx, caption: [Apply settings transaction]) <fig:apply>
+
+
+= Close settings
+
+#let close_tx = vanilla_transaction(
+  "",
+  inputs: (
+    (
+      name: "Settings UTxO",
+      address: "settings_addr",
+      value: (
+        "Settings NFT": "1",
+        // "ADA": "min_ada",
+      ),
+    ),
+  ),
+  mint: (
+    "Settings NFT": -1,
+  ),
+  withdrawals: (
+    "apply_auth",
+  ),
+  notes: [
+    - `settings_addr`: payment is `settings_hash`, staking is any
+    - `settings_nft`: policy is `settings_hash`, token name is `settings_token_name`
+    - `settings_hash = hash(settings_validator(seed_utxo, propose_auth, apply_auth, apply_delay, settings_token_name))`
+    - the `Settings NFT` must be burned (`quantity < 0`)
+    - the datum is not checked
+  ],
+)
+
+#figure(close_tx, caption: [Close settings transaction]) <fig:close>
 
 
 
