@@ -40,7 +40,7 @@
   notes: [
     - `settings_addr`: payment is `settings_hash`, staking is any
     - `settings_nft`: policy is `settings_hash`, token name is `settings_token_name`
-    - `settings_hash = hash(settings_validator(seed_utxo, propose_auth, apply_auth))`
+    - `settings_hash = hash(settings_validator(seed_utxo, propose_auth, apply_auth, apply_delay, settings_token_name))`
     - `data`: the settings data. it is such that `validate_datum(data)` is true
   ],
 )
@@ -69,9 +69,6 @@
       ),
     ),
   ),
-  mint: (
-    "Settings NFT": 1,
-  ),
   withdrawals: (
     "propose_auth",
   ),
@@ -95,7 +92,7 @@
   notes: [
     - `settings_addr`: payment is `settings_hash`, staking is any
     - `settings_nft`: policy is `settings_hash`, token name is `settings_token_name`
-    - `settings_hash = hash(settings_validator(seed_utxo, propose_auth, apply_auth, apply_delay))`
+    - `settings_hash = hash(settings_validator(seed_utxo, propose_auth, apply_auth, apply_delay, settings_token_name))`
     - `maybe_data`: can be `None` or `Some(data)`
     - `proposed`: the proposed settings data. it is such that `validate_datum(proposed)` is true
     - `timestamp = now + apply_delay`, where `apply_delay` is the minimum time that must pass before the proposed settings can be applied
@@ -125,9 +122,6 @@
         next_apply: [timestamp],
       ),
     ),
-  ),
-  mint: (
-    "Settings NFT": 1,
   ),
   withdrawals: (
     "apply_auth",
