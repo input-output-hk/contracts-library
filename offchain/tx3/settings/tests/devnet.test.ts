@@ -53,7 +53,7 @@ async function configure(options: ConfigureOptions = {}): Promise<Instance> {
   const seed = await devnet.seedUtxo("applier");
 
   const params: SettingsParams = {
-    seedUtxo: { transactionId: seed.txHash, outputIndex: seed.outputIndex },
+    seedUtxo: { txHash: seed.txHash, outputIndex: seed.outputIndex },
     proposeAuth: { kind: "key", hash: proposer.keyHash },
     applyAuth: { kind: "key", hash: applier.keyHash },
     applyDelay: APPLY_DELAY,
