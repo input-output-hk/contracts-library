@@ -36,6 +36,11 @@ import { fileURLToPath } from "node:url";
 import { ed25519 } from "@noble/curves/ed25519";
 import { blake2b } from "@noble/hashes/blake2b";
 import { bech32 } from "bech32";
+import {
+  cst,
+  MeshTxBuilder,
+  serializeRewardAddress,
+} from "@meshsdk/core";
 import { Ed25519Signer, Party, PollConfig } from "tx3-sdk";
 
 /** Poll config tuned for the devnet's 1s block interval. */
@@ -70,6 +75,7 @@ function shelleySlotConfig(): { zeroTimeMs: number; slotLengthMs: number } {
 
 /** Enterprise-address network id: 0 = testnet (`addr_test`), 1 = mainnet. */
 const NETWORK_ID: number = 0;
+const STAKE_REGISTRATION_FEE = 500_000n;
 
 export interface DevnetOptions {
   /**
@@ -78,6 +84,18 @@ export interface DevnetOptions {
    * which Plutus transactions require).
    */
   wallets: Record<string, bigint | number | Array<bigint | number>>;
+  /** Named Plutus V3 scripts seeded as reference-script UTxOs. */
+  referenceScripts?: Record<
+    string,
+    {
+      /** Wallet whose address receives the reference script UTxO. */
+      owner: string;
+      /** Raw single-CBOR Plutus V3 flat script bytes. */
+      scriptCode: string;
+      /** Lovelace locked with the reference script (default: 2 ADA). */
+      lovelace?: bigint | number;
+    }
+  >;
   /** Seconds between produced blocks (default 1). */
   blockIntervalSeconds?: number;
   /** Max seconds to wait for the node to start serving (default 60). */
@@ -194,6 +212,43 @@ function outputCbor(address: Uint8Array, coin: bigint): number[] {
   return out;
 }
 
+function cborByteString(bytes: number[]): number[] {
+  if (bytes.length < 24) return [0x40 + bytes.length, ...bytes];
+  if (bytes.length < 256) return [0x58, bytes.length, ...bytes];
+  if (bytes.length < 65536)
+    return [0x59, ...beBytes(BigInt(bytes.length), 2), ...bytes];
+  throw new Error(`CBOR byte string is too large: ${bytes.length} bytes`);
+}
+
+/**
+ * CBOR for a Conway output holding a Plutus V3 reference script.
+ *
+ * The reference script is ledger-encoded as tag 24 around the serialized
+ * `Script = [3, bytes(flat-script)]` value.
+ */
+function referenceScriptOutputCbor(
+  address: Uint8Array,
+  coin: bigint,
+  scriptCode: string,
+): number[] {
+  if (!/^(?:[0-9a-fA-F]{2})+$/.test(scriptCode)) {
+    throw new Error("reference script code must be non-empty hexadecimal");
+  }
+  const scriptBytes = [...Buffer.from(scriptCode, "hex")];
+  const serializedScript = [0x82, 0x03, ...cborByteString(scriptBytes)];
+  return [
+    0xa3,
+    0x00,
+    ...cborByteString([...address]),
+    0x01,
+    ...cborUint(coin),
+    0x03,
+    0xd8,
+    0x18,
+    ...cborByteString(serializedScript),
+  ];
+}
+
 /** Ask the OS for a free TCP port. */
 function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -228,6 +283,7 @@ export class TestDevnet {
     private readonly proc: ChildProcess,
     private readonly workdir: string,
     private readonly walletsByName: Map<string, DevnetWallet>,
+    private readonly referenceScriptsByName: Map<string, DevnetUtxo>,
     private readonly slotConfig: { zeroTimeMs: number; slotLengthMs: number },
   ) {}
 
@@ -245,6 +301,7 @@ export class TestDevnet {
 
     // Derive wallets and their funding UTxOs.
     const walletsByName = new Map<string, DevnetWallet>();
+    const referenceScriptsByName = new Map<string, DevnetUtxo>();
     const utxoBlocks: string[] = [];
     for (const [name, balanceSpec] of Object.entries(options.wallets)) {
       const privateKey = deriveKey(name);
@@ -265,6 +322,31 @@ export class TestDevnet {
         utxoBlocks.push(
           `[[chain.custom_utxos]]\nref = ["${txid}", ${index}]\nera = 7\ncbor = [${cbor.join(",")}]\n`,
         );
+      });
+    }
+
+    for (const [name, spec] of Object.entries(options.referenceScripts ?? {})) {
+      const owner = walletsByName.get(spec.owner);
+      if (!owner) {
+        throw new Error(
+          `reference script ${name} has unknown owner wallet ${spec.owner}`,
+        );
+      }
+      const txHash = toHex(deriveTxid(`reference-script:${name}`));
+      const outputIndex = 0;
+      const lovelace = BigInt(spec.lovelace ?? 2_000_000);
+      const address = new Uint8Array(
+        bech32.fromWords(bech32.decode(owner.address, 1023).words),
+      );
+      const cbor = referenceScriptOutputCbor(address, lovelace, spec.scriptCode);
+      utxoBlocks.push(
+        `[[chain.custom_utxos]]\nref = ["${txHash}", ${outputIndex}]\nera = 7\ncbor = [${cbor.join(",")}]\n`,
+      );
+      referenceScriptsByName.set(name, {
+        txHash,
+        outputIndex,
+        ref: `${txHash}#${outputIndex}`,
+        lovelace,
       });
     }
 
@@ -326,6 +408,7 @@ export class TestDevnet {
       proc,
       workdir,
       walletsByName,
+      referenceScriptsByName,
       slotConfig,
     );
 
@@ -370,6 +453,13 @@ export class TestDevnet {
     const w = this.walletsByName.get(name);
     if (!w) throw new Error(`unknown wallet: ${name}`);
     return w;
+  }
+
+  /** Look up a reference-script UTxO seeded when the devnet started. */
+  referenceScript(name: string): DevnetUtxo {
+    const script = this.referenceScriptsByName.get(name);
+    if (!script) throw new Error(`unknown reference script: ${name}`);
+    return script;
   }
 
   /** Total lovelace held at an address (0 if the address has no UTxOs). */
@@ -419,6 +509,82 @@ export class TestDevnet {
     const seed = utxos[0];
     if (!seed) throw new Error(`wallet ${name} has no UTxOs to use as a seed`);
     return seed;
+  }
+
+  /** Register a script stake credential so its withdraw-0 reward account exists. */
+  async registerScriptStakeCredential(
+    payerName: string,
+    scriptHash: string,
+  ): Promise<void> {
+    const payer = this.wallet(payerName);
+    const utxos = await this.utxosOf(payer.address);
+    const input = utxos[0];
+    if (!input) throw new Error(`wallet ${payerName} has no UTxO to fund registration`);
+    const change = input.lovelace - STAKE_REGISTRATION_FEE;
+    if (change < 1_000_000n) {
+      throw new Error(`wallet ${payerName} has insufficient funds for registration`);
+    }
+
+    const tx = new MeshTxBuilder()
+      .registerStakeCertificate(
+        serializeRewardAddress(scriptHash, true, NETWORK_ID as 0),
+      )
+      .txIn(
+        input.txHash,
+        input.outputIndex,
+        [{ unit: "lovelace", quantity: input.lovelace.toString() }],
+        payer.address,
+      )
+      .txOut(payer.address, [
+        { unit: "lovelace", quantity: change.toString() },
+      ])
+      .setFee(STAKE_REGISTRATION_FEE.toString())
+      .changeAddress(payer.address)
+      .selectUtxosFrom([
+        {
+          input: { txHash: input.txHash, outputIndex: input.outputIndex },
+          output: {
+            address: payer.address,
+            amount: [{ unit: "lovelace", quantity: input.lovelace.toString() }],
+          },
+        },
+      ])
+      .completeSync();
+    const parsed = cst.deserializeTx(tx);
+    const body = parsed.body().toCbor();
+    const signer = Ed25519Signer.fromHex(payer.address, payer.privateKeyHex);
+    const witness = await signer.sign({ txHashHex: parsed.getId(), txCborHex: body });
+    const submitted = await this.trpCall<{ hash: string }>("trp.submit", {
+      tx: { content: tx, contentType: "hex" },
+      witnesses: [witness],
+    });
+    await this.waitForConfirmed(submitted.hash);
+  }
+
+  private async waitForConfirmed(txHash: string): Promise<void> {
+    for (let attempt = 0; attempt < DEVNET_POLL.attempts; attempt++) {
+      const status = await this.trpCall<{
+        statuses: Record<string, { stage?: string }>;
+      }>("trp.checkStatus", { hashes: [txHash] });
+      const stage = status.statuses[txHash]?.stage;
+      if (stage === "confirmed" || stage === "finalized") return;
+      if (stage === "dropped") throw new Error(`transaction ${txHash} was dropped`);
+      await sleep(DEVNET_POLL.delayMs);
+    }
+    throw new Error(`transaction ${txHash} was not confirmed`);
+  }
+
+  private async trpCall<T>(method: string, params: unknown): Promise<T> {
+    const res = await fetch(this.trpUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+    });
+    if (!res.ok) throw new Error(`TRP ${method} failed: HTTP ${res.status}`);
+    const body = (await res.json()) as { error?: { message?: string }; result?: T };
+    if (body.error) throw new Error(`TRP ${method} failed: ${body.error.message}`);
+    if (body.result === undefined) throw new Error(`TRP ${method} returned no result`);
+    return body.result;
   }
 
   /**
