@@ -521,6 +521,55 @@ describe.skipIf(!reachable)("settings e2e (Yaci devnet)", () => {
       expect(proposedUtxo).toBeDefined();
     });
 
+    it("mints, proposes, applies, and closes a typed instance", async () => {
+      const ctx = await setupTyped();
+
+      const { proposedDatum, proposedUtxo } = await launchAndProposeSettings({
+        ctx,
+        newValue: VALUE_B,
+      });
+
+      await waitUntilChainTimeMs(proposedDatum.nextApply! + 2_000);
+      const applyNow = await chainNowMs();
+
+      const applyTx = await buildApplyTx({
+        txBuilder: newTxBuilder(provider),
+        script: ctx.script,
+        settingsUtxo: proposedUtxo,
+        datum: proposedDatum,
+        now: applyNow,
+        outputIndex: 0,
+        utxos: await ctx.applier.wallet.getUtxos(),
+        changeAddress: ctx.applier.address,
+        collateralUtxo: await collateralOf(ctx.applier),
+        applyAuth: { kind: "key", hash: ctx.applier.keyHash },
+        customSlotConfig: slotConfig,
+      });
+      const applyHash = await signAndSubmit(ctx.applier, applyTx);
+      await waitForTx(provider, applyHash);
+      const appliedUtxo = await scriptOutputOf(
+        provider,
+        applyHash,
+        ctx.scriptAddr,
+      );
+      expect(appliedUtxo).toBeDefined();
+
+      const closeTx = await buildCloseTx({
+        txBuilder: newTxBuilder(provider),
+        script: ctx.script,
+        settingsUtxo: appliedUtxo,
+        utxos: await ctx.applier.wallet.getUtxos(),
+        changeAddress: ctx.applier.address,
+        collateralUtxo: await collateralOf(ctx.applier),
+        applyAuth: { kind: "key", hash: ctx.applier.keyHash },
+      });
+      const closeHash = await signAndSubmit(ctx.applier, closeTx);
+      await waitForTx(provider, closeHash);
+
+      const outs = await provider.fetchUTxOs(closeHash);
+      expect(outs.some((u) => u.output.address === ctx.scriptAddr)).toBe(false);
+    });
+
     // ---- R7: invalid setting value ----------------------------------------
 
     it("rejects a typed launch whose current value is a bare int (not Constr(0,[_]))", async () => {
@@ -545,6 +594,28 @@ describe.skipIf(!reachable)("settings e2e (Yaci devnet)", () => {
       await expect(launchSettings(ctx, datum)).rejects.toThrow();
     });
 
+    it("rejects a typed launch whose current value is an empty constructor", async () => {
+      const ctx = await setupTyped();
+      const datum: SettingsDatum = {
+        current: mConStr0([]), // Constr(0, []) — right index, wrong arity
+        next: null,
+        nextApply: null,
+      };
+
+      await expect(launchSettings(ctx, datum)).rejects.toThrow();
+    });
+
+    it("rejects a typed launch whose current value is a multi-field constructor", async () => {
+      const ctx = await setupTyped();
+      const datum: SettingsDatum = {
+        current: mConStr0([1n, 2n]), // Constr(0, [1, 2]) — right index, wrong arity
+        next: null,
+        nextApply: null,
+      };
+
+      await expect(launchSettings(ctx, datum)).rejects.toThrow();
+    });
+
     it("rejects a typed propose whose new value is out of shape", async () => {
       const ctx = await setupTyped();
       const settingsUtxo = await launchSettings(ctx, initialDatum());
@@ -556,6 +627,75 @@ describe.skipIf(!reachable)("settings e2e (Yaci devnet)", () => {
           settingsUtxo,
           datum: initialDatum(),
           newValue: 1n, // not Constr(0, [_])
+          now: await chainNowMs(),
+          outputIndex: 0,
+          utxos: await ctx.proposer.wallet.getUtxos(),
+          changeAddress: ctx.proposer.address,
+          collateralUtxo: await collateralOf(ctx.proposer),
+          proposeAuth: { kind: "key", hash: ctx.proposer.keyHash },
+          applyDelay: ctx.applyDelay,
+          customSlotConfig: slotConfig,
+        }),
+      ).rejects.toThrow();
+    });
+
+    it("rejects a typed propose whose new value has the wrong constructor index", async () => {
+      const ctx = await setupTyped();
+      const settingsUtxo = await launchSettings(ctx, initialDatum());
+
+      await expect(
+        buildProposeTx({
+          txBuilder: newTxBuilder(provider),
+          script: ctx.script,
+          settingsUtxo,
+          datum: initialDatum(),
+          newValue: mConStr1([1n]), // Constr(1, [1]) — not Constr(0, [_])
+          now: await chainNowMs(),
+          outputIndex: 0,
+          utxos: await ctx.proposer.wallet.getUtxos(),
+          changeAddress: ctx.proposer.address,
+          collateralUtxo: await collateralOf(ctx.proposer),
+          proposeAuth: { kind: "key", hash: ctx.proposer.keyHash },
+          applyDelay: ctx.applyDelay,
+          customSlotConfig: slotConfig,
+        }),
+      ).rejects.toThrow();
+    });
+
+    it("rejects a typed propose whose new value is an empty constructor", async () => {
+      const ctx = await setupTyped();
+      const settingsUtxo = await launchSettings(ctx, initialDatum());
+
+      await expect(
+        buildProposeTx({
+          txBuilder: newTxBuilder(provider),
+          script: ctx.script,
+          settingsUtxo,
+          datum: initialDatum(),
+          newValue: mConStr0([]), // Constr(0, []) — right index, wrong arity
+          now: await chainNowMs(),
+          outputIndex: 0,
+          utxos: await ctx.proposer.wallet.getUtxos(),
+          changeAddress: ctx.proposer.address,
+          collateralUtxo: await collateralOf(ctx.proposer),
+          proposeAuth: { kind: "key", hash: ctx.proposer.keyHash },
+          applyDelay: ctx.applyDelay,
+          customSlotConfig: slotConfig,
+        }),
+      ).rejects.toThrow();
+    });
+
+    it("rejects a typed propose whose new value is a multi-field constructor", async () => {
+      const ctx = await setupTyped();
+      const settingsUtxo = await launchSettings(ctx, initialDatum());
+
+      await expect(
+        buildProposeTx({
+          txBuilder: newTxBuilder(provider),
+          script: ctx.script,
+          settingsUtxo,
+          datum: initialDatum(),
+          newValue: mConStr0([1n, 2n]), // Constr(0, [1, 2]) — right index, wrong arity
           now: await chainNowMs(),
           outputIndex: 0,
           utxos: await ctx.proposer.wallet.getUtxos(),
