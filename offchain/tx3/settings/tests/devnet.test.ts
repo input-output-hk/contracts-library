@@ -9,11 +9,21 @@ import {
 } from "@contracts-library/meshjs";
 import { Party } from "tx3-sdk";
 import { Client } from "../.tx3/codegen/ts-client/config-parameter-management/protocol"; // trix codegen ts-client
-import { resolveScriptHash, PlutusScript } from "@meshsdk/core";
+import {
+  applyCborEncoding,
+  resolveScriptHash,
+  PlutusScript,
+} from "@meshsdk/core";
 
 const APPLY_DELAY = 4_000;
-const VALUE_A = 1;
-const VALUE_B = 2;
+const VALUE_A = new Uint8Array([1]);
+const VALUE_B = new Uint8Array([2]);
+const ALWAYS_TRUE_SCRIPT = "5101010023259800a518a4d136564004ae69";
+const ALWAYS_TRUE_HASH = resolveScriptHash(
+  applyCborEncoding(ALWAYS_TRUE_SCRIPT),
+  plutusVersion,
+);
+const ALWAYS_TRUE_REWARD_ADDRESS = `f0${ALWAYS_TRUE_HASH}`;
 
 let devnet: TestDevnet;
 
@@ -26,6 +36,10 @@ beforeEach(async () => {
       // gas) and a separate one reserved as script collateral.
       proposer: [10_000_000_000n, 5_000_000n],
       applier: [5_000_000_000n, 5_000_000n],
+      authorizer: 5_000_000n,
+    },
+    referenceScripts: {
+      alwaysTrue: { owner: "authorizer", scriptCode: ALWAYS_TRUE_SCRIPT },
     },
   });
 }, 60_000);
@@ -36,7 +50,15 @@ interface Instance {
   scriptAddr: string;
   scriptHash: string;
   /** Runtime overrides for the stale values baked into the `local` profile. */
-  env: { settings_hash: string; settings_script: string; apply_delay: number };
+  env: {
+    settings_hash: string;
+    settings_script: string;
+    apply_delay: number;
+    proposer_script_ref: string;
+    proposer_script_address: string;
+    applier_script_ref: string;
+    applier_script_address: string;
+  };
   /** `txHash#index` of the applier UTxO consumed as the mint seed. */
   seedRef: string;
 }
@@ -44,18 +66,28 @@ interface Instance {
 interface ConfigureOptions {
   proposerParty?: Party;
   applierParty?: Party;
+  scriptAuthorized?: boolean;
 }
 
 /** Parameterize the settings script for this run and wire up a client. */
 async function configure(options: ConfigureOptions = {}): Promise<Instance> {
   const proposer = devnet.wallet("proposer");
   const applier = devnet.wallet("applier");
+  const authorizer = devnet.referenceScript("alwaysTrue");
+
+  if (options.scriptAuthorized) {
+    await devnet.registerScriptStakeCredential("applier", ALWAYS_TRUE_HASH);
+  }
   const seed = await devnet.seedUtxo("applier");
 
   const params: SettingsParams = {
     seedUtxo: { txHash: seed.txHash, outputIndex: seed.outputIndex },
-    proposeAuth: { kind: "key", hash: proposer.keyHash },
-    applyAuth: { kind: "key", hash: applier.keyHash },
+    proposeAuth: options.scriptAuthorized
+      ? { kind: "script", hash: ALWAYS_TRUE_HASH }
+      : { kind: "key", hash: proposer.keyHash },
+    applyAuth: options.scriptAuthorized
+      ? { kind: "script", hash: ALWAYS_TRUE_HASH }
+      : { kind: "key", hash: applier.keyHash },
     applyDelay: APPLY_DELAY,
     settingsTokenName: SETTINGS_TOKEN_NAME,
   };
@@ -79,6 +111,10 @@ async function configure(options: ConfigureOptions = {}): Promise<Instance> {
       // `applyParamsToScript` returns a double-CBOR wrapper, so strip one layer.
       settings_script: unwrapCborBytes(script.code),
       apply_delay: APPLY_DELAY,
+      proposer_script_ref: authorizer.ref,
+      proposer_script_address: ALWAYS_TRUE_REWARD_ADDRESS,
+      applier_script_ref: authorizer.ref,
+      applier_script_address: ALWAYS_TRUE_REWARD_ADDRESS,
     },
     seedRef: seed.ref,
   };
@@ -93,8 +129,17 @@ type CloseArgs = Parameters<Client["close"]>[0];
 type CloseWithoutBurnAttackArgs = Parameters<
   Client["closeWithoutBurnAttack"]
 >[0];
+type LaunchScriptAuthorizedArgs = Parameters<Client["launchScriptAuthorized"]>[0];
+type ProposeScriptAuthorizedArgs = Parameters<
+  Client["proposeScriptAuthorized"]
+>[0];
+type ApplyScriptAuthorizedArgs = Parameters<Client["applyScriptAuthorized"]>[0];
+type CloseScriptAuthorizedArgs = Parameters<Client["closeScriptAuthorized"]>[0];
+type CloseWithoutBurnAttackScriptAuthorizedArgs = Parameters<
+  Client["closeWithoutBurnAttackScriptAuthorized"]
+>[0];
 
-function launchTx(inst: Instance, value: number) {
+function launchTx(inst: Instance, value: Uint8Array) {
   return inst.client
     .launch({
       seed: inst.seedRef,
@@ -109,7 +154,7 @@ function launchTx(inst: Instance, value: number) {
 
 function proposeTx(
   inst: Instance,
-  newValue: number,
+  newValue: Uint8Array,
   nowMs: number,
   sinceSlot: number,
   outIx = 0,
@@ -129,7 +174,7 @@ function proposeTx(
 
 function applyTx(
   inst: Instance,
-  newCurrent: number,
+  newCurrent: Uint8Array,
   sinceSlot: number,
   outIx = 0,
 ) {
@@ -157,6 +202,75 @@ function closeTx(inst: Instance) {
 function closeWithoutBurnAttackTx(inst: Instance) {
   return inst.client
     .closeWithoutBurnAttack({} as unknown as CloseWithoutBurnAttackArgs)
+    .env(inst.env)
+    .resolve()
+    .then((r) => r.sign())
+    .then((s) => s.submit());
+}
+
+function launchScriptAuthorizedTx(inst: Instance, value: Uint8Array) {
+  return inst.client
+    .launchScriptAuthorized({
+      seed: inst.seedRef,
+      initial_value: value,
+      out_ix: 0,
+    } as unknown as LaunchScriptAuthorizedArgs)
+    .env(inst.env)
+    .resolve()
+    .then((r) => r.sign())
+    .then((s) => s.submit());
+}
+
+function proposeScriptAuthorizedTx(
+  inst: Instance,
+  newValue: Uint8Array,
+  nowMs: number,
+  sinceSlot: number,
+) {
+  return inst.client
+    .proposeScriptAuthorized({
+      new_value: newValue,
+      now_ms: nowMs,
+      since_slot: sinceSlot,
+      out_ix: 0,
+    } as unknown as ProposeScriptAuthorizedArgs)
+    .env(inst.env)
+    .resolve()
+    .then((r) => r.sign())
+    .then((s) => s.submit());
+}
+
+function applyScriptAuthorizedTx(
+  inst: Instance,
+  newCurrent: Uint8Array,
+  sinceSlot: number,
+) {
+  return inst.client
+    .applyScriptAuthorized({
+      new_current: newCurrent,
+      since_slot: sinceSlot,
+      out_ix: 0,
+    } as unknown as ApplyScriptAuthorizedArgs)
+    .env(inst.env)
+    .resolve()
+    .then((r) => r.sign())
+    .then((s) => s.submit());
+}
+
+function closeScriptAuthorizedTx(inst: Instance) {
+  return inst.client
+    .closeScriptAuthorized({} as CloseScriptAuthorizedArgs)
+    .env(inst.env)
+    .resolve()
+    .then((r) => r.sign())
+    .then((s) => s.submit());
+}
+
+function closeWithoutBurnAttackScriptAuthorizedTx(inst: Instance) {
+  return inst.client
+    .closeWithoutBurnAttackScriptAuthorized(
+      {} as CloseWithoutBurnAttackScriptAuthorizedArgs,
+    )
     .env(inst.env)
     .resolve()
     .then((r) => r.sign())
@@ -203,6 +317,33 @@ test("launches, proposes, applies, and closes", async () => {
 
   // 4. Close — burn the NFT and tear the instance down.
   await confirm(closeTx(inst));
+  expect(await settingsUtxoExists(inst)).toBe(false);
+}, 120_000);
+
+// Tx3 currently emits a withdrawal redeemer without its zero-amount withdrawal,
+// so Dolos rejects every script-authorized transaction before phase two.
+test("runs the script-authorized lifecycle", async () => {
+  const inst = await configure({ scriptAuthorized: true });
+
+  await confirm(launchScriptAuthorizedTx(inst, VALUE_A));
+  expect(await settingsUtxoExists(inst)).toBe(true);
+
+  const proposeTip = await devnet.tip();
+  await confirm(
+    proposeScriptAuthorizedTx(
+      inst,
+      VALUE_B,
+      proposeTip.timeMs,
+      proposeTip.slot,
+    ),
+  );
+
+  await devnet.waitForChainTimeMs(proposeTip.timeMs + APPLY_DELAY + 2_000);
+  const applyTip = await devnet.tip();
+  await confirm(applyScriptAuthorizedTx(inst, VALUE_B, applyTip.slot));
+  expect(await settingsUtxoExists(inst)).toBe(true);
+
+  await confirm(closeScriptAuthorizedTx(inst));
   expect(await settingsUtxoExists(inst)).toBe(false);
 }, 120_000);
 
@@ -273,4 +414,11 @@ test("rejects close without burning the settings NFT", async () => {
   await confirm(launchTx(inst, VALUE_A));
 
   await expect(closeWithoutBurnAttackTx(inst)).rejects.toThrow();
+}, 60_000);
+
+test("rejects script-authorized close without burning the settings NFT", async () => {
+  const inst = await configure({ scriptAuthorized: true });
+  await confirm(launchScriptAuthorizedTx(inst, VALUE_A));
+
+  await expect(closeWithoutBurnAttackScriptAuthorizedTx(inst)).rejects.toThrow();
 }, 60_000);
