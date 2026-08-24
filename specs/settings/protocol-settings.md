@@ -266,6 +266,9 @@ input/output counts, so it composes freely (`ARCHITECTURE.md` §1.1).
   proposer.
 - **Closing is irreversible.** After `Close`, no instance can be relaunched at
   this script hash (seed spent, NFT burned).
+- **The staking credential is frozen at launch.** The launch output may pick any
+  staking part (§4.1), but every continuation must reproduce the spent input's
+  full address. Moving the instance to a new staking key requires a fresh deployment under a new script hash.
 - **Consumers are off-chain (or other validators).** The settings validator
   provides no read endpoint; consumers check `current` from the UTxO's datum,
   typically via a reference input (`settings/utils.get_settings_datum`).
