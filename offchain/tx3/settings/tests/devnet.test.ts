@@ -1,5 +1,11 @@
-import { afterEach, beforeEach, expect, test } from "vitest";
-import { TestDevnet, DEVNET_POLL, unwrapCborBytes } from "../../devnet/utils";
+import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
+import {
+  TrixDevnet,
+  DEVNET_POLL,
+  unwrapCborBytes,
+  type DevnetUtxo,
+  type DevnetWallet,
+} from "../../devnet/utils";
 import {
   type SettingsParams,
   plutusVersion,
@@ -8,14 +14,24 @@ import {
   SETTINGS_TOKEN_NAME,
 } from "@contracts-library/meshjs";
 import { Party } from "tx3-sdk";
-import { Client } from "../.tx3/codegen/ts-client/config-parameter-management/protocol"; // trix codegen ts-client
+import { Client } from "../codegen/ts-client/config-parameter-management/protocol"; // trix codegen ts-client
 import {
   applyCborEncoding,
   resolveScriptHash,
   PlutusScript,
 } from "@meshsdk/core";
 
-const APPLY_DELAY = 4_000;
+const ADA = 1_000_000n;
+// Must comfortably exceed ONE block interval (trix devnets mint every ~5s):
+// an attack tx submitted early only reaches phase-2 in the NEXT block, and
+// if the delay elapsed during mempool wait the validator rightly accepts it.
+const APPLY_DELAY = 12_000;
+// Per-test funding mirrors the old genesis layout: a large seed plus a
+// separate reserved collateral UTxO per signer.
+const PROPOSER_SEED = 10_000n * ADA;
+const APPLIER_SEED = 5_000n * ADA;
+const REGISTRAR_SEED = 10_000n * ADA;
+const COLLATERAL = 5n * ADA;
 const VALUE_A = new Uint8Array([1]);
 const VALUE_B = new Uint8Array([2]);
 const ALWAYS_TRUE_SCRIPT = "5101010023259800a518a4d136564004ae69";
@@ -23,27 +39,44 @@ const ALWAYS_TRUE_HASH = resolveScriptHash(
   applyCborEncoding(ALWAYS_TRUE_SCRIPT),
   plutusVersion,
 );
+// Script stake address BYTES for the always-true credential (network 0):
+// CIP-19 header 0xf0 (script-cred reward account, testnet) + key hash.
 const ALWAYS_TRUE_REWARD_ADDRESS = `f0${ALWAYS_TRUE_HASH}`;
 
-let devnet: TestDevnet;
+let devnet: TrixDevnet;
+let authorizerRef: DevnetUtxo;
+let proposer!: DevnetWallet;
+let applier!: DevnetWallet;
 
-// A fresh devnet per test: minting/burning the settings NFT mutates chain state,
-// so isolation keeps each scenario deterministic.
-beforeEach(async () => {
-  devnet = await TestDevnet.start({
-    wallets: {
-      // Each signer needs two UTxOs: one to fund the transaction (mint seed /
-      // gas) and a separate one reserved as script collateral.
-      proposer: [10_000_000_000n, 5_000_000n],
-      applier: [5_000_000_000n, 5_000_000n],
-      authorizer: 5_000_000n,
-    },
-    referenceScripts: {
-      alwaysTrue: { owner: "authorizer", scriptCode: ALWAYS_TRUE_SCRIPT },
-    },
+// One ephemeral devnet for the whole suite (trix owns the node lifecycle).
+// Chain state persists between tests, so every test funds its OWN wallets —
+// unique random keys make instances independent regardless of test order.
+beforeAll(async () => {
+  devnet = await TrixDevnet.start();
+
+  const registrar = devnet.wallet("bootstrap/registrar");
+  await devnet.payTo(registrar.address, REGISTRAR_SEED);
+  await devnet.payTo(registrar.address, COLLATERAL);
+  authorizerRef = await devnet.deployReferenceScript({
+    publisherAddress: registrar.address,
+    scriptCode: ALWAYS_TRUE_SCRIPT,
+    lovelace: 2n * ADA,
   });
-}, 60_000);
-afterEach(() => devnet.stop());
+  // Stake registration is global chain state: once is enough for every
+  // script-authorized test below.
+  await devnet.registerScriptStakeCredential(registrar, ALWAYS_TRUE_HASH);
+}, 180_000);
+
+afterAll(() => devnet.stop());
+
+beforeEach(async () => {
+  proposer = devnet.wallet("proposer");
+  applier = devnet.wallet("applier");
+  await devnet.payTo(proposer.address, PROPOSER_SEED);
+  await devnet.payTo(proposer.address, COLLATERAL);
+  await devnet.payTo(applier.address, APPLIER_SEED);
+  await devnet.payTo(applier.address, COLLATERAL);
+}, 120_000);
 
 interface Instance {
   client: Client;
@@ -71,14 +104,7 @@ interface ConfigureOptions {
 
 /** Parameterize the settings script for this run and wire up a client. */
 async function configure(options: ConfigureOptions = {}): Promise<Instance> {
-  const proposer = devnet.wallet("proposer");
-  const applier = devnet.wallet("applier");
-  const authorizer = devnet.referenceScript("alwaysTrue");
-
-  if (options.scriptAuthorized) {
-    await devnet.registerScriptStakeCredential("applier", ALWAYS_TRUE_HASH);
-  }
-  const seed = await devnet.seedUtxo("applier");
+  const seed = await devnet.seedUtxo(applier);
 
   const params: SettingsParams = {
     seedUtxo: { txHash: seed.txHash, outputIndex: seed.outputIndex },
@@ -111,9 +137,9 @@ async function configure(options: ConfigureOptions = {}): Promise<Instance> {
       // `applyParamsToScript` returns a double-CBOR wrapper, so strip one layer.
       settings_script: unwrapCborBytes(script.code),
       apply_delay: APPLY_DELAY,
-      proposer_script_ref: authorizer.ref,
+      proposer_script_ref: authorizerRef.ref,
       proposer_script_address: ALWAYS_TRUE_REWARD_ADDRESS,
-      applier_script_ref: authorizer.ref,
+      applier_script_ref: authorizerRef.ref,
       applier_script_address: ALWAYS_TRUE_REWARD_ADDRESS,
     },
     seedRef: seed.ref,
@@ -129,7 +155,9 @@ type CloseArgs = Parameters<Client["close"]>[0];
 type CloseWithoutBurnAttackArgs = Parameters<
   Client["closeWithoutBurnAttack"]
 >[0];
-type LaunchScriptAuthorizedArgs = Parameters<Client["launchScriptAuthorized"]>[0];
+type LaunchScriptAuthorizedArgs = Parameters<
+  Client["launchScriptAuthorized"]
+>[0];
 type ProposeScriptAuthorizedArgs = Parameters<
   Client["proposeScriptAuthorized"]
 >[0];
@@ -287,6 +315,27 @@ async function settingsUtxoExists(inst: Instance): Promise<boolean> {
   return (await devnet.utxosOf(inst.scriptAddr)).length > 0;
 }
 
+/**
+ * A rejected attack must fail for the RIGHT reason (ledger phase-2 script /
+ * validity failure surfaced through TRP) and must leave the settings instance
+ * untouched — a generic throw would also catch unrelated build-time failures
+ * and prove nothing about the validator.
+ */
+async function expectAttackRejected(
+  attack: Promise<unknown>,
+  inst: Instance,
+): Promise<void> {
+  let message = "";
+  await expect(
+    attack.catch((err: unknown) => {
+      message = err instanceof Error ? err.message : String(err);
+      throw err;
+    }),
+  ).rejects.toThrow();
+  expect(message).toMatch(/script returned failure|-32003|invalid|evaluat/i);
+  expect(await settingsUtxoExists(inst)).toBe(true);
+}
+
 // ------------------------------------------------------------- happy paths
 
 test("launches a settings instance", async () => {
@@ -295,7 +344,7 @@ test("launches a settings instance", async () => {
   await confirm(launchTx(inst, VALUE_A));
 
   expect(await settingsUtxoExists(inst)).toBe(true);
-}, 60_000);
+}, 120_000);
 
 test("launches, proposes, applies, and closes", async () => {
   const inst = await configure();
@@ -310,7 +359,7 @@ test("launches, proposes, applies, and closes", async () => {
   const nextApplyMs = proposeTip.timeMs + APPLY_DELAY;
 
   // 3. Wait for the proposal to mature, then apply — current = B.
-  await devnet.waitForChainTimeMs(nextApplyMs + 2_000);
+  await devnet.waitForChainTimeMs(nextApplyMs + 3_000);
   const applyTip = await devnet.tip();
   await confirm(applyTx(inst, VALUE_B, applyTip.slot));
   expect(await settingsUtxoExists(inst)).toBe(true);
@@ -318,10 +367,10 @@ test("launches, proposes, applies, and closes", async () => {
   // 4. Close — burn the NFT and tear the instance down.
   await confirm(closeTx(inst));
   expect(await settingsUtxoExists(inst)).toBe(false);
-}, 120_000);
+}, 240_000);
 
-// Tx3 currently emits a withdrawal redeemer without its zero-amount withdrawal,
-// so Dolos rejects every script-authorized transaction before phase two.
+// The script-authorized variants authorize through a withdraw-0 keyed by the
+// always-true reference script deployed in beforeAll.
 test("runs the script-authorized lifecycle", async () => {
   const inst = await configure({ scriptAuthorized: true });
 
@@ -338,14 +387,14 @@ test("runs the script-authorized lifecycle", async () => {
     ),
   );
 
-  await devnet.waitForChainTimeMs(proposeTip.timeMs + APPLY_DELAY + 2_000);
+  await devnet.waitForChainTimeMs(proposeTip.timeMs + APPLY_DELAY + 3_000);
   const applyTip = await devnet.tip();
   await confirm(applyScriptAuthorizedTx(inst, VALUE_B, applyTip.slot));
   expect(await settingsUtxoExists(inst)).toBe(true);
 
   await confirm(closeScriptAuthorizedTx(inst));
   expect(await settingsUtxoExists(inst)).toBe(false);
-}, 120_000);
+}, 240_000);
 
 // ------------------------------------------------------------- attack paths
 
@@ -358,8 +407,8 @@ test("rejects apply before next_apply", async () => {
 
   // Apply immediately, without waiting for the delay to elapse.
   const tip = await devnet.tip();
-  await expect(applyTx(inst, VALUE_B, tip.slot)).rejects.toThrow();
-}, 60_000);
+  await expectAttackRejected(applyTx(inst, VALUE_B, tip.slot), inst);
+}, 120_000);
 
 test("rejects apply with no pending proposal", async () => {
   const inst = await configure();
@@ -367,8 +416,8 @@ test("rejects apply with no pending proposal", async () => {
 
   // Nothing was proposed, so there is no pending value to apply.
   const tip = await devnet.tip();
-  await expect(applyTx(inst, VALUE_B, tip.slot)).rejects.toThrow();
-}, 60_000);
+  await expectAttackRejected(applyTx(inst, VALUE_B, tip.slot), inst);
+}, 120_000);
 
 test("rejects propose with same value as current", async () => {
   const inst = await configure();
@@ -376,23 +425,24 @@ test("rejects propose with same value as current", async () => {
 
   // Proposing the current value is a no-op the validator forbids.
   const tip = await devnet.tip();
-  await expect(
+  await expectAttackRejected(
     proposeTx(inst, VALUE_A, tip.timeMs, tip.slot),
-  ).rejects.toThrow();
-}, 60_000);
+    inst,
+  );
+}, 120_000);
 
 test("rejects propose signed by a non-proposer credential", async () => {
-  const applier = devnet.wallet("applier");
   const inst = await configure({ proposerParty: applier.party });
   await confirm(launchTx(inst, VALUE_A));
 
   // Script params bind propose auth to `proposer`; using `applier` to propose
   // must fail validator authorization.
   const tip = await devnet.tip();
-  await expect(
+  await expectAttackRejected(
     proposeTx(inst, VALUE_B, tip.timeMs, tip.slot),
-  ).rejects.toThrow();
-}, 60_000);
+    inst,
+  );
+}, 120_000);
 
 test("rejects apply with an invalid continuation output index", async () => {
   const inst = await configure();
@@ -402,23 +452,26 @@ test("rejects apply with an invalid continuation output index", async () => {
   await confirm(proposeTx(inst, VALUE_B, proposeTip.timeMs, proposeTip.slot));
   const nextApplyMs = proposeTip.timeMs + APPLY_DELAY;
 
-  await devnet.waitForChainTimeMs(nextApplyMs + 2_000);
+  await devnet.waitForChainTimeMs(nextApplyMs + 3_000);
   const applyTip = await devnet.tip();
 
   // `out_ix=1` points away from the continuation output in this tx layout.
-  await expect(applyTx(inst, VALUE_B, applyTip.slot, 1)).rejects.toThrow();
-}, 60_000);
+  await expectAttackRejected(applyTx(inst, VALUE_B, applyTip.slot, 1), inst);
+}, 120_000);
 
 test("rejects close without burning the settings NFT", async () => {
   const inst = await configure();
   await confirm(launchTx(inst, VALUE_A));
 
-  await expect(closeWithoutBurnAttackTx(inst)).rejects.toThrow();
-}, 60_000);
+  await expectAttackRejected(closeWithoutBurnAttackTx(inst), inst);
+}, 120_000);
 
 test("rejects script-authorized close without burning the settings NFT", async () => {
   const inst = await configure({ scriptAuthorized: true });
   await confirm(launchScriptAuthorizedTx(inst, VALUE_A));
 
-  await expect(closeWithoutBurnAttackScriptAuthorizedTx(inst)).rejects.toThrow();
-}, 60_000);
+  await expectAttackRejected(
+    closeWithoutBurnAttackScriptAuthorizedTx(inst),
+    inst,
+  );
+}, 120_000);
