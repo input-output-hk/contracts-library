@@ -23,6 +23,7 @@ import {
 import {
   mConStr0,
   mConStr1,
+  resolveScriptHash,
   type Data,
   type SlotConfig,
   type UTxO,
@@ -187,6 +188,21 @@ describe.skipIf(!reachable)("settings e2e (Yaci devnet)", () => {
     };
   }
 
+  /** Assert a settings UTxO sits at the script address and holds the NFT. */
+  function assertSettingsUtxo(
+    utxo: UTxO,
+    ctx: Awaited<ReturnType<typeof setup>>,
+  ): void {
+    expect(utxo.output.address).toBe(ctx.scriptAddr);
+
+    const policyId = resolveScriptHash(ctx.script.code, ctx.script.version);
+    const nft = utxo.output.amount.find(
+      (a) => a.unit === policyId + SETTINGS_TOKEN_NAME,
+    );
+    expect(nft).toBeDefined();
+    expect(nft?.quantity).toBe("1");
+  }
+
   async function launchAndProposeSettings(p: {
     ctx: Awaited<ReturnType<typeof setup>>;
     datum?: SettingsDatum;
@@ -301,6 +317,7 @@ describe.skipIf(!reachable)("settings e2e (Yaci devnet)", () => {
     const ctx = await setup();
     const settingsUtxo = await launchSettings(ctx, initialDatum());
     expect(settingsUtxo).toBeDefined();
+    assertSettingsUtxo(settingsUtxo, ctx);
   });
 
   it("mints, proposes, applies, and closes", async () => {
@@ -510,6 +527,7 @@ describe.skipIf(!reachable)("settings e2e (Yaci devnet)", () => {
       const ctx = await setupTyped();
       const settingsUtxo = await launchSettings(ctx, initialDatum());
       expect(settingsUtxo).toBeDefined();
+      assertSettingsUtxo(settingsUtxo, ctx);
     });
 
     it("proposes an in-shape value on a typed instance", async () => {
@@ -722,6 +740,7 @@ describe.skipIf(!reachable)("settings e2e (Yaci devnet)", () => {
         nextApply: null,
       });
       expect(settingsUtxo).toBeDefined();
+      assertSettingsUtxo(settingsUtxo, ctx);
     });
   });
 });
