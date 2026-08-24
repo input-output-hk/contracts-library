@@ -36,21 +36,23 @@ vitest by the harness in [`devnet/utils.ts`](devnet/utils.ts).
   ```
 
 - **dolos ≥ 1.4.0**: older versions inject Plutus `POSIXTime` in *seconds*
-  during mempool validation, so time-dependent spend validators fail with an
-  opaque `-32003 tx script returned failure`. As of this writing `tx3up` may
-  still install dolos 1.3.2 — check `dolos --version` and replace
+  during mempool validation, so time-dependent spend validators fail. As of this
+  writing `tx3up` may still install dolos 1.3.2 — check `dolos --version` and replace
   `~/.tx3/stable/bin/dolos` with a newer release if needed.
 
 ## Running the tests
 
-> **Before the tests:** generate the TypeScript client (gitignored). From the
-> protocol directory where `trix.toml` lives:
+**Before the tests:** generate the TypeScript client (gitignored) from the
+protocol directory where `trix.toml` lives:
 
 ```bash
-cd offchain/tx3/settings
+cd offchain/tx3/<protocol-name>
 trix codegen --plugin ts-client
+```
 
-cd ..
+Then run the suite (from `offchain/tx3`):
+
+```bash
 npm run test:devnet      # or: npx vitest run settings/tests/devnet.test.ts
 ```
 
