@@ -1,5 +1,9 @@
 {
   "type": "module",
+  "scripts": {
+    "test:devnet": "vitest run settings/tests/devnet.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
   "dependencies": {
     "@contracts-library/meshjs": "file:../meshjs/lib",
     "@meshsdk/core": "^1.9.1",

@@ -697,3 +697,60 @@ tx close_without_burn_attack_script_authorized() {
         script: settings_script,
     }
 }
+
+// ============================================================
+// TEST KIT — devnet infrastructure only.
+//
+// Consumed exclusively by `tests/devnet.test.ts` to bootstrap a
+// fresh trix devnet: the faucet pays wallets, and the authorizer
+// fixture script is published as a reference-script UTxO.
+//
+// Never used by production builders. Safe to delete wholesale.
+// ============================================================
+
+/// Funds every devnet wallet. Bound in tests to a fixed throwaway
+/// keypair whose address is committed in `devnet.toml`.
+party Faucet;
+
+/// Pay `quantity` lovelace from the faucet to any runtime address,
+/// returning change to the faucet. Called sequentially: while the
+/// chain is live the faucet holds exactly one spendable UTxO.
+tx devnet_pay(destination: Address, quantity: Int) {
+    input source {
+        from: Faucet,
+        min_amount: Ada(quantity) + fees,
+    }
+
+    output {
+        to: destination,
+        amount: Ada(quantity),
+    }
+
+    output {
+        to: Faucet,
+        amount: source - Ada(quantity) - fees,
+    }
+}
+
+/// Publish the always-true authorizer fixture as a reference
+/// script (Plutus V3) held by the publisher party.
+party Publisher;
+
+tx devnet_deploy_authorizer(script_code: Bytes, lovelace: Int) {
+    input gas {
+        from: Faucet,
+        min_amount: Ada(lovelace) + fees,
+    }
+
+    cardano::publish {
+        to: Publisher,
+        amount: Ada(lovelace),
+        version: 3,
+        script: script_code,
+    }
+
+    output {
+        to: Faucet,
+        amount: gas - Ada(lovelace) - fees,
+    }
+}

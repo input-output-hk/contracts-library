@@ -1,113 +1,106 @@
 /**
- * Test harness for driving an ephemeral Cardano devnet from vitest, mirroring
- * what `trix test <file>.toml` does but letting the test body drive the protocol
- * through the generated tx3 TypeScript client instead of a declarative TOML.
+ * Test harness for driving an ephemeral Cardano devnet from vitest through
+ * the official tx3 toolchain.
  *
- * `TestDevnet.start(...)` boots a throwaway {@link https://github.com/txpipe/dolos | Dolos}
- * node (the same engine `trix devnet` uses) in a temp directory:
- *   - genesis comes from the committed static template in `devnet/genesis`,
- *   - each requested wallet is funded with one or more UTxOs (`custom_utxos`),
- *   - the node serves TRP (for the SDK), minibf (for balance queries) and gRPC.
+ * {@linkcode TrixDevnet.start} wipes the protocol's `.tx3` state directory,
+ * boots `trix devnet` as a foreground child process (so teardown kills the
+ * exact process tree we spawned — no port hunting), waits for a healthcheck
+ * against the endpoints trix generates, and returns handles for funding
+ * wallets and deploying fixture scripts through real transactions.
  *
- * The wallets are plain Ed25519 enterprise-address keys owned by the harness, so
- * the SDK can sign for them directly via {@link Party.signer}. Each devnet gets
- * its own fresh in-memory chain and its own free ports, so test files never
- * pollute each other.
+ * Wallets are plain Ed25519 enterprise-address keys created fresh per call;
+ * the SDK signs for them directly via {@link Party.signer}. Genesis funding
+ * comes solely from the committed `settings/devnet.toml`, which funds the
+ * fixed throwaway keypair in [`./faucet.ts`](./faucet.ts).
  *
- * Requires the `dolos` binary on `PATH`, at `DOLOS_BIN`, or under the tx3
- * toolchain (`~/.tx3/<channel>/bin/dolos`, installed by `tx3up`).
+ * Requires the tx3 toolchain (`trix`, and the dolos it spawns) on PATH, or
+ * point `TRIX_BIN` at a specific binary.
  */
 
 import { spawn, type ChildProcess } from "node:child_process";
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import net from "node:net";
-import os from "node:os";
+import { existsSync, readFileSync, rmSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { ed25519 } from "@noble/curves/ed25519";
 import { blake2b } from "@noble/hashes/blake2b";
 import { bech32 } from "bech32";
-import {
-  cst,
-  MeshTxBuilder,
-  serializeRewardAddress,
-} from "@meshsdk/core";
+import { cst, MeshTxBuilder, serializeRewardAddress } from "@meshsdk/core";
 import { Ed25519Signer, Party, PollConfig } from "tx3-sdk";
 
-/** Poll config tuned for the devnet's 1s block interval. */
+import { FAUCET } from "./faucet";
+import { Client } from "../settings/codegen/ts-client/config-parameter-management/protocol"; // trix codegen ts-client
+
+/** Poll config tuned for the devnet's block interval. */
 export const DEVNET_POLL = new PollConfig(60, 1000);
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const GENESIS_DIR = join(HERE, "genesis");
-const GENESIS_FILES = [
-  "byron.json",
-  "shelley.json",
-  "alonzo.json",
-  "conway.json",
-] as const;
+/** Directory holding `trix.toml` + `devnet.toml`; also where trix writes state. */
+const PROTOCOL_ROOT = join(HERE, "..", "settings");
+/** Trix-generated state (generated genesis, `dolos/dolos.toml`, codegen). */
+const STATE_DIR = join(PROTOCOL_ROOT, ".tx3");
+const BOOT_TIMEOUT_MS = 120_000;
+
+const TRIX_BIN = process.env.TRIX_BIN ?? "trix";
 
 /**
- * Read the Shelley genesis to build the ledger's linear slot->time mapping:
- * `time(slot) = systemStart + slot * slotLength`. Devnets start at slot 0, so
- * `zeroTime` is simply the system start.
+ * Env values for TEST KIT transactions.
+ *
+ * All templates of a protocol share one env block, and the kit templates
+ * (`devnet_pay`, `devnet_deploy_authorizer`) reference none of the settings
+ * values — these structurally-valid dummies simply satisfy resolvers that
+ * require the declared env to be present.
+ */
+const KIT_ENV = {
+  settings_hash: "00",
+  settings_script: "00",
+  apply_delay: 0,
+  proposer_script_ref: "00#0",
+  proposer_script_address: "00",
+  applier_script_ref: "00#0",
+  applier_script_address: "00",
+};
+
+/**
+ * Read the Shelley genesis trix generated for this boot to build the ledger's
+ * linear slot->time mapping: `time(slot) = systemStart + slot * slotLength`.
  */
 function shelleySlotConfig(): { zeroTimeMs: number; slotLengthMs: number } {
   const genesis = JSON.parse(
-    readFileSync(join(GENESIS_DIR, "shelley.json"), "utf8"),
+    readFileSync(join(STATE_DIR, "dolos", "shelley.json"), "utf8"),
   ) as {
     systemStart?: string;
     slotLength?: number;
   };
   const zeroTimeMs = Date.parse(genesis.systemStart ?? "");
   if (Number.isNaN(zeroTimeMs))
-    throw new Error("shelley genesis has no valid systemStart");
+    throw new Error("generated shelley genesis has no valid systemStart");
   return { zeroTimeMs, slotLengthMs: (genesis.slotLength ?? 1) * 1000 };
+}
+
+const toHex = (bytes: Uint8Array): string => Buffer.from(bytes).toString("hex");
+
+/**
+ * Strip a single CBOR byte-string wrapper from a hex-encoded script.
+ * Some tooling emits a double-CBOR ("cbor") wrapper; the on-chain witness
+ * often needs the inner single-CBOR flat script.
+ */
+export function unwrapCborBytes(hex: string): string {
+  const tag = Number.parseInt(hex.slice(0, 2), 16);
+  const headerHexLen =
+    tag === 0x58 ? 4 : tag === 0x59 ? 6 : tag === 0x5a ? 10 : 0;
+  return hex.slice(headerHexLen);
 }
 
 /** Enterprise-address network id: 0 = testnet (`addr_test`), 1 = mainnet. */
 const NETWORK_ID: number = 0;
 const STAKE_REGISTRATION_FEE = 500_000n;
 
-export interface DevnetOptions {
-  /**
-   * Wallet name -> starting balance in lovelace. Pass an array to fund the
-   * wallet with several UTxOs (e.g. a seed plus a separate collateral UTxO,
-   * which Plutus transactions require).
-   */
-  wallets: Record<string, bigint | number | Array<bigint | number>>;
-  /** Named Plutus V3 scripts seeded as reference-script UTxOs. */
-  referenceScripts?: Record<
-    string,
-    {
-      /** Wallet whose address receives the reference script UTxO. */
-      owner: string;
-      /** Raw single-CBOR Plutus V3 flat script bytes. */
-      scriptCode: string;
-      /** Lovelace locked with the reference script (default: 2 ADA). */
-      lovelace?: bigint | number;
-    }
-  >;
-  /** Seconds between produced blocks (default 1). */
-  blockIntervalSeconds?: number;
-  /** Max seconds to wait for the node to start serving (default 60). */
-  startupTimeoutSeconds?: number;
-  /** Stream the dolos node logs to stderr (default false, or when `DEBUG_DOLOS` is set). */
-  logs?: boolean;
-}
-
 export interface DevnetWallet {
-  /** Wallet name, as passed to {@link TestDevnet.start}. */
+  /** Free-form label; wallets are NOT cached or deduplicated by name. */
   readonly name: string;
-  /** Bech32 enterprise address funded on the devnet. */
+  /** Bech32 enterprise address, ready to receive funds via {@link TrixDevnet.payTo}. */
   readonly address: string;
   /** Hex-encoded Blake2b-224 hash of the wallet's public key (payment credential). */
   readonly keyHash: string;
@@ -139,250 +132,51 @@ export interface ChainTip {
   readonly height: number;
 }
 
-const toHex = (bytes: Uint8Array): string => Buffer.from(bytes).toString("hex");
-
-/**
- * Strip a single CBOR byte-string wrapper from a hex-encoded script.
- * Some tooling emits a double-CBOR ("cbor") wrapper; the on-chain witness
- * often needs the inner single-CBOR flat script.
- */
-export function unwrapCborBytes(hex: string): string {
-  const tag = Number.parseInt(hex.slice(0, 2), 16);
-  const headerHexLen =
-    tag === 0x58 ? 4 : tag === 0x59 ? 6 : tag === 0x5a ? 10 : 0;
-  return hex.slice(headerHexLen);
-}
-
-/** Deterministic 32-byte Ed25519 key from a wallet name (stable across runs). */
-function deriveKey(name: string): Uint8Array {
-  return blake2b(new TextEncoder().encode(`tx3-test-devnet:${name}`), {
-    dkLen: 32,
-  });
-}
-
-/** Deterministic 32-byte funding-UTxO txid for a wallet (stable across runs). */
-function deriveTxid(name: string): Uint8Array {
-  return blake2b(new TextEncoder().encode(`tx3-test-devnet:utxo:${name}`), {
-    dkLen: 32,
-  });
-}
-
-/** Enterprise address (bytes + bech32 + key hash) for an Ed25519 public key. */
-function enterpriseAddress(publicKey: Uint8Array): {
-  bytes: Uint8Array;
-  bech32: string;
-  keyHash: string;
-} {
-  const keyHash = blake2b(publicKey, { dkLen: 28 });
-  const bytes = new Uint8Array(29);
-  bytes[0] = 0x60 | (NETWORK_ID & 0x0f); // type 6 (enterprise, key credential)
-  bytes.set(keyHash, 1);
-  const hrp = NETWORK_ID === 1 ? "addr" : "addr_test";
-  return {
-    bytes,
-    bech32: bech32.encode(hrp, bech32.toWords(bytes), 1023),
-    keyHash: toHex(keyHash),
-  };
-}
-
-/** Big-endian byte expansion of `n` into `len` bytes. */
-function beBytes(n: bigint, len: number): number[] {
-  const out: number[] = [];
-  for (let i = len - 1; i >= 0; i--)
-    out.push(Number((n >> BigInt(i * 8)) & 0xffn));
-  return out;
-}
-
-/** Minimal CBOR unsigned-integer encoding. */
-function cborUint(n: bigint): number[] {
-  if (n < 0n) throw new Error(`negative coin: ${n}`);
-  if (n < 24n) return [Number(n)];
-  if (n < 256n) return [0x18, Number(n)];
-  if (n < 65536n) return [0x19, ...beBytes(n, 2)];
-  if (n < 4294967296n) return [0x1a, ...beBytes(n, 4)];
-  return [0x1b, ...beBytes(n, 8)];
-}
-
-/** CBOR for a simple `{0: address, 1: coin}` transaction output. */
-function outputCbor(address: Uint8Array, coin: bigint): number[] {
-  const out: number[] = [0xa2, 0x00];
-  if (address.length < 24) out.push(0x40 + address.length);
-  else out.push(0x58, address.length);
-  out.push(...address, 0x01, ...cborUint(coin));
-  return out;
-}
-
-function cborByteString(bytes: number[]): number[] {
-  if (bytes.length < 24) return [0x40 + bytes.length, ...bytes];
-  if (bytes.length < 256) return [0x58, bytes.length, ...bytes];
-  if (bytes.length < 65536)
-    return [0x59, ...beBytes(BigInt(bytes.length), 2), ...bytes];
-  throw new Error(`CBOR byte string is too large: ${bytes.length} bytes`);
-}
-
-/**
- * CBOR for a Conway output holding a Plutus V3 reference script.
- *
- * The reference script is ledger-encoded as tag 24 around the serialized
- * `Script = [3, bytes(flat-script)]` value.
- */
-function referenceScriptOutputCbor(
-  address: Uint8Array,
-  coin: bigint,
-  scriptCode: string,
-): number[] {
-  if (!/^(?:[0-9a-fA-F]{2})+$/.test(scriptCode)) {
-    throw new Error("reference script code must be non-empty hexadecimal");
-  }
-  const scriptBytes = [...Buffer.from(scriptCode, "hex")];
-  const serializedScript = [0x82, 0x03, ...cborByteString(scriptBytes)];
-  return [
-    0xa3,
-    0x00,
-    ...cborByteString([...address]),
-    0x01,
-    ...cborUint(coin),
-    0x03,
-    0xd8,
-    0x18,
-    ...cborByteString(serializedScript),
-  ];
-}
-
-/** Ask the OS for a free TCP port. */
-function freePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const srv = net.createServer();
-    srv.unref();
-    srv.on("error", reject);
-    srv.listen(0, "127.0.0.1", () => {
-      const port = (srv.address() as net.AddressInfo).port;
-      srv.close(() => resolve(port));
-    });
-  });
-}
-
-/** Locate the `dolos` binary. */
-function resolveDolosBin(): string {
-  if (process.env.DOLOS_BIN) return process.env.DOLOS_BIN;
-  const home = os.homedir();
-  for (const channel of ["default", "stable", "beta", "nightly"]) {
-    const candidate = join(home, ".tx3", channel, "bin", "dolos");
-    if (existsSync(candidate)) return candidate;
-  }
-  return "dolos"; // fall back to PATH
+/** Extract the listen port of one `[serve.<section>]` from a dolos.toml. */
+function servePort(toml: string, section: string): number | undefined {
+  const match = toml.match(
+    new RegExp(
+      `\\[serve\\.${section}\\][^[]*?listen_address\\s*=\\s*"\\[::\\]:(\\d+)"`,
+    ),
+  );
+  return match ? Number(match[1]) : undefined;
 }
 
 const sleep = (ms: number): Promise<void> =>
   new Promise((r) => setTimeout(r, ms));
 
-export class TestDevnet {
+export class TrixDevnet {
   private constructor(
     readonly trpUrl: string,
     private readonly minibfUrl: string,
     private readonly proc: ChildProcess,
-    private readonly workdir: string,
-    private readonly walletsByName: Map<string, DevnetWallet>,
-    private readonly referenceScriptsByName: Map<string, DevnetUtxo>,
     private readonly slotConfig: { zeroTimeMs: number; slotLengthMs: number },
+    /** The funded faucet wallet (see [`./faucet.ts`](./faucet.ts)). */
+    readonly faucetWallet: DevnetWallet,
   ) {}
 
-  /** Boot an ephemeral devnet funding the requested wallets. */
-  static async start(options: DevnetOptions): Promise<TestDevnet> {
-    if (!GENESIS_FILES.every((f) => existsSync(join(GENESIS_DIR, f)))) {
-      throw new Error(`devnet genesis template not found in ${GENESIS_DIR}`);
-    }
+  /**
+   * Boot an ephemeral devnet.
+   *
+   * Wipes any previous `.tx3` state first, so every run gets a genuinely
+   * fresh chain (fresh genesis, fresh stake registrations, no leftover NFTs).
+   */
+  static async start(): Promise<TrixDevnet> {
+    rmSync(STATE_DIR, { recursive: true, force: true });
 
-    // Ledger slot->time config, straight from the Shelley genesis. The
-    // validators convert a transaction's validity lower-bound slot to POSIX
-    // time with this, so chain time must be derived from the slot the same
-    // way (dolos may report wall-clock `block.time`, which would not match).
-    const slotConfig = shelleySlotConfig();
-
-    // Derive wallets and their funding UTxOs.
-    const walletsByName = new Map<string, DevnetWallet>();
-    const referenceScriptsByName = new Map<string, DevnetUtxo>();
-    const utxoBlocks: string[] = [];
-    for (const [name, balanceSpec] of Object.entries(options.wallets)) {
-      const privateKey = deriveKey(name);
-      const publicKey = ed25519.getPublicKey(privateKey);
-      const addr = enterpriseAddress(publicKey);
-      const privateKeyHex = toHex(privateKey);
-      walletsByName.set(name, {
-        name,
-        address: addr.bech32,
-        keyHash: addr.keyHash,
-        privateKeyHex,
-        party: Party.signer(Ed25519Signer.fromHex(addr.bech32, privateKeyHex)),
-      });
-      const txid = toHex(deriveTxid(name));
-      const balances = Array.isArray(balanceSpec) ? balanceSpec : [balanceSpec];
-      balances.forEach((balance, index) => {
-        const cbor = outputCbor(addr.bytes, BigInt(balance));
-        utxoBlocks.push(
-          `[[chain.custom_utxos]]\nref = ["${txid}", ${index}]\nera = 7\ncbor = [${cbor.join(",")}]\n`,
-        );
-      });
-    }
-
-    for (const [name, spec] of Object.entries(options.referenceScripts ?? {})) {
-      const owner = walletsByName.get(spec.owner);
-      if (!owner) {
-        throw new Error(
-          `reference script ${name} has unknown owner wallet ${spec.owner}`,
-        );
-      }
-      const txHash = toHex(deriveTxid(`reference-script:${name}`));
-      const outputIndex = 0;
-      const lovelace = BigInt(spec.lovelace ?? 2_000_000);
-      const address = new Uint8Array(
-        bech32.fromWords(bech32.decode(owner.address, 1023).words),
-      );
-      const cbor = referenceScriptOutputCbor(address, lovelace, spec.scriptCode);
-      utxoBlocks.push(
-        `[[chain.custom_utxos]]\nref = ["${txHash}", ${outputIndex}]\nera = 7\ncbor = [${cbor.join(",")}]\n`,
-      );
-      referenceScriptsByName.set(name, {
-        txHash,
-        outputIndex,
-        ref: `${txHash}#${outputIndex}`,
-        lovelace,
-      });
-    }
-
-    const [trpPort, minibfPort, grpcPort] = await Promise.all([
-      freePort(),
-      freePort(),
-      freePort(),
-    ]);
-
-    // Lay out an isolated dolos workspace.
-    const workdir = mkdtempSync(join(os.tmpdir(), "tx3-devnet-"));
-    mkdirSync(join(workdir, "data"), { recursive: true });
-    for (const f of GENESIS_FILES)
-      copyFileSync(join(GENESIS_DIR, f), join(workdir, f));
-    writeFileSync(
-      join(workdir, "dolos.toml"),
-      dolosConfig({
-        trpPort,
-        minibfPort,
-        grpcPort,
-        blockInterval: options.blockIntervalSeconds ?? 1,
-        utxoBlocks,
-      }),
-    );
-
-    // Boot the node.
-    const proc = spawn(resolveDolosBin(), ["-c", "dolos.toml", "daemon"], {
-      cwd: workdir,
+    // Foreground child: killing the process group below takes trix AND its
+    // dolos down together.
+    const proc = spawn(TRIX_BIN, ["devnet", "--config", "devnet.toml"], {
+      cwd: PROTOCOL_ROOT,
+      detached: true,
       stdio: ["ignore", "pipe", "pipe"],
     });
-    const streamLogs = options.logs ?? Boolean(process.env.DEBUG_DOLOS);
+
     let log = "";
     const capture = (chunk: Buffer): void => {
       log += chunk.toString();
       if (log.length > 16_384) log = log.slice(-16_384);
-      if (streamLogs) process.stderr.write(`[dolos] ${chunk}`);
+      if (process.env.DEBUG_TRIX) process.stderr.write(`[trix] ${chunk}`);
     };
     proc.stdout?.on("data", capture);
     proc.stderr?.on("data", capture);
@@ -400,66 +194,149 @@ export class TestDevnet {
       spawnError = err;
     });
 
-    const trpUrl = `http://localhost:${trpPort}`;
-    const minibfUrl = `http://localhost:${minibfPort}`;
-    const devnet = new TestDevnet(
-      trpUrl,
-      minibfUrl,
-      proc,
-      workdir,
-      walletsByName,
-      referenceScriptsByName,
-      slotConfig,
-    );
-
-    // Wait until it is serving blocks.
-    const deadline = Date.now() + (options.startupTimeoutSeconds ?? 60) * 1000;
-    for (;;) {
-      if (spawnError) {
-        cleanupDir(workdir);
-        throw new Error(
-          `failed to spawn dolos (${resolveDolosBin()}): ${spawnError.message}`,
-        );
-      }
-      if (exited) {
-        cleanupDir(workdir);
-        throw new Error(
-          `dolos exited during startup (code=${exited.code}, signal=${exited.signal}):\n${log}`,
-        );
-      }
+    const fail = (message: string): Error => {
       try {
-        const res = await fetch(`${minibfUrl}/blocks/latest`, {
-          signal: AbortSignal.timeout(2000),
-        });
-        if (res.ok) {
-          const tip = (await res.json()) as { height?: number };
-          if ((tip.height ?? 0) >= 1) return devnet;
-        }
+        process.kill(-proc.pid!, "SIGKILL");
       } catch {
-        // not up yet
+        // already gone
       }
-      if (Date.now() > deadline) {
-        devnet.stop();
-        throw new Error(
-          `dolos did not start serving within the timeout:\n${log}`,
+      rmSync(STATE_DIR, { recursive: true, force: true });
+      return new Error(`${message}\n${log}`);
+    };
+
+    const deadline = Date.now() + BOOT_TIMEOUT_MS;
+    let trpPort: number | undefined;
+    let minibfPort: number | undefined;
+
+    for (;;) {
+      if (spawnError)
+        throw fail(`failed to spawn ${TRIX_BIN}: ${spawnError.message}`);
+      if (exited)
+        throw fail(
+          `trix devnet exited during boot (code=${exited.code}, signal=${exited.signal})`,
         );
+
+      const tomlPath = join(STATE_DIR, "dolos", "dolos.toml");
+      if (!trpPort && existsSync(tomlPath)) {
+        const toml = readFileSync(tomlPath, "utf8");
+        trpPort = servePort(toml, "trp");
+        minibfPort = servePort(toml, "minibf");
       }
+
+      if (trpPort && minibfPort) {
+        const healthy = await healthcheck(minibfPort, trpPort);
+        if (healthy) break;
+      }
+
+      if (Date.now() > deadline)
+        throw fail(
+          `trix devnet did not become healthy within ${BOOT_TIMEOUT_MS}ms`,
+        );
       await sleep(500);
     }
+
+    const trpUrl = `http://localhost:${trpPort}`;
+    const minibfUrl = `http://localhost:${minibfPort}`;
+
+    // Rebuild the faucet wallet object from the committed fixture literals.
+    const privateKey = Buffer.from(FAUCET.privateKeyHex, "hex");
+    const publicKey = ed25519.getPublicKey(privateKey);
+    const addr = enterpriseAddress(publicKey);
+
+    return new TrixDevnet(trpUrl, minibfUrl, proc, shelleySlotConfig(), {
+      name: "faucet",
+      address: FAUCET.address,
+      keyHash: addr.keyHash,
+      privateKeyHex: FAUCET.privateKeyHex,
+      party: Party.signer(
+        Ed25519Signer.fromHex(FAUCET.address, FAUCET.privateKeyHex),
+      ),
+    });
   }
 
-  /** Look up a funded wallet by name. */
+  /**
+   * A fresh random wallet. Every call returns independent keys — hold onto
+   * the returned object; looking up "the same" name again yields a different
+   * (unfunded) wallet.
+   */
   wallet(name: string): DevnetWallet {
-    const w = this.walletsByName.get(name);
-    if (!w) throw new Error(`unknown wallet: ${name}`);
-    return w;
+    const privateKey = randomBytes(32);
+    const publicKey = ed25519.getPublicKey(privateKey);
+    const addr = enterpriseAddress(publicKey);
+    const privateKeyHex = toHex(privateKey);
+    return {
+      name,
+      address: addr.bech32,
+      keyHash: addr.keyHash,
+      privateKeyHex,
+      party: Party.signer(Ed25519Signer.fromHex(addr.bech32, privateKeyHex)),
+    };
   }
 
-  /** Look up a reference-script UTxO seeded when the devnet started. */
-  referenceScript(name: string): DevnetUtxo {
-    const script = this.referenceScriptsByName.get(name);
-    if (!script) throw new Error(`unknown reference script: ${name}`);
-    return script;
+  /**
+   * Pay lovelace from the faucet to `address` through a real `devnet_pay`
+   * transaction. Calls are serialized because the live faucet holds exactly
+   * one spendable UTxO at a time (each payment refunds change to itself).
+   */
+  payTo(address: string, lovelace: bigint): Promise<void> {
+    const run = async (): Promise<void> => {
+      const submitted = await new Client({ endpoint: this.trpUrl }, "local")
+        .withFaucet(this.faucetWallet.party)
+        .devnetPay({ destination: address, quantity: Number(lovelace) })
+        .env(KIT_ENV)
+        .resolve()
+        .then((r) => r.sign())
+        .then((s) => s.submit());
+      await (await submitted).waitForConfirmed(DEVNET_POLL);
+    };
+    this.queue = this.queue.then(run, run);
+    return this.queue;
+  }
+  private queue: Promise<void> = Promise.resolve();
+
+  /**
+   * Publish `scriptCode` (hex-encoded Plutus V3 flat script) as a reference
+   * script held by `publisherAddress`, through a real `cardano::publish`
+   * transaction funded by the faucet. Returns the reference-script UTxO,
+   * discovered as the output that appeared at the publisher address.
+   */
+  async deployReferenceScript(p: {
+    publisherAddress: string;
+    scriptCode: string;
+    /** Lovelace attached to the reference-script output. */
+    lovelace: bigint;
+  }): Promise<DevnetUtxo> {
+    if (
+      !/^(?:[0-9a-fA-F]{2})+$/.test(p.scriptCode) ||
+      p.scriptCode.length < 2
+    ) {
+      throw new Error("scriptCode must be non-empty hexadecimal");
+    }
+    const before = new Set(
+      (await this.utxosOf(p.publisherAddress)).map((u) => u.ref),
+    );
+    const submitted = await new Client({ endpoint: this.trpUrl }, "local")
+      .withFaucet(this.faucetWallet.party)
+      .withPublisher(Party.address(p.publisherAddress))
+      .devnetDeployAuthorizer({
+        // Runtime args are snake_case; the generated param type says camelCase.
+        script_code: Buffer.from(p.scriptCode, "hex"),
+        lovelace: Number(p.lovelace),
+      } as unknown as Parameters<Client["devnetDeployAuthorizer"]>[0])
+      .env(KIT_ENV)
+      .resolve()
+      .then((r) => r.sign())
+      .then((s) => s.submit());
+    await (await submitted).waitForConfirmed(DEVNET_POLL);
+
+    const added = (await this.utxosOf(p.publisherAddress)).find(
+      (u) => !before.has(u.ref),
+    );
+    if (!added)
+      throw new Error(
+        `reference-script deploy confirmed but no new UTxO appeared at ${p.publisherAddress}`,
+      );
+    return added;
   }
 
   /** Total lovelace held at an address (0 if the address has no UTxOs). */
@@ -500,29 +377,32 @@ export class TestDevnet {
     }));
   }
 
-  /**
-   * Returns the first UTxO of the wallet, suitable as a seed for transactions.
-   * Throws if the wallet has no UTxOs.
-   */
-  async seedUtxo(name: string): Promise<DevnetUtxo> {
-    const utxos = await this.utxosOf(this.wallet(name).address);
+  /** The first UTxO of `wallet`, suitable as a tx seed. Throws if unfunded. */
+  async seedUtxo(wallet: DevnetWallet): Promise<DevnetUtxo> {
+    const utxos = await this.utxosOf(wallet.address);
     const seed = utxos[0];
-    if (!seed) throw new Error(`wallet ${name} has no UTxOs to use as a seed`);
+    if (!seed)
+      throw new Error(`wallet ${wallet.name} has no UTxOs to use as a seed`);
     return seed;
   }
 
-  /** Register a script stake credential so its withdraw-0 reward account exists. */
+  /**
+   * Register a script stake credential so its withdraw-0 reward account
+   * exists. `payer` must already be funded ({@link TrixDevnet.payTo}).
+   */
   async registerScriptStakeCredential(
-    payerName: string,
+    payer: DevnetWallet,
     scriptHash: string,
   ): Promise<void> {
-    const payer = this.wallet(payerName);
     const utxos = await this.utxosOf(payer.address);
     const input = utxos[0];
-    if (!input) throw new Error(`wallet ${payerName} has no UTxO to fund registration`);
+    if (!input)
+      throw new Error(`wallet ${payer.name} has no UTxO to fund registration`);
     const change = input.lovelace - STAKE_REGISTRATION_FEE;
     if (change < 1_000_000n) {
-      throw new Error(`wallet ${payerName} has insufficient funds for registration`);
+      throw new Error(
+        `wallet ${payer.name} has insufficient funds for registration`,
+      );
     }
 
     const tx = new MeshTxBuilder()
@@ -535,9 +415,7 @@ export class TestDevnet {
         [{ unit: "lovelace", quantity: input.lovelace.toString() }],
         payer.address,
       )
-      .txOut(payer.address, [
-        { unit: "lovelace", quantity: change.toString() },
-      ])
+      .txOut(payer.address, [{ unit: "lovelace", quantity: change.toString() }])
       .setFee(STAKE_REGISTRATION_FEE.toString())
       .changeAddress(payer.address)
       .selectUtxosFrom([
@@ -553,14 +431,39 @@ export class TestDevnet {
     const parsed = cst.deserializeTx(tx);
     const body = parsed.body().toCbor();
     const signer = Ed25519Signer.fromHex(payer.address, payer.privateKeyHex);
-    const witness = await signer.sign({ txHashHex: parsed.getId(), txCborHex: body });
-    const submitted = await this.trpCall<{ hash: string }>("trp.submit", {
-      tx: { content: tx, contentType: "hex" },
-      witnesses: [witness],
+    const witness = await signer.sign({
+      txHashHex: parsed.getId(),
+      txCborHex: body,
     });
+    const submitted = await this.trpSubmit(tx, witness);
     await this.waitForConfirmed(submitted.hash);
   }
 
+  /** Raw TRP submission for hand-built transactions (Mesh paths). */
+  private async trpSubmit(tx: string, witness: unknown) {
+    const res = await fetch(this.trpUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "trp.submit",
+        params: {
+          tx: { content: tx, contentType: "hex" },
+          witnesses: [witness],
+        },
+      }),
+    });
+    if (!res.ok) throw new Error(`TRP submit failed: HTTP ${res.status}`);
+    const body = (await res.json()) as {
+      error?: { message?: string };
+      result?: unknown;
+    };
+    if (body.error) throw new Error(`TRP submit failed: ${body.error.message}`);
+    return body.result as { hash: string };
+  }
+
+  /** Poll TRP until the transaction reaches a confirmed stage (or drop out). */
   private async waitForConfirmed(txHash: string): Promise<void> {
     for (let attempt = 0; attempt < DEVNET_POLL.attempts; attempt++) {
       const status = await this.trpCall<{
@@ -568,7 +471,8 @@ export class TestDevnet {
       }>("trp.checkStatus", { hashes: [txHash] });
       const stage = status.statuses[txHash]?.stage;
       if (stage === "confirmed" || stage === "finalized") return;
-      if (stage === "dropped") throw new Error(`transaction ${txHash} was dropped`);
+      if (stage === "dropped")
+        throw new Error(`transaction ${txHash} was dropped`);
       await sleep(DEVNET_POLL.delayMs);
     }
     throw new Error(`transaction ${txHash} was not confirmed`);
@@ -581,16 +485,21 @@ export class TestDevnet {
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
     });
     if (!res.ok) throw new Error(`TRP ${method} failed: HTTP ${res.status}`);
-    const body = (await res.json()) as { error?: { message?: string }; result?: T };
-    if (body.error) throw new Error(`TRP ${method} failed: ${body.error.message}`);
-    if (body.result === undefined) throw new Error(`TRP ${method} returned no result`);
+    const body = (await res.json()) as {
+      error?: { message?: string };
+      result?: T;
+    };
+    if (body.error)
+      throw new Error(`TRP ${method} failed: ${body.error.message}`);
+    if (body.result === undefined)
+      throw new Error(`TRP ${method} returned no result`);
     return body.result;
   }
 
   /**
    * The current chain tip. `timeMs` is the *ledger* time of the tip slot
-   * (`systemStart + slot * slotLength`) — the exact value a validator sees as
-   * the validity lower bound — not dolos's reported `block.time`.
+   * (`systemStart + slot * slotLength`) — the exact value a validator sees
+   * as the validity lower bound — not dolos's reported `block.time`.
    */
   async tip(): Promise<ChainTip> {
     const res = await fetch(`${this.minibfUrl}/blocks/latest`);
@@ -605,7 +514,7 @@ export class TestDevnet {
   /** Poll until the chain's tip time reaches `targetMs` (or throw on timeout). */
   async waitForChainTimeMs(
     targetMs: number,
-    timeoutSeconds = 60,
+    timeoutSeconds = 90,
   ): Promise<void> {
     const deadline = Date.now() + timeoutSeconds * 1000;
     for (;;) {
@@ -619,68 +528,68 @@ export class TestDevnet {
     }
   }
 
-  /** Stop the node and remove its workspace. */
+  /** Stop the node (and its whole process tree) and remove trix's state. */
   stop(): void {
-    if (!this.proc.killed) this.proc.kill("SIGTERM");
-    cleanupDir(this.workdir);
+    try {
+      process.kill(-this.proc.pid!, "SIGTERM");
+    } catch {
+      // already gone
+    }
+    rmSync(STATE_DIR, { recursive: true, force: true });
   }
 }
 
-function cleanupDir(dir: string): void {
+/**
+ * Confirm the discovered endpoints actually belong to OUR freshly booted
+ * services: minibf must report a producing chain (height >= 1), and the TRP
+ * port must answer with a JSON-RPC envelope — a squatter on either port
+ * fails here loudly instead of corrupting tests later.
+ */
+async function healthcheck(
+  minibfPort: number,
+  trpPort: number,
+): Promise<boolean> {
   try {
-    rmSync(dir, { recursive: true, force: true });
+    const blocks = await fetch(`http://localhost:${minibfPort}/blocks/latest`, {
+      signal: AbortSignal.timeout(2000),
+    });
+    if (!blocks.ok) return false;
+    const tip = (await blocks.json()) as { height?: number };
+    if ((tip.height ?? 0) < 1) return false;
+
+    const trp = await fetch(`http://localhost:${trpPort}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 0,
+        method: "trp.checkStatus",
+        params: { hashes: [] },
+      }),
+      signal: AbortSignal.timeout(2000),
+    });
+    if (!trp.ok) return false;
+    const envelope = (await trp.json()) as { jsonrpc?: string };
+    return envelope.jsonrpc === "2.0";
   } catch {
-    // best effort
+    return false;
   }
 }
 
-function dolosConfig(opts: {
-  trpPort: number;
-  minibfPort: number;
-  grpcPort: number;
-  blockInterval: number;
-  utxoBlocks: string[];
-}): string {
-  return `[upstream]
-block_production_interval = ${opts.blockInterval}
-
-[storage]
-version = "v3"
-path = "data"
-[storage.wal]
-backend = "in_memory"
-[storage.state]
-backend = "in_memory"
-[storage.archive]
-backend = "in_memory"
-[storage.index]
-backend = "in_memory"
-
-[genesis]
-byron_path = "./byron.json"
-shelley_path = "./shelley.json"
-alonzo_path = "./alonzo.json"
-conway_path = "./conway.json"
-force_protocol = 9
-
-[sync]
-pull_batch_size = 100
-
-[serve.grpc]
-listen_address = "[::]:${opts.grpcPort}"
-permissive_cors = true
-[serve.minibf]
-listen_address = "[::]:${opts.minibfPort}"
-permissive_cors = true
-[serve.trp]
-listen_address = "[::]:${opts.trpPort}"
-max_optimize_rounds = 10
-permissive_cors = true
-
-[chain]
-type = "cardano"
-magic = 0
-is_testnet = false
-
-${opts.utxoBlocks.join("\n")}`;
+/** Enterprise address (bytes + bech32 + key hash) for an Ed25519 public key. */
+function enterpriseAddress(publicKey: Uint8Array): {
+  bytes: Uint8Array;
+  bech32: string;
+  keyHash: string;
+} {
+  const keyHash = blake2b(publicKey, { dkLen: 28 });
+  const bytes = new Uint8Array(29);
+  bytes[0] = 0x60 | (NETWORK_ID & 0x0f); // type 6 (enterprise, key credential)
+  bytes.set(keyHash, 1);
+  const hrp = NETWORK_ID === 1 ? "addr" : "addr_test";
+  return {
+    bytes,
+    bech32: bech32.encode(hrp, bech32.toWords(bytes), 1023),
+    keyHash: toHex(keyHash),
+  };
 }
