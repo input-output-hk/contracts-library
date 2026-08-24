@@ -100,7 +100,7 @@ export async function buildLaunchTx(p: MintParams): Promise<string> {
 
   applyAuthorization(p.txBuilder, p.applyAuth, p.authorizer, networkId);
 
-  p.txBuilder
+  return await p.txBuilder
     .mintPlutusScriptV3()
     .mint("1", policyId, SETTINGS_TOKEN_NAME)
     .mintRedeemerValue(mintRedeemer(p.outputIndex))
@@ -110,9 +110,7 @@ export async function buildLaunchTx(p: MintParams): Promise<string> {
       p.seedUtxo.input.outputIndex,
       p.seedUtxo.output.amount,
       p.seedUtxo.output.address,
-    );
-
-  return await p.txBuilder
+    )
     .txOut(scriptAddr, [
       { unit: "lovelace", quantity: DEFAULT_MIN_UTXO_LOVELACE.toString() },
       settingsAsset,
@@ -167,7 +165,7 @@ export async function buildProposeTx(p: ProposeParams): Promise<string> {
 
   applyAuthorization(p.txBuilder, p.proposeAuth, p.authorizer, networkId);
 
-  p.txBuilder
+  return await p.txBuilder
     .spendingPlutusScriptV3()
     .txIn(
       p.settingsUtxo.input.txHash,
@@ -177,9 +175,7 @@ export async function buildProposeTx(p: ProposeParams): Promise<string> {
     )
     .txInInlineDatumPresent()
     .txInRedeemerValue(proposeRedeemer(p.outputIndex))
-    .txInScript(p.script.code);
-
-  return await p.txBuilder
+    .txInScript(p.script.code)
     .txOut(scriptAddr, p.settingsUtxo.output.amount)
     .txOutInlineDatumValue(settingsDatumToData(newDatum))
     .invalidBefore(lowerBoundSlot)
@@ -241,7 +237,7 @@ export async function buildApplyTx(p: ApplyParams): Promise<string> {
 
   applyAuthorization(p.txBuilder, p.applyAuth, p.authorizer, networkId);
 
-  p.txBuilder
+  return await p.txBuilder
     .spendingPlutusScriptV3()
     .txIn(
       p.settingsUtxo.input.txHash,
@@ -251,9 +247,7 @@ export async function buildApplyTx(p: ApplyParams): Promise<string> {
     )
     .txInInlineDatumPresent()
     .txInRedeemerValue(applyRedeemer(p.outputIndex))
-    .txInScript(p.script.code);
-
-  return await p.txBuilder
+    .txInScript(p.script.code)
     .txOut(scriptAddr, p.settingsUtxo.output.amount)
     .txOutInlineDatumValue(settingsDatumToData(newDatum))
     .invalidBefore(lowerBoundSlot)
@@ -289,7 +283,7 @@ export async function buildCloseTx(p: CloseParams): Promise<string> {
 
   applyAuthorization(p.txBuilder, p.applyAuth, p.authorizer, networkId);
 
-  p.txBuilder
+  return await p.txBuilder
     .spendingPlutusScriptV3()
     .txIn(
       p.settingsUtxo.input.txHash,
@@ -303,9 +297,7 @@ export async function buildCloseTx(p: CloseParams): Promise<string> {
     .mintPlutusScriptV3()
     .mint("-1", policyId, SETTINGS_TOKEN_NAME)
     .mintRedeemerValue(burnRedeemer())
-    .mintingScript(p.script.code);
-
-  return await p.txBuilder
+    .mintingScript(p.script.code)
     .txInCollateral(
       p.collateralUtxo.input.txHash,
       p.collateralUtxo.input.outputIndex,
