@@ -36,13 +36,11 @@ pub fn validate_propose(
 
   let correct_datum = {
     expect cont_datum: SettingsDatum = cont_datum
-    let expected_datum = SettingsDatum {
-      current,
-      next: cont_datum.next,
-      next_apply: Some(now + apply_delay),
-    }
     expect Some(next_data) = cont_datum.next
-    cont_datum == expected_datum && validate_datum(next_data) && next_data != current
+    expect Some(next_apply_time) = cont_datum.next_apply
+    cont_datum.current == current && next_apply_time >= now + apply_delay && validate_datum(
+      next_data,
+    ) && next_data != current
   }
 
   and {
