@@ -35,12 +35,19 @@ TEST_FILES=(
 # `next_apply == now + apply_delay`) then pass offchain evaluation but fail
 # on-chain at submit.
 #
-# The launcher spawns the CLI with an empty environment, so env vars and the
-# workspace `./config/node.properties` are ignored. The only reliable override
-# channel is JVM system properties passed *before* the `up` subcommand: Spring
-# ranks system properties above config files, so these win over the bundled
-# node.properties. We read the values from config/node.properties to keep a
-# single source of truth (see its comment for rationale).
+# The launcher spawns the CLI with an empty environment
+# (`env: {}`), so env vars are dropped entirely. That's a known upstream bug
+# (bloxbean/yaci-devkit#171, fixed by #172 via `...process.env`) that so far
+# only shipped in the beta line, not the stable 0.10.x we use.
+#
+# Independently of that, the workspace `./config/node.properties` is ignored:
+# the launcher's `-Dspring.config.import` system property overrides the
+# relative `optional:file:./config/node.properties` import in the bundled
+# application.properties. So the only reliable override channel is JVM system
+# properties passed *before* the `up` subcommand: Spring ranks system
+# properties above config files, so these win over the bundled node.properties.
+# We read the values from config/node.properties to keep a single source of
+# truth (see its comment for rationale).
 GENESIS_OVERRIDES=()
 NODE_PROPS="config/node.properties"
 if [ -f "$NODE_PROPS" ]; then
