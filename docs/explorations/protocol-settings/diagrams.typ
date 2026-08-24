@@ -38,7 +38,8 @@
     ),
   ),
   notes: [
-    - `settings_addr`: payment is `settings_hash`, staking is any
+    - `settings_addr`: payment is `settings_hash`, staking is any (chosen at launch)
+    - continuations must reproduce the spent input's full address, so the staking key cannot be changed once deployed
     - `settings_nft`: policy is `settings_hash`, token name is `settings_token_name`
     - `settings_hash = hash(settings_validator(seed_utxo, propose_auth, apply_auth, apply_delay, settings_token_name))`
     - `data`: the settings data. it is such that `validate_datum(data)` is true
@@ -90,7 +91,7 @@
     ),
   ),
   notes: [
-    - `settings_addr`: payment is `settings_hash`, staking is any
+    - `settings_addr`: payment is `settings_hash`, staking is unchanged
     - `settings_nft`: policy is `settings_hash`, token name is `settings_token_name`
     - `settings_hash = hash(settings_validator(seed_utxo, propose_auth, apply_auth, apply_delay, settings_token_name))`
     - `maybe_data`: can be `None` or `Some(data)`
@@ -144,7 +145,7 @@
     ),
   ),
   notes: [
-    - `settings_addr`: payment is `settings_hash`, staking is any
+    - `settings_addr`: payment is `settings_hash`, staking is unchanged
     - `settings_nft`: policy is `settings_hash`, token name is `settings_token_name`
     - `settings_hash = hash(settings_validator(seed_utxo, propose_auth, apply_auth, apply_delay, settings_token_name))`
     - delay must have expired: `now >= timestamp`
