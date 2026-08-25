@@ -3,6 +3,7 @@
 
 use aiken/crypto.{ScriptHash}
 use cardano/address.{Credential}
+use cardano/assets.{AssetName}
 use cardano/transaction.{OutputReference}
 use dao/locks.{Lock}
 
@@ -20,8 +21,8 @@ pub type StakeRedeemer {
   Withdraw { amount: Int }
   ClosePosition
   CreateProposal
-  CosignProposal
-  VoteProposal { voted_option: Int }
+  CosignProposal { proposal_id: AssetName }
+  VoteProposal { proposal_id: AssetName, voted_option: Int }
 }
 
 /// Redeemer for the stake position NFT minting policy.
