@@ -24,13 +24,18 @@ pub fn validate_vote_spend(
   expect Script(own_hash) = own_input.output.address.payment_credential
   let own_nft = single_nft_name(own_input.output.value, own_hash)
 
-  let proposal_input =
-    find_proposal_input(inputs, proposal_policy, datum.proposal)
+  let proposal_input = find_proposal_input(
+    inputs,
+    proposal_policy,
+    datum.proposal,
+  )
   expect Script(policy) = proposal_input.output.address.payment_credential
 
   let tallied = {
-    expect action: ProposalRedeemer =
-      spend_redeemer(self, proposal_input.output_reference)
+    expect action: ProposalRedeemer = spend_redeemer(
+      self,
+      proposal_input.output_reference,
+    )
     action == TallyVotes
   }
 
