@@ -15,7 +15,7 @@
     "lint-staged": "^16.1.5"
   },
   "lint-staged": {
-    "*.{ts,js,mjs,cjs,json}": "biome format --write",
+    "*.{ts,js,mjs,cjs,json}": "biome format --write --no-errors-on-unmatched",
     "*.ak": "bash scripts/aiken-fmt.sh"
   }
 }
