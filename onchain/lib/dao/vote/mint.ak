@@ -37,25 +37,27 @@ pub fn validate_mint_vote(
   let stake_input = find_input_by_policy(inputs, stake_policy)
 
   // stake input is consumed with `VoteProposal`
-  expect action: StakeRedeemer =
-    spend_redeemer(self, stake_input.output_reference)
+  expect action: StakeRedeemer = spend_redeemer(
+    self,
+    stake_input.output_reference,
+  )
   expect VoteProposal { voted_option } = action
-  let stake =
-    quantity_of(
-      stake_input.output.value,
-      staked_token_policy,
-      staked_token_name,
-    )
+  let stake = quantity_of(
+    stake_input.output.value,
+    staked_token_policy,
+    staked_token_name,
+  )
   expect InlineDatum(stake_datum) = stake_input.output.datum
   expect StakePositionDatum { owner, .. } = stake_datum
 
   let proposal_ref = find_input_by_policy(reference_inputs, proposal_policy)
   let p_id = single_nft_name(proposal_ref.output.value, proposal_policy)
-  let proposal_voting = {
-    expect InlineDatum(d) = proposal_ref.output.datum
-    expect proposal: ProposalDatum = d
-    proposal.status == ProposalStatus.Voting
-  }
+  expect InlineDatum(proposal_data) = proposal_ref.output.datum
+  expect proposal: ProposalDatum = proposal_data
+  let proposal_voting = proposal.status == ProposalStatus.Voting
+  let valid_option = voted_option >= 0 && voted_option < list.length(
+    proposal.results,
+  )
 
   expect Some(vote_output) = list.at(outputs, out_idx)
   expect Script(hash) = vote_output.address.payment_credential
@@ -64,6 +66,7 @@ pub fn validate_mint_vote(
 
   and {
     proposal_voting,
+    valid_option,
     vote_name == nft_name_from_ref(stake_input.output_reference),
     hash == own_policy,
     has_nft_strict(vote_output.value, own_policy, vote_name),
@@ -78,10 +81,9 @@ pub fn validate_mint_vote(
 /// Validate burning vote NFTs (`BurnVotes`) during a tally: every token moved
 /// under `own_policy` must be a burn of exactly one.
 pub fn validate_burn_votes(own_policy: PolicyId, self: Transaction) -> Bool {
-  let burns =
-    self.mint
-      |> assets.tokens(own_policy)
-      |> dict.to_pairs()
+  let burns = self.mint
+    |> assets.tokens(own_policy)
+    |> dict.to_pairs()
   when burns is {
     [] -> False
     _ -> list.all(burns, fn(entry) { entry.2nd == -1 })

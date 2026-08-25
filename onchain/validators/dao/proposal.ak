@@ -17,13 +17,14 @@ validator proposal(
   mint(redeemer: ProposalTokenRedeemer, own_policy: PolicyId, self: Transaction) {
     let settings = get_dao_settings(self, settings_utxo, settings_token_name)
     when redeemer is {
-      MintProposal { out_idx } ->
+      MintProposal { results, out_idx } ->
         validate_create_proposal(
           settings,
           staked_token_policy,
           staked_token_name,
           own_policy,
           out_idx,
+          results,
           self,
         )
       BurnProposal -> validate_finish_proposal(own_policy, self)

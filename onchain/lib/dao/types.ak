@@ -51,7 +51,7 @@ pub type ProposalTimingConfig {
 pub type ProposalStatus {
   Draft { cosigning_stake: Int }
   Voting
-  Tally { votes: Pairs<Int, Int> }
+  Tally { votes: List<Int> }
 }
 
 /// Immutable proposal state, written once at creation. `thresholds`,
