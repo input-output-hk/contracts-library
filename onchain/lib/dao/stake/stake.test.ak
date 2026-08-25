@@ -111,10 +111,7 @@ fn pos_value(stake: Int) -> Value {
     |> assets.add(gov_policy, gov_name, stake)
 }
 
-fn stake_datum(
-  delegatee: Option<Credential>,
-  locks: List<Lock>,
-) {
+fn stake_datum(delegatee: Option<Credential>, locks: List<Lock>) {
   StakePositionDatum { owner: owner(), delegatee, locks }
 }
 
@@ -184,21 +181,23 @@ fn spend(d: StakePositionDatum, r: StakeRedeemer, self: Transaction) -> Bool {
 test deposit_ok() {
   let d = stake_datum(None, [])
   let out = pos_output(20, stake_datum(None, []))
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [pos_input(10)],
-      outputs: [out],
-      extra_signatories: [owner_hash],
-    }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [pos_input(10)],
+    outputs: [out],
+    extra_signatories: [owner_hash],
+  }
   spend(d, Deposit, tx)
 }
 
 test rejects_deposit_unsigned() {
   let d = stake_datum(None, [])
   let out = pos_output(20, stake_datum(None, []))
-  let tx =
-    Transaction { ..placeholder, inputs: [pos_input(10)], outputs: [out] }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [pos_input(10)],
+    outputs: [out],
+  }
   !spend(d, Deposit, tx)
 }
 
@@ -206,13 +205,12 @@ test rejects_deposit_that_removes_stake() {
   let d = stake_datum(None, [])
   // continuation carries less stake than the input — disallowed for a deposit
   let out = pos_output(5, stake_datum(None, []))
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [pos_input(10)],
-      outputs: [out],
-      extra_signatories: [owner_hash],
-    }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [pos_input(10)],
+    outputs: [out],
+    extra_signatories: [owner_hash],
+  }
   !spend(d, Deposit, tx)
 }
 
@@ -220,29 +218,31 @@ test rejects_deposit_that_removes_stake() {
 
 test delegate_ok() {
   let d = stake_datum(None, [])
-  let out =
-    pos_output(10, stake_datum(Some(VerificationKey(delegatee_hash)), []))
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [pos_input(10)],
-      outputs: [out],
-      extra_signatories: [owner_hash],
-    }
+  let out = pos_output(
+    10,
+    stake_datum(Some(VerificationKey(delegatee_hash)), []),
+  )
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [pos_input(10)],
+    outputs: [out],
+    extra_signatories: [owner_hash],
+  }
   spend(d, DelegateTo { delegatee: Some(VerificationKey(delegatee_hash)) }, tx)
 }
 
 test rejects_delegate_that_changes_stake() {
   let d = stake_datum(None, [])
-  let out =
-    pos_output(20, stake_datum(Some(VerificationKey(delegatee_hash)), []))
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [pos_input(10)],
-      outputs: [out],
-      extra_signatories: [owner_hash],
-    }
+  let out = pos_output(
+    20,
+    stake_datum(Some(VerificationKey(delegatee_hash)), []),
+  )
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [pos_input(10)],
+    outputs: [out],
+    extra_signatories: [owner_hash],
+  }
   !spend(d, DelegateTo { delegatee: Some(VerificationKey(delegatee_hash)) }, tx)
 }
 
@@ -251,14 +251,13 @@ test rejects_delegate_that_changes_stake() {
 test withdraw_free_ok() {
   let d = stake_datum(None, [])
   let out = pos_output(6, stake_datum(None, []))
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [pos_input(10)],
-      outputs: [out],
-      extra_signatories: [owner_hash],
-      validity_range: interval.after(500),
-    }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [pos_input(10)],
+    outputs: [out],
+    extra_signatories: [owner_hash],
+    validity_range: interval.after(500),
+  }
   spend(d, Withdraw { amount: 4 }, tx)
 }
 
@@ -267,14 +266,13 @@ test rejects_withdraw_of_locked_stake() {
   let locks = [(prop_nft, 2000, 8)]
   let d = stake_datum(None, locks)
   let out = pos_output(6, stake_datum(None, locks))
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [pos_input(10)],
-      outputs: [out],
-      extra_signatories: [owner_hash],
-      validity_range: interval.after(500),
-    }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [pos_input(10)],
+    outputs: [out],
+    extra_signatories: [owner_hash],
+    validity_range: interval.after(500),
+  }
   !spend(d, Withdraw { amount: 4 }, tx)
 }
 
@@ -282,14 +280,13 @@ test withdraw_prunes_expired_lock() {
   // lock unlock_time 400 <= now 500 → pruned, all 10 become free
   let d = stake_datum(None, [(prop_nft, 400, 8)])
   let out = pos_output(2, stake_datum(None, []))
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [pos_input(10)],
-      outputs: [out],
-      extra_signatories: [owner_hash],
-      validity_range: interval.after(500),
-    }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [pos_input(10)],
+    outputs: [out],
+    extra_signatories: [owner_hash],
+    validity_range: interval.after(500),
+  }
   spend(d, Withdraw { amount: 8 }, tx)
 }
 
@@ -297,39 +294,36 @@ test withdraw_prunes_expired_lock() {
 
 test close_position_ok() {
   let d = stake_datum(None, [(prop_nft, 400, 8)])
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [pos_input(10)],
-      mint: assets.from_asset(stake_hash, pos_nft, -1),
-      extra_signatories: [owner_hash],
-      validity_range: interval.after(500),
-    }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [pos_input(10)],
+    mint: assets.from_asset(stake_hash, pos_nft, -1),
+    extra_signatories: [owner_hash],
+    validity_range: interval.after(500),
+  }
   spend(d, ClosePosition, tx)
 }
 
 test rejects_close_with_live_lock() {
   let d = stake_datum(None, [(prop_nft, 900, 8)])
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [pos_input(10)],
-      mint: assets.from_asset(stake_hash, pos_nft, -1),
-      extra_signatories: [owner_hash],
-      validity_range: interval.after(500),
-    }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [pos_input(10)],
+    mint: assets.from_asset(stake_hash, pos_nft, -1),
+    extra_signatories: [owner_hash],
+    validity_range: interval.after(500),
+  }
   !spend(d, ClosePosition, tx)
 }
 
 test rejects_close_without_burn() {
   let d = stake_datum(None, [])
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [pos_input(10)],
-      extra_signatories: [owner_hash],
-      validity_range: interval.after(500),
-    }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [pos_input(10)],
+    extra_signatories: [owner_hash],
+    validity_range: interval.after(500),
+  }
   !spend(d, ClosePosition, tx)
 }
 
@@ -341,16 +335,15 @@ test create_proposal_ok() {
   let new_lock = (p_id, now + 1000, 100)
   let d = stake_datum(None, [])
   let out = pos_output(100, stake_datum(None, [new_lock]))
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [pos_input(100)],
-      reference_inputs: [settings_input()],
-      outputs: [out],
-      mint: assets.from_asset(proposal_policy, p_id, 1),
-      extra_signatories: [owner_hash],
-      validity_range: interval.after(now),
-    }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [pos_input(100)],
+    reference_inputs: [settings_input()],
+    outputs: [out],
+    mint: assets.from_asset(proposal_policy, p_id, 1),
+    extra_signatories: [owner_hash],
+    validity_range: interval.after(now),
+  }
   spend(d, CreateProposal, tx)
 }
 
@@ -360,16 +353,15 @@ test rejects_create_below_threshold() {
   let new_lock = (p_id, now + 1000, 99)
   let d = stake_datum(None, [])
   let out = pos_output(99, stake_datum(None, [new_lock]))
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [pos_input(99)],
-      reference_inputs: [settings_input()],
-      outputs: [out],
-      mint: assets.from_asset(proposal_policy, p_id, 1),
-      extra_signatories: [owner_hash],
-      validity_range: interval.after(now),
-    }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [pos_input(99)],
+    reference_inputs: [settings_input()],
+    outputs: [out],
+    mint: assets.from_asset(proposal_policy, p_id, 1),
+    extra_signatories: [owner_hash],
+    validity_range: interval.after(now),
+  }
   !spend(d, CreateProposal, tx)
 }
 
@@ -380,14 +372,13 @@ test cosign_proposal_ok() {
   let new_lock = (prop_nft, start + 1000, 60)
   let d = stake_datum(None, [])
   let out = pos_output(60, stake_datum(None, [new_lock]))
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [pos_input(60), proposal_input_draft(start)],
-      reference_inputs: [settings_input()],
-      outputs: [out],
-      extra_signatories: [owner_hash],
-    }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [pos_input(60), proposal_input_draft(start)],
+    reference_inputs: [settings_input()],
+    outputs: [out],
+    extra_signatories: [owner_hash],
+  }
   spend(d, CosignProposal, tx)
 }
 
@@ -396,14 +387,13 @@ test rejects_cosign_below_threshold() {
   let new_lock = (prop_nft, start + 1000, 40)
   let d = stake_datum(None, [])
   let out = pos_output(40, stake_datum(None, [new_lock]))
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [pos_input(40), proposal_input_draft(start)],
-      reference_inputs: [settings_input()],
-      outputs: [out],
-      extra_signatories: [owner_hash],
-    }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [pos_input(40), proposal_input_draft(start)],
+    reference_inputs: [settings_input()],
+    outputs: [out],
+    extra_signatories: [owner_hash],
+  }
   !spend(d, CosignProposal, tx)
 }
 
@@ -414,14 +404,13 @@ test rejects_cosign_same_proposal_twice() {
   let new_lock = (prop_nft, start + 1000, 60)
   let d = stake_datum(None, [existing])
   let out = pos_output(60, stake_datum(None, [existing, new_lock]))
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [pos_input(60), proposal_input_draft(start)],
-      reference_inputs: [settings_input()],
-      outputs: [out],
-      extra_signatories: [owner_hash],
-    }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [pos_input(60), proposal_input_draft(start)],
+    reference_inputs: [settings_input()],
+    outputs: [out],
+    extra_signatories: [owner_hash],
+  }
   !spend(d, CosignProposal, tx)
 }
 
@@ -433,16 +422,15 @@ test vote_proposal_ok() {
   let new_lock = (prop_nft, unlock, 20)
   let d = stake_datum(None, [])
   let out = pos_output(20, stake_datum(None, [new_lock]))
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [pos_input(20)],
-      reference_inputs: [settings_input(), proposal_ref_voting(start)],
-      outputs: [out],
-      mint: assets.from_asset(vote_policy, "V", 1),
-      extra_signatories: [owner_hash],
-      validity_range: interval.before(unlock),
-    }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [pos_input(20)],
+    reference_inputs: [settings_input(), proposal_ref_voting(start)],
+    outputs: [out],
+    mint: assets.from_asset(vote_policy, "V", 1),
+    extra_signatories: [owner_hash],
+    validity_range: interval.before(unlock),
+  }
   spend(d, VoteProposal { voted_option: 1 }, tx)
 }
 
@@ -452,16 +440,15 @@ test rejects_vote_when_not_voting_stage() {
   let new_lock = (prop_nft, unlock, 20)
   let d = stake_datum(None, [])
   let out = pos_output(20, stake_datum(None, [new_lock]))
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [pos_input(20)],
-      reference_inputs: [settings_input(), proposal_input_draft(start)],
-      outputs: [out],
-      mint: assets.from_asset(vote_policy, "V", 1),
-      extra_signatories: [owner_hash],
-      validity_range: interval.before(unlock),
-    }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [pos_input(20)],
+    reference_inputs: [settings_input(), proposal_input_draft(start)],
+    outputs: [out],
+    mint: assets.from_asset(vote_policy, "V", 1),
+    extra_signatories: [owner_hash],
+    validity_range: interval.before(unlock),
+  }
   !spend(d, VoteProposal { voted_option: 1 }, tx)
 }
 
@@ -470,72 +457,65 @@ test rejects_vote_when_not_voting_stage() {
 test create_position_ok() {
   let seed = OutputReference { transaction_id: tx_id, output_index: 7 }
   let name = nft_name_from_ref(seed)
-  let seed_input =
-    Input {
-      output_reference: seed,
-      output: Output {
-        address: from_verification_key(owner_hash),
-        value: assets.from_lovelace(2_000_000),
-        datum: NoDatum,
-        reference_script: None,
-      },
-    }
-  let position =
-    Output {
-      address: from_script(stake_hash),
-      value: assets.from_asset(stake_hash, name, 1)
-        |> assets.add(gov_policy, gov_name, 1)
-        |> assets.merge(assets.from_lovelace(2_000_000)),
-      datum: InlineDatum(stake_datum(None, [])),
+  let seed_input = Input {
+    output_reference: seed,
+    output: Output {
+      address: from_verification_key(owner_hash),
+      value: assets.from_lovelace(2_000_000),
+      datum: NoDatum,
       reference_script: None,
-    }
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [seed_input],
-      outputs: [position],
-      mint: assets.from_asset(stake_hash, name, 1),
-    }
+    },
+  }
+  let position = Output {
+    address: from_script(stake_hash),
+    value: assets.from_asset(stake_hash, name, 1)
+      |> assets.add(gov_policy, gov_name, 1)
+      |> assets.merge(assets.from_lovelace(2_000_000)),
+    datum: InlineDatum(stake_datum(None, [])),
+    reference_script: None,
+  }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [seed_input],
+    outputs: [position],
+    mint: assets.from_asset(stake_hash, name, 1),
+  }
   validate_create_position(gov_policy, gov_name, seed, stake_hash, 0, tx)
 }
 
 test rejects_create_position_with_locks() {
   let seed = OutputReference { transaction_id: tx_id, output_index: 7 }
   let name = nft_name_from_ref(seed)
-  let seed_input =
-    Input {
-      output_reference: seed,
-      output: Output {
-        address: from_verification_key(owner_hash),
-        value: assets.from_lovelace(2_000_000),
-        datum: NoDatum,
-        reference_script: None,
-      },
-    }
-  let position =
-    Output {
-      address: from_script(stake_hash),
-      value: assets.from_asset(stake_hash, name, 1)
-        |> assets.add(gov_policy, gov_name, 1)
-        |> assets.merge(assets.from_lovelace(2_000_000)),
-      datum: InlineDatum(stake_datum(None, [(prop_nft, 1, 1)])),
+  let seed_input = Input {
+    output_reference: seed,
+    output: Output {
+      address: from_verification_key(owner_hash),
+      value: assets.from_lovelace(2_000_000),
+      datum: NoDatum,
       reference_script: None,
-    }
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [seed_input],
-      outputs: [position],
-      mint: assets.from_asset(stake_hash, name, 1),
-    }
+    },
+  }
+  let position = Output {
+    address: from_script(stake_hash),
+    value: assets.from_asset(stake_hash, name, 1)
+      |> assets.add(gov_policy, gov_name, 1)
+      |> assets.merge(assets.from_lovelace(2_000_000)),
+    datum: InlineDatum(stake_datum(None, [(prop_nft, 1, 1)])),
+    reference_script: None,
+  }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [seed_input],
+    outputs: [position],
+    mint: assets.from_asset(stake_hash, name, 1),
+  }
   !validate_create_position(gov_policy, gov_name, seed, stake_hash, 0, tx)
 }
 
 test close_position_mint_ok() {
-  let tx =
-    Transaction {
-      ..placeholder,
-      mint: assets.from_asset(stake_hash, pos_nft, -1),
-    }
+  let tx = Transaction {
+    ..placeholder,
+    mint: assets.from_asset(stake_hash, pos_nft, -1),
+  }
   validate_close_position(stake_hash, tx)
 }

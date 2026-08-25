@@ -98,21 +98,23 @@ pub fn validate_proposal_spend(
       expect ProposalStatus.Tally { votes } = datum.status
       expect Finite(upper) = validity_range.upper_bound.bound_type
       let cont = continuation_datum(outputs, own_addr, own_hash, p_id)
-      let vote_inputs = list.filter(
+      let (counted, vote_count, refunds_ok) = fold_votes(
+        vote_policy,
+        p_id,
         inputs,
-        fn(i) { is_vote_for(vote_policy, p_id, i) },
+        outputs,
+        votes,
       )
-      let counted = tally(votes, vote_inputs)
       let burned = mint |> assets.tokens(vote_policy) |> dict.to_pairs()
       let all_burned = list.all(burned, fn(entry) { entry.2nd == -1 })
       and {
         upper <= tally_end,
         // every consumed vote is refunded to its owner and its NFT burned; the
         // number of burns must match the votes consumed so none slip through
-        list.length(vote_inputs) > 0,
-        list.length(burned) == list.length(vote_inputs),
+        vote_count > 0,
+        list.length(burned) == vote_count,
         all_burned,
-        refunds_ok(vote_inputs, outputs),
+        refunds_ok,
         cont.status == ProposalStatus.Tally { votes: counted },
         immutables_ok(cont, datum),
       }
@@ -169,28 +171,45 @@ fn immutables_ok(cont: ProposalDatum, datum: ProposalDatum) -> Bool {
   }
 }
 
-/// Is `input` a vote artifact belonging to proposal `p_id`?
-fn is_vote_for(vote_policy: PolicyId, p_id: AssetName, input: Input) -> Bool {
-  if has_any_nft(input.output.value, vote_policy) {
-    expect InlineDatum(d) = input.output.datum
-    expect vote: VoteDatum = d
-    vote.proposal == p_id
-  } else {
-    False
-  }
-}
-
-/// Fold the consumed votes into the running tally, weighting each option by the
-/// voter's committed stake. `votes` is indexed by option, so its length equals
-/// the number of proposal results.
-fn tally(prior: List<Int>, vote_inputs: List<Input>) -> List<Int> {
+/// Fold the transaction inputs once: each consumed vote is decoded exactly
+/// once, then (if it belongs to this proposal) tallied, counted, and checked
+/// for its lovelace refund. Returns (tally, vote_count, refunds_ok).
+fn fold_votes(
+  vote_policy: PolicyId,
+  p_id: AssetName,
+  inputs: List<Input>,
+  outputs: List<Output>,
+  prior: List<Int>,
+) -> (List<Int>, Int, Bool) {
   list.reduce(
-    vote_inputs,
-    prior,
+    inputs,
+    (prior, 0, True),
     fn(acc, input) {
-      expect InlineDatum(d) = input.output.datum
-      expect vote: VoteDatum = d
-      upsert(acc, vote.voted_option, vote.stake)
+      let (tally, count, refunds_ok) = acc
+      if has_any_nft(input.output.value, vote_policy) {
+        expect InlineDatum(d) = input.output.datum
+        expect vote: VoteDatum = d
+        if vote.proposal == p_id {
+          let owed = lovelace_of(input.output.value)
+          let refunded = list.any(
+            outputs,
+            fn(o) {
+              o.address.payment_credential == vote.stake_owner && lovelace_of(
+                o.value,
+              ) >= owed
+            },
+          )
+          (
+            upsert(tally, vote.voted_option, vote.stake),
+            count + 1,
+            refunds_ok && refunded,
+          )
+        } else {
+          acc
+        }
+      } else {
+        acc
+      }
     },
   )
 }
@@ -206,26 +225,6 @@ fn upsert(votes: List<Int>, option: Int, weight: Int) -> List<Int> {
       } else {
         total
       }
-    },
-  )
-}
-
-/// Every consumed vote must be refunded its lovelace to the recorded owner.
-fn refunds_ok(vote_inputs: List<Input>, outputs: List<Output>) -> Bool {
-  list.all(
-    vote_inputs,
-    fn(input) {
-      expect InlineDatum(d) = input.output.datum
-      expect vote: VoteDatum = d
-      let owed = lovelace_of(input.output.value)
-      list.any(
-        outputs,
-        fn(o) {
-          o.address.payment_credential == vote.stake_owner && lovelace_of(
-            o.value,
-          ) >= owed
-        },
-      )
     },
   )
 }
