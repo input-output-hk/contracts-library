@@ -12,20 +12,18 @@ use settings/utils.{get_settings_datum}
 /// The single asset name held under `policy` in `value`. Fails unless there is
 /// exactly one token of that policy (the NFT convention used throughout the DAO).
 pub fn single_nft_name(value: Value, policy: PolicyId) -> AssetName {
-  expect [Pair(name, _)] =
-    value
-      |> assets.tokens(policy)
-      |> dict.to_pairs()
+  expect [Pair(name, _)] = value
+    |> assets.tokens(policy)
+    |> dict.to_pairs()
   name
 }
 
 /// The single mint entry under `policy` as `(name, quantity)`. Fails unless
 /// exactly one token of that policy is minted or burned.
 pub fn single_minted(mint: Value, policy: PolicyId) -> (AssetName, Int) {
-  expect [Pair(name, quantity)] =
-    mint
-      |> assets.tokens(policy)
-      |> dict.to_pairs()
+  expect [Pair(name, quantity)] = mint
+    |> assets.tokens(policy)
+    |> dict.to_pairs()
   (name, quantity)
 }
 
@@ -48,8 +46,10 @@ pub fn spend_redeemer(self: Transaction, ref: OutputReference) -> Data {
 
 /// Locate an input holding exactly one NFT under `policy` (any name).
 pub fn find_input_by_policy(inputs: List<Input>, policy: PolicyId) -> Input {
-  expect Some(input) =
-    list.find(inputs, fn(input) { has_any_nft(input.output.value, policy) })
+  expect Some(input) = list.find(
+    inputs,
+    fn(input) { has_any_nft(input.output.value, policy) },
+  )
   input
 }
 
@@ -73,11 +73,10 @@ pub fn find_proposal_input(
   own_policy: PolicyId,
   token_name: AssetName,
 ) -> Input {
-  expect Some(proposal_input) =
-    list.find(
-      inputs,
-      fn(input) { has_nft_strict(input.output.value, own_policy, token_name) },
-    )
+  expect Some(proposal_input) = list.find(
+    inputs,
+    fn(input) { has_nft_strict(input.output.value, own_policy, token_name) },
+  )
   proposal_input
 }
 
@@ -90,8 +89,11 @@ pub fn get_dao_settings(
   settings_ref: OutputReference,
   settings_token_name: AssetName,
 ) -> DaoSettings {
-  let settings_datum =
-    get_settings_datum(self, settings_ref, settings_token_name)
+  let settings_datum = get_settings_datum(
+    self,
+    settings_ref,
+    settings_token_name,
+  )
   expect dao_settings: DaoSettings = settings_datum.current
   dao_settings
 }

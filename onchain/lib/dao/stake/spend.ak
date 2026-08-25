@@ -32,23 +32,28 @@ pub fn validate_stake_spend(
   own_ref: OutputReference,
   self: Transaction,
 ) -> Bool {
-  let Transaction {
-    inputs,
-    reference_inputs,
-    outputs,
-    mint,
-    extra_signatories,
-    withdrawals,
-    validity_range,
-    ..
-  } = self
+  let  
+      Transaction {
+        inputs,
+        reference_inputs,
+        outputs,
+        mint,
+        extra_signatories,
+        withdrawals,
+        validity_range,
+        ..
+      }
+    = self
 
   expect Some(own_input) = find_input(inputs, own_ref)
   let own_addr = own_input.output.address
   expect Script(own_hash) = own_addr.payment_credential
   let nft = single_nft_name(own_input.output.value, own_hash)
-  let in_stake =
-    quantity_of(own_input.output.value, staked_token_policy, staked_token_name)
+  let in_stake = quantity_of(
+    own_input.output.value,
+    staked_token_policy,
+    staked_token_name,
+  )
 
   when redeemer is {
     Deposit -> {
@@ -120,10 +125,15 @@ pub fn validate_stake_spend(
       }
     }
     CosignProposal -> {
-      let (p_id, proposal) =
-        proposal_with_nft(inputs, settings.proposal_validator)
-      let new_lock =
-        (p_id, proposal.start_time + settings.timings.draft_length, in_stake)
+      let (p_id, proposal) = proposal_with_nft(
+        inputs,
+        settings.proposal_validator,
+      )
+      let new_lock = (
+        p_id,
+        proposal.start_time + settings.timings.draft_length,
+        in_stake,
+      )
       let out = find_continuation_output(outputs, own_addr)
       let cont = out_datum(out)
       and {
@@ -140,20 +150,20 @@ pub fn validate_stake_spend(
     }
     VoteProposal { voted_option: _option } -> {
       expect Finite(upper) = validity_range.upper_bound.bound_type
-      let (p_id, proposal) =
-        proposal_with_nft(reference_inputs, settings.proposal_validator)
-      let unlock =
-        proposal.start_time + settings.timings.draft_length + settings.timings.voting_length
+      let (p_id, proposal) = proposal_with_nft(
+        reference_inputs,
+        settings.proposal_validator,
+      )
+      let unlock = proposal.start_time + settings.timings.draft_length + settings.timings.voting_length
       let new_lock = (p_id, unlock, in_stake)
       let out = find_continuation_output(outputs, own_addr)
       let cont = out_datum(out)
-      let vote_minted =
-        when
-          mint |> assets.tokens(settings.vote_validator) |> dict.to_pairs()
-        is {
-          [Pair(_, q)] -> q == 1
-          _ -> False
-        }
+      let vote_minted = when
+        mint |> assets.tokens(settings.vote_validator) |> dict.to_pairs()
+      is {
+        [Pair(_, q)] -> q == 1
+        _ -> False
+      }
       and {
         is_authorized(vote_auth(datum), extra_signatories, withdrawals),
         proposal.status == ProposalStatus.Voting,
@@ -196,8 +206,10 @@ fn proposal_with_nft(
   inputs: List<Input>,
   policy: PolicyId,
 ) -> (AssetName, ProposalDatum) {
-  expect Some(input) =
-    list.find(inputs, fn(input) { has_any_nft(input.output.value, policy) })
+  expect Some(input) = list.find(
+    inputs,
+    fn(input) { has_any_nft(input.output.value, policy) },
+  )
   let name = single_nft_name(input.output.value, policy)
   expect InlineDatum(d) = input.output.datum
   expect pd: ProposalDatum = d

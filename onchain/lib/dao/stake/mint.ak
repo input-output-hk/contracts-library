@@ -36,24 +36,25 @@ pub fn validate_create_position(
   expect Some(stake_position) = list.at(outputs, out_idx)
 
   // checks for stake position output
-  expect Output {
-    address: stake_address,
-    value: stake_value,
-    datum: InlineDatum(stake_datum),
-    reference_script: None,
-  } = stake_position
+  expect  
+      Output {
+        address: stake_address,
+        value: stake_value,
+        datum: InlineDatum(stake_datum),
+        reference_script: None,
+      }
+    = stake_position
 
   let correct_address = stake_address.payment_credential == Script(own_policy)
 
   // `flatten` yields one entry per asset plus lovelace (under the empty
   // policy), so exactly 3 entries means the position holds nothing but its
   // NFT, the staked token, and lovelace.
-  let correct_value =
-    has_nft(stake_value, own_policy, stake_nft_name) && quantity_of(
-      stake_value,
-      staked_token_policy,
-      staked_token_name,
-    ) >= 1 && list.length(assets.flatten(stake_value)) == 3
+  let correct_value = has_nft(stake_value, own_policy, stake_nft_name) && quantity_of(
+    stake_value,
+    staked_token_policy,
+    staked_token_name,
+  ) >= 1 && list.length(assets.flatten(stake_value)) == 3
 
   let correct_datum = {
     expect StakePositionDatum { owner, delegatee, locks } = stake_datum
@@ -76,9 +77,8 @@ pub fn validate_create_position(
 /// validator (`ClosePosition`) enforces that all locks have expired and the
 /// owner authorized; here we only require exactly one NFT to be burned.
 pub fn validate_close_position(own_policy: PolicyId, self: Transaction) -> Bool {
-  expect [Pair(_, quantity)] =
-    self.mint
-      |> assets.tokens(own_policy)
-      |> dict.to_pairs()
+  expect [Pair(_, quantity)] = self.mint
+    |> assets.tokens(own_policy)
+    |> dict.to_pairs()
   quantity == -1
 }
