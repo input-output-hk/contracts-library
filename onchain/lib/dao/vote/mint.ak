@@ -62,7 +62,12 @@ pub fn validate_mint_vote(
   expect Some(vote_output) = list.at(outputs, out_idx)
   expect Script(hash) = vote_output.address.payment_credential
   expect InlineDatum(vote_data) = vote_output.datum
-  expect vote: VoteDatum = vote_data
+  let expected_datum: Data = VoteDatum {
+    stake_owner: owner,
+    proposal: p_id,
+    voted_option,
+    stake,
+  }
 
   and {
     proposal_voting,
@@ -71,10 +76,7 @@ pub fn validate_mint_vote(
     hash == own_policy,
     has_nft_strict(vote_output.value, own_policy, vote_name),
     vote_output.reference_script == None,
-    vote.stake_owner == owner,
-    vote.proposal == p_id,
-    vote.voted_option == voted_option,
-    vote.stake == stake,
+    expected_datum == vote_data,
   }
 }
 
