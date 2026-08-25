@@ -1,3 +1,4 @@
+use aiken/crypto.{ScriptHash}
 use aiken/fuzz
 use aiken/interval
 use cardano/address.{Script, from_script}
@@ -49,13 +50,7 @@ const tx_id =
   #"0000000000000000000000000000000000000000000000000000000000000000"
 
 fn thresholds_with_create(create: Int) -> ProposalThresholds {
-  ProposalThresholds {
-    create,
-    cosign: 50,
-    accept: 100,
-    vote: 10,
-    execute: 200,
-  }
+  ProposalThresholds { create, cosign: 50, accept: 100, vote: 10, execute: 200 }
 }
 
 fn thresholds() -> ProposalThresholds {
@@ -134,10 +129,7 @@ fn prop_ref() -> OutputReference {
   OutputReference { transaction_id: tx_id, output_index: 0 }
 }
 
-fn datum(
-  status: ProposalStatus,
-  results: Pairs<Int, ByteArray>,
-) -> ProposalDatum {
+fn datum(status: ProposalStatus, results: List<ScriptHash>) -> ProposalDatum {
   ProposalDatum {
     thresholds: thresholds(),
     timing_config: timings(),
@@ -280,7 +272,9 @@ fn create_tx(create: Int, stake: Int, now: Int) -> Transaction {
     ..placeholder,
     inputs: [stake_in],
     reference_inputs: [settings_input_create(create)],
-    outputs: [proposal_output_named(token_name, mint_proposal_datum(create, stake, now))],
+    outputs: [
+      proposal_output_named(token_name, mint_proposal_datum(create, stake, now)),
+    ],
     mint: assets.from_asset(proposal_policy, token_name, 1),
     redeemers: [Pair(Spend(stake_in.output_reference), create_r)],
     validity_range: interval.after(now),
@@ -289,39 +283,47 @@ fn create_tx(create: Int, stake: Int, now: Int) -> Transaction {
 
 fn validate_mint(tx: Transaction) -> Bool {
   let settings = get_dao_settings(tx, settings_ref(), settings_name)
-  validate_create_proposal(settings, gov_policy, gov_name, proposal_policy, 0, tx)
+  validate_create_proposal(
+    settings,
+    gov_policy,
+    gov_name,
+    proposal_policy,
+    0,
+    [],
+    tx,
+  )
 }
 
 // --------------------------------------------------------------------- Cosign
 
 test cosign_ok() {
   let d = datum(ProposalStatus.Draft { cosigning_stake: 10 }, [])
-  let cont =
-    prop_output(datum(ProposalStatus.Draft { cosigning_stake: 15 }, []))
+  let cont = prop_output(
+    datum(ProposalStatus.Draft { cosigning_stake: 15 }, []),
+  )
   let cosign_r: Data = CosignProposal
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [prop_input(d), stake_input(5)],
-      outputs: [cont],
-      redeemers: [Pair(Spend(stake_ref()), cosign_r)],
-    }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d), stake_input(5)],
+    outputs: [cont],
+    redeemers: [Pair(Spend(stake_ref()), cosign_r)],
+  }
   spend(d, Cosign, tx)
 }
 
 test rejects_cosign_wrong_new_stake() {
   let d = datum(ProposalStatus.Draft { cosigning_stake: 10 }, [])
   // continuation records the wrong running total (should be 15)
-  let cont =
-    prop_output(datum(ProposalStatus.Draft { cosigning_stake: 20 }, []))
+  let cont = prop_output(
+    datum(ProposalStatus.Draft { cosigning_stake: 20 }, []),
+  )
   let cosign_r: Data = CosignProposal
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [prop_input(d), stake_input(5)],
-      outputs: [cont],
-      redeemers: [Pair(Spend(stake_ref()), cosign_r)],
-    }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d), stake_input(5)],
+    outputs: [cont],
+    redeemers: [Pair(Spend(stake_ref()), cosign_r)],
+  }
   !spend(d, Cosign, tx)
 }
 
@@ -330,39 +332,36 @@ test rejects_cosign_wrong_new_stake() {
 test accept_draft_ok() {
   let d = datum(ProposalStatus.Draft { cosigning_stake: 120 }, [])
   let cont = prop_output(datum(ProposalStatus.Voting, []))
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [prop_input(d)],
-      outputs: [cont],
-      validity_range: interval.before(start + 1000),
-    }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d)],
+    outputs: [cont],
+    validity_range: interval.before(start + 1000),
+  }
   spend(d, AcceptDraft, tx)
 }
 
 test rejects_accept_below_threshold() {
   let d = datum(ProposalStatus.Draft { cosigning_stake: 80 }, [])
   let cont = prop_output(datum(ProposalStatus.Voting, []))
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [prop_input(d)],
-      outputs: [cont],
-      validity_range: interval.before(start + 1000),
-    }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d)],
+    outputs: [cont],
+    validity_range: interval.before(start + 1000),
+  }
   !spend(d, AcceptDraft, tx)
 }
 
 test rejects_accept_after_draft_window() {
   let d = datum(ProposalStatus.Draft { cosigning_stake: 120 }, [])
   let cont = prop_output(datum(ProposalStatus.Voting, []))
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [prop_input(d)],
-      outputs: [cont],
-      validity_range: interval.before(start + 2000),
-    }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d)],
+    outputs: [cont],
+    validity_range: interval.before(start + 2000),
+  }
   !spend(d, AcceptDraft, tx)
 }
 
@@ -370,25 +369,23 @@ test rejects_accept_after_draft_window() {
 
 test reject_draft_ok() {
   let d = datum(ProposalStatus.Draft { cosigning_stake: 10 }, [])
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [prop_input(d)],
-      mint: assets.from_asset(proposal_policy, prop_nft, -1),
-      validity_range: interval.after(start + 1000),
-    }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d)],
+    mint: assets.from_asset(proposal_policy, prop_nft, -1),
+    validity_range: interval.after(start + 1000),
+  }
   spend(d, RejectDraft, tx)
 }
 
 test rejects_reject_before_draft_window() {
   let d = datum(ProposalStatus.Draft { cosigning_stake: 10 }, [])
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [prop_input(d)],
-      mint: assets.from_asset(proposal_policy, prop_nft, -1),
-      validity_range: interval.after(start + 500),
-    }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d)],
+    mint: assets.from_asset(proposal_policy, prop_nft, -1),
+    validity_range: interval.after(start + 500),
+  }
   !spend(d, RejectDraft, tx)
 }
 
@@ -397,75 +394,96 @@ test rejects_reject_before_draft_window() {
 test end_voting_ok() {
   let d = datum(ProposalStatus.Voting, [])
   let cont = prop_output(datum(ProposalStatus.Tally { votes: [] }, []))
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [prop_input(d)],
-      outputs: [cont],
-      validity_range: interval.after(start + 3000),
-    }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d)],
+    outputs: [cont],
+    validity_range: interval.after(start + 3000),
+  }
+  spend(d, EndVotingStage, tx)
+}
+
+test end_voting_initializes_zero_tally() {
+  let d = datum(ProposalStatus.Voting, [effect_hash, effect_hash])
+  let cont = prop_output(
+    datum(ProposalStatus.Tally { votes: [0, 0] }, [effect_hash, effect_hash]),
+  )
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d)],
+    outputs: [cont],
+    validity_range: interval.after(start + 3000),
+  }
   spend(d, EndVotingStage, tx)
 }
 
 test rejects_end_voting_too_early() {
   let d = datum(ProposalStatus.Voting, [])
   let cont = prop_output(datum(ProposalStatus.Tally { votes: [] }, []))
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [prop_input(d)],
-      outputs: [cont],
-      validity_range: interval.after(start + 2000),
-    }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d)],
+    outputs: [cont],
+    validity_range: interval.after(start + 2000),
+  }
   !spend(d, EndVotingStage, tx)
 }
 
 // ----------------------------------------------------------------- TallyVotes
 
 test tally_votes_ok() {
-  let d = datum(ProposalStatus.Tally { votes: [] }, [])
-  let cont =
-    prop_output(datum(ProposalStatus.Tally { votes: [Pair(1, 5)] }, []))
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [prop_input(d), vote_input(2, 1, 5, 2_000_000)],
-      reference_inputs: [settings_input()],
-      outputs: [cont, refund(2_000_000)],
-      mint: assets.from_asset(vote_policy, "V", -1),
-      validity_range: interval.before(start + 6000),
-    }
+  let d = datum(
+    ProposalStatus.Tally { votes: [0, 0] },
+    [effect_hash, effect_hash],
+  )
+  let cont = prop_output(
+    datum(ProposalStatus.Tally { votes: [0, 5] }, [effect_hash, effect_hash]),
+  )
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d), vote_input(2, 1, 5, 2_000_000)],
+    reference_inputs: [settings_input()],
+    outputs: [cont, refund(2_000_000)],
+    mint: assets.from_asset(vote_policy, "V", -1),
+    validity_range: interval.before(start + 6000),
+  }
   spend(d, TallyVotes, tx)
 }
 
 test rejects_tally_without_refund() {
-  let d = datum(ProposalStatus.Tally { votes: [] }, [])
-  let cont =
-    prop_output(datum(ProposalStatus.Tally { votes: [Pair(1, 5)] }, []))
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [prop_input(d), vote_input(2, 1, 5, 2_000_000)],
-      reference_inputs: [settings_input()],
-      outputs: [cont],
-      mint: assets.from_asset(vote_policy, "V", -1),
-      validity_range: interval.before(start + 6000),
-    }
+  let d = datum(
+    ProposalStatus.Tally { votes: [0, 0] },
+    [effect_hash, effect_hash],
+  )
+  let cont = prop_output(
+    datum(ProposalStatus.Tally { votes: [0, 5] }, [effect_hash, effect_hash]),
+  )
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d), vote_input(2, 1, 5, 2_000_000)],
+    reference_inputs: [settings_input()],
+    outputs: [cont],
+    mint: assets.from_asset(vote_policy, "V", -1),
+    validity_range: interval.before(start + 6000),
+  }
   !spend(d, TallyVotes, tx)
 }
 
 test rejects_tally_without_burn() {
-  let d = datum(ProposalStatus.Tally { votes: [] }, [])
-  let cont =
-    prop_output(datum(ProposalStatus.Tally { votes: [Pair(1, 5)] }, []))
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [prop_input(d), vote_input(2, 1, 5, 2_000_000)],
-      reference_inputs: [settings_input()],
-      outputs: [cont, refund(2_000_000)],
-      validity_range: interval.before(start + 6000),
-    }
+  let d = datum(
+    ProposalStatus.Tally { votes: [0, 0] },
+    [effect_hash, effect_hash],
+  )
+  let cont = prop_output(
+    datum(ProposalStatus.Tally { votes: [0, 5] }, [effect_hash, effect_hash]),
+  )
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d), vote_input(2, 1, 5, 2_000_000)],
+    reference_inputs: [settings_input()],
+    outputs: [cont, refund(2_000_000)],
+    validity_range: interval.before(start + 6000),
+  }
   !spend(d, TallyVotes, tx)
 }
 
@@ -473,76 +491,74 @@ test rejects_tally_without_burn() {
 
 test end_proposal_below_execute_ok() {
   // winner has 150 votes (< execute threshold 200): no effect required
-  let d = datum(ProposalStatus.Tally { votes: [Pair(1, 150)] }, [])
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [prop_input(d)],
-      mint: assets.from_asset(proposal_policy, prop_nft, -1),
-      validity_range: interval.after(start + 6000),
-    }
+  let d = datum(
+    ProposalStatus.Tally { votes: [0, 150] },
+    [effect_hash, effect_hash],
+  )
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d)],
+    mint: assets.from_asset(proposal_policy, prop_nft, -1),
+    validity_range: interval.after(start + 6000),
+  }
   spend(d, EndProposal, tx)
 }
 
 test end_proposal_executes_effect_ok() {
-  let d =
-    datum(
-      ProposalStatus.Tally { votes: [Pair(1, 250)] },
-      [Pair(1, effect_hash)],
-    )
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [prop_input(d)],
-      mint: assets.from_asset(proposal_policy, prop_nft, -1),
-      withdrawals: [Pair(Script(effect_hash), 0)],
-      validity_range: interval.after(start + 6000),
-    }
+  let d = datum(
+    ProposalStatus.Tally { votes: [0, 250] },
+    [effect_hash, effect_hash],
+  )
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d)],
+    mint: assets.from_asset(proposal_policy, prop_nft, -1),
+    withdrawals: [Pair(Script(effect_hash), 0)],
+    validity_range: interval.after(start + 6000),
+  }
   spend(d, EndProposal, tx)
 }
 
 test rejects_end_proposal_missing_effect() {
-  let d =
-    datum(
-      ProposalStatus.Tally { votes: [Pair(1, 250)] },
-      [Pair(1, effect_hash)],
-    )
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [prop_input(d)],
-      mint: assets.from_asset(proposal_policy, prop_nft, -1),
-      validity_range: interval.after(start + 6000),
-    }
+  let d = datum(
+    ProposalStatus.Tally { votes: [0, 250] },
+    [effect_hash, effect_hash],
+  )
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d)],
+    mint: assets.from_asset(proposal_policy, prop_nft, -1),
+    validity_range: interval.after(start + 6000),
+  }
   !spend(d, EndProposal, tx)
 }
 
 test rejects_end_proposal_too_early() {
-  let d = datum(ProposalStatus.Tally { votes: [Pair(1, 150)] }, [])
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [prop_input(d)],
-      mint: assets.from_asset(proposal_policy, prop_nft, -1),
-      validity_range: interval.after(start + 5000),
-    }
+  let d = datum(
+    ProposalStatus.Tally { votes: [0, 150] },
+    [effect_hash, effect_hash],
+  )
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d)],
+    mint: assets.from_asset(proposal_policy, prop_nft, -1),
+    validity_range: interval.after(start + 5000),
+  }
   !spend(d, EndProposal, tx)
 }
 
 test end_proposal_tie_needs_no_effect() {
   // a tie yields no winner, so no effect withdrawal is required
-  let d =
-    datum(
-      ProposalStatus.Tally { votes: [Pair(1, 250), Pair(2, 250)] },
-      [Pair(1, effect_hash)],
-    )
-  let tx =
-    Transaction {
-      ..placeholder,
-      inputs: [prop_input(d)],
-      mint: assets.from_asset(proposal_policy, prop_nft, -1),
-      validity_range: interval.after(start + 6000),
-    }
+  let d = datum(
+    ProposalStatus.Tally { votes: [0, 250, 250] },
+    [effect_hash, effect_hash, effect_hash],
+  )
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d)],
+    mint: assets.from_asset(proposal_policy, prop_nft, -1),
+    validity_range: interval.after(start + 6000),
+  }
   spend(d, EndProposal, tx)
 }
 
@@ -564,10 +580,9 @@ test rejects_stake_below_threshold() fail {
 
 test rejects_wrong_thresholds_in_datum() fail {
   let tx = create_tx(100, 100, 5000)
-  let token_name =
-    proposal_token_name(
-      OutputReference { transaction_id: tx_id, output_index: 0 },
-    )
+  let token_name = proposal_token_name(
+    OutputReference { transaction_id: tx_id, output_index: 0 },
+  )
   let mutated = mint_proposal_datum(200, 100, 5000)
   validate_mint(
     Transaction { ..tx, outputs: [proposal_output_named(token_name, mutated)] },
@@ -576,19 +591,17 @@ test rejects_wrong_thresholds_in_datum() fail {
 
 test rejects_wrong_timings_in_datum() fail {
   let tx = create_tx(100, 100, 5000)
-  let token_name =
-    proposal_token_name(
-      OutputReference { transaction_id: tx_id, output_index: 0 },
-    )
-  let mutated =
-    ProposalDatum {
-      ..mint_proposal_datum(100, 100, 5000),
-      timing_config: ProposalTimingConfig {
-        draft_length: 9999,
-        voting_length: 2000,
-        tally_length: 3000,
-      },
-    }
+  let token_name = proposal_token_name(
+    OutputReference { transaction_id: tx_id, output_index: 0 },
+  )
+  let mutated = ProposalDatum {
+    ..mint_proposal_datum(100, 100, 5000),
+    timing_config: ProposalTimingConfig {
+      draft_length: 9999,
+      voting_length: 2000,
+      tally_length: 3000,
+    },
+  }
   validate_mint(
     Transaction { ..tx, outputs: [proposal_output_named(token_name, mutated)] },
   )
@@ -596,12 +609,13 @@ test rejects_wrong_timings_in_datum() fail {
 
 test rejects_wrong_start_time() fail {
   let tx = create_tx(100, 100, 5000)
-  let token_name =
-    proposal_token_name(
-      OutputReference { transaction_id: tx_id, output_index: 0 },
-    )
-  let mutated =
-    ProposalDatum { ..mint_proposal_datum(100, 100, 5000), start_time: 5001 }
+  let token_name = proposal_token_name(
+    OutputReference { transaction_id: tx_id, output_index: 0 },
+  )
+  let mutated = ProposalDatum {
+    ..mint_proposal_datum(100, 100, 5000),
+    start_time: 5001,
+  }
   validate_mint(
     Transaction { ..tx, outputs: [proposal_output_named(token_name, mutated)] },
   )
@@ -609,15 +623,13 @@ test rejects_wrong_start_time() fail {
 
 test rejects_wrong_cosigning_stake() fail {
   let tx = create_tx(100, 100, 5000)
-  let token_name =
-    proposal_token_name(
-      OutputReference { transaction_id: tx_id, output_index: 0 },
-    )
-  let mutated =
-    ProposalDatum {
-      ..mint_proposal_datum(100, 100, 5000),
-      status: ProposalStatus.Draft { cosigning_stake: 1000 },
-    }
+  let token_name = proposal_token_name(
+    OutputReference { transaction_id: tx_id, output_index: 0 },
+  )
+  let mutated = ProposalDatum {
+    ..mint_proposal_datum(100, 100, 5000),
+    status: ProposalStatus.Draft { cosigning_stake: 1000 },
+  }
   validate_mint(
     Transaction { ..tx, outputs: [proposal_output_named(token_name, mutated)] },
   )
@@ -625,12 +637,13 @@ test rejects_wrong_cosigning_stake() fail {
 
 test rejects_non_draft_status() fail {
   let tx = create_tx(100, 100, 5000)
-  let token_name =
-    proposal_token_name(
-      OutputReference { transaction_id: tx_id, output_index: 0 },
-    )
-  let mutated =
-    ProposalDatum { ..mint_proposal_datum(100, 100, 5000), status: Voting }
+  let token_name = proposal_token_name(
+    OutputReference { transaction_id: tx_id, output_index: 0 },
+  )
+  let mutated = ProposalDatum {
+    ..mint_proposal_datum(100, 100, 5000),
+    status: Voting,
+  }
   validate_mint(
     Transaction { ..tx, outputs: [proposal_output_named(token_name, mutated)] },
   )
@@ -638,15 +651,13 @@ test rejects_non_draft_status() fail {
 
 test rejects_non_empty_results() fail {
   let tx = create_tx(100, 100, 5000)
-  let token_name =
-    proposal_token_name(
-      OutputReference { transaction_id: tx_id, output_index: 0 },
-    )
-  let mutated =
-    ProposalDatum {
-      ..mint_proposal_datum(100, 100, 5000),
-      results: [Pair(1, proposal_policy)],
-    }
+  let token_name = proposal_token_name(
+    OutputReference { transaction_id: tx_id, output_index: 0 },
+  )
+  let mutated = ProposalDatum {
+    ..mint_proposal_datum(100, 100, 5000),
+    results: [proposal_policy],
+  }
   validate_mint(
     Transaction { ..tx, outputs: [proposal_output_named(token_name, mutated)] },
   )
@@ -654,29 +665,25 @@ test rejects_non_empty_results() fail {
 
 test rejects_wrong_address() fail {
   let tx = create_tx(100, 100, 5000)
-  let token_name =
-    proposal_token_name(
-      OutputReference { transaction_id: tx_id, output_index: 0 },
-    )
-  let bad_output =
-    Output {
-      ..proposal_output_named(token_name, mint_proposal_datum(100, 100, 5000)),
-      address: from_script(stake_hash),
-    }
+  let token_name = proposal_token_name(
+    OutputReference { transaction_id: tx_id, output_index: 0 },
+  )
+  let bad_output = Output {
+    ..proposal_output_named(token_name, mint_proposal_datum(100, 100, 5000)),
+    address: from_script(stake_hash),
+  }
   validate_mint(Transaction { ..tx, outputs: [bad_output] })
 }
 
 test rejects_reference_script() fail {
   let tx = create_tx(100, 100, 5000)
-  let token_name =
-    proposal_token_name(
-      OutputReference { transaction_id: tx_id, output_index: 0 },
-    )
-  let bad_output =
-    Output {
-      ..proposal_output_named(token_name, mint_proposal_datum(100, 100, 5000)),
-      reference_script: Some(proposal_policy),
-    }
+  let token_name = proposal_token_name(
+    OutputReference { transaction_id: tx_id, output_index: 0 },
+  )
+  let bad_output = Output {
+    ..proposal_output_named(token_name, mint_proposal_datum(100, 100, 5000)),
+    reference_script: Some(proposal_policy),
+  }
   validate_mint(Transaction { ..tx, outputs: [bad_output] })
 }
 
@@ -689,12 +696,14 @@ test rejects_wrong_token_name() fail {
 
 test rejects_wrong_mint_quantity() fail {
   let tx = create_tx(100, 100, 5000)
-  let token_name =
-    proposal_token_name(
-      OutputReference { transaction_id: tx_id, output_index: 0 },
-    )
+  let token_name = proposal_token_name(
+    OutputReference { transaction_id: tx_id, output_index: 0 },
+  )
   validate_mint(
-    Transaction { ..tx, mint: assets.from_asset(proposal_policy, token_name, 2) },
+    Transaction {
+      ..tx,
+      mint: assets.from_asset(proposal_policy, token_name, 2),
+    },
   )
 }
 
@@ -710,15 +719,13 @@ test rejects_missing_settings_ref() fail {
 
 test rejects_datum_hash_output() fail {
   let tx = create_tx(100, 100, 5000)
-  let token_name =
-    proposal_token_name(
-      OutputReference { transaction_id: tx_id, output_index: 0 },
-    )
-  let bad_output =
-    Output {
-      ..proposal_output_named(token_name, mint_proposal_datum(100, 100, 5000)),
-      datum: DatumHash(tx_id),
-    }
+  let token_name = proposal_token_name(
+    OutputReference { transaction_id: tx_id, output_index: 0 },
+  )
+  let bad_output = Output {
+    ..proposal_output_named(token_name, mint_proposal_datum(100, 100, 5000)),
+    datum: DatumHash(tx_id),
+  }
   validate_mint(Transaction { ..tx, outputs: [bad_output] })
 }
 
