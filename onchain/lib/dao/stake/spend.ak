@@ -2,7 +2,7 @@ use aiken/collection/list
 use aiken/interval.{Finite}
 use authorization.{is_authorized}
 use cardano/address.{Address, Credential, Script}
-use cardano/assets.{AssetName, PolicyId, has_any_nft, quantity_of}
+use cardano/assets.{AssetName, PolicyId, has_nft, quantity_of}
 use cardano/transaction.{
   InlineDatum, Input, Output, OutputReference, Transaction, resolve_input,
 }
@@ -124,11 +124,8 @@ pub fn validate_stake_spend(
         assets.match(out.value, own_value, >=),
       }
     }
-    CosignProposal -> {
-      let (p_id, proposal) = proposal_with_nft(
-        inputs,
-        settings.proposal_validator,
-      )
+    CosignProposal { proposal_id: p_id } -> {
+      let proposal = proposal_datum(inputs, settings.proposal_validator, p_id)
       let new_lock = (
         p_id,
         proposal.start_time + proposal.timing_config.draft_length,
@@ -147,12 +144,13 @@ pub fn validate_stake_spend(
         assets.match(out.value, own_value, >=),
       }
     }
-    VoteProposal { voted_option: _option } -> {
+    VoteProposal { proposal_id: p_id, voted_option: _option } -> {
       expect Finite(now) = validity_range.lower_bound.bound_type
       expect Finite(upper) = validity_range.upper_bound.bound_type
-      let (p_id, proposal) = proposal_with_nft(
+      let proposal = proposal_datum(
         reference_inputs,
         settings.proposal_validator,
+        p_id,
       )
       let unlock = proposal.start_time + proposal.timing_config.draft_length + proposal.timing_config.voting_length
       let new_lock = (p_id, unlock, in_stake)
@@ -195,16 +193,16 @@ fn out_datum(out: Output) -> StakePositionDatum {
   sd
 }
 
-fn proposal_with_nft(
+fn proposal_datum(
   inputs: List<Input>,
   policy: PolicyId,
-) -> (AssetName, ProposalDatum) {
+  proposal_id: AssetName,
+) -> ProposalDatum {
   let input = list.expect_find(
     inputs,
-    fn(input) { has_any_nft(input.output.value, policy) },
+    fn(input) { has_nft(input.output.value, policy, proposal_id) },
   )
-  let name = single_nft_name(input.output.value, policy)
   expect InlineDatum(d) = input.output.datum
   expect pd: ProposalDatum = d
-  (name, pd)
+  pd
 }

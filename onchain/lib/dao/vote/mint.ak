@@ -1,15 +1,14 @@
 use aiken/collection/dict
 use aiken/collection/list
 use cardano/address.{Script}
-use cardano/assets.{AssetName, PolicyId, has_nft_strict, quantity_of}
+use cardano/assets.{AssetName, PolicyId, has_nft, has_nft_strict, quantity_of}
 use cardano/transaction.{InlineDatum, Transaction}
 use dao/types.{
   ProposalDatum, ProposalStatus, StakePositionDatum, StakeRedeemer, VoteDatum,
   VoteProposal,
 }
 use dao/utils.{
-  find_input_by_policy, nft_name_from_ref, single_minted, single_nft_name,
-  spend_redeemer,
+  find_input_by_policy, nft_name_from_ref, single_minted, spend_redeemer,
 }
 
 /// Validate minting a vote NFT (`MintVote`).
@@ -41,7 +40,7 @@ pub fn validate_mint_vote(
     self,
     stake_input.output_reference,
   )
-  expect VoteProposal { voted_option } = action
+  expect VoteProposal { proposal_id: p_id, voted_option } = action
   let stake = quantity_of(
     stake_input.output.value,
     staked_token_policy,
@@ -50,8 +49,10 @@ pub fn validate_mint_vote(
   expect InlineDatum(stake_datum) = stake_input.output.datum
   expect StakePositionDatum { owner, .. } = stake_datum
 
-  let proposal_ref = find_input_by_policy(reference_inputs, proposal_policy)
-  let p_id = single_nft_name(proposal_ref.output.value, proposal_policy)
+  let proposal_ref = list.expect_find(
+    reference_inputs,
+    fn(input) { has_nft(input.output.value, proposal_policy, p_id) },
+  )
   expect InlineDatum(proposal_data) = proposal_ref.output.datum
   expect proposal: ProposalDatum = proposal_data
   let proposal_voting = proposal.status == ProposalStatus.Voting

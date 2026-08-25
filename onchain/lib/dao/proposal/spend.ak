@@ -5,7 +5,7 @@ use aiken/interval.{Finite}
 use cardano/address.{Address, Script}
 use cardano/assets.{AssetName, PolicyId, has_any_nft, lovelace_of, quantity_of}
 use cardano/transaction.{
-  InlineDatum, Input, Output, OutputReference, Transaction, find_input,
+  InlineDatum, Input, Output, OutputReference, Transaction, resolve_input,
 }
 use dao/types.{
   AcceptDraft, Cosign, CosignProposal, EndProposal, EndVotingStage,
@@ -31,10 +31,10 @@ pub fn validate_proposal_spend(
 ) -> Bool {
   let Transaction { inputs, outputs, mint, validity_range, .. } = self
 
-  expect Some(own_input) = find_input(inputs, own_ref)
-  let own_addr = own_input.output.address
+  let own_input = resolve_input(inputs, own_ref)
+  let own_addr = own_input.address
   expect Script(own_hash) = own_addr.payment_credential
-  let p_id = single_nft_name(own_input.output.value, own_hash)
+  let p_id = single_nft_name(own_input.value, own_hash)
 
   let draft_end = datum.start_time + datum.timing_config.draft_length
   let voting_end = draft_end + datum.timing_config.voting_length
@@ -55,7 +55,7 @@ pub fn validate_proposal_spend(
           self,
           stake_input.output_reference,
         )
-        action == CosignProposal
+        action == CosignProposal { proposal_id: p_id }
       }
       and {
         cosigning,
