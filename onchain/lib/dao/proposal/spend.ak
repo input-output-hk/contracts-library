@@ -88,7 +88,9 @@ pub fn validate_proposal_spend(
       let cont = continuation_datum(outputs, own_addr, own_hash, p_id)
       and {
         lower >= voting_end,
-        cont.status == ProposalStatus.Tally { votes: [] },
+        cont.status == ProposalStatus.Tally {
+          votes: list.repeat(0, list.length(datum.results)),
+        },
         immutables_ok(cont, datum),
       }
     }
@@ -179,8 +181,9 @@ fn is_vote_for(vote_policy: PolicyId, p_id: AssetName, input: Input) -> Bool {
 }
 
 /// Fold the consumed votes into the running tally, weighting each option by the
-/// voter's committed stake.
-fn tally(prior: Pairs<Int, Int>, vote_inputs: List<Input>) -> Pairs<Int, Int> {
+/// voter's committed stake. `votes` is indexed by option, so its length equals
+/// the number of proposal results.
+fn tally(prior: List<Int>, vote_inputs: List<Input>) -> List<Int> {
   list.reduce(
     vote_inputs,
     prior,
@@ -192,17 +195,19 @@ fn tally(prior: Pairs<Int, Int>, vote_inputs: List<Input>) -> Pairs<Int, Int> {
   )
 }
 
-/// Add `weight` to `option`'s tally, preserving key order (new keys appended).
-fn upsert(votes: Pairs<Int, Int>, option: Int, weight: Int) -> Pairs<Int, Int> {
-  when votes is {
-    [] -> [Pair(option, weight)]
-    [Pair(k, v), ..rest] ->
-      if k == option {
-        [Pair(k, v + weight), ..rest]
+/// Add `weight` to the vote total at index `option`, leaving other entries
+/// untouched. Out-of-range options are ignored.
+fn upsert(votes: List<Int>, option: Int, weight: Int) -> List<Int> {
+  list.indexed_map(
+    votes,
+    fn(index, total) {
+      if index == option {
+        total + weight
       } else {
-        [Pair(k, v), ..upsert(rest, option, weight)]
+        total
       }
-  }
+    },
+  )
 }
 
 /// Every consumed vote must be refunded its lovelace to the recorded owner.
@@ -226,14 +231,12 @@ fn refunds_ok(vote_inputs: List<Input>, outputs: List<Output>) -> Bool {
 }
 
 /// The strictly-winning option and its vote total, or `None` on a tie / no votes.
-fn winner(votes: Pairs<Int, Int>) -> Option<(Int, Int)> {
-  let (best_option, best_votes, tie) = list.reduce(
+fn winner(votes: List<Int>) -> Option<(Int, Int)> {
+  let (best_option, best_votes, tie) = list.indexed_foldr(
     votes,
     (None, 0, False),
-    fn(acc, entry) {
+    fn(option, v, acc) {
       let (bo, bv, tie) = acc
-      let option = entry.1st
-      let v = entry.2nd
       if v > bv {
         (Some(option), v, False)
       } else if v == bv {
