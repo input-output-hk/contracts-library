@@ -45,15 +45,16 @@ pub fn validate_proposal_spend(
       expect ProposalStatus.Draft { cosigning_stake: n } = datum.status
       let cont = continuation_datum(outputs, own_addr, own_hash, p_id)
       let stake_input = find_input_by_policy(inputs, stake_policy)
-      let s =
-        quantity_of(
-          stake_input.output.value,
-          staked_token_policy,
-          staked_token_name,
-        )
+      let s = quantity_of(
+        stake_input.output.value,
+        staked_token_policy,
+        staked_token_name,
+      )
       let cosigning = {
-        expect action: StakeRedeemer =
-          spend_redeemer(self, stake_input.output_reference)
+        expect action: StakeRedeemer = spend_redeemer(
+          self,
+          stake_input.output_reference,
+        )
         action == CosignProposal
       }
       and {
@@ -95,8 +96,10 @@ pub fn validate_proposal_spend(
       expect ProposalStatus.Tally { votes } = datum.status
       expect Finite(upper) = validity_range.upper_bound.bound_type
       let cont = continuation_datum(outputs, own_addr, own_hash, p_id)
-      let vote_inputs =
-        list.filter(inputs, fn(i) { is_vote_for(vote_policy, p_id, i) })
+      let vote_inputs = list.filter(
+        inputs,
+        fn(i) { is_vote_for(vote_policy, p_id, i) },
+      )
       let counted = tally(votes, vote_inputs)
       let burned = mint |> assets.tokens(vote_policy) |> dict.to_pairs()
       let all_burned = list.all(burned, fn(entry) { entry.2nd == -1 })
@@ -117,20 +120,19 @@ pub fn validate_proposal_spend(
       expect Finite(lower) = validity_range.lower_bound.bound_type
       let time_ok = lower >= tally_end
       let burned = quantity_of(mint, own_hash, p_id) == -1
-      let execution =
-        when winner(votes) is {
-          Some((option, tally_votes)) ->
-            if tally_votes >= datum.thresholds.execute {
-              // a strict winner above threshold must run its bound effect
-              when pairs.get_first(datum.results, option) is {
-                Some(effect) -> pairs.has_key(self.withdrawals, Script(effect))
-                None -> True
-              }
-            } else {
-              True
+      let execution = when winner(votes) is {
+        Some((option, tally_votes)) ->
+          if tally_votes >= datum.thresholds.execute {
+            // a strict winner above threshold must run its bound effect
+            when list.at(datum.results, option) is {
+              Some(effect) -> pairs.has_key(self.withdrawals, Script(effect))
+              None -> True
             }
-          None -> True
-        }
+          } else {
+            True
+          }
+        None -> True
+      }
       and {
         time_ok,
         burned,
@@ -225,23 +227,22 @@ fn refunds_ok(vote_inputs: List<Input>, outputs: List<Output>) -> Bool {
 
 /// The strictly-winning option and its vote total, or `None` on a tie / no votes.
 fn winner(votes: Pairs<Int, Int>) -> Option<(Int, Int)> {
-  let (best_option, best_votes, tie) =
-    list.reduce(
-      votes,
-      (None, 0, False),
-      fn(acc, entry) {
-        let (bo, bv, tie) = acc
-        let option = entry.1st
-        let v = entry.2nd
-        if v > bv {
-          (Some(option), v, False)
-        } else if v == bv {
-          (bo, bv, True)
-        } else {
-          (bo, bv, tie)
-        }
-      },
-    )
+  let (best_option, best_votes, tie) = list.reduce(
+    votes,
+    (None, 0, False),
+    fn(acc, entry) {
+      let (bo, bv, tie) = acc
+      let option = entry.1st
+      let v = entry.2nd
+      if v > bv {
+        (Some(option), v, False)
+      } else if v == bv {
+        (bo, bv, True)
+      } else {
+        (bo, bv, tie)
+      }
+    },
+  )
   when best_option is {
     Some(option) ->
       if !tie && best_votes > 0 {
