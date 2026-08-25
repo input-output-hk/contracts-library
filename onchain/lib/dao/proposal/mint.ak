@@ -1,4 +1,5 @@
 use aiken/collection/list
+use aiken/crypto.{ScriptHash}
 use aiken/interval.{Finite}
 use cardano/address.{Script}
 use cardano/assets.{has_any_nft}
@@ -26,6 +27,7 @@ pub fn validate_create_proposal(
   staked_token_name: assets.AssetName,
   own_policy: assets.PolicyId,
   out_idx: Int,
+  results: List<ScriptHash>,
   self: Transaction,
 ) {
   let Transaction { inputs, outputs, mint, validity_range, .. } = self
@@ -34,11 +36,10 @@ pub fn validate_create_proposal(
 
   // The stake position is matched loosely (any NFT under the stake policy);
   // its own spend validator re-checks the detailed constraints on that input.
-  expect Some(stake_input) =
-    list.find(
-      inputs,
-      fn(input) { has_any_nft(input.output.value, settings.stake_validator) },
-    )
+  let stake_input = list.expect_find(
+    inputs,
+    fn(input) { has_any_nft(input.output.value, settings.stake_validator) },
+  )
 
   let token_name = proposal_token_name(stake_input.output_reference)
 
@@ -47,48 +48,49 @@ pub fn validate_create_proposal(
     quantity == 1 && minted_name == token_name
   }
 
-  let staked_amount =
-    assets.quantity_of(
-      stake_input.output.value,
-      staked_token_policy,
-      staked_token_name,
-    )
+  let staked_amount = assets.quantity_of(
+    stake_input.output.value,
+    staked_token_policy,
+    staked_token_name,
+  )
 
   expect staked_amount >= settings.thresholds.create
 
-  expect Some(proposal_output) = list.at(outputs, out_idx)
+  let proposal_output = list.expect_at(outputs, out_idx)
 
   // The stake must be consumed with `CreateProposal`, so the stake validator
   // enforces the matching lock
   // `(token_name, now + settings.timings.draft_length, stake_amount)`.
   let stake_creating = {
-    expect action: StakeRedeemer =
-      spend_redeemer(self, stake_input.output_reference)
+    expect action: StakeRedeemer = spend_redeemer(
+      self,
+      stake_input.output_reference,
+    )
     action == CreateProposal
   }
 
-  expect Output {
-    address: addr,
-    value,
-    datum: InlineDatum(datum),
-    reference_script: None,
-  } = proposal_output
+  expect  
+      Output {
+        address: addr,
+        value,
+        datum: InlineDatum(datum),
+        reference_script: None,
+      }
+    = proposal_output
 
   let correct_address = addr.payment_credential == Script(own_policy)
   let correct_value = assets.has_nft_strict(value, own_policy, token_name)
 
   let correct_datum = {
-    expect proposal_datum: ProposalDatum = datum
-    let expected_datum =
-      ProposalDatum {
-        thresholds: settings.thresholds,
-        timing_config: settings.timings,
-        start_time: now,
-        status: ProposalStatus.Draft { cosigning_stake: staked_amount },
-        results: [],
-      }
+    let expected_datum: Data = ProposalDatum {
+      thresholds: settings.thresholds,
+      timing_config: settings.timings,
+      start_time: now,
+      status: ProposalStatus.Draft { cosigning_stake: staked_amount },
+      results,
+    }
 
-    proposal_datum == expected_datum
+    datum == expected_datum
   }
 
   and {

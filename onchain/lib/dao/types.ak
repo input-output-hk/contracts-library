@@ -62,7 +62,7 @@ pub type ProposalDatum {
   timing_config: ProposalTimingConfig,
   start_time: Int,
   status: ProposalStatus,
-  results: Pairs<Int, ScriptHash>,
+  results: List<ScriptHash>,
 }
 
 /// DAO configuration, stored as the settings contract's opaque `current` datum.
@@ -82,7 +82,7 @@ pub type DaoSettings {
 
 /// Redeemer for the proposal token minting policy.
 pub type ProposalTokenRedeemer {
-  MintProposal { out_idx: Int }
+  MintProposal { results: List<ScriptHash>, out_idx: Int }
   BurnProposal
 }
 
