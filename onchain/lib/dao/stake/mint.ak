@@ -33,7 +33,7 @@ pub fn validate_create_position(
 
   expect Some(owner_input) = find_input(inputs, owner_utxo)
 
-  expect Some(stake_position) = list.at(outputs, out_idx)
+  let stake_position = list.expect_at(outputs, out_idx)
 
   // checks for stake position output
   expect  
