@@ -2,6 +2,7 @@ use aiken/collection/dict
 use aiken/collection/list
 use aiken/collection/pairs
 use aiken/interval.{Finite}
+use aiken/option
 use cardano/address.{Address, Script}
 use cardano/assets.{AssetName, PolicyId, has_any_nft, lovelace_of, quantity_of}
 use cardano/transaction.{
