@@ -15,7 +15,7 @@ use dao/utils.{get_dao_settings}
 validator proposal(
   staked_token_policy: PolicyId,
   staked_token_name: AssetName,
-  settings_utxo: OutputReference,
+  settings_policy: PolicyId,
   settings_token_name: AssetName,
 ) {
   mint(redeemer: ProposalTokenRedeemer, own_policy: PolicyId, self: Transaction) {
@@ -23,7 +23,7 @@ validator proposal(
       MintProposal { results, out_idx } -> {
         let settings = get_dao_settings(
           self,
-          settings_utxo,
+          settings_policy,
           settings_token_name,
         )
         validate_create_proposal(
@@ -47,7 +47,7 @@ validator proposal(
     self: Transaction,
   ) {
     expect Some(proposal_datum) = datum
-    let settings = get_dao_settings(self, settings_utxo, settings_token_name)
+    let settings = get_dao_settings(self, settings_policy, settings_token_name)
     when redeemer is {
       Cosign ->
         validate_cosign(

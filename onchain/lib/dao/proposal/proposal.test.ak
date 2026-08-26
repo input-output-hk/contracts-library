@@ -284,7 +284,7 @@ fn create_tx(create: Int, stake: Int, now: Int) -> Transaction {
 }
 
 fn validate_mint(tx: Transaction) -> Bool {
-  let settings = get_dao_settings(tx, settings_ref(), settings_name)
+  let settings = get_dao_settings(tx, settings_policy, settings_name)
   validate_create_proposal(
     settings,
     gov_policy,
