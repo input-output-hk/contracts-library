@@ -2,7 +2,8 @@
  * Off-chain mirror of the on-chain types in `onchain/lib/dao/types.ak`.
  */
 
-import type { Credential, OutputRef } from "../common";
+import { TxInput } from "@meshsdk/core";
+import type { Credential } from "../common";
 
 export type { Credential };
 
@@ -113,7 +114,7 @@ export type VoteTokenRedeemer = { kind: "MintVote" } | { kind: "BurnVotes" };
 
 /** Parameters of the `proposal` validator (blueprint order). */
 export interface ProposalParams {
-  settingsUtxo: OutputRef;
+  settingsUtxo: TxInput;
   stakeNftPolicy: string;
   stakeNftName: string;
   stakeTokenPolicy: string;
@@ -124,7 +125,7 @@ export interface ProposalParams {
 export interface StakeParams {
   stakeTokenPolicy: string;
   stakeTokenName: string;
-  settingsUtxo: OutputRef;
+  settingsUtxo: TxInput;
 }
 
 /** Parameters of the `vote` validator (blueprint order). */
