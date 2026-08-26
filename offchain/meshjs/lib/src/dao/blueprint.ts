@@ -13,7 +13,6 @@
  * emitted by Aiken (single-CBOR-encoded, ready for `applyParamsToScript`).
  */
 
-
 export const proposalCompiledCode =
   "5901810101002222229800aba2aba1aab9faab9eaab9dab9a9bae0059bae0049bae0039bae00248888888889660026464653" +
   "00130093754003370e90004dc3a4005300c0039806001244444b300130040058cc004dd7180898079baa0068acc004c010c0" +

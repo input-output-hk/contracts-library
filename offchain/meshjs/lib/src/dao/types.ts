@@ -110,9 +110,7 @@ export interface AddressData {
 export type VoteRedeemer = { kind: "TallyVote" };
 
 /** Redeemer for the vote NFT minting policy. */
-export type VoteTokenRedeemer =
-  | { kind: "MintVote" }
-  | { kind: "BurnVotes" };
+export type VoteTokenRedeemer = { kind: "MintVote" } | { kind: "BurnVotes" };
 
 /** Parameters of the `proposal` validator (blueprint order). */
 export interface ProposalParams {
