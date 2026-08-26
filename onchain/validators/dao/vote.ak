@@ -1,9 +1,12 @@
 use cardano/assets.{AssetName, PolicyId}
 use cardano/transaction.{OutputReference, Transaction}
-use dao/types.{BurnVotes, MintVote, VoteDatum, VoteRedeemer, VoteTokenRedeemer}
+use dao/types.{
+  BurnVotes, Cancel, MintVote, TallyVote, VoteDatum, VoteRedeemer,
+  VoteTokenRedeemer,
+}
 use dao/utils.{get_dao_settings}
 use dao/vote/mint.{validate_burn_votes, validate_mint_vote}
-use dao/vote/spend.{validate_vote_spend}
+use dao/vote/spend.{validate_vote_cancel, validate_vote_tally}
 
 /// Vote artifact script: its hash is the vote NFT policy id and the address
 /// where vote artifacts live while awaiting tally.
@@ -43,13 +46,16 @@ validator vote(
   ) {
     expect Some(vote_datum) = datum
     let settings = get_dao_settings(self, settings_utxo, settings_token_name)
-    validate_vote_spend(
-      settings.proposal_validator,
-      vote_datum,
-      redeemer,
-      own_ref,
-      self,
-    )
+    when redeemer is {
+      TallyVote ->
+        validate_vote_tally(
+          settings.proposal_validator,
+          vote_datum,
+          own_ref,
+          self,
+        )
+      Cancel -> validate_vote_cancel(vote_datum, own_ref, self)
+    }
   }
 
   else(_) {

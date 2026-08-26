@@ -87,5 +87,8 @@ pub fn validate_burn_votes(own_policy: PolicyId, self: Transaction) -> Bool {
   let burns = self.mint
     |> assets.tokens(own_policy)
     |> dict.to_pairs()
-  list.all(burns, fn(entry) { entry.2nd == -1 })
+  and {
+    list.length(burns) > 0,
+    list.all(burns, fn(entry) { entry.2nd == -1 }),
+  }
 }
