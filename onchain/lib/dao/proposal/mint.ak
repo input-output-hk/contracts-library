@@ -1,3 +1,4 @@
+use aiken/collection/dict
 use aiken/collection/list
 use aiken/crypto.{ScriptHash}
 use aiken/interval.{Finite}
@@ -7,9 +8,7 @@ use cardano/transaction.{InlineDatum, Output, Transaction}
 use dao/types.{
   CreateProposal, DaoSettings, ProposalDatum, ProposalStatus, StakeRedeemer,
 }
-use dao/utils.{
-  find_proposal_input, proposal_token_name, single_minted, spend_redeemer,
-}
+use dao/utils.{proposal_token_name, single_minted, spend_redeemer}
 
 /// Validate the mint of a proposal NFT: the first step of creating a proposal.
 ///
@@ -102,20 +101,15 @@ pub fn validate_create_proposal(
   }
 }
 
-/// Validate the burning of a proposal NFT when a proposal is rejected or
-/// otherwise closed. The burn must target a spent proposal UTxO under the same
-/// policy and carry the exact token name that was minted for that proposal.
+/// Validate the burning of proposal NFTs when proposals are rejected or
+/// otherwise closed. The spend branches check their own input NFT being
+/// burned, with exact policy and unique name.
 pub fn validate_finish_proposal(own_policy: assets.PolicyId, self: Transaction) {
-  let Transaction { inputs, mint, .. } = self
-
-  let correct_burn = {
-    let (minted_name, quantity) = single_minted(mint, own_policy)
-    quantity == -1 && {
-      let proposal_input = find_proposal_input(inputs, own_policy, minted_name)
-      expect Script(own_hash) = proposal_input.output.address.payment_credential
-      own_hash == own_policy
-    }
+  let burns = self.mint
+    |> assets.tokens(own_policy)
+    |> dict.to_pairs()
+  and {
+    list.length(burns) > 0,
+    list.all(burns, fn(entry) { entry.2nd == -1 }),
   }
-
-  correct_burn
 }
