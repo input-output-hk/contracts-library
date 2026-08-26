@@ -20,3 +20,9 @@ export function credentialToData(c: Credential): Data {
 
 /** The amount of lovelace in 1 ADA. */
 export const ADA = 1_000_000n;
+
+/** A reference to a transaction output. */
+export interface OutputRef {
+  transactionId: string;
+  outputIndex: number;
+}
