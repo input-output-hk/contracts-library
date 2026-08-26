@@ -6,12 +6,11 @@ use cardano/transaction.{
 }
 use dao/types.{
   Cosign, ProposalDatum, ProposalStatus, ProposalThresholds,
-  ProposalTimingConfig, StakePositionDatum, TallyVote, TallyVotes, VoteDatum,
-  VoteProposal,
+  ProposalTimingConfig, StakePositionDatum, TallyVotes, VoteDatum, VoteProposal,
 }
 use dao/utils.{nft_name_from_ref}
 use dao/vote/mint.{validate_burn_votes, validate_mint_vote}
-use dao/vote/spend.{validate_vote_spend}
+use dao/vote/spend.{validate_vote_tally}
 
 // ------------------------------------------------------------------- fixtures
 
@@ -150,9 +149,10 @@ test vote_spend_ok() {
   let tx = Transaction {
     ..placeholder,
     inputs: [proposal_in, vote_utxo(d)],
+    mint: assets.from_asset(vote_policy, vote_name(), -1),
     redeemers: [Pair(Spend(proposal_ref()), tally_r)],
   }
-  validate_vote_spend(proposal_policy, d, TallyVote, stake_ref(), tx)
+  validate_vote_tally(proposal_policy, d, stake_ref(), tx)
 }
 
 test rejects_vote_spend_without_tally() {
@@ -165,7 +165,7 @@ test rejects_vote_spend_without_tally() {
     inputs: [proposal_in, vote_utxo(d)],
     redeemers: [Pair(Spend(proposal_ref()), other_r)],
   }
-  !validate_vote_spend(proposal_policy, d, TallyVote, stake_ref(), tx)
+  !validate_vote_tally(proposal_policy, d, stake_ref(), tx)
 }
 
 test rejects_vote_spend_transferring_nft() {
@@ -185,7 +185,7 @@ test rejects_vote_spend_transferring_nft() {
     outputs: [transfer],
     redeemers: [Pair(Spend(proposal_ref()), tally_r)],
   }
-  !validate_vote_spend(proposal_policy, d, TallyVote, stake_ref(), tx)
+  !validate_vote_tally(proposal_policy, d, stake_ref(), tx)
 }
 
 test rejects_vote_spend_wrong_proposal_address() {
@@ -202,13 +202,13 @@ test rejects_vote_spend_wrong_proposal_address() {
     inputs: [bad_proposal, vote_utxo(d)],
     redeemers: [Pair(Spend(proposal_ref()), tally_r)],
   }
-  !validate_vote_spend(proposal_policy, d, TallyVote, stake_ref(), tx)
+  !validate_vote_tally(proposal_policy, d, stake_ref(), tx)
 }
 
 // ----------------------------------------------------------------- mint votes
 
 test mint_vote_ok() {
-  let vote_r: Data = VoteProposal { voted_option: 1 }
+  let vote_r: Data = VoteProposal { proposal_id: prop_nft, voted_option: 1 }
   let tx = Transaction {
     ..placeholder,
     inputs: [stake_input(5)],
@@ -230,7 +230,7 @@ test mint_vote_ok() {
 
 test rejects_mint_vote_wrong_token_name() {
   // the vote NFT name must be the hash of the spent stake UTxO's reference
-  let vote_r: Data = VoteProposal { voted_option: 1 }
+  let vote_r: Data = VoteProposal { proposal_id: prop_nft, voted_option: 1 }
   let out = Output {
     ..vote_output(prop_nft, 5),
     value: assets.from_asset(vote_policy, vote_nft, 1),
@@ -256,7 +256,7 @@ test rejects_mint_vote_wrong_token_name() {
 
 test rejects_mint_vote_extra_token_output() {
   // the vote UTxO may hold nothing but its NFT (and lovelace)
-  let vote_r: Data = VoteProposal { voted_option: 1 }
+  let vote_r: Data = VoteProposal { proposal_id: prop_nft, voted_option: 1 }
   let out = Output {
     ..vote_output(prop_nft, 5),
     value: assets.from_asset(vote_policy, vote_name(), 1)
@@ -282,7 +282,7 @@ test rejects_mint_vote_extra_token_output() {
 }
 
 test rejects_mint_vote_wrong_stake_record() {
-  let vote_r: Data = VoteProposal { voted_option: 1 }
+  let vote_r: Data = VoteProposal { proposal_id: prop_nft, voted_option: 1 }
   // the vote artifact records 7 but the stake only holds 5
   let tx = Transaction {
     ..placeholder,
@@ -304,7 +304,7 @@ test rejects_mint_vote_wrong_stake_record() {
 }
 
 test rejects_mint_vote_when_not_voting() {
-  let vote_r: Data = VoteProposal { voted_option: 1 }
+  let vote_r: Data = VoteProposal { proposal_id: prop_nft, voted_option: 1 }
   let tx = Transaction {
     ..placeholder,
     inputs: [stake_input(5)],
@@ -327,7 +327,7 @@ test rejects_mint_vote_when_not_voting() {
 }
 
 test rejects_mint_vote_option_out_of_range() {
-  let vote_r: Data = VoteProposal { voted_option: 2 }
+  let vote_r: Data = VoteProposal { proposal_id: prop_nft, voted_option: 2 }
   let tx = Transaction {
     ..placeholder,
     inputs: [stake_input(5)],
@@ -348,7 +348,7 @@ test rejects_mint_vote_option_out_of_range() {
 }
 
 test rejects_mint_vote_reference_script_output() {
-  let vote_r: Data = VoteProposal { voted_option: 1 }
+  let vote_r: Data = VoteProposal { proposal_id: prop_nft, voted_option: 1 }
   let bad_output = Output {
     ..vote_output(prop_nft, 5),
     reference_script: Some(vote_policy),
