@@ -67,6 +67,7 @@ export interface VoteBuilderParams {
   stakeDatum: StakePositionDatum;
   /** The proposal UTxO referenced for the proposal's state. */
   proposalUtxo: UTxO;
+  settingsUtxo: UTxO;
   voteDatum: VoteDatum;
   voteTokenName: string;
   utxos: UTxO[];
@@ -99,6 +100,10 @@ export async function buildVoteTx(p: VoteBuilderParams): Promise<string> {
     .readOnlyTxInReference(
       p.proposalUtxo.input.txHash,
       p.proposalUtxo.input.outputIndex,
+    )
+    .readOnlyTxInReference(
+      p.settingsUtxo.input.txHash,
+      p.settingsUtxo.input.outputIndex,
     );
 
   p.txBuilder

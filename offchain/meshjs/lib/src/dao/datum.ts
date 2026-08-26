@@ -244,11 +244,10 @@ export function burnVotesRedeemer(): Data {
 
 export function proposalParamsToData(p: ProposalParams): Data[] {
   return [
-    outputRefToData(p.settingsUtxo),
-    p.stakeNftPolicy,
-    p.stakeNftName,
     p.stakeTokenPolicy,
     p.stakeTokenName,
+    p.settingsPolicy,
+    p.settingsTokenName,
   ];
 }
 
@@ -256,15 +255,16 @@ export function stakeParamsToData(p: StakeParams): Data[] {
   return [
     p.stakeTokenPolicy,
     p.stakeTokenName,
-    outputRefToData(p.settingsUtxo),
+    p.settingsPolicy,
+    p.settingsTokenName,
   ];
 }
 
 export function voteParamsToData(p: VoteParams): Data[] {
   return [
-    p.stakeNftPolicy,
     p.stakeTokenPolicy,
     p.stakeTokenName,
-    p.proposalPolicy,
+    p.settingsPolicy,
+    p.settingsTokenName,
   ];
 }

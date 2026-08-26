@@ -24,12 +24,12 @@
     "vitest": "^4.1.10"
   },
   "blueprint": {
-    "vesting": "a916d73a133b6e6cfaaa3fb66f0bc2410359ffa0d6b6a2bc6f057263",
-    "settings": "4829c5417ff3b8803091bc4825c263d3eeed7756201f4494167ec609",
+    "dao.proposal": "2073290ca059ba4f81e8bd81984cfb9f769d2f2de9d955a5e35fa82c",
+    "dao.stake": "35d89cc017ac9ea191b99e5dcb63e973d1cf264a2e8434bb371b2f5a",
+    "dao.vote": "9d12fb5acbd7e0d0433ae1464e9439785f34c11d9639b315344a797d",
+    "vesting": "95da21788eb1f59f51aad9669eb8c8b7081ab618c1f29b871925894a",
+    "settings": "4a317c2f38490b12ca84e32ef08896da3163c610d6d5d6538a893e0f",
     "settings_typed": "e6fc4020c94ba64dcd29f4ba98f7108eef19a8ca860f57cf0ba9edc2",
-    "dao.proposal": "76caa2f2d4e96faf1cd874bb70463b5a0c3de3aa813b7019498edac8",
-    "dao.stake": "8f43904c1edc421822f4637195ee020989e64136bc731535897b7e53",
-    "dao.vote": "0fedb79ded71964b40930acab324c6e415f87659165863679c269d16",
-    "compiler": "aiken-v1.1.21"
+    "compiler": "aiken-v1.1.22"
   }
 }

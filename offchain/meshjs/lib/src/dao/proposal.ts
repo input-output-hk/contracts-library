@@ -98,7 +98,6 @@ export interface CreateProposalParams {
   stakeScript: PlutusScript;
   stakeUtxo: UTxO;
   stakeDatum: StakePositionDatum;
-  /** The settings UTxO referenced for governance parameters. */
   settingsUtxo: UTxO;
   proposalDatum: ProposalDatum;
   proposalTokenName: string;
@@ -169,6 +168,7 @@ export interface ProposalSpendParams {
   txBuilder: MeshTxBuilder;
   script: PlutusScript;
   proposalUtxo: UTxO;
+  settingsUtxo: UTxO;
   utxos: UTxO[];
   changeAddress: string;
   collateralUtxo: UTxO;
@@ -200,7 +200,11 @@ async function buildProposalSpend(
     )
     .txInInlineDatumPresent()
     .txInRedeemerValue(proposalRedeemerToData(redeemer))
-    .txInScript(p.script.code);
+    .txInScript(p.script.code)
+    .readOnlyTxInReference(
+      p.settingsUtxo.input.txHash,
+      p.settingsUtxo.input.outputIndex,
+    );
 
   if (continuationDatum) {
     p.txBuilder
@@ -259,6 +263,10 @@ export async function buildCosignProposalTx(
     .txInInlineDatumPresent()
     .txInRedeemerValue(proposalRedeemerToData({ kind: "Cosign" }))
     .txInScript(p.script.code)
+    .readOnlyTxInReference(
+      p.settingsUtxo.input.txHash,
+      p.settingsUtxo.input.outputIndex,
+    )
     .txOut(
       proposalScriptAddress(p.script, networkId),
       proposalValue(p.script, tokenName),
@@ -391,6 +399,10 @@ export async function buildTallyTx(p: TallyParams): Promise<string> {
     .txInInlineDatumPresent()
     .txInRedeemerValue(proposalRedeemerToData({ kind: "TallyVotes" }))
     .txInScript(p.script.code)
+    .readOnlyTxInReference(
+      p.settingsUtxo.input.txHash,
+      p.settingsUtxo.input.outputIndex,
+    )
     .txOut(
       proposalScriptAddress(p.script, networkId),
       proposalValue(p.script, tokenName),
