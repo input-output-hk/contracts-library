@@ -32,7 +32,7 @@ pub fn find_continuation_output(
   outputs: List<Output>,
   own_addr: Address,
 ) -> Output {
-  expect Some(out) = list.find(outputs, fn(o) { o.address == own_addr })
+  let out = list.expect_find(outputs, fn(o) { o.address == own_addr })
   out
 }
 
@@ -46,7 +46,7 @@ pub fn spend_redeemer(self: Transaction, ref: OutputReference) -> Data {
 
 /// Locate an input holding exactly one NFT under `policy` (any name).
 pub fn find_input_by_policy(inputs: List<Input>, policy: PolicyId) -> Input {
-  expect Some(input) = list.find(
+  let input = list.expect_find(
     inputs,
     fn(input) { has_any_nft(input.output.value, policy) },
   )
@@ -73,7 +73,7 @@ pub fn find_proposal_input(
   own_policy: PolicyId,
   token_name: AssetName,
 ) -> Input {
-  expect Some(proposal_input) = list.find(
+  let proposal_input = list.expect_find(
     inputs,
     fn(input) { has_nft_strict(input.output.value, own_policy, token_name) },
   )
