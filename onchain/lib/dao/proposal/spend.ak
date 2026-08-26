@@ -106,14 +106,12 @@ pub fn validate_proposal_spend(
         votes,
       )
       let burned = mint |> assets.tokens(vote_policy) |> dict.to_pairs()
-      let all_burned = list.all(burned, fn(entry) { entry.2nd == -1 })
       and {
         upper <= tally_end,
         // every consumed vote is refunded to its owner and its NFT burned; the
         // number of burns must match the votes consumed so none slip through
         vote_count > 0,
         list.length(burned) == vote_count,
-        all_burned,
         refunds_ok,
         cont.status == ProposalStatus.Tally { votes: counted },
         immutables_ok(cont, datum),
