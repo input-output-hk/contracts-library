@@ -108,6 +108,7 @@ pub type VoteDatum {
 /// Actions on a vote artifact UTxO.
 pub type VoteRedeemer {
   TallyVote
+  Cancel
 }
 
 /// Redeemer for the vote NFT minting policy.
