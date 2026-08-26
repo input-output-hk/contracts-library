@@ -163,6 +163,7 @@ export interface StakeSpendParams {
   script: PlutusScript;
   /** The stake position UTxO being acted on. */
   stakeUtxo: UTxO;
+  settingsUtxo: UTxO;
   utxos: UTxO[];
   changeAddress: string;
   collateralUtxo: UTxO;
@@ -194,7 +195,11 @@ async function buildStakeSpend(
     )
     .txInInlineDatumPresent()
     .txInRedeemerValue(stakeRedeemerToData(redeemer))
-    .txInScript(p.script.code);
+    .txInScript(p.script.code)
+    .readOnlyTxInReference(
+      p.settingsUtxo.input.txHash,
+      p.settingsUtxo.input.outputIndex,
+    );
 
   if (continuation) {
     p.txBuilder
@@ -295,6 +300,10 @@ export async function buildClosePositionTx(
     .txInInlineDatumPresent()
     .txInRedeemerValue(stakeRedeemerToData({ kind: "ClosePosition" }))
     .txInScript(p.script.code)
+    .readOnlyTxInReference(
+      p.settingsUtxo.input.txHash,
+      p.settingsUtxo.input.outputIndex,
+    )
     .mintPlutusScriptV3()
     .mint("-1", policyId, p.stakeNftName)
     .mintRedeemerValue(closeStakePositionRedeemer())

@@ -29,7 +29,6 @@ import {
   voteScript,
   voteScriptAddress,
   type DaoSettings,
-  type OutputRef,
   type ProposalDatum,
   type ProposalThresholds,
   type ProposalTimingConfig,
@@ -107,14 +106,6 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
   const stakeTokenPolicy = () => resolveScriptHash(ALWAYS_TRUE.cbor, "V3");
   const stakeTokenUnit = () => stakeTokenPolicy() + STAKE_TOKEN_NAME;
 
-  /** A fixed, deterministic placeholder output reference used only to compute
-   * the sibling script hashes published in DaoSettings before the settings
-   * UTxO exists. See the bootstrap note in `setup`. */
-  const PLACEHOLDER_REF: OutputRef = {
-    transactionId: "00".repeat(32),
-    outputIndex: 0,
-  };
-
   function addressDataOf(address: string): VoteDatum["stakeOwner"] {
     const { pubKeyHash } = deserializeAddress(address);
     return {
@@ -128,7 +119,6 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
     cosigner: Account;
     admin: Account;
     settingsUtxo: UTxO;
-    settingsRef: OutputRef;
     stake: { script: ReturnType<typeof stakeScript>; addr: string };
     proposal: { script: ReturnType<typeof proposalScript>; addr: string };
     vote: { script: ReturnType<typeof voteScript>; addr: string };
@@ -161,46 +151,12 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
     await mintStakeTokens(owner);
     await mintStakeTokens(cosigner);
 
-    // 2. Derive the sibling script hashes from placeholder-parameterized
-    //    scripts (they only feed the DaoSettings datum; the live scripts below
-    //    are re-derived from the real settings UTxO reference). This is the
-    //    DAO's bootstrap: hashes <-> settings UTxO ref are mutually dependent,
-    //    so the settings datum is finalized once and the live scripts use the
-    //    post-launch reference. TODO: resolve cleanly with the real logic.
-    const placeholderStake = stakeScript({
-      stakeTokenPolicy: policy,
-      stakeTokenName: STAKE_TOKEN_NAME,
-      settingsUtxo: PLACEHOLDER_REF,
-    });
-    const placeholderProposal = proposalScript({
-      settingsUtxo: PLACEHOLDER_REF,
-      stakeNftPolicy: resolveScriptHash(placeholderStake.code, "V3"),
-      stakeNftName: STAKE_NFT_NAME,
-      stakeTokenPolicy: policy,
-      stakeTokenName: STAKE_TOKEN_NAME,
-    });
-    const placeholderVote = voteScript({
-      stakeNftPolicy: resolveScriptHash(placeholderStake.code, "V3"),
-      stakeTokenPolicy: policy,
-      stakeTokenName: STAKE_TOKEN_NAME,
-      proposalPolicy: resolveScriptHash(placeholderProposal.code, "V3"),
-    });
-
-    const daoSettings: DaoSettings = {
-      thresholds: THRESHOLDS,
-      timings: TIMINGS,
-      stakeValidator: resolveScriptHash(placeholderStake.code, "V3"),
-      proposalValidator: resolveScriptHash(placeholderProposal.code, "V3"),
-      voteValidator: resolveScriptHash(placeholderVote.code, "V3"),
-    };
-
-    // 3. Launch the settings UTxO carrying the DaoSettings datum.
+    // 2. Build the settings script and derive its hash (the settings NFT
+    //    policy), which parameterizes the DAO validators independently of the
+    //    settings UTxO location.
     const settingsSeed = (await admin.wallet.getUtxos())[0];
     const settingsParams = {
-      seedUtxo: {
-        transactionId: settingsSeed.input.txHash,
-        outputIndex: settingsSeed.input.outputIndex,
-      },
+      seedUtxo: settingsSeed.input,
       proposeAuth: { kind: "key" as const, hash: admin.keyHash },
       applyAuth: { kind: "key" as const, hash: admin.keyHash },
       applyDelay: 4_000,
@@ -209,10 +165,31 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
     const settings = settingsScript(settingsParams);
     const settingsAddr = settingsScriptAddress(settings, NETWORK_ID);
     const settingsPolicy = resolveScriptHash(settings.code, "V3");
+
+    // 3. Derive the DAO scripts from the settings policy + token name.
+    const daoParams = {
+      stakeTokenPolicy: policy,
+      stakeTokenName: STAKE_TOKEN_NAME,
+      settingsPolicy,
+      settingsTokenName: SETTINGS_TOKEN_NAME,
+    };
+    const stake = stakeScript(daoParams);
+    const proposal = proposalScript(daoParams);
+    const vote = voteScript(daoParams);
+
+    const daoSettings: DaoSettings = {
+      thresholds: THRESHOLDS,
+      timings: TIMINGS,
+      stakeValidator: resolveScriptHash(stake.code, "V3"),
+      proposalValidator: resolveScriptHash(proposal.code, "V3"),
+      voteValidator: resolveScriptHash(vote.code, "V3"),
+    };
+
+    // 4. Launch the settings UTxO carrying the DaoSettings datum. Custom launch
+    //    (rather than the library's `buildLaunchTx`) so the output carries
+    //    enough ada for the large inline DaoSettings datum: the library's
+    //    1.5 ADA default is below the min-UTxO once the datum is this big.
     const adminCol = (await admin.wallet.getCollateral())[0];
-    // Custom launch (rather than the library's `buildLaunchTx`) so the output
-    // carries enough ada for the large inline DaoSettings datum: the library's
-    // 1.5 ADA default is below the min-UTxO once the datum is this big.
     const launchTx = await newTxBuilder(provider)
       .mintPlutusScriptV3()
       .mint("1", settingsPolicy, SETTINGS_TOKEN_NAME)
@@ -252,48 +229,23 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
       launchHash,
       settingsAddr,
     );
-    const settingsRef = {
-      transactionId: settingsUtxo.input.txHash,
-      outputIndex: settingsUtxo.input.outputIndex,
-    };
-
-    // 4. Live scripts parameterized with the real settings UTxO reference.
-    const liveStake = stakeScript({
-      stakeTokenPolicy: policy,
-      stakeTokenName: STAKE_TOKEN_NAME,
-      settingsUtxo: settingsRef,
-    });
-    const liveProposal = proposalScript({
-      settingsUtxo: settingsRef,
-      stakeNftPolicy: resolveScriptHash(liveStake.code, "V3"),
-      stakeNftName: STAKE_NFT_NAME,
-      stakeTokenPolicy: policy,
-      stakeTokenName: STAKE_TOKEN_NAME,
-    });
-    const liveVote = voteScript({
-      stakeNftPolicy: resolveScriptHash(liveStake.code, "V3"),
-      stakeTokenPolicy: policy,
-      stakeTokenName: STAKE_TOKEN_NAME,
-      proposalPolicy: resolveScriptHash(liveProposal.code, "V3"),
-    });
 
     return {
       owner,
       cosigner,
       admin,
       settingsUtxo,
-      settingsRef,
       stake: {
-        script: liveStake,
-        addr: stakeScriptAddress(liveStake, NETWORK_ID),
+        script: stake,
+        addr: stakeScriptAddress(stake, NETWORK_ID),
       },
       proposal: {
-        script: liveProposal,
-        addr: proposalScriptAddress(liveProposal, NETWORK_ID),
+        script: proposal,
+        addr: proposalScriptAddress(proposal, NETWORK_ID),
       },
       vote: {
-        script: liveVote,
-        addr: voteScriptAddress(liveVote, NETWORK_ID),
+        script: vote,
+        addr: voteScriptAddress(vote, NETWORK_ID),
       },
     };
   }
@@ -390,6 +342,7 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
       stakeUtxo,
       stakeDatum: stakeDatum(voter),
       proposalUtxo,
+      settingsUtxo: ctx.settingsUtxo,
       voteDatum,
       voteTokenName: VOTE_TOKEN_NAME,
       utxos: await voter.wallet.getUtxos(),
@@ -418,6 +371,7 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
       txBuilder: newTxBuilder(provider),
       script: ctx.stake.script,
       stakeUtxo,
+      settingsUtxo: ctx.settingsUtxo,
       datum: stakeDatum(ctx.owner),
       addedTokens: [{ unit: stakeTokenUnit(), quantity: "1000" }],
       utxos: ownerUtxos,
@@ -436,6 +390,7 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
       txBuilder: newTxBuilder(provider),
       script: ctx.stake.script,
       stakeUtxo: deposited,
+      settingsUtxo: ctx.settingsUtxo,
       datum: stakeDatum(ctx.owner),
       delegatee: { keyHash: ctx.cosigner.keyHash },
       utxos: await ctx.owner.wallet.getUtxos(),
@@ -460,6 +415,7 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
       txBuilder: newTxBuilder(provider),
       script: ctx.stake.script,
       stakeUtxo,
+      settingsUtxo: ctx.settingsUtxo,
       datum: stakeDatum(ctx.owner),
       amount: 1_000n,
       stakeTokenUnit: stakeTokenUnit(),
@@ -500,6 +456,7 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
       txBuilder: newTxBuilder(provider),
       script: ctx.proposal.script,
       proposalUtxo,
+      settingsUtxo: ctx.settingsUtxo,
       proposalDatum: {
         ...initialProposalDatum(ctx),
         status: {
@@ -526,6 +483,7 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
       txBuilder: newTxBuilder(provider),
       script: ctx.proposal.script,
       proposalUtxo: cosigned,
+      settingsUtxo: ctx.settingsUtxo,
 
       continuationDatum: {
         ...initialProposalDatum(ctx),
@@ -568,6 +526,7 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
       txBuilder: newTxBuilder(provider),
       script: ctx.proposal.script,
       proposalUtxo,
+      settingsUtxo: ctx.settingsUtxo,
 
       continuationDatum: {
         ...initialProposalDatum(ctx),
@@ -589,6 +548,7 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
       txBuilder: newTxBuilder(provider),
       script: ctx.proposal.script,
       proposalUtxo: tallyState,
+      settingsUtxo: ctx.settingsUtxo,
 
       continuationDatum: {
         ...initialProposalDatum(ctx),
@@ -627,6 +587,7 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
       txBuilder: newTxBuilder(provider),
       script: ctx.proposal.script,
       proposalUtxo,
+      settingsUtxo: ctx.settingsUtxo,
 
       utxos: await ctx.owner.wallet.getUtxos(),
       changeAddress: ctx.owner.address,
@@ -649,6 +610,7 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
       txBuilder: newTxBuilder(provider),
       script: ctx.stake.script,
       stakeUtxo,
+      settingsUtxo: ctx.settingsUtxo,
 
       stakeNftName: STAKE_NFT_NAME,
       utxos: await ctx.owner.wallet.getUtxos(),
@@ -784,6 +746,7 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
           txBuilder: newTxBuilder(provider),
           script: ctx.proposal.script,
           proposalUtxo,
+          settingsUtxo: ctx.settingsUtxo,
 
           continuationDatum: {
             ...initialProposalDatum(ctx),
@@ -807,6 +770,7 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
           txBuilder: newTxBuilder(provider),
           script: ctx.stake.script,
           stakeUtxo,
+          settingsUtxo: ctx.settingsUtxo,
 
           stakeNftName: STAKE_NFT_NAME,
           utxos: await ctx.owner.wallet.getUtxos(),
