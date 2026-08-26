@@ -13,7 +13,7 @@ use dao/vote/spend.{validate_vote_cancel, validate_vote_tally}
 validator vote(
   staked_token_policy: PolicyId,
   staked_token_name: AssetName,
-  settings_utxo: OutputReference,
+  settings_policy: PolicyId,
   settings_token_name: AssetName,
 ) {
   mint(redeemer: VoteTokenRedeemer, own_policy: PolicyId, self: Transaction) {
@@ -21,7 +21,7 @@ validator vote(
       MintVote { out_idx } -> {
         let settings = get_dao_settings(
           self,
-          settings_utxo,
+          settings_policy,
           settings_token_name,
         )
         validate_mint_vote(
@@ -45,7 +45,7 @@ validator vote(
     self: Transaction,
   ) {
     expect Some(vote_datum) = datum
-    let settings = get_dao_settings(self, settings_utxo, settings_token_name)
+    let settings = get_dao_settings(self, settings_policy, settings_token_name)
     when redeemer is {
       TallyVote ->
         validate_vote_tally(

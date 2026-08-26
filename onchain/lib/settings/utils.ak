@@ -1,28 +1,25 @@
 use aiken/collection/list
 use cardano/address.{Script}
-use cardano/assets.{AssetName, has_nft_strict}
+use cardano/assets.{AssetName, PolicyId, has_nft_strict}
 use cardano/transaction.{
   InlineDatum, Input, Output, OutputReference, Transaction, find_input,
 }
 use settings/types.{SettingsDatum}
 
-/// Extract a SettingsDatum from a reference input that holds the
-/// settings NFT.
+/// Extract a SettingsDatum from the reference input that holds the settings
+/// NFT (identified by `settings_token_name` under `settings_policy`).
 pub fn get_settings_datum(
   self: Transaction,
-  settings_ref: OutputReference,
+  settings_policy: PolicyId,
   settings_token_name: AssetName,
 ) -> SettingsDatum {
   let Transaction { reference_inputs, .. } = self
-  expect Some(settings_input) = find_input(reference_inputs, settings_ref)
-  expect Script(settings_policy) =
-    settings_input.output.address.payment_credential
-  expect
-    has_nft_strict(
-      settings_input.output.value,
-      settings_policy,
-      settings_token_name,
-    )
+  let settings_input = list.expect_find(
+    reference_inputs,
+    fn(input) {
+      has_nft_strict(input.output.value, settings_policy, settings_token_name)
+    },
+  )
   expect InlineDatum(datum) = settings_input.output.datum
   expect settings_datum: SettingsDatum = datum
   settings_datum

@@ -15,11 +15,11 @@ use dao/utils.{get_dao_settings}
 
 /// Stake position script: its hash is the stake NFT policy id and the address
 /// where positions live. Governance parameters and sibling script hashes are
-/// read at runtime from the settings UTxO at `settings_utxo`.
+/// read at runtime from the settings UTxO located by its NFT.
 validator stake(
   staked_token_policy: PolicyId,
   staked_token_name: AssetName,
-  settings_utxo: OutputReference,
+  settings_policy: PolicyId,
   settings_token_name: AssetName,
 ) {
   mint(
@@ -48,7 +48,7 @@ validator stake(
     self: Transaction,
   ) {
     expect Some(stake_datum) = datum
-    let settings = get_dao_settings(self, settings_utxo, settings_token_name)
+    let settings = get_dao_settings(self, settings_policy, settings_token_name)
     when redeemer is {
       Deposit ->
         validate_stake_deposit(
