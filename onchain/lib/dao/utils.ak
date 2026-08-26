@@ -80,18 +80,17 @@ pub fn find_proposal_input(
   proposal_input
 }
 
-/// Read the DAO settings from the referenced settings UTxO, casting the
-/// settings contract's opaque `current` datum to `DaoSettings`. The settings
-/// NFT (identified by `settings_token_name` under the settings script's own
-/// policy, derived from the UTxO address) must be present on the UTxO.
+/// Read the DAO settings from the settings UTxO located by its NFT (the
+/// settings token name under the settings script's own policy), casting the
+/// settings contract's opaque `current` datum to `DaoSettings`.
 pub fn get_dao_settings(
   self: Transaction,
-  settings_ref: OutputReference,
+  settings_policy: PolicyId,
   settings_token_name: AssetName,
 ) -> DaoSettings {
   let settings_datum = get_settings_datum(
     self,
-    settings_ref,
+    settings_policy,
     settings_token_name,
   )
   expect dao_settings: DaoSettings = settings_datum.current
