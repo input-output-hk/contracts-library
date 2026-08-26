@@ -8,7 +8,10 @@ use cardano/transaction.{
   Transaction, placeholder,
 }
 use dao/proposal/mint.{validate_create_proposal}
-use dao/proposal/spend.{validate_proposal_spend}
+use dao/proposal/spend.{
+  validate_accept_draft, validate_cosign, validate_end_proposal,
+  validate_end_voting_stage, validate_reject_draft, validate_tally_votes,
+}
 use dao/types.{
   AcceptDraft, Cosign, CosignProposal, CreateProposal, DaoSettings, EndProposal,
   EndVotingStage, ProposalDatum, ProposalRedeemer, ProposalStatus,
@@ -211,16 +214,15 @@ fn refund(lovelace: Int) -> Output {
 }
 
 fn spend(d: ProposalDatum, r: ProposalRedeemer, self: Transaction) -> Bool {
-  validate_proposal_spend(
-    vote_policy,
-    stake_hash,
-    gov_policy,
-    gov_name,
-    d,
-    r,
-    prop_ref(),
-    self,
-  )
+  when r is {
+    Cosign ->
+      validate_cosign(stake_hash, gov_policy, gov_name, d, prop_ref(), self)
+    AcceptDraft -> validate_accept_draft(d, prop_ref(), self)
+    RejectDraft -> validate_reject_draft(d, prop_ref(), self)
+    EndVotingStage -> validate_end_voting_stage(d, prop_ref(), self)
+    TallyVotes -> validate_tally_votes(vote_policy, d, prop_ref(), self)
+    EndProposal -> validate_end_proposal(d, prop_ref(), self)
+  }
 }
 
 fn mint_stake_value(stake: Int) -> assets.Value {
@@ -301,7 +303,7 @@ test cosign_ok() {
   let cont = prop_output(
     datum(ProposalStatus.Draft { cosigning_stake: 15 }, []),
   )
-  let cosign_r: Data = CosignProposal
+  let cosign_r: Data = CosignProposal { proposal_id: prop_nft }
   let tx = Transaction {
     ..placeholder,
     inputs: [prop_input(d), stake_input(5)],
@@ -317,7 +319,7 @@ test rejects_cosign_wrong_new_stake() {
   let cont = prop_output(
     datum(ProposalStatus.Draft { cosigning_stake: 20 }, []),
   )
-  let cosign_r: Data = CosignProposal
+  let cosign_r: Data = CosignProposal { proposal_id: prop_nft }
   let tx = Transaction {
     ..placeholder,
     inputs: [prop_input(d), stake_input(5)],
