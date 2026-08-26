@@ -243,13 +243,14 @@ fn winner(votes: List<Int>) -> Option<(Int, Int)> {
       }
     },
   )
-  when best_option is {
-    Some(option) ->
-      if !tie && best_votes > 0 {
-        Some((option, best_votes))
-      } else {
-        None
-      }
-    None -> None
-  }
+  best_option
+    |> option.and_then(
+        fn(option) {
+          if !tie && best_votes > 0 {
+            Some((option, best_votes))
+          } else {
+            None
+          }
+        },
+      )
 }
