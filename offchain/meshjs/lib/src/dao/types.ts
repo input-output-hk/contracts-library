@@ -2,8 +2,7 @@
  * Off-chain mirror of the on-chain types in `onchain/lib/dao/types.ak`.
  */
 
-import type { Credential } from "../common";
-import type { OutputRef } from "../settings/types";
+import type { Credential, OutputRef } from "../common";
 
 export type { Credential };
 
