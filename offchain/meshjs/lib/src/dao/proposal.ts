@@ -432,13 +432,16 @@ export async function buildTallyTx(p: TallyParams): Promise<string> {
   }
 
   if (voteNfts.size > 0) {
-    p.txBuilder.mintPlutusScriptV3();
+    // One fully-specified mint item per burned NFT: Mesh's queueMint merges
+    // same-policy items with identical redeemer/script, but every `.mint()`
+    // must already carry its script info (queueing the previous item).
     for (const name of voteNfts) {
-      p.txBuilder.mint("-1", votePolicy, name);
+      p.txBuilder
+        .mintPlutusScriptV3()
+        .mint("-1", votePolicy, name)
+        .mintRedeemerValue(burnVotesRedeemer())
+        .mintingScript(p.voteScript.code);
     }
-    p.txBuilder
-      .mintRedeemerValue(burnVotesRedeemer())
-      .mintingScript(p.voteScript.code);
   }
 
   for (const { voteUtxo, ownerAddress } of p.votes) {
