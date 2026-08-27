@@ -2,6 +2,8 @@
  * Off-chain mirror of the on-chain types in `onchain/lib/dao/types.ak`.
  */
 
+import type { TxInput } from "@meshsdk/core";
+
 import type { Credential } from "../common";
 
 export type { Credential };
@@ -21,12 +23,12 @@ export type StakeRedeemer =
   | { kind: "Withdraw"; amount: bigint }
   | { kind: "ClosePosition" }
   | { kind: "CreateProposal" }
-  | { kind: "CosignProposal" }
-  | { kind: "VoteProposal" };
+  | { kind: "CosignProposal"; proposalId: string }
+  | { kind: "VoteProposal"; proposalId: string; votedOption: number };
 
 /** Redeemer for the stake position NFT minting policy. */
 export type StakePositionTokenRedeemer =
-  | { kind: "CreatePosition" }
+  | { kind: "CreatePosition"; ownerUtxo: TxInput; outIdx: number }
   | { kind: "CloseStakePosition" };
 
 /** Governance thresholds required at each stage of a proposal's lifecycle. */
@@ -49,7 +51,7 @@ export interface ProposalTimingConfig {
 export type ProposalStatus =
   | { kind: "Draft"; cosigningStake: bigint }
   | { kind: "Voting" }
-  | { kind: "Tally"; votes: Map<number, bigint> };
+  | { kind: "Tally"; votes: bigint[] };
 
 /** Immutable proposal state, written once at creation. */
 export interface ProposalDatum {
@@ -57,8 +59,8 @@ export interface ProposalDatum {
   timingConfig: ProposalTimingConfig;
   startTime: number;
   status: ProposalStatus;
-  /** resultId -> script hash to execute. */
-  results: Map<number, string>;
+  /** Ordered list of execution-effect script hashes (one per vote option). */
+  results: string[];
 }
 
 /**
@@ -79,7 +81,7 @@ export interface DaoSettings {
 
 /** Redeemer for the proposal token minting policy. */
 export type ProposalTokenRedeemer =
-  | { kind: "MintProposal" }
+  | { kind: "MintProposal"; results: string[]; outIdx: number }
   | { kind: "BurnProposal" };
 
 /** Spent proposal UTxO actions. */
@@ -93,23 +95,19 @@ export type ProposalRedeemer =
 
 /** Vote artifact datum. */
 export interface VoteDatum {
-  stakeOwner: AddressData;
+  stakeOwner: Credential;
   proposal: string;
   votedOption: number;
   stake: bigint;
 }
 
-/** Off-chain mirror of `cardano/address/Address`. */
-export interface AddressData {
-  paymentCredential: Credential;
-  stakeCredential: Credential | null;
-}
-
 /** Actions on a vote artifact UTxO. */
-export type VoteRedeemer = { kind: "TallyVote" };
+export type VoteRedeemer = { kind: "TallyVote" } | { kind: "Cancel" };
 
 /** Redeemer for the vote NFT minting policy. */
-export type VoteTokenRedeemer = { kind: "MintVote" } | { kind: "BurnVotes" };
+export type VoteTokenRedeemer =
+  | { kind: "MintVote"; outIdx: number }
+  | { kind: "BurnVotes" };
 
 /** Parameters of the `proposal` validator (blueprint order). */
 export interface ProposalParams {

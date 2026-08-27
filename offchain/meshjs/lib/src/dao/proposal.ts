@@ -15,12 +15,15 @@ import {
   applyParamsToScript,
   resolveScriptHash,
   serializePlutusScript,
+  SLOT_CONFIG_NETWORK,
   type Asset,
   type MeshTxBuilder,
   type PlutusScript,
+  type SlotConfig,
   type UTxO,
 } from "@meshsdk/core";
 
+import { enclosingSlotBound, nftNameFromRef } from "../common";
 import {
   burnProposalRedeemer,
   burnVotesRedeemer,
@@ -48,6 +51,26 @@ type Network = "mainnet" | "preprod" | "preview";
 
 function networkIdOf(network: Network): 0 | 1 {
   return network === "mainnet" ? 1 : 0;
+}
+
+/** The enclosing slot + start time for `now` on the given network/devnet. */
+function slotBound(
+  network: Network,
+  now: number,
+  customSlotConfig?: SlotConfig,
+) {
+  return enclosingSlotBound(
+    now,
+    customSlotConfig ?? SLOT_CONFIG_NETWORK[network],
+  );
+}
+
+/** Phase end times (POSIX ms) derived from a proposal's immutable fields. */
+function phaseBounds(datum: ProposalDatum) {
+  const draftEnd = datum.startTime + datum.timingConfig.draftLength;
+  const votingEnd = draftEnd + datum.timingConfig.votingLength;
+  const tallyEnd = votingEnd + datum.timingConfig.tallyLength;
+  return { draftEnd, votingEnd, tallyEnd };
 }
 
 const DEFAULT_MIN_UTXO_LOVELACE = 2_000_000n;
@@ -100,11 +123,13 @@ export interface CreateProposalParams {
   stakeDatum: StakePositionDatum;
   settingsUtxo: UTxO;
   proposalDatum: ProposalDatum;
-  proposalTokenName: string;
+  /** Wall-clock used to set `start_time` and the validity lower bound (POSIX ms). */
+  now: number;
   utxos: UTxO[];
   changeAddress: string;
   collateralUtxo: UTxO;
   network?: Network;
+  customSlotConfig?: SlotConfig;
 }
 
 /** Spend the creating stake position and mint the proposal NFT. */
@@ -117,11 +142,17 @@ export async function buildCreateProposalTx(
     p.proposalScript.code,
     p.proposalScript.version,
   );
+  const bound = slotBound(network, p.now, p.customSlotConfig);
+  const proposalTokenName = nftNameFromRef(p.stakeUtxo.input);
+
+  if (p.stakeDatum.owner.kind === "key") {
+    p.txBuilder.requiredSignerHash(p.stakeDatum.owner.hash);
+  }
 
   p.txBuilder
     .mintPlutusScriptV3()
-    .mint("1", proposalPolicy, p.proposalTokenName)
-    .mintRedeemerValue(mintProposalRedeemer())
+    .mint("1", proposalPolicy, proposalTokenName)
+    .mintRedeemerValue(mintProposalRedeemer(p.proposalDatum.results, 0))
     .mintingScript(p.proposalScript.code)
     .spendingPlutusScriptV3()
     .txIn(
@@ -141,7 +172,7 @@ export async function buildCreateProposalTx(
   p.txBuilder
     .txOut(
       proposalScriptAddress(p.proposalScript, networkId),
-      proposalValue(p.proposalScript, p.proposalTokenName),
+      proposalValue(p.proposalScript, proposalTokenName),
     )
     .txOutInlineDatumValue(proposalDatumToData(p.proposalDatum))
     .txOut(
@@ -151,6 +182,7 @@ export async function buildCreateProposalTx(
     .txOutInlineDatumValue(stakePositionDatumToData(p.stakeDatum));
 
   return await p.txBuilder
+    .invalidBefore(bound.slot)
     .txInCollateral(
       p.collateralUtxo.input.txHash,
       p.collateralUtxo.input.outputIndex,
@@ -169,10 +201,15 @@ export interface ProposalSpendParams {
   script: PlutusScript;
   proposalUtxo: UTxO;
   settingsUtxo: UTxO;
+  /** The spent proposal's state (for phase-boundary derivation). */
+  datum: ProposalDatum;
+  /** Wall-clock used for lower-bound validity intervals (POSIX ms). */
+  now: number;
   utxos: UTxO[];
   changeAddress: string;
   collateralUtxo: UTxO;
   network?: Network;
+  customSlotConfig?: SlotConfig;
 }
 
 /**
@@ -189,6 +226,7 @@ async function buildProposalSpend(
   const networkId = networkIdOf(network);
   const policyId = resolveScriptHash(p.script.code, p.script.version);
   const tokenName = nftNameOf(p.proposalUtxo, policyId);
+  const bounds = phaseBounds(p.datum);
 
   p.txBuilder
     .spendingPlutusScriptV3()
@@ -221,6 +259,21 @@ async function buildProposalSpend(
       .mintingScript(p.script.code);
   }
 
+  // Each action has its own validity-interval requirement (see proposal/spend.ak).
+  if (redeemer.kind === "AcceptDraft") {
+    p.txBuilder.invalidHereafter(
+      slotBound(network, bounds.draftEnd, p.customSlotConfig).slot,
+    );
+  } else if (
+    redeemer.kind === "RejectDraft" ||
+    redeemer.kind === "EndVotingStage" ||
+    redeemer.kind === "EndProposal"
+  ) {
+    p.txBuilder.invalidBefore(
+      slotBound(network, p.now, p.customSlotConfig).slot,
+    );
+  }
+
   return await p.txBuilder
     .txInCollateral(
       p.collateralUtxo.input.txHash,
@@ -251,6 +304,11 @@ export async function buildCosignProposalTx(
   const networkId = networkIdOf(network);
   const policyId = resolveScriptHash(p.script.code, p.script.version);
   const tokenName = nftNameOf(p.proposalUtxo, policyId);
+  const authorizer = p.stakeDatum.delegatee ?? p.stakeDatum.owner;
+
+  if (authorizer.kind === "key") {
+    p.txBuilder.requiredSignerHash(authorizer.hash);
+  }
 
   p.txBuilder
     .spendingPlutusScriptV3()
@@ -280,7 +338,9 @@ export async function buildCosignProposalTx(
       p.stakeUtxo.output.address,
     )
     .txInInlineDatumPresent()
-    .txInRedeemerValue(stakeRedeemerToData({ kind: "CosignProposal" }))
+    .txInRedeemerValue(
+      stakeRedeemerToData({ kind: "CosignProposal", proposalId: tokenName }),
+    )
     .txInScript(p.stakeScript.code)
     .txOut(
       stakeScriptAddress(p.stakeScript, networkId),
@@ -346,6 +406,7 @@ export async function buildTallyTx(p: TallyParams): Promise<string> {
   const policyId = resolveScriptHash(p.script.code, p.script.version);
   const tokenName = nftNameOf(p.proposalUtxo, policyId);
   const votePolicy = resolveScriptHash(p.voteScript.code, p.voteScript.version);
+  const bounds = phaseBounds(p.datum);
 
   for (const { voteUtxo } of p.votes) {
     p.txBuilder
@@ -410,6 +471,9 @@ export async function buildTallyTx(p: TallyParams): Promise<string> {
     .txOutInlineDatumValue(proposalDatumToData(p.continuationDatum));
 
   return await p.txBuilder
+    .invalidHereafter(
+      slotBound(network, bounds.tallyEnd, p.customSlotConfig).slot,
+    )
     .txInCollateral(
       p.collateralUtxo.input.txHash,
       p.collateralUtxo.input.outputIndex,

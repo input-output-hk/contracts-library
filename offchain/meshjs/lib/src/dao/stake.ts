@@ -13,12 +13,15 @@ import {
   applyParamsToScript,
   resolveScriptHash,
   serializePlutusScript,
+  SLOT_CONFIG_NETWORK,
   type Asset,
   type MeshTxBuilder,
   type PlutusScript,
+  type SlotConfig,
   type UTxO,
 } from "@meshsdk/core";
 
+import { enclosingSlotBound, nftNameFromRef, type Credential } from "../common";
 import {
   closeStakePositionRedeemer,
   createPositionRedeemer,
@@ -33,6 +36,18 @@ type Network = "mainnet" | "preprod" | "preview";
 
 function networkIdOf(network: Network): 0 | 1 {
   return network === "mainnet" ? 1 : 0;
+}
+
+/** The enclosing slot + start time for `now` on the given network/devnet. */
+function slotBound(
+  network: Network,
+  now: number,
+  customSlotConfig?: SlotConfig,
+) {
+  return enclosingSlotBound(
+    now,
+    customSlotConfig ?? SLOT_CONFIG_NETWORK[network],
+  );
 }
 
 const DEFAULT_MIN_UTXO_LOVELACE = 2_000_000n;
@@ -56,6 +71,14 @@ export function stakeScriptAddress(
 
 function assetUnit(policyId: string, assetName: string): string {
   return policyId + assetName;
+}
+
+/** The asset name held by `utxo` under `policyId` (excluding lovelace), or "". */
+function nftNameOf(utxo: UTxO, policyId: string): string {
+  const unit = utxo.output.amount
+    .map((a) => a.unit)
+    .find((u) => u !== "lovelace" && u.startsWith(policyId));
+  return unit ? unit.slice(policyId.length) : "";
 }
 
 /** Add (or subtract, for negative quantities) an asset to a value list. */
@@ -110,7 +133,6 @@ export interface CreateStakePositionParams {
   datum: StakePositionDatum;
   /** The stake-token asset(s) to lock. */
   stakedTokens: Asset[];
-  stakeNftName: string;
   utxos: UTxO[];
   changeAddress: string;
   collateralUtxo: UTxO;
@@ -124,11 +146,12 @@ export async function buildCreateStakePositionTx(
   const network = p.network ?? "preprod";
   const policyId = resolveScriptHash(p.script.code, p.script.version);
   const scriptAddr = stakeScriptAddress(p.script, networkIdOf(network));
+  const stakeNftName = nftNameFromRef(p.seedUtxo.input);
 
   p.txBuilder
     .mintPlutusScriptV3()
-    .mint("1", policyId, p.stakeNftName)
-    .mintRedeemerValue(createPositionRedeemer())
+    .mint("1", policyId, stakeNftName)
+    .mintRedeemerValue(createPositionRedeemer(p.seedUtxo.input, 0))
     .mintingScript(p.script.code)
     .txIn(
       p.seedUtxo.input.txHash,
@@ -142,7 +165,7 @@ export async function buildCreateStakePositionTx(
   return await p.txBuilder
     .txOut(
       scriptAddr,
-      createPositionValue(p.script, p.stakeNftName, p.stakedTokens),
+      createPositionValue(p.script, stakeNftName, p.stakedTokens),
     )
     .txOutInlineDatumValue(stakePositionDatumToData(p.datum))
     .txInCollateral(
@@ -164,10 +187,15 @@ export interface StakeSpendParams {
   /** The stake position UTxO being acted on. */
   stakeUtxo: UTxO;
   settingsUtxo: UTxO;
+  /** The position owner (added as a required signer when a key credential). */
+  owner: Credential;
+  /** Wall-clock used to set the validity lower bound (POSIX ms). */
+  now: number;
   utxos: UTxO[];
   changeAddress: string;
   collateralUtxo: UTxO;
   network?: Network;
+  customSlotConfig?: SlotConfig;
 }
 
 /**
@@ -184,6 +212,11 @@ async function buildStakeSpend(
 ): Promise<string> {
   const network = p.network ?? "preprod";
   const scriptAddr = stakeScriptAddress(p.script, networkIdOf(network));
+  const bound = slotBound(network, p.now, p.customSlotConfig);
+
+  if (p.owner.kind === "key") {
+    p.txBuilder.requiredSignerHash(p.owner.hash);
+  }
 
   p.txBuilder
     .spendingPlutusScriptV3()
@@ -208,6 +241,7 @@ async function buildStakeSpend(
   }
 
   return await p.txBuilder
+    .invalidBefore(bound.slot)
     .txInCollateral(
       p.collateralUtxo.input.txHash,
       p.collateralUtxo.input.outputIndex,
@@ -280,14 +314,19 @@ export async function buildDelegateTx(p: DelegateParams): Promise<string> {
 
 // ---------------------------------------------------- ClosePosition
 
-export interface ClosePositionParams extends StakeSpendParams {
-  stakeNftName: string;
-}
+export interface ClosePositionParams extends StakeSpendParams {}
 
 export async function buildClosePositionTx(
   p: ClosePositionParams,
 ): Promise<string> {
+  const network = p.network ?? "preprod";
   const policyId = resolveScriptHash(p.script.code, p.script.version);
+  const stakeNftName = nftNameOf(p.stakeUtxo, policyId);
+  const bound = slotBound(network, p.now, p.customSlotConfig);
+
+  if (p.owner.kind === "key") {
+    p.txBuilder.requiredSignerHash(p.owner.hash);
+  }
 
   p.txBuilder
     .spendingPlutusScriptV3()
@@ -305,11 +344,12 @@ export async function buildClosePositionTx(
       p.settingsUtxo.input.outputIndex,
     )
     .mintPlutusScriptV3()
-    .mint("-1", policyId, p.stakeNftName)
+    .mint("-1", policyId, stakeNftName)
     .mintRedeemerValue(closeStakePositionRedeemer())
     .mintingScript(p.script.code);
 
   return await p.txBuilder
+    .invalidBefore(bound.slot)
     .txInCollateral(
       p.collateralUtxo.input.txHash,
       p.collateralUtxo.input.outputIndex,
