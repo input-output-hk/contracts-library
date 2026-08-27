@@ -17,7 +17,9 @@ import {
   buildVoteTx,
   buildWithdrawTx,
   daoSettingsToData,
+  enclosingSlotBound,
   mintRedeemer,
+  nftNameFromRef,
   proposalScript,
   proposalScriptAddress,
   SETTINGS_TOKEN_NAME,
@@ -38,13 +40,13 @@ import {
 } from "@contracts-library/meshjs";
 import {
   mConStr0,
-  deserializeAddress,
   resolveScriptHash,
   type SlotConfig,
   type UTxO,
 } from "@meshsdk/core";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
+  chainNowMs,
   collateralOf,
   devnetReachable,
   devnetSlotConfig,
@@ -57,6 +59,7 @@ import {
   signAndSubmit,
   STORE_URL,
   waitForTx,
+  waitUntilChainTimeMs,
   type Account,
 } from "../src/devnet";
 import { ALWAYS_TRUE } from "../src/fixtures";
@@ -69,29 +72,26 @@ if (!reachable) {
   );
 }
 
-// hex("stake") — the stake NFT's token name. Not a validator parameter, so the
-// tests are free to pick it; keep it constant so proposal's `stake_nft_name`
-// parameter agrees.
-const STAKE_NFT_NAME = "7374616b65";
 // hex("stake") — the DAO's staked token name (minted by the test harness).
 const STAKE_TOKEN_NAME = "7374616b65";
 const STAKE_TOKEN_QUANTITY = 1_000_000n;
-const PROPOSAL_TOKEN_NAME = "00".repeat(32);
-const VOTE_TOKEN_NAME = "01".repeat(32);
 
 const THRESHOLDS: ProposalThresholds = {
   create: 100_000n,
   cosign: 50_000n,
-  accept: 150_000n,
+  accept: 100_000n,
   vote: 10_000n,
-  execute: 10_000n,
+  execute: 200_000n,
 };
 
 const TIMINGS: ProposalTimingConfig = {
-  draftLength: 20_000,
-  votingLength: 20_000,
-  tallyLength: 20_000,
+  draftLength: 10_000,
+  votingLength: 10_000,
+  tallyLength: 10_000,
 };
+
+/** Number of milliseconds of slack added past a phase boundary before waiting. */
+const PHASE_SLACK = 2_000;
 
 describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
   let provider: ReturnType<typeof makeProvider>;
@@ -106,14 +106,6 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
   const stakeTokenPolicy = () => resolveScriptHash(ALWAYS_TRUE.cbor, "V3");
   const stakeTokenUnit = () => stakeTokenPolicy() + STAKE_TOKEN_NAME;
 
-  function addressDataOf(address: string): VoteDatum["stakeOwner"] {
-    const { pubKeyHash } = deserializeAddress(address);
-    return {
-      paymentCredential: { kind: "key", hash: pubKeyHash },
-      stakeCredential: null,
-    };
-  }
-
   async function setup(): Promise<{
     owner: Account;
     cosigner: Account;
@@ -123,9 +115,9 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
     proposal: { script: ReturnType<typeof proposalScript>; addr: string };
     vote: { script: ReturnType<typeof voteScript>; addr: string };
   }> {
-    const owner = await fundedAccount(provider);
-    const cosigner = await fundedAccount(provider);
-    const admin = await fundedAccount(provider);
+    const owner = await fundedAccount(provider, [5_000, 5_000]);
+    const cosigner = await fundedAccount(provider, [5_000, 5_000]);
+    const admin = await fundedAccount(provider, [5_000, 5_000]);
 
     // 1. Mint the DAO's staked token (always-true policy) to the accounts that
     //    will hold positions.
@@ -258,15 +250,28 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
     };
   }
 
-  function initialProposalDatum(
-    ctx: Awaited<ReturnType<typeof setup>>,
+  /** The staked-token balance held by a stake position UTxO. */
+  function stakeBalance(utxo: UTxO): bigint {
+    const a = utxo.output.amount.find((x) => x.unit === stakeTokenUnit());
+    return BigInt(a?.quantity ?? "0");
+  }
+
+  /** The single execution-effect script hash (one vote option). */
+  function results(): string[] {
+    return [stakeTokenPolicy()];
+  }
+
+  /** A proposal datum for the given lifecycle stage. */
+  function proposalDatum(
+    startTime: number,
+    status: ProposalDatum["status"],
   ): ProposalDatum {
     return {
       thresholds: THRESHOLDS,
       timingConfig: TIMINGS,
-      startTime: 0,
-      status: { kind: "Draft", cosigningStake: THRESHOLDS.create },
-      results: new Map(),
+      startTime,
+      status,
+      results: results(),
     };
   }
 
@@ -275,6 +280,7 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
   async function createStakePosition(
     ctx: Awaited<ReturnType<typeof setup>>,
     owner: Account,
+    stakeQuantity: bigint = THRESHOLDS.create,
   ): Promise<UTxO> {
     const utxos = await owner.wallet.getUtxos();
     const seed = utxos[0];
@@ -285,9 +291,8 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
       owner: { keyHash: owner.keyHash },
       datum: stakeDatum(owner),
       stakedTokens: [
-        { unit: stakeTokenUnit(), quantity: THRESHOLDS.create.toString() },
+        { unit: stakeTokenUnit(), quantity: stakeQuantity.toString() },
       ],
-      stakeNftName: STAKE_NFT_NAME,
       utxos,
       changeAddress: owner.address,
       collateralUtxo: await collateralOf(owner),
@@ -297,57 +302,126 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
     return scriptOutputOf(provider, hash, ctx.stake.addr);
   }
 
+  interface ProposalState {
+    utxo: UTxO;
+    datum: ProposalDatum;
+    tokenName: string;
+    /** The continuing stake position after creation (holds the draft lock). */
+    stakeUtxo: UTxO;
+  }
+
   async function createProposal(
     ctx: Awaited<ReturnType<typeof setup>>,
     stakeUtxo: UTxO,
     owner: Account,
-    datum: ProposalDatum,
-  ): Promise<UTxO> {
+  ): Promise<ProposalState> {
+    const now = await chainNowMs();
+    const startTime = enclosingSlotBound(now, slotConfig).startMs;
+    const tokenName = nftNameFromRef(stakeUtxo.input);
+    const inStake = stakeBalance(stakeUtxo);
+
+    const datum = proposalDatum(startTime, {
+      kind: "Draft",
+      cosigningStake: inStake,
+    });
+
+    const lockedStakeDatum: StakePositionDatum = {
+      ...stakeDatum(owner),
+      locks: [[tokenName, startTime + TIMINGS.draftLength, inStake]],
+    };
+
     const tx = await buildCreateProposalTx({
       txBuilder: newTxBuilder(provider),
       proposalScript: ctx.proposal.script,
       stakeScript: ctx.stake.script,
       stakeUtxo,
-      stakeDatum: stakeDatum(owner),
+      stakeDatum: lockedStakeDatum,
       settingsUtxo: ctx.settingsUtxo,
       proposalDatum: datum,
-      proposalTokenName: PROPOSAL_TOKEN_NAME,
+      now,
       utxos: await owner.wallet.getUtxos(),
       changeAddress: owner.address,
       collateralUtxo: await collateralOf(owner),
+      customSlotConfig: slotConfig,
     });
     const hash = await signAndSubmit(owner, tx);
     await waitForTx(provider, hash);
-    return scriptOutputOf(provider, hash, ctx.proposal.addr);
+    return {
+      utxo: await scriptOutputOf(provider, hash, ctx.proposal.addr),
+      stakeUtxo: await scriptOutputOf(provider, hash, ctx.stake.addr),
+      datum,
+      tokenName,
+    };
+  }
+
+  async function acceptDraft(
+    ctx: Awaited<ReturnType<typeof setup>>,
+    proposal: ProposalState,
+    owner: Account,
+  ): Promise<ProposalState> {
+    const continuation = proposalDatum(proposal.datum.startTime, {
+      kind: "Voting",
+    });
+    const tx = await buildAcceptDraftTx({
+      txBuilder: newTxBuilder(provider),
+      script: ctx.proposal.script,
+      proposalUtxo: proposal.utxo,
+      settingsUtxo: ctx.settingsUtxo,
+      datum: proposal.datum,
+      now: await chainNowMs(),
+      continuationDatum: continuation,
+      utxos: await owner.wallet.getUtxos(),
+      changeAddress: owner.address,
+      collateralUtxo: await collateralOf(owner),
+      customSlotConfig: slotConfig,
+    });
+    const hash = await signAndSubmit(owner, tx);
+    await waitForTx(provider, hash);
+    return {
+      ...proposal,
+      utxo: await scriptOutputOf(provider, hash, ctx.proposal.addr),
+      datum: continuation,
+    };
   }
 
   async function voteOn(
     ctx: Awaited<ReturnType<typeof setup>>,
-    stakeUtxo: UTxO,
-    proposalUtxo: UTxO,
+    proposal: ProposalState,
+    voterStake: UTxO,
     voter: Account,
-    stake: bigint,
     option: number,
   ): Promise<UTxO> {
+    const stake = stakeBalance(voterStake);
+    const unlock =
+      proposal.datum.startTime + TIMINGS.draftLength + TIMINGS.votingLength;
+
     const voteDatum: VoteDatum = {
-      stakeOwner: addressDataOf(voter.address),
-      proposal: PROPOSAL_TOKEN_NAME,
+      stakeOwner: { kind: "key", hash: voter.keyHash },
+      proposal: proposal.tokenName,
       votedOption: option,
       stake,
     };
+
+    const votedStakeDatum: StakePositionDatum = {
+      ...stakeDatum(voter),
+      locks: [[proposal.tokenName, unlock, stake]],
+    };
+
     const tx = await buildVoteTx({
       txBuilder: newTxBuilder(provider),
       voteScript: ctx.vote.script,
       stakeScript: ctx.stake.script,
-      stakeUtxo,
-      stakeDatum: stakeDatum(voter),
-      proposalUtxo,
+      stakeUtxo: voterStake,
+      stakeDatum: votedStakeDatum,
+      proposalUtxo: proposal.utxo,
+      proposalDatum: proposal.datum,
       settingsUtxo: ctx.settingsUtxo,
       voteDatum,
-      voteTokenName: VOTE_TOKEN_NAME,
+      now: await chainNowMs(),
       utxos: await voter.wallet.getUtxos(),
       changeAddress: voter.address,
       collateralUtxo: await collateralOf(voter),
+      customSlotConfig: slotConfig,
     });
     const hash = await signAndSubmit(voter, tx);
     await waitForTx(provider, hash);
@@ -372,11 +446,14 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
       script: ctx.stake.script,
       stakeUtxo,
       settingsUtxo: ctx.settingsUtxo,
+      owner: { kind: "key", hash: ctx.owner.keyHash },
       datum: stakeDatum(ctx.owner),
       addedTokens: [{ unit: stakeTokenUnit(), quantity: "1000" }],
+      now: await chainNowMs(),
       utxos: ownerUtxos,
       changeAddress: ctx.owner.address,
       collateralUtxo: await collateralOf(ctx.owner),
+      customSlotConfig: slotConfig,
     });
     const depositHash = await signAndSubmit(ctx.owner, depositTx);
     await waitForTx(provider, depositHash);
@@ -391,11 +468,14 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
       script: ctx.stake.script,
       stakeUtxo: deposited,
       settingsUtxo: ctx.settingsUtxo,
+      owner: { kind: "key", hash: ctx.owner.keyHash },
       datum: stakeDatum(ctx.owner),
       delegatee: { keyHash: ctx.cosigner.keyHash },
+      now: await chainNowMs(),
       utxos: await ctx.owner.wallet.getUtxos(),
       changeAddress: ctx.owner.address,
       collateralUtxo: await collateralOf(ctx.owner),
+      customSlotConfig: slotConfig,
     });
     const delegateHash = await signAndSubmit(ctx.owner, delegateTx);
     await waitForTx(provider, delegateHash);
@@ -416,12 +496,15 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
       script: ctx.stake.script,
       stakeUtxo,
       settingsUtxo: ctx.settingsUtxo,
+      owner: { kind: "key", hash: ctx.owner.keyHash },
       datum: stakeDatum(ctx.owner),
       amount: 1_000n,
       stakeTokenUnit: stakeTokenUnit(),
+      now: await chainNowMs(),
       utxos: await ctx.owner.wallet.getUtxos(),
       changeAddress: ctx.owner.address,
       collateralUtxo: await collateralOf(ctx.owner),
+      customSlotConfig: slotConfig,
     });
     const hash = await signAndSubmit(ctx.owner, withdrawTx);
     await waitForTx(provider, hash);
@@ -432,44 +515,50 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
   it("creates a proposal from a stake position", async () => {
     const ctx = await setup();
     const stakeUtxo = await createStakePosition(ctx, ctx.owner);
-    const proposalUtxo = await createProposal(
-      ctx,
-      stakeUtxo,
-      ctx.owner,
-      initialProposalDatum(ctx),
-    );
-    expect(lovelaceOf(proposalUtxo)).toBeGreaterThan(0n);
+    const proposal = await createProposal(ctx, stakeUtxo, ctx.owner);
+    expect(lovelaceOf(proposal.utxo)).toBeGreaterThan(0n);
   });
 
   it("cosigns and accepts a draft proposal", async () => {
     const ctx = await setup();
     const ownerStake = await createStakePosition(ctx, ctx.owner);
     const cosignerStake = await createStakePosition(ctx, ctx.cosigner);
-    const proposalUtxo = await createProposal(
-      ctx,
-      ownerStake,
-      ctx.owner,
-      initialProposalDatum(ctx),
-    );
+    const proposal = await createProposal(ctx, ownerStake, ctx.owner);
 
+    // Cosign with the cosigner's full stake.
+    const cosignerInStake = stakeBalance(cosignerStake);
+    const cosignedDatum = proposalDatum(proposal.datum.startTime, {
+      kind: "Draft",
+      cosigningStake:
+        proposal.datum.status.kind === "Draft"
+          ? proposal.datum.status.cosigningStake + cosignerInStake
+          : cosignerInStake,
+    });
+    const cosignerStakeDatum: StakePositionDatum = {
+      ...stakeDatum(ctx.cosigner),
+      locks: [
+        [
+          proposal.tokenName,
+          proposal.datum.startTime + TIMINGS.draftLength,
+          cosignerInStake,
+        ],
+      ],
+    };
     const cosignTx = await buildCosignProposalTx({
       txBuilder: newTxBuilder(provider),
       script: ctx.proposal.script,
-      proposalUtxo,
+      proposalUtxo: proposal.utxo,
       settingsUtxo: ctx.settingsUtxo,
-      proposalDatum: {
-        ...initialProposalDatum(ctx),
-        status: {
-          kind: "Draft",
-          cosigningStake: THRESHOLDS.create + THRESHOLDS.cosign,
-        },
-      },
+      datum: proposal.datum,
+      now: await chainNowMs(),
+      proposalDatum: cosignedDatum,
       stakeScript: ctx.stake.script,
       stakeUtxo: cosignerStake,
-      stakeDatum: stakeDatum(ctx.cosigner),
+      stakeDatum: cosignerStakeDatum,
       utxos: await ctx.cosigner.wallet.getUtxos(),
       changeAddress: ctx.cosigner.address,
       collateralUtxo: await collateralOf(ctx.cosigner),
+      customSlotConfig: slotConfig,
     });
     const cosignHash = await signAndSubmit(ctx.cosigner, cosignTx);
     await waitForTx(provider, cosignHash);
@@ -479,62 +568,43 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
       ctx.proposal.addr,
     );
 
-    const acceptTx = await buildAcceptDraftTx({
-      txBuilder: newTxBuilder(provider),
-      script: ctx.proposal.script,
-      proposalUtxo: cosigned,
-      settingsUtxo: ctx.settingsUtxo,
-
-      continuationDatum: {
-        ...initialProposalDatum(ctx),
-        status: { kind: "Voting" },
-      },
-      utxos: await ctx.owner.wallet.getUtxos(),
-      changeAddress: ctx.owner.address,
-      collateralUtxo: await collateralOf(ctx.owner),
-    });
-    const acceptHash = await signAndSubmit(ctx.owner, acceptTx);
-    await waitForTx(provider, acceptHash);
-    const accepted = await scriptOutputOf(
-      provider,
-      acceptHash,
-      ctx.proposal.addr,
+    const accepted = await acceptDraft(
+      ctx,
+      { ...proposal, utxo: cosigned, datum: cosignedDatum },
+      ctx.owner,
     );
-    expect(lovelaceOf(accepted)).toBeGreaterThan(0n);
+    expect(lovelaceOf(accepted.utxo)).toBeGreaterThan(0n);
   });
 
   it("votes, ends voting, and tallies", async () => {
     const ctx = await setup();
     const ownerStake = await createStakePosition(ctx, ctx.owner);
     const voterStake = await createStakePosition(ctx, ctx.cosigner);
-    const proposalUtxo = await createProposal(
-      ctx,
-      ownerStake,
-      ctx.owner,
-      initialProposalDatum(ctx),
-    );
-    const voteUtxo = await voteOn(
-      ctx,
-      voterStake,
-      proposalUtxo,
-      ctx.cosigner,
-      THRESHOLDS.vote,
-      0,
-    );
+    const proposal = await createProposal(ctx, ownerStake, ctx.owner);
+    const voting = await acceptDraft(ctx, proposal, ctx.owner);
 
+    const voteUtxo = await voteOn(ctx, voting, voterStake, ctx.cosigner, 0);
+
+    // End voting after the voting phase has closed.
+    const votingEnd =
+      voting.datum.startTime + TIMINGS.draftLength + TIMINGS.votingLength;
+    await waitUntilChainTimeMs(votingEnd + PHASE_SLACK);
+    const tallyDatum = proposalDatum(voting.datum.startTime, {
+      kind: "Tally",
+      votes: [0n],
+    });
     const endTx = await buildEndVotingStageTx({
       txBuilder: newTxBuilder(provider),
       script: ctx.proposal.script,
-      proposalUtxo,
+      proposalUtxo: voting.utxo,
       settingsUtxo: ctx.settingsUtxo,
-
-      continuationDatum: {
-        ...initialProposalDatum(ctx),
-        status: { kind: "Tally", votes: new Map() },
-      },
+      datum: voting.datum,
+      now: await chainNowMs(),
+      continuationDatum: tallyDatum,
       utxos: await ctx.owner.wallet.getUtxos(),
       changeAddress: ctx.owner.address,
       collateralUtxo: await collateralOf(ctx.owner),
+      customSlotConfig: slotConfig,
     });
     const endHash = await signAndSubmit(ctx.owner, endTx);
     await waitForTx(provider, endHash);
@@ -544,21 +614,24 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
       ctx.proposal.addr,
     );
 
+    const countedVotes = [stakeBalance(voterStake)];
     const tallyTx = await buildTallyTx({
       txBuilder: newTxBuilder(provider),
       script: ctx.proposal.script,
       proposalUtxo: tallyState,
       settingsUtxo: ctx.settingsUtxo,
-
-      continuationDatum: {
-        ...initialProposalDatum(ctx),
-        status: { kind: "Tally", votes: new Map([[0, THRESHOLDS.vote]]) },
-      },
+      datum: tallyDatum,
+      now: await chainNowMs(),
+      continuationDatum: proposalDatum(voting.datum.startTime, {
+        kind: "Tally",
+        votes: countedVotes,
+      }),
       voteScript: ctx.vote.script,
       votes: [{ voteUtxo, ownerAddress: ctx.cosigner.address }],
       utxos: await ctx.owner.wallet.getUtxos(),
       changeAddress: ctx.owner.address,
       collateralUtxo: await collateralOf(ctx.owner),
+      customSlotConfig: slotConfig,
     });
     const tallyHash = await signAndSubmit(ctx.owner, tallyTx);
     await waitForTx(provider, tallyHash);
@@ -576,24 +649,58 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
   it("ends a proposal", async () => {
     const ctx = await setup();
     const ownerStake = await createStakePosition(ctx, ctx.owner);
-    const proposalUtxo = await createProposal(
-      ctx,
-      ownerStake,
-      ctx.owner,
-      initialProposalDatum(ctx),
-    );
+    const proposal = await createProposal(ctx, ownerStake, ctx.owner);
+    const voting = await acceptDraft(ctx, proposal, ctx.owner);
 
-    const endTx = await buildEndProposalTx({
+    // Drive Draft -> Voting -> Tally (no votes cast).
+    const votingEnd =
+      voting.datum.startTime + TIMINGS.draftLength + TIMINGS.votingLength;
+    await waitUntilChainTimeMs(votingEnd + PHASE_SLACK);
+    const tallyDatum = proposalDatum(voting.datum.startTime, {
+      kind: "Tally",
+      votes: [0n],
+    });
+    const endTx = await buildEndVotingStageTx({
       txBuilder: newTxBuilder(provider),
       script: ctx.proposal.script,
-      proposalUtxo,
+      proposalUtxo: voting.utxo,
       settingsUtxo: ctx.settingsUtxo,
-
+      datum: voting.datum,
+      now: await chainNowMs(),
+      continuationDatum: tallyDatum,
       utxos: await ctx.owner.wallet.getUtxos(),
       changeAddress: ctx.owner.address,
       collateralUtxo: await collateralOf(ctx.owner),
+      customSlotConfig: slotConfig,
     });
-    const hash = await signAndSubmit(ctx.owner, endTx);
+    const endHash = await signAndSubmit(ctx.owner, endTx);
+    await waitForTx(provider, endHash);
+    const tallyState = await scriptOutputOf(
+      provider,
+      endHash,
+      ctx.proposal.addr,
+    );
+
+    // End the proposal after the tally phase has closed.
+    const tallyEnd =
+      voting.datum.startTime +
+      TIMINGS.draftLength +
+      TIMINGS.votingLength +
+      TIMINGS.tallyLength;
+    await waitUntilChainTimeMs(tallyEnd + PHASE_SLACK);
+    const endProposalTx = await buildEndProposalTx({
+      txBuilder: newTxBuilder(provider),
+      script: ctx.proposal.script,
+      proposalUtxo: tallyState,
+      settingsUtxo: ctx.settingsUtxo,
+      datum: tallyDatum,
+      now: await chainNowMs(),
+      utxos: await ctx.owner.wallet.getUtxos(),
+      changeAddress: ctx.owner.address,
+      collateralUtxo: await collateralOf(ctx.owner),
+      customSlotConfig: slotConfig,
+    });
+    const hash = await signAndSubmit(ctx.owner, endProposalTx);
     await waitForTx(provider, hash);
 
     const outs = await provider.fetchUTxOs(hash);
@@ -611,11 +718,12 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
       script: ctx.stake.script,
       stakeUtxo,
       settingsUtxo: ctx.settingsUtxo,
-
-      stakeNftName: STAKE_NFT_NAME,
+      owner: { kind: "key", hash: ctx.owner.keyHash },
+      now: await chainNowMs(),
       utxos: await ctx.owner.wallet.getUtxos(),
       changeAddress: ctx.owner.address,
       collateralUtxo: await collateralOf(ctx.owner),
+      customSlotConfig: slotConfig,
     });
     const hash = await signAndSubmit(ctx.owner, closeTx);
     await waitForTx(provider, hash);
@@ -663,119 +771,63 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
 
   it("rejects a proposal mint with insufficient stake", async () => {
     const ctx = await setup();
-    // stake a position below thresholds.create, then mint a proposal NFT from it
     const owner = ctx.owner;
-    const utxos = await owner.wallet.getUtxos();
-    const tx = await buildCreateStakePositionTx({
-      txBuilder: newTxBuilder(provider),
-      script: ctx.stake.script,
-      seedUtxo: utxos[0],
-      owner: { keyHash: owner.keyHash },
-      datum: stakeDatum(owner),
-      stakedTokens: [
-        {
-          unit: stakeTokenUnit(),
-          quantity: (THRESHOLDS.create - 1n).toString(),
-        },
-      ],
-      stakeNftName: STAKE_NFT_NAME,
-      utxos,
-      changeAddress: owner.address,
-      collateralUtxo: await collateralOf(owner),
-    });
-    const hash = await signAndSubmit(owner, tx);
-    await waitForTx(provider, hash);
-    const stakeUtxo = await scriptOutputOf(provider, hash, ctx.stake.addr);
+    const stakeUtxo = await createStakePosition(
+      ctx,
+      owner,
+      THRESHOLDS.create - 1n,
+    );
 
-    await expect(
-      (async () => {
-        const ptx = await buildCreateProposalTx({
-          txBuilder: newTxBuilder(provider),
-          proposalScript: ctx.proposal.script,
-          stakeScript: ctx.stake.script,
-          stakeUtxo,
-          stakeDatum: stakeDatum(owner),
-          settingsUtxo: ctx.settingsUtxo,
-          proposalDatum: initialProposalDatum(ctx),
-          proposalTokenName: PROPOSAL_TOKEN_NAME,
-          utxos: await owner.wallet.getUtxos(),
-          changeAddress: owner.address,
-          collateralUtxo: await collateralOf(owner),
-        });
-        return signAndSubmit(owner, ptx);
-      })(),
-    ).rejects.toThrow();
+    await expect(createProposal(ctx, stakeUtxo, owner)).rejects.toThrow();
   });
 
   it("rejects a vote below the vote threshold", async () => {
     const ctx = await setup();
     const ownerStake = await createStakePosition(ctx, ctx.owner);
-    const voterStake = await createStakePosition(ctx, ctx.cosigner);
-    const proposalUtxo = await createProposal(
+    const voterStake = await createStakePosition(
       ctx,
-      ownerStake,
-      ctx.owner,
-      initialProposalDatum(ctx),
+      ctx.cosigner,
+      THRESHOLDS.vote - 1n,
     );
+    const proposal = await createProposal(ctx, ownerStake, ctx.owner);
+    const voting = await acceptDraft(ctx, proposal, ctx.owner);
 
     await expect(
-      voteOn(
-        ctx,
-        voterStake,
-        proposalUtxo,
-        ctx.cosigner,
-        THRESHOLDS.vote - 1n,
-        0,
-      ),
+      voteOn(ctx, voting, voterStake, ctx.cosigner, 0),
     ).rejects.toThrow();
   });
 
-  it("rejects an accept-draft before the draft phase ends", async () => {
+  it("rejects an accept-draft after the draft phase ends", async () => {
     const ctx = await setup();
     const ownerStake = await createStakePosition(ctx, ctx.owner);
-    const proposalUtxo = await createProposal(
-      ctx,
-      ownerStake,
-      ctx.owner,
-      initialProposalDatum(ctx),
+    const proposal = await createProposal(ctx, ownerStake, ctx.owner);
+
+    await waitUntilChainTimeMs(
+      proposal.datum.startTime + TIMINGS.draftLength + PHASE_SLACK,
     );
 
-    await expect(
-      (async () => {
-        const tx = await buildAcceptDraftTx({
-          txBuilder: newTxBuilder(provider),
-          script: ctx.proposal.script,
-          proposalUtxo,
-          settingsUtxo: ctx.settingsUtxo,
-
-          continuationDatum: {
-            ...initialProposalDatum(ctx),
-            status: { kind: "Voting" },
-          },
-          utxos: await ctx.owner.wallet.getUtxos(),
-          changeAddress: ctx.owner.address,
-          collateralUtxo: await collateralOf(ctx.owner),
-        });
-        return signAndSubmit(ctx.owner, tx);
-      })(),
-    ).rejects.toThrow();
+    await expect(acceptDraft(ctx, proposal, ctx.owner)).rejects.toThrow();
   });
 
   it("rejects a close while locks are active", async () => {
     const ctx = await setup();
-    const stakeUtxo = await createStakePosition(ctx, ctx.owner);
+    const ownerStake = await createStakePosition(ctx, ctx.owner);
+    const proposal = await createProposal(ctx, ownerStake, ctx.owner);
+    const lockedStake = proposal.stakeUtxo;
+
     await expect(
       (async () => {
         const tx = await buildClosePositionTx({
           txBuilder: newTxBuilder(provider),
           script: ctx.stake.script,
-          stakeUtxo,
+          stakeUtxo: lockedStake,
           settingsUtxo: ctx.settingsUtxo,
-
-          stakeNftName: STAKE_NFT_NAME,
+          owner: { kind: "key", hash: ctx.owner.keyHash },
+          now: await chainNowMs(),
           utxos: await ctx.owner.wallet.getUtxos(),
           changeAddress: ctx.owner.address,
           collateralUtxo: await collateralOf(ctx.owner),
+          customSlotConfig: slotConfig,
         });
         return signAndSubmit(ctx.owner, tx);
       })(),

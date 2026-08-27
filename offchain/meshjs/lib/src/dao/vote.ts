@@ -11,12 +11,15 @@ import {
   applyParamsToScript,
   resolveScriptHash,
   serializePlutusScript,
+  SLOT_CONFIG_NETWORK,
   type Asset,
   type MeshTxBuilder,
   type PlutusScript,
+  type SlotConfig,
   type UTxO,
 } from "@meshsdk/core";
 
+import { enclosingSlotBound, nftNameFromRef } from "../common";
 import {
   mintVoteRedeemer,
   stakePositionDatumToData,
@@ -24,7 +27,12 @@ import {
   voteDatumToData,
   voteParamsToData,
 } from "./datum";
-import type { StakePositionDatum, VoteDatum, VoteParams } from "./types";
+import type {
+  ProposalDatum,
+  StakePositionDatum,
+  VoteDatum,
+  VoteParams,
+} from "./types";
 import { voteCompiledCode as voteCode, plutusVersion } from "./blueprint";
 import { stakeScriptAddress } from "./stake";
 
@@ -32,6 +40,18 @@ type Network = "mainnet" | "preprod" | "preview";
 
 function networkIdOf(network: Network): 0 | 1 {
   return network === "mainnet" ? 1 : 0;
+}
+
+/** The enclosing slot + start time for `now` on the given network/devnet. */
+function slotBound(
+  network: Network,
+  now: number,
+  customSlotConfig?: SlotConfig,
+) {
+  return enclosingSlotBound(
+    now,
+    customSlotConfig ?? SLOT_CONFIG_NETWORK[network],
+  );
 }
 
 const DEFAULT_MIN_UTXO_LOVELACE = 2_000_000n;
@@ -67,13 +87,17 @@ export interface VoteBuilderParams {
   stakeDatum: StakePositionDatum;
   /** The proposal UTxO referenced for the proposal's state. */
   proposalUtxo: UTxO;
+  /** The referenced proposal's datum (for the voting-phase unlock time). */
+  proposalDatum: ProposalDatum;
   settingsUtxo: UTxO;
   voteDatum: VoteDatum;
-  voteTokenName: string;
+  /** Wall-clock used for the validity lower bound (POSIX ms). */
+  now: number;
   utxos: UTxO[];
   changeAddress: string;
   collateralUtxo: UTxO;
   network?: Network;
+  customSlotConfig?: SlotConfig;
 }
 
 /** Spend a stake position and mint a vote NFT carrying `voteDatum`. */
@@ -81,11 +105,23 @@ export async function buildVoteTx(p: VoteBuilderParams): Promise<string> {
   const network = p.network ?? "preprod";
   const networkId = networkIdOf(network);
   const votePolicy = resolveScriptHash(p.voteScript.code, p.voteScript.version);
+  const voteTokenName = nftNameFromRef(p.stakeUtxo.input);
+  const proposalId = p.voteDatum.proposal;
+  const votedOption = p.voteDatum.votedOption;
+  const unlock =
+    p.proposalDatum.startTime +
+    p.proposalDatum.timingConfig.draftLength +
+    p.proposalDatum.timingConfig.votingLength;
+  const authorizer = p.stakeDatum.delegatee ?? p.stakeDatum.owner;
+
+  if (authorizer.kind === "key") {
+    p.txBuilder.requiredSignerHash(authorizer.hash);
+  }
 
   p.txBuilder
     .mintPlutusScriptV3()
-    .mint("1", votePolicy, p.voteTokenName)
-    .mintRedeemerValue(mintVoteRedeemer())
+    .mint("1", votePolicy, voteTokenName)
+    .mintRedeemerValue(mintVoteRedeemer(0))
     .mintingScript(p.voteScript.code)
     .spendingPlutusScriptV3()
     .txIn(
@@ -95,7 +131,9 @@ export async function buildVoteTx(p: VoteBuilderParams): Promise<string> {
       p.stakeUtxo.output.address,
     )
     .txInInlineDatumPresent()
-    .txInRedeemerValue(stakeRedeemerToData({ kind: "VoteProposal" }))
+    .txInRedeemerValue(
+      stakeRedeemerToData({ kind: "VoteProposal", proposalId, votedOption }),
+    )
     .txInScript(p.stakeScript.code)
     .readOnlyTxInReference(
       p.proposalUtxo.input.txHash,
@@ -109,7 +147,7 @@ export async function buildVoteTx(p: VoteBuilderParams): Promise<string> {
   p.txBuilder
     .txOut(
       voteScriptAddress(p.voteScript, networkId),
-      voteValue(p.voteScript, p.voteTokenName),
+      voteValue(p.voteScript, voteTokenName),
     )
     .txOutInlineDatumValue(voteDatumToData(p.voteDatum))
     .txOut(
@@ -119,6 +157,8 @@ export async function buildVoteTx(p: VoteBuilderParams): Promise<string> {
     .txOutInlineDatumValue(stakePositionDatumToData(p.stakeDatum));
 
   return await p.txBuilder
+    .invalidBefore(slotBound(network, p.now, p.customSlotConfig).slot)
+    .invalidHereafter(slotBound(network, unlock, p.customSlotConfig).slot)
     .txInCollateral(
       p.collateralUtxo.input.txHash,
       p.collateralUtxo.input.outputIndex,

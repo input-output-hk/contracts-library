@@ -4,20 +4,20 @@
  * CBOR constructor layout matching the Aiken blueprint in onchain/plutus.json:
  *   StakePositionDatum  = Constr 0 [owner: Credential, delegatee: Option<Credential>, locks: [Tuple3]]
  *   StakeRedeemer       = Deposit=0 | DelegateTo{delegatee}=1 | Withdraw{amount}=2
- *                       | ClosePosition=3 | CreateProposal=4 | CosignProposal=5 | VoteProposal=6
- *   StakePositionTokenRedeemer = CreatePosition=0 | CloseStakePosition=1
+ *                       | ClosePosition=3 | CreateProposal=4 | CosignProposal{proposal_id}=5
+ *                       | VoteProposal{proposal_id, voted_option}=6
+ *   StakePositionTokenRedeemer = CreatePosition{owner_utxo, out_idx}=0 | CloseStakePosition=1
  *   ProposalThresholds  = Constr 0 [create, cosign, accept, vote, execute]
  *   ProposalTimingConfig= Constr 0 [draft_length, voting_length, tally_length]
- *   ProposalStatus      = Draft{cosigning_stake}=0 | Voting=1 | Tally{votes}=2
- *   ProposalDatum       = Constr 0 [thresholds, timing_config, start_time, status, results: map]
+ *   ProposalStatus      = Draft{cosigning_stake}=0 | Voting=1 | Tally{votes: [Int]}=2
+ *   ProposalDatum       = Constr 0 [thresholds, timing_config, start_time, status, results: [ScriptHash]]
  *   DaoSettings         = Constr 0 [thresholds, timings, stake, proposal, vote validator]
- *   ProposalTokenRedeemer = MintProposal=0 | BurnProposal=1
+ *   ProposalTokenRedeemer = MintProposal{results, out_idx}=0 | BurnProposal=1
  *   ProposalRedeemer    = Cosign=0 | AcceptDraft=1 | RejectDraft=2 | EndVotingStage=3
  *                       | TallyVotes=4 | EndProposal=5
- *   VoteDatum           = Constr 0 [stake_owner: Address, proposal, voted_option, stake]
- *   VoteRedeemer        = TallyVote=0
- *   VoteTokenRedeemer   = MintVote=0 | BurnVotes=1
- *   Address             = Constr 0 [payment_credential, stake_credential: Option<Referenced<Credential>>]
+ *   VoteDatum           = Constr 0 [stake_owner: Credential, proposal, voted_option, stake]
+ *   VoteRedeemer        = TallyVote=0 | Cancel=1
+ *   VoteTokenRedeemer   = MintVote{out_idx}=0 | BurnVotes=1
  */
 
 import {
@@ -26,12 +26,12 @@ import {
   mConStr1,
   mConStr2,
   type Data,
+  type TxInput,
 } from "@meshsdk/core";
 
 import { credentialToData } from "../common";
 import { outputRefToData } from "../settings/datum";
 import type {
-  AddressData,
   DaoSettings,
   ProposalDatum,
   ProposalParams,
@@ -54,16 +54,6 @@ export { credentialToData, outputRefToData };
 
 function option<T>(value: T | null, wrap: (v: T) => Data): Data {
   return value === null ? mConStr1([]) : mConStr0([wrap(value)]);
-}
-
-/** Encode a Credential to Data (VerificationKey=0, Script=1). */
-
-/** Encode an Address to Data (payment credential + optional inline stake credential). */
-export function addressToData(addr: AddressData): Data {
-  const stake = option(addr.stakeCredential, (c) =>
-    mConStr0([credentialToData(c)]),
-  );
-  return mConStr0([credentialToData(addr.paymentCredential), stake]);
 }
 
 // ------------------------------------------------------------ stake datum
@@ -91,14 +81,17 @@ export function stakeRedeemerToData(r: StakeRedeemer): Data {
     case "CreateProposal":
       return mConStr(4, []);
     case "CosignProposal":
-      return mConStr(5, []);
+      return mConStr(5, [r.proposalId]);
     case "VoteProposal":
-      return mConStr(6, []);
+      return mConStr(6, [r.proposalId, r.votedOption]);
   }
 }
 
-export function createPositionRedeemer(): Data {
-  return mConStr0([]);
+export function createPositionRedeemer(
+  ownerUtxo: TxInput,
+  outIdx: number,
+): Data {
+  return mConStr0([outputRefToData(ownerUtxo), outIdx]);
 }
 
 export function closeStakePositionRedeemer(): Data {
@@ -109,7 +102,7 @@ export function stakePositionTokenRedeemerToData(
   r: StakePositionTokenRedeemer,
 ): Data {
   return r.kind === "CreatePosition"
-    ? createPositionRedeemer()
+    ? createPositionRedeemer(r.ownerUtxo, r.outIdx)
     : closeStakePositionRedeemer();
 }
 
@@ -130,7 +123,7 @@ export function proposalStatusToData(s: ProposalStatus): Data {
     case "Voting":
       return mConStr1([]);
     case "Tally":
-      return mConStr2([new Map<Data, Data>(s.votes)]);
+      return mConStr2([s.votes]);
   }
 }
 
@@ -140,7 +133,7 @@ export function proposalDatumToData(d: ProposalDatum): Data {
     proposalTimingConfigToData(d.timingConfig),
     d.startTime,
     proposalStatusToData(d.status),
-    new Map<Data, Data>(d.results),
+    d.results,
   ]);
 }
 
@@ -157,11 +150,13 @@ export function daoSettingsToData(s: DaoSettings): Data {
 // ------------------------------------------------------------ proposal redeemers
 
 export function proposalTokenRedeemerToData(r: ProposalTokenRedeemer): Data {
-  return r.kind === "MintProposal" ? mConStr0([]) : mConStr1([]);
+  return r.kind === "MintProposal"
+    ? mintProposalRedeemer(r.results, r.outIdx)
+    : mConStr1([]);
 }
 
-export function mintProposalRedeemer(): Data {
-  return mConStr0([]);
+export function mintProposalRedeemer(results: string[], outIdx: number): Data {
+  return mConStr0([results, outIdx]);
 }
 
 export function burnProposalRedeemer(): Data {
@@ -213,7 +208,7 @@ export function endProposalRedeemer(): Data {
 
 export function voteDatumToData(d: VoteDatum): Data {
   return mConStr0([
-    addressToData(d.stakeOwner),
+    credentialToData(d.stakeOwner),
     d.proposal,
     d.votedOption,
     d.stake,
@@ -224,16 +219,20 @@ export function tallyVoteRedeemer(): Data {
   return mConStr0([]);
 }
 
-export function voteRedeemerToData(_r: VoteRedeemer): Data {
-  return tallyVoteRedeemer();
+export function cancelVoteRedeemer(): Data {
+  return mConStr1([]);
+}
+
+export function voteRedeemerToData(r: VoteRedeemer): Data {
+  return r.kind === "TallyVote" ? tallyVoteRedeemer() : cancelVoteRedeemer();
 }
 
 export function voteTokenRedeemerToData(r: VoteTokenRedeemer): Data {
-  return r.kind === "MintVote" ? mConStr0([]) : mConStr1([]);
+  return r.kind === "MintVote" ? mintVoteRedeemer(r.outIdx) : mConStr1([]);
 }
 
-export function mintVoteRedeemer(): Data {
-  return mConStr0([]);
+export function mintVoteRedeemer(outIdx: number): Data {
+  return mConStr0([outIdx]);
 }
 
 export function burnVotesRedeemer(): Data {
