@@ -4,9 +4,9 @@
 
 export * from "./types";
 export {
-  addressToData,
   burnProposalRedeemer,
   burnVotesRedeemer,
+  cancelVoteRedeemer,
   closeStakePositionRedeemer,
   cosignRedeemer,
   createPositionRedeemer,
