@@ -24,9 +24,9 @@
     "vitest": "^4.1.10"
   },
   "blueprint": {
-    "dao.proposal": "2073290ca059ba4f81e8bd81984cfb9f769d2f2de9d955a5e35fa82c",
+    "dao.proposal": "77c566ce6f3f9646dbb3bffc13eed87bad3cae4af8f60b9173b083ab",
     "dao.stake": "35d89cc017ac9ea191b99e5dcb63e973d1cf264a2e8434bb371b2f5a",
-    "dao.vote": "9d12fb5acbd7e0d0433ae1464e9439785f34c11d9639b315344a797d",
+    "dao.vote": "ce5693c0af16f3d3645fde5ddb1a32a0ff72648439ac3132a253efd4",
     "vesting": "95da21788eb1f59f51aad9669eb8c8b7081ab618c1f29b871925894a",
     "settings": "4a317c2f38490b12ca84e32ef08896da3163c610d6d5d6538a893e0f",
     "settings_typed": "e6fc4020c94ba64dcd29f4ba98f7108eef19a8ca860f57cf0ba9edc2",
