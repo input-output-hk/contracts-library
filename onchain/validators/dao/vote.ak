@@ -25,10 +25,10 @@ validator vote(
           settings_token_name,
         )
         validate_mint_vote(
-          settings.proposal_validator,
           settings.stake_validator,
           staked_token_policy,
           staked_token_name,
+          settings.proposal_validator,
           own_policy,
           out_idx,
           self,
