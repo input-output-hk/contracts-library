@@ -305,7 +305,7 @@ tx launch_settings(
     /// The UTxO consumed as the mint seed (settings validator parameter).
     seed: UtxoRef,
     /// The DAO configuration to store as the settings `current`.
-    settings: DaoSettings,
+    dao_settings: DaoSettings,
     /// Index of the settings output within the transaction outputs.
     out_ix: Int,
 ) {
@@ -326,7 +326,7 @@ tx launch_settings(
         to: Settings,
         amount: AnyAsset(settings_hash, "settings", 1) + Ada(2000000),
         datum: DaoSettingsDatum {
-            current: settings,
+            current: dao_settings,
             next: OptionalDaoSettings::None {},
             next_apply: OptionalInt::None {},
         },
@@ -358,10 +358,12 @@ tx launch_settings(
 tx create_stake_position(
     /// The owner's UTxO consumed as the mint seed (holds the staked token).
     seed: UtxoRef,
+    /// The mint seed as the on-chain `OutputReference` (redeemer field).
+    owner_utxo: OutputReference,
     /// The position owner (a key credential; also the required signer).
     owner: Credential,
     /// Quantity of the staked token locked into the position.
-    stake: Int,
+    stake_amount: Int,
     /// The stake NFT name (`blake2b_256` of the seed reference).
     stake_nft_name: Bytes,
     /// Index of the stake position output within the transaction outputs.
@@ -370,7 +372,7 @@ tx create_stake_position(
     input source {
         from: Signer,
         ref: seed,
-        min_amount: AnyAsset(staked_token_policy, staked_token_name, stake),
+        min_amount: AnyAsset(staked_token_policy, staked_token_name, stake_amount),
     }
 
     input gas {
@@ -381,10 +383,7 @@ tx create_stake_position(
     mint {
         amount: AnyAsset(stake_hash, stake_nft_name, 1),
         redeemer: StakeTokenRedeemer::CreatePosition {
-            owner_utxo: OutputReference {
-                transaction_id: seed.tx_hash,
-                output_index: seed.output_index,
-            },
+            owner_utxo: owner_utxo,
             out_idx: out_ix,
         },
     }
@@ -392,7 +391,7 @@ tx create_stake_position(
     output stake_out {
         to: Stake,
         amount: AnyAsset(stake_hash, stake_nft_name, 1) +
-            AnyAsset(staked_token_policy, staked_token_name, stake) +
+            AnyAsset(staked_token_policy, staked_token_name, stake_amount) +
             Ada(2000000),
         datum: StakePositionDatum {
             owner: owner,
@@ -403,7 +402,7 @@ tx create_stake_position(
 
     output {
         to: Signer,
-        amount: source - AnyAsset(staked_token_policy, staked_token_name, stake) +
+        amount: source - AnyAsset(staked_token_policy, staked_token_name, stake_amount) +
             gas - Ada(2000000) - fees,
     }
 
@@ -1323,6 +1322,11 @@ tx devnet_mint_staked(destination: Address, quantity: Int) {
     output {
         to: Faucet,
         amount: source - Ada(2000000) - fees,
+    }
+
+    collateral {
+        from: Faucet,
+        min_amount: fees,
     }
 
     cardano::plutus_witness {

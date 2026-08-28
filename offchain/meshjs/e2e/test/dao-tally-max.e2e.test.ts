@@ -200,15 +200,17 @@ describe.skipIf(!reachable || TALLY_MAX_VOTES <= 0)(
 
     /** All wallet utxos except the actor's reserved collateral one. */
     function selectable(actor: Actor): Promise<UTxO[]> {
-      return actor.account.wallet.getUtxos().then((utxos) =>
-        utxos.filter(
-          (u) =>
-            !(
-              u.input.txHash === actor.collateral.input.txHash &&
-              u.input.outputIndex === actor.collateral.input.outputIndex
-            ),
-        ),
-      );
+      return actor.account.wallet
+        .getUtxos()
+        .then((utxos) =>
+          utxos.filter(
+            (u) =>
+              !(
+                u.input.txHash === actor.collateral.input.txHash &&
+                u.input.outputIndex === actor.collateral.input.outputIndex
+              ),
+          ),
+        );
     }
 
     /** An unfunded one-vote wallet, ready to receive the fan-out. */
@@ -291,14 +293,18 @@ describe.skipIf(!reachable || TALLY_MAX_VOTES <= 0)(
         .changeAddress(distributor.account.address)
         .selectUtxosFrom(await selectable(distributor))
         .complete();
-      await waitForTx(await signAndSubmit(distributor.account, distributorMint));
+      await waitForTx(
+        await signAndSubmit(distributor.account, distributorMint),
+      );
 
       // 4. ...and fan-out ada + tokens in a single transaction: 2 outputs per
       //    voter (5-ADA pure-ada collateral + 10-ADA-with-tokens spendable).
       const fanOut = newTxBuilder(provider);
       for (const v of voters) {
         fanOut
-          .txOut(v.address, [{ unit: "lovelace", quantity: COLLATERAL_ADA.toString() }])
+          .txOut(v.address, [
+            { unit: "lovelace", quantity: COLLATERAL_ADA.toString() },
+          ])
           .txOut(v.address, [
             { unit: "lovelace", quantity: SPENDABLE_ADA.toString() },
             { unit: stakeTokenUnit(), quantity: STAKE_PER_VOTE.toString() },
@@ -319,7 +325,10 @@ describe.skipIf(!reachable || TALLY_MAX_VOTES <= 0)(
       const settingsSeed = (await distributor.account.wallet.getUtxos())[0];
       const settingsParams = {
         seedUtxo: settingsSeed.input,
-        proposeAuth: { kind: "key" as const, hash: distributor.account.keyHash },
+        proposeAuth: {
+          kind: "key" as const,
+          hash: distributor.account.keyHash,
+        },
         applyAuth: { kind: "key" as const, hash: distributor.account.keyHash },
         applyDelay: 4_000,
         settingsTokenName: SETTINGS_TOKEN_NAME,
@@ -434,7 +443,10 @@ describe.skipIf(!reachable || TALLY_MAX_VOTES <= 0)(
 
     /** Retry a whole build+submit step: the store occasionally 500s its
      * evaluation endpoint under wave bursts. Rebuilds the tx from scratch. */
-    async function withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
+    async function withRetry<T>(
+      label: string,
+      fn: () => Promise<T>,
+    ): Promise<T> {
       let lastError: unknown;
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
@@ -448,7 +460,9 @@ describe.skipIf(!reachable || TALLY_MAX_VOTES <= 0)(
             msg.includes("502") ||
             msg.includes("503");
           if (!transient || attempt === 3) throw err;
-          console.warn(`[tally-max] retrying ${label} (${attempt}): ${msg.slice(0, 120)}`);
+          console.warn(
+            `[tally-max] retrying ${label} (${attempt}): ${msg.slice(0, 120)}`,
+          );
           await new Promise((r) => setTimeout(r, 1_500 * attempt));
         }
       }
@@ -598,162 +612,158 @@ describe.skipIf(!reachable || TALLY_MAX_VOTES <= 0)(
       });
     }
 
-    it(
-      "finds the max number of votes tally-able in one tx (worst case)",
-      async () => {
-        const ctx = await setup();
-        const owner = ctx.owner;
+    it("finds the max number of votes tally-able in one tx (worst case)", async () => {
+      const ctx = await setup();
+      const owner = ctx.owner;
 
-        // 1. Proposal lifecycle up to Tally.
-        const stakeUtxo = await createStakePosition(ctx, owner);
-        const proposal = await createProposal(ctx, stakeUtxo, owner);
-        const voting = await acceptDraft(ctx, proposal, owner);
-        const votingEnd =
-          voting.datum.startTime + TIMINGS.draftLength + TIMINGS.votingLength;
+      // 1. Proposal lifecycle up to Tally.
+      const stakeUtxo = await createStakePosition(ctx, owner);
+      const proposal = await createProposal(ctx, stakeUtxo, owner);
+      const voting = await acceptDraft(ctx, proposal, owner);
+      const votingEnd =
+        voting.datum.startTime + TIMINGS.draftLength + TIMINGS.votingLength;
 
-        // 2. One vote per distinct owner, in bounded waves so the store is
-        //    not hammered by N concurrent submissions.
-        const votes: Array<{ utxo: UTxO; refundTo: string }> = [];
-        const t0 = Date.now();
-        for (let i = 0; i < ctx.voters.length; i += WAVE_SIZE) {
-          const wave = ctx.voters.slice(i, i + WAVE_SIZE);
-          await Promise.all(
-            wave.map(async (voter) => {
-              const position = await createStakePosition(
-                ctx,
-                voter,
-                STAKE_PER_VOTE,
-              );
-              const vote = await voteOn(ctx, voting, position, voter);
-              votes.push({ utxo: vote, refundTo: voter.account.address });
-            }),
-          );
-          console.log(
-            `[tally-max] ${votes.length}/${TALLY_MAX_VOTES} votes created ` +
-              `(${Math.round((Date.now() - t0) / 1000)}s)`,
-          );
-        }
-        expect(votes.length).toBe(TALLY_MAX_VOTES);
+      // 2. One vote per distinct owner, in bounded waves so the store is
+      //    not hammered by N concurrent submissions.
+      const votes: Array<{ utxo: UTxO; refundTo: string }> = [];
+      const t0 = Date.now();
+      for (let i = 0; i < ctx.voters.length; i += WAVE_SIZE) {
+        const wave = ctx.voters.slice(i, i + WAVE_SIZE);
+        await Promise.all(
+          wave.map(async (voter) => {
+            const position = await createStakePosition(
+              ctx,
+              voter,
+              STAKE_PER_VOTE,
+            );
+            const vote = await voteOn(ctx, voting, position, voter);
+            votes.push({ utxo: vote, refundTo: voter.account.address });
+          }),
+        );
+        console.log(
+          `[tally-max] ${votes.length}/${TALLY_MAX_VOTES} votes created ` +
+            `(${Math.round((Date.now() - t0) / 1000)}s)`,
+        );
+      }
+      expect(votes.length).toBe(TALLY_MAX_VOTES);
 
-        // 3. The voting window must close before EndVotingStage is legal.
-        await waitUntilChainTimeMs(votingEnd, TIMINGS.votingLength + 60_000);
+      // 3. The voting window must close before EndVotingStage is legal.
+      await waitUntilChainTimeMs(votingEnd, TIMINGS.votingLength + 60_000);
 
-        // 4. Voting -> Tally.
-        const endTx = await buildEndVotingStageTx({
+      // 4. Voting -> Tally.
+      const endTx = await buildEndVotingStageTx({
+        txBuilder: newTxBuilder(provider),
+        script: ctx.proposal.script,
+        proposalUtxo: voting.utxo,
+        settingsUtxo: ctx.settingsUtxo,
+        datum: voting.datum,
+        now: await chainNowMs(),
+        continuationDatum: proposalDatum(voting.datum.startTime, {
+          kind: "Tally",
+          votes: [0n],
+        }),
+        utxos: await selectable(owner),
+        changeAddress: owner.account.address,
+        collateralUtxo: owner.collateral,
+        customSlotConfig: slotConfig,
+      });
+      const endHash = await signAndSubmit(owner.account, endTx);
+      await waitForTx(endHash);
+      const tallyState = await scriptOutputOf(
+        provider,
+        endHash,
+        ctx.proposal.addr,
+      );
+      const tallyDatum: ProposalDatum = {
+        ...voting.datum,
+        status: { kind: "Tally", votes: [0n] },
+      };
+
+      // 5. Binary-search the largest k whose tally tx is acceptable to the
+      //    node. Two node limits are invisible to Mesh's complete():
+      //    coin selection (tx size) fails inside the build, and the
+      //    *total* per-tx ExUnits budget is only checked by the ledger,
+      //    so the probe sums the evaluator's per-redeemer budgets itself.
+      const MAX_TX_EX_UNITS = { mem: 14_000_000, steps: 10_000_000_000 };
+      const attempt = async (k: number): Promise<string> => {
+        const tx = await buildTallyTx({
           txBuilder: newTxBuilder(provider),
           script: ctx.proposal.script,
-          proposalUtxo: voting.utxo,
+          proposalUtxo: tallyState,
           settingsUtxo: ctx.settingsUtxo,
-          datum: voting.datum,
+          datum: tallyDatum,
           now: await chainNowMs(),
-          continuationDatum: proposalDatum(voting.datum.startTime, {
-            kind: "Tally",
-            votes: [0n],
-          }),
+          continuationDatum: {
+            ...tallyDatum,
+            status: { kind: "Tally", votes: [STAKE_PER_VOTE * BigInt(k)] },
+          },
+          voteScript: ctx.vote.script,
+          votes: votes
+            .slice(0, k)
+            .map((v) => ({ voteUtxo: v.utxo, ownerAddress: v.refundTo })),
           utxos: await selectable(owner),
           changeAddress: owner.account.address,
           collateralUtxo: owner.collateral,
           customSlotConfig: slotConfig,
         });
-        const endHash = await signAndSubmit(owner.account, endTx);
-        await waitForTx(endHash);
-        const tallyState = await scriptOutputOf(
-          provider,
-          endHash,
-          ctx.proposal.addr,
-        );
-        const tallyDatum: ProposalDatum = {
-          ...voting.datum,
-          status: { kind: "Tally", votes: [0n] },
-        };
-
-        // 5. Binary-search the largest k whose tally tx is acceptable to the
-        //    node. Two node limits are invisible to Mesh's complete():
-        //    coin selection (tx size) fails inside the build, and the
-        //    *total* per-tx ExUnits budget is only checked by the ledger,
-        //    so the probe sums the evaluator's per-redeemer budgets itself.
-        const MAX_TX_EX_UNITS = { mem: 14_000_000, steps: 10_000_000_000 };
-        const attempt = async (k: number): Promise<string> => {
-          const tx = await buildTallyTx({
-            txBuilder: newTxBuilder(provider),
-            script: ctx.proposal.script,
-            proposalUtxo: tallyState,
-            settingsUtxo: ctx.settingsUtxo,
-            datum: tallyDatum,
-            now: await chainNowMs(),
-            continuationDatum: {
-              ...tallyDatum,
-              status: { kind: "Tally", votes: [STAKE_PER_VOTE * BigInt(k)] },
-            },
-            voteScript: ctx.vote.script,
-            votes: votes
-              .slice(0, k)
-              .map((v) => ({ voteUtxo: v.utxo, ownerAddress: v.refundTo })),
-            utxos: await selectable(owner),
-            changeAddress: owner.account.address,
-            collateralUtxo: owner.collateral,
-            customSlotConfig: slotConfig,
-          });
-          const budgets = (await provider.evaluateTx(tx)) as Array<{
-            budget: { mem: number; steps: number };
-          }>;
-          const totalMem = budgets.reduce((a, b) => a + b.budget.mem, 0);
-          const totalSteps = budgets.reduce((a, b) => a + b.budget.steps, 0);
-          if (
-            totalMem > MAX_TX_EX_UNITS.mem ||
-            totalSteps > MAX_TX_EX_UNITS.steps
-          ) {
-            throw new Error(
-              `total tx ExUnits (mem ${totalMem}, cpu ${totalSteps}) exceed ` +
-                `maxTxExUnits (mem ${MAX_TX_EX_UNITS.mem}, cpu ${MAX_TX_EX_UNITS.steps})`,
-            );
-          }
-          return tx;
-        };
-
-        let maxOk = 0;
-        let failureReason = "";
-        let bestTx: string | null = null;
-        let lo = 1;
-        let hi = votes.length;
-        while (lo <= hi) {
-          const k = Math.floor((lo + hi) / 2);
-          try {
-            const tx = await attempt(k);
-            maxOk = k;
-            bestTx = tx;
-            console.log(`[tally-max] probe k=${k}: OK`);
-            lo = k + 1;
-          } catch (err) {
-            failureReason = (err as Error).message;
-            console.log(
-              `[tally-max] probe k=${k}: FAIL — ${failureReason.split("\n")[0]}`,
-            );
-            hi = k - 1;
-          }
+        const budgets = (await provider.evaluateTx(tx)) as Array<{
+          budget: { mem: number; steps: number };
+        }>;
+        const totalMem = budgets.reduce((a, b) => a + b.budget.mem, 0);
+        const totalSteps = budgets.reduce((a, b) => a + b.budget.steps, 0);
+        if (
+          totalMem > MAX_TX_EX_UNITS.mem ||
+          totalSteps > MAX_TX_EX_UNITS.steps
+        ) {
+          throw new Error(
+            `total tx ExUnits (mem ${totalMem}, cpu ${totalSteps}) exceed ` +
+              `maxTxExUnits (mem ${MAX_TX_EX_UNITS.mem}, cpu ${MAX_TX_EX_UNITS.steps})`,
+          );
         }
+        return tx;
+      };
 
-        expect(maxOk, failureReason).toBeGreaterThanOrEqual(2);
-        expect(bestTx).not.toBeNull();
-        console.log(
-          `[tally-max] max votes per tally tx (one vote per distinct owner): ${maxOk}` +
-            (failureReason ? ` (last blocking reason: ${failureReason})` : ""),
-        );
+      let maxOk = 0;
+      let failureReason = "";
+      let bestTx: string | null = null;
+      let lo = 1;
+      let hi = votes.length;
+      while (lo <= hi) {
+        const k = Math.floor((lo + hi) / 2);
+        try {
+          const tx = await attempt(k);
+          maxOk = k;
+          bestTx = tx;
+          console.log(`[tally-max] probe k=${k}: OK`);
+          lo = k + 1;
+        } catch (err) {
+          failureReason = (err as Error).message;
+          console.log(
+            `[tally-max] probe k=${k}: FAIL — ${failureReason.split("\n")[0]}`,
+          );
+          hi = k - 1;
+        }
+      }
 
-        // 6. Prove the maximum end-to-end on-chain: the k tallied votes are
-        //    consumed, the rest remain untouched at the vote address.
-        const tallyHash = await signAndSubmit(owner.account, bestTx!);
-        await waitForTx(tallyHash);
-        const remaining = await provider.fetchAddressUTxOs(ctx.vote.addr);
-        expect(remaining.length).toBe(votes.length - maxOk);
-        const continued = await scriptOutputOf(
-          provider,
-          tallyHash,
-          ctx.proposal.addr,
-        );
-        expect(lovelaceOf(continued)).toBeGreaterThan(0n);
-      },
-      1_500_000,
-    );
+      expect(maxOk, failureReason).toBeGreaterThanOrEqual(2);
+      expect(bestTx).not.toBeNull();
+      console.log(
+        `[tally-max] max votes per tally tx (one vote per distinct owner): ${maxOk}` +
+          (failureReason ? ` (last blocking reason: ${failureReason})` : ""),
+      );
+
+      // 6. Prove the maximum end-to-end on-chain: the k tallied votes are
+      //    consumed, the rest remain untouched at the vote address.
+      const tallyHash = await signAndSubmit(owner.account, bestTx!);
+      await waitForTx(tallyHash);
+      const remaining = await provider.fetchAddressUTxOs(ctx.vote.addr);
+      expect(remaining.length).toBe(votes.length - maxOk);
+      const continued = await scriptOutputOf(
+        provider,
+        tallyHash,
+        ctx.proposal.addr,
+      );
+      expect(lovelaceOf(continued)).toBeGreaterThan(0n);
+    }, 1_500_000);
   },
 );
