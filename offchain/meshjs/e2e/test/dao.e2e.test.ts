@@ -20,6 +20,7 @@ import {
   enclosingSlotBound,
   mintRedeemer,
   nftNameFromRef,
+  pollEffectScript,
   proposalScript,
   proposalScriptAddress,
   SETTINGS_TOKEN_NAME,
@@ -31,12 +32,14 @@ import {
   voteScript,
   voteScriptAddress,
   type DaoSettings,
+  type EndProposalParams,
   type ProposalDatum,
   type ProposalThresholds,
   type ProposalTimingConfig,
   type SettingsDatum,
   type StakePositionDatum,
   type VoteDatum,
+  type WinnerEffect,
 } from "@contracts-library/meshjs";
 import {
   mConStr0,
@@ -55,6 +58,7 @@ import {
   makeProvider,
   NETWORK_ID,
   newTxBuilder,
+  registerStakeCredential,
   scriptOutputOf,
   signAndSubmit,
   STORE_URL,
@@ -115,9 +119,13 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
     proposal: { script: ReturnType<typeof proposalScript>; addr: string };
     vote: { script: ReturnType<typeof voteScript>; addr: string };
   }> {
-    const owner = await fundedAccount(provider, [5_000, 5_000]);
-    const cosigner = await fundedAccount(provider, [5_000, 5_000]);
-    const admin = await fundedAccount(provider, [5_000, 5_000]);
+    // Extra pure-ada utxos keep MeshWallet.getCollateral()'s "smallest
+    // pure-ada utxo >= 5 ADA" heuristic alive across each account's txs.
+    const owner = await fundedAccount(provider, [5_000, 5_000, 2_000, 2_000]);
+    const cosigner = await fundedAccount(provider, [
+      5_000, 5_000, 2_000, 2_000,
+    ]);
+    const admin = await fundedAccount(provider, [5_000, 5_000, 2_000, 2_000]);
 
     // 1. Mint the DAO's staked token (always-true policy) to the accounts that
     //    will hold positions.
@@ -265,13 +273,14 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
   function proposalDatum(
     startTime: number,
     status: ProposalDatum["status"],
+    resultScripts: string[] = results(),
   ): ProposalDatum {
     return {
       thresholds: THRESHOLDS,
       timingConfig: TIMINGS,
       startTime,
       status,
-      results: results(),
+      results: resultScripts,
     };
   }
 
@@ -314,16 +323,21 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
     ctx: Awaited<ReturnType<typeof setup>>,
     stakeUtxo: UTxO,
     owner: Account,
+    resultScripts: string[] = results(),
   ): Promise<ProposalState> {
     const now = await chainNowMs();
     const startTime = enclosingSlotBound(now, slotConfig).startMs;
     const tokenName = nftNameFromRef(stakeUtxo.input);
     const inStake = stakeBalance(stakeUtxo);
 
-    const datum = proposalDatum(startTime, {
-      kind: "Draft",
-      cosigningStake: inStake,
-    });
+    const datum = proposalDatum(
+      startTime,
+      {
+        kind: "Draft",
+        cosigningStake: inStake,
+      },
+      resultScripts,
+    );
 
     const lockedStakeDatum: StakePositionDatum = {
       ...stakeDatum(owner),
@@ -358,10 +372,13 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
     ctx: Awaited<ReturnType<typeof setup>>,
     proposal: ProposalState,
     owner: Account,
+    resultScripts: string[] = results(),
   ): Promise<ProposalState> {
-    const continuation = proposalDatum(proposal.datum.startTime, {
-      kind: "Voting",
-    });
+    const continuation = proposalDatum(
+      proposal.datum.startTime,
+      { kind: "Voting" },
+      resultScripts,
+    );
     const tx = await buildAcceptDraftTx({
       txBuilder: newTxBuilder(provider),
       script: ctx.proposal.script,
@@ -706,6 +723,192 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
     const outs = await provider.fetchUTxOs(hash);
     expect(outs.some((u) => u.output.address === ctx.proposal.addr)).toBe(
       false,
+    );
+  });
+
+  // --------------------------------------------- EndProposal effect (poll_effect)
+
+  /** The poll_effect reference candidate, pinned to this ctx's proposal. */
+  function pollEffectCandidate(ctx: Awaited<ReturnType<typeof setup>>) {
+    const script = pollEffectScript({
+      proposalPolicy: resolveScriptHash(ctx.proposal.script.code, "V3"),
+    });
+    return { script, hash: resolveScriptHash(script.code, "V3") };
+  }
+
+  /**
+   * Full lifecycle with the poll_effect candidate as the single option and a
+   * winning vote clearing the `execute` threshold, parked at the Tally stage
+   * after the tally deadline (where EndProposal becomes legal).
+   */
+  async function lifecycleToTallyWithEffect() {
+    const ctx = await setup();
+    const effect = pollEffectCandidate(ctx);
+    // The candidate runs as a withdraw-0: its reward account must exist.
+    // The admin pays so the owner's utxo shape stays predictable.
+    await registerStakeCredential(provider, ctx.admin, effect.hash);
+
+    const ownerStake = await createStakePosition(ctx, ctx.owner);
+    // A single vote whose stake clears the execute threshold.
+    const voterStake = await createStakePosition(
+      ctx,
+      ctx.cosigner,
+      THRESHOLDS.execute,
+    );
+    const proposal = await createProposal(ctx, ownerStake, ctx.owner, [
+      effect.hash,
+    ]);
+    const voting = await acceptDraft(ctx, proposal, ctx.owner, [effect.hash]);
+
+    const voteUtxo = await voteOn(ctx, voting, voterStake, ctx.cosigner, 0);
+
+    const votingEnd =
+      voting.datum.startTime + TIMINGS.draftLength + TIMINGS.votingLength;
+    await waitUntilChainTimeMs(votingEnd + PHASE_SLACK);
+    const tallyDatum = proposalDatum(
+      voting.datum.startTime,
+      { kind: "Tally", votes: [0n] },
+      [effect.hash],
+    );
+    const endTx = await buildEndVotingStageTx({
+      txBuilder: newTxBuilder(provider),
+      script: ctx.proposal.script,
+      proposalUtxo: voting.utxo,
+      settingsUtxo: ctx.settingsUtxo,
+      datum: voting.datum,
+      now: await chainNowMs(),
+      continuationDatum: tallyDatum,
+      utxos: await ctx.owner.wallet.getUtxos(),
+      changeAddress: ctx.owner.address,
+      collateralUtxo: await collateralOf(ctx.owner),
+      customSlotConfig: slotConfig,
+    });
+    const endHash = await signAndSubmit(ctx.owner, endTx);
+    await waitForTx(provider, endHash);
+    const tallyState = await scriptOutputOf(
+      provider,
+      endHash,
+      ctx.proposal.addr,
+    );
+
+    const tallyTx = await buildTallyTx({
+      txBuilder: newTxBuilder(provider),
+      script: ctx.proposal.script,
+      proposalUtxo: tallyState,
+      settingsUtxo: ctx.settingsUtxo,
+      datum: tallyDatum,
+      now: await chainNowMs(),
+      continuationDatum: proposalDatum(
+        voting.datum.startTime,
+        { kind: "Tally", votes: [stakeBalance(voterStake)] },
+        [effect.hash],
+      ),
+      voteScript: ctx.vote.script,
+      votes: [{ voteUtxo, ownerAddress: ctx.cosigner.address }],
+      utxos: await ctx.owner.wallet.getUtxos(),
+      changeAddress: ctx.owner.address,
+      collateralUtxo: await collateralOf(ctx.owner),
+      customSlotConfig: slotConfig,
+    });
+    const tallyHash = await signAndSubmit(ctx.owner, tallyTx);
+    await waitForTx(provider, tallyHash);
+    const tallied = await scriptOutputOf(
+      provider,
+      tallyHash,
+      ctx.proposal.addr,
+    );
+    expect(lovelaceOf(tallied)).toBeGreaterThan(0n);
+
+    const tallyEnd =
+      voting.datum.startTime +
+      TIMINGS.draftLength +
+      TIMINGS.votingLength +
+      TIMINGS.tallyLength;
+    await waitUntilChainTimeMs(tallyEnd + PHASE_SLACK);
+
+    return {
+      ctx,
+      effect,
+      tallyDatum: proposalDatum(
+        voting.datum.startTime,
+        { kind: "Tally", votes: [stakeBalance(voterStake)] },
+        [effect.hash],
+      ),
+      // the LIVE proposal utxo: the EndVotingStage output was consumed by the
+      // TallyVotes tx above
+      proposalUtxo: tallied,
+      tokenName: proposal.tokenName,
+    };
+  }
+
+  async function endProposalParams(
+    s: Awaited<ReturnType<typeof lifecycleToTallyWithEffect>>,
+    winnerEffect?: WinnerEffect,
+  ): Promise<EndProposalParams> {
+    return {
+      txBuilder: newTxBuilder(provider),
+      script: s.ctx.proposal.script,
+      proposalUtxo: s.proposalUtxo,
+      settingsUtxo: s.ctx.settingsUtxo,
+      datum: s.tallyDatum,
+      now: await chainNowMs(),
+      utxos: await s.ctx.owner.wallet.getUtxos(),
+      changeAddress: s.ctx.owner.address,
+      collateralUtxo: await collateralOf(s.ctx.owner),
+      customSlotConfig: slotConfig,
+      winnerEffect,
+    };
+  }
+
+  it("executes the winning effect via the poll_effect candidate", async () => {
+    const s = await lifecycleToTallyWithEffect();
+
+    // The candidate's own validator re-derives the verdict with
+    // `am_i_the_winner` while the proposal validator checks the claim.
+    const tx = await buildEndProposalTx(
+      await endProposalParams(s, {
+        script: s.effect.script,
+        claim: {
+          kind: "ExecuteWinner",
+          proposalId: s.tokenName,
+          winnerOption: 0,
+        },
+      }),
+    );
+    const hash = await signAndSubmit(s.ctx.owner, tx);
+    await waitForTx(provider, hash);
+
+    const outs = await provider.fetchUTxOs(hash);
+    expect(outs.some((u) => u.output.address === s.ctx.proposal.addr)).toBe(
+      false,
+    );
+  });
+
+  it("rejects EndProposal with a missing or lying effect claim", async () => {
+    const s = await lifecycleToTallyWithEffect();
+    const expectRejected = (params: EndProposalParams) =>
+      expect(
+        (async () =>
+          signAndSubmit(
+            s.ctx.owner,
+            await buildEndProposalTx(params),
+          ))(),
+      ).rejects.toThrow();
+
+    // A strict winner above the execute threshold MUST run its bound effect.
+    await expectRejected(await endProposalParams(s));
+
+    // A withdrawal whose claim lies about the winning option is rejected by
+    // both the proposal validator and the candidate's am_i_the_winner.
+    await expectRejected(
+      await endProposalParams(s, {
+        script: s.effect.script,
+        claim: {
+          kind: "ExecuteWinner",
+          proposalId: s.tokenName,
+          winnerOption: 1,
+        },
+      }),
     );
   });
 

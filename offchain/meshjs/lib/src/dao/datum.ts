@@ -18,6 +18,7 @@
  *   VoteDatum           = Constr 0 [stake_owner: Credential, proposal, voted_option, stake]
  *   VoteRedeemer        = TallyVote=0 | Cancel=1
  *   VoteTokenRedeemer   = MintVote{out_idx}=0 | BurnVotes=1
+ *   PollEffectRedeemer  = ExecuteWinner{proposal_id, winner_option}=0
  */
 
 import {
@@ -33,6 +34,8 @@ import { credentialToData } from "../common";
 import { outputRefToData } from "../settings/datum";
 import type {
   DaoSettings,
+  PollEffectParams,
+  PollEffectRedeemer,
   ProposalDatum,
   ProposalParams,
   ProposalRedeemer,
@@ -266,4 +269,17 @@ export function voteParamsToData(p: VoteParams): Data[] {
     p.settingsPolicy,
     p.settingsTokenName,
   ];
+}
+
+// --------------------------------------------------------- poll-effect candidate
+
+export function pollEffectParamsToData(p: PollEffectParams): Data[] {
+  return [p.proposalPolicy];
+}
+
+export function pollEffectRedeemerToData(r: PollEffectRedeemer): Data {
+  switch (r.kind) {
+    case "ExecuteWinner":
+      return mConStr0([r.proposalId, r.winnerOption]);
+  }
 }
