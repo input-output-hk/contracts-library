@@ -604,6 +604,55 @@ Casts a vote on a proposal by minting a vote NFT locked to the voter's choice.
 #figure(tx_vote)
 #pagebreak()
 
+= Close Vote
+Cancels a vote by burning its NFT, releasing the stake owner's ADA.
+
+#let tx_close_vote = [
+#vanilla_transaction(
+  "Close Vote",
+  mint: (
+    "voteNFT": "-1",
+  ),
+  inputs: (
+    (
+      name: "Vote UTxO",
+      address: "vote_addr",
+      redeemer: [Cancel],
+      value: (
+        "ADA": "A",
+        "voteNFT": "1",
+      ),
+      datum: (
+        "stakeOwner": "",
+        "proposal": "",
+        "votedOption": "",
+        "stake": "",
+      ),
+    ),
+  ),
+  outputs: (
+    (
+      name: "Owner UTxO",
+      address: "owner_addr",
+      value: (
+        "ADA": "A",
+      ),
+    ),
+  ),
+  signatures: (
+    [*auth*],
+  ),
+  notes: [
+    ```
+    auth = stakeOwner
+    ```
+  ],
+)
+]
+
+#figure(tx_close_vote)
+#pagebreak()
+
 = End Voting Stage
 Closes the voting period and transitions the proposal to the tally stage.
 
