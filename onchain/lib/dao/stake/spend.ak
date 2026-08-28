@@ -6,7 +6,7 @@ use cardano/assets.{AssetName, PolicyId, Value, has_nft, quantity_of}
 use cardano/transaction.{
   InlineDatum, Input, Output, OutputReference, Transaction, resolve_input,
 }
-use dao/locks.{free_stake, has_proposal, prune_expired}
+use dao/locks.{Lock, free_stake, has_proposal, prune_expired}
 use dao/types.{DaoSettings, ProposalDatum, ProposalStatus, StakePositionDatum}
 use dao/utils.{
   find_continuation_output, nft_name_from_ref, proposal_token_name,
@@ -192,7 +192,11 @@ pub fn validate_stake_create_proposal(
     = self
   expect Finite(now) = validity_range.lower_bound.bound_type
   let p_id = proposal_token_name(own_ref)
-  let new_lock = (p_id, now + settings.timings.draft_length, in_stake)
+  let new_lock = Lock {
+    proposal_id: p_id,
+    unlock_time: now + settings.timings.draft_length,
+    stake: in_stake,
+  }
   let out = find_continuation_output(outputs, own_addr)
   let cont = out_datum(out)
   and {
@@ -227,11 +231,11 @@ pub fn validate_stake_cosign(
     settings.proposal_validator,
     proposal_id,
   )
-  let new_lock = (
+  let new_lock = Lock {
     proposal_id,
-    proposal.start_time + proposal.timing_config.draft_length,
-    in_stake,
-  )
+    unlock_time: proposal.start_time + proposal.timing_config.draft_length,
+    stake: in_stake,
+  }
   let out = find_continuation_output(outputs, own_addr)
   let cont = out_datum(out)
   and {
@@ -280,7 +284,7 @@ pub fn validate_stake_vote(
     proposal_id,
   )
   let unlock = proposal.start_time + proposal.timing_config.draft_length + proposal.timing_config.voting_length
-  let new_lock = (proposal_id, unlock, in_stake)
+  let new_lock = Lock { proposal_id, unlock_time: unlock, stake: in_stake }
   let out = find_continuation_output(outputs, own_addr)
   let cont = out_datum(out)
   and {

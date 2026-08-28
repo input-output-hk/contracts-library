@@ -307,7 +307,7 @@ test withdraw_free_ok() {
 
 test rejects_withdraw_of_locked_stake() {
   // a live lock freezes 8 tokens; only 2 of 10 are free
-  let locks = [(prop_nft, 2000, 8)]
+  let locks = [Lock { proposal_id: prop_nft, unlock_time: 2000, stake: 8 }]
   let d = stake_datum(None, locks)
   let out = pos_output(6, stake_datum(None, locks))
   let tx = Transaction {
@@ -322,7 +322,10 @@ test rejects_withdraw_of_locked_stake() {
 
 test withdraw_prunes_expired_lock() {
   // lock unlock_time 400 <= now 500 → pruned, all 10 become free
-  let d = stake_datum(None, [(prop_nft, 400, 8)])
+  let d = stake_datum(
+    None,
+    [Lock { proposal_id: prop_nft, unlock_time: 400, stake: 8 }],
+  )
   let out = pos_output(2, stake_datum(None, []))
   let tx = Transaction {
     ..placeholder,
@@ -337,7 +340,10 @@ test withdraw_prunes_expired_lock() {
 // ------------------------------------------------------------- ClosePosition
 
 test close_position_ok() {
-  let d = stake_datum(None, [(prop_nft, 400, 8)])
+  let d = stake_datum(
+    None,
+    [Lock { proposal_id: prop_nft, unlock_time: 400, stake: 8 }],
+  )
   let tx = Transaction {
     ..placeholder,
     inputs: [pos_input(10)],
@@ -349,7 +355,10 @@ test close_position_ok() {
 }
 
 test rejects_close_with_live_lock() {
-  let d = stake_datum(None, [(prop_nft, 900, 8)])
+  let d = stake_datum(
+    None,
+    [Lock { proposal_id: prop_nft, unlock_time: 900, stake: 8 }],
+  )
   let tx = Transaction {
     ..placeholder,
     inputs: [pos_input(10)],
@@ -376,7 +385,7 @@ test rejects_close_without_burn() {
 test create_proposal_ok() {
   let now = 500
   let p_id = proposal_token_name(pos_ref())
-  let new_lock = (p_id, now + 1000, 100)
+  let new_lock = Lock { proposal_id: p_id, unlock_time: now + 1000, stake: 100 }
   let d = stake_datum(None, [])
   let out = pos_output(100, stake_datum(None, [new_lock]))
   let tx = Transaction {
@@ -394,7 +403,7 @@ test create_proposal_ok() {
 test rejects_create_below_threshold() {
   let now = 500
   let p_id = proposal_token_name(pos_ref())
-  let new_lock = (p_id, now + 1000, 99)
+  let new_lock = Lock { proposal_id: p_id, unlock_time: now + 1000, stake: 99 }
   let d = stake_datum(None, [])
   let out = pos_output(99, stake_datum(None, [new_lock]))
   let tx = Transaction {
@@ -413,7 +422,11 @@ test rejects_create_below_threshold() {
 
 test cosign_proposal_ok() {
   let start = 500
-  let new_lock = (prop_nft, start + 1000, 60)
+  let new_lock = Lock {
+    proposal_id: prop_nft,
+    unlock_time: start + 1000,
+    stake: 60,
+  }
   let d = stake_datum(None, [])
   let out = pos_output(60, stake_datum(None, [new_lock]))
   let tx = Transaction {
@@ -428,7 +441,11 @@ test cosign_proposal_ok() {
 
 test rejects_cosign_below_threshold() {
   let start = 500
-  let new_lock = (prop_nft, start + 1000, 40)
+  let new_lock = Lock {
+    proposal_id: prop_nft,
+    unlock_time: start + 1000,
+    stake: 40,
+  }
   let d = stake_datum(None, [])
   let out = pos_output(40, stake_datum(None, [new_lock]))
   let tx = Transaction {
@@ -444,8 +461,16 @@ test rejects_cosign_below_threshold() {
 test rejects_cosign_same_proposal_twice() {
   let start = 500
   // datum already holds a lock referencing this proposal
-  let existing = (prop_nft, start + 1000, 60)
-  let new_lock = (prop_nft, start + 1000, 60)
+  let existing = Lock {
+    proposal_id: prop_nft,
+    unlock_time: start + 1000,
+    stake: 60,
+  }
+  let new_lock = Lock {
+    proposal_id: prop_nft,
+    unlock_time: start + 1000,
+    stake: 60,
+  }
   let d = stake_datum(None, [existing])
   let out = pos_output(60, stake_datum(None, [existing, new_lock]))
   let tx = Transaction {
@@ -463,7 +488,7 @@ test rejects_cosign_same_proposal_twice() {
 test vote_proposal_ok() {
   let start = 500
   let unlock = start + 1000 + 2000
-  let new_lock = (prop_nft, unlock, 20)
+  let new_lock = Lock { proposal_id: prop_nft, unlock_time: unlock, stake: 20 }
   let d = stake_datum(None, [])
   let out = pos_output(20, stake_datum(None, [new_lock]))
   let tx = Transaction {
@@ -481,7 +506,7 @@ test vote_proposal_ok() {
 test rejects_vote_when_not_voting_stage() {
   let start = 500
   let unlock = start + 1000 + 2000
-  let new_lock = (prop_nft, unlock, 20)
+  let new_lock = Lock { proposal_id: prop_nft, unlock_time: unlock, stake: 20 }
   let d = stake_datum(None, [])
   let out = pos_output(20, stake_datum(None, [new_lock]))
   let tx = Transaction {
@@ -544,7 +569,12 @@ test rejects_create_position_with_locks() {
     value: assets.from_asset(stake_hash, name, 1)
       |> assets.add(gov_policy, gov_name, 1)
       |> assets.merge(assets.from_lovelace(2_000_000)),
-    datum: InlineDatum(stake_datum(None, [(prop_nft, 1, 1)])),
+    datum: InlineDatum(
+      stake_datum(
+        None,
+        [Lock { proposal_id: prop_nft, unlock_time: 1, stake: 1 }],
+      ),
+    ),
     reference_script: None,
   }
   let tx = Transaction {

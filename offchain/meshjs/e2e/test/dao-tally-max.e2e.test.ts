@@ -512,7 +512,13 @@ describe.skipIf(!reachable || TALLY_MAX_VOTES <= 0)(
       });
       const lockedStakeDatum: StakePositionDatum = {
         ...stakeDatum(owner),
-        locks: [[tokenName, startTime + TIMINGS.draftLength, inStake]],
+        locks: [
+          {
+            proposalId: tokenName,
+            unlockTime: startTime + TIMINGS.draftLength,
+            stake: inStake,
+          },
+        ],
       };
 
       const tx = await buildCreateProposalTx({
@@ -586,7 +592,13 @@ describe.skipIf(!reachable || TALLY_MAX_VOTES <= 0)(
       };
       const votedStakeDatum: StakePositionDatum = {
         ...stakeDatum(voter),
-        locks: [[proposal.tokenName, unlock, stake]],
+        locks: [
+          {
+            proposalId: proposal.tokenName,
+            unlockTime: unlock,
+            stake,
+          },
+        ],
       };
 
       return withRetry("voteOn", async () => {
