@@ -8,10 +8,7 @@
  * hash (pinned at compile time on-chain, provided at apply-params time here).
  */
 
-import {
-  applyParamsToScript,
-  type PlutusScript,
-} from "@meshsdk/core";
+import { applyParamsToScript, type PlutusScript } from "@meshsdk/core";
 
 import { pollEffectCompiledCode, plutusVersion } from "./blueprint";
 import { pollEffectParamsToData } from "./datum";

@@ -122,9 +122,10 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
     // Extra pure-ada utxos keep MeshWallet.getCollateral()'s "smallest
     // pure-ada utxo >= 5 ADA" heuristic alive across each account's txs.
     const owner = await fundedAccount(provider, [5_000, 5_000, 2_000, 2_000]);
-    const cosigner = await fundedAccount(provider, [
-      5_000, 5_000, 2_000, 2_000,
-    ]);
+    const cosigner = await fundedAccount(
+      provider,
+      [5_000, 5_000, 2_000, 2_000],
+    );
     const admin = await fundedAccount(provider, [5_000, 5_000, 2_000, 2_000]);
 
     // 1. Mint the DAO's staked token (always-true policy) to the accounts that
@@ -889,10 +890,7 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
     const expectRejected = (params: EndProposalParams) =>
       expect(
         (async () =>
-          signAndSubmit(
-            s.ctx.owner,
-            await buildEndProposalTx(params),
-          ))(),
+          signAndSubmit(s.ctx.owner, await buildEndProposalTx(params)))(),
       ).rejects.toThrow();
 
     // A strict winner above the execute threshold MUST run its bound effect.
