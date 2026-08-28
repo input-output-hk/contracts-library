@@ -342,7 +342,13 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
 
     const lockedStakeDatum: StakePositionDatum = {
       ...stakeDatum(owner),
-      locks: [[tokenName, startTime + TIMINGS.draftLength, inStake]],
+      locks: [
+        {
+          proposalId: tokenName,
+          unlockTime: startTime + TIMINGS.draftLength,
+          stake: inStake,
+        },
+      ],
     };
 
     const tx = await buildCreateProposalTx({
@@ -422,7 +428,13 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
 
     const votedStakeDatum: StakePositionDatum = {
       ...stakeDatum(voter),
-      locks: [[proposal.tokenName, unlock, stake]],
+      locks: [
+        {
+          proposalId: proposal.tokenName,
+          unlockTime: unlock,
+          stake,
+        },
+      ],
     };
 
     const tx = await buildVoteTx({
@@ -555,11 +567,11 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
     const cosignerStakeDatum: StakePositionDatum = {
       ...stakeDatum(ctx.cosigner),
       locks: [
-        [
-          proposal.tokenName,
-          proposal.datum.startTime + TIMINGS.draftLength,
-          cosignerInStake,
-        ],
+        {
+          proposalId: proposal.tokenName,
+          unlockTime: proposal.datum.startTime + TIMINGS.draftLength,
+          stake: cosignerInStake,
+        },
       ],
     };
     const cosignTx = await buildCosignProposalTx({

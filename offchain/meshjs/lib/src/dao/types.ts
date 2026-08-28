@@ -8,12 +8,20 @@ import type { Credential } from "../common";
 
 export type { Credential };
 
+/** A stake locked by a proposal interaction (co-sign, creation, or vote). */
+export interface Lock {
+  proposalId: string;
+  /** POSIX ms at which the lock expires. */
+  unlockTime: number;
+  /** The staked-token amount committed by this lock. */
+  stake: bigint;
+}
+
 /** A stake position holds the DAO's staked token under an NFT. */
 export interface StakePositionDatum {
   owner: Credential;
   delegatee: Credential | null;
-  /** (proposalTokenName, unlockTimeMs, lockedStake) tuples. */
-  locks: Array<[string, number, bigint]>;
+  locks: Lock[];
 }
 
 /** Actions on a stake position UTxO. */
