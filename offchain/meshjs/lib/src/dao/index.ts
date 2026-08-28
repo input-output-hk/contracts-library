@@ -16,6 +16,8 @@ export {
   endVotingStageRedeemer,
   mintProposalRedeemer,
   mintVoteRedeemer,
+  pollEffectParamsToData,
+  pollEffectRedeemerToData,
   proposalDatumToData,
   proposalParamsToData,
   proposalRedeemerToData,
@@ -35,6 +37,7 @@ export {
   voteRedeemerToData,
   voteTokenRedeemerToData,
 } from "./datum";
+export { pollEffectScript } from "./effect";
 export {
   buildCreateStakePositionTx,
   buildDepositTx,
@@ -62,9 +65,11 @@ export {
   proposalScriptAddress,
   type CosignProposalParams,
   type CreateProposalParams,
+  type EndProposalParams,
   type ProposalSpendParams,
   type SimpleProposalParams,
   type TallyParams,
+  type WinnerEffect,
 } from "./proposal";
 export {
   buildVoteTx,
