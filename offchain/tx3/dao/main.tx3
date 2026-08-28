@@ -33,7 +33,8 @@
 //   vote                    spend a stake position and mint a vote NFT
 //   end_voting_stage        advance Voting -> Tally
 //   tally                   consume one vote artifact and fold it into results
-//   end_proposal            execute the winner or burn a failed proposal
+//   end_proposal            burn the proposal NFT and run the winning effect
+//                           (withdraw-0 with a truthful `ExecuteWinner` claim)
 //   cancel                  burn an un-tallied vote NFT
 //   deposit/withdraw/delegate/close_position — staking mechanics
 //
@@ -72,8 +73,9 @@ env {
     staked_token_script: Bytes,
     /// UTxO carrying the execution-effect authorizer script (reference script).
     effect_script_ref: UtxoRef,
-    /// Script hash of the execution-effect authorizer.
-    effect_script_hash: Bytes,
+    /// Reward address (raw bytes: `0xf0` header + script hash) of the
+    /// execution-effect authorizer, the withdraw-0 target.
+    effect_reward_address: Bytes,
 }
 
 /// The transacting stakeholder: signer, gas payer, and the key credential the
@@ -96,7 +98,7 @@ party Settings;
 // invoked via withdraw-0 when a winning proposal executes.
 policy EffectScript {
     ref: effect_script_ref,
-    hash: effect_script_hash,
+    hash: effect_reward_address,
 }
 
 // ---------------------------------------------------------------- credentials
@@ -191,9 +193,13 @@ type MintRedeemer {
 
 // ------------------------------------------------------------------- stake
 
-// A single stake lock: `(proposal_id, unlock_time_ms, committed_stake)`.
-// Aiken encodes a 3-tuple as a 3-element list.
-type Lock = Tuple<Bytes, Int, Int>;
+// A single stake lock, recorded when a stake position co-signs, creates, or
+// votes on a proposal. Encodes as `Constr 0 [proposal_id, unlock_time, stake]`.
+type Lock {
+    proposal_id: Bytes,
+    unlock_time: Int,
+    stake: Int,
+}
 
 // Stake position state.
 type StakePositionDatum {
@@ -295,6 +301,17 @@ type VoteTokenRedeemer {
         out_idx: Int,
     },
     BurnVotes,
+}
+
+// Redeemer of a poll-effect candidate's withdraw-0 execution. Declares the
+// intent of whoever triggers the effect: which poll closed and which option
+// won. The proposal validator (`EndProposal`) checks it against the tally,
+// and a well-formed candidate re-verifies it with `am_i_the_winner`.
+type PollEffectRedeemer {
+    ExecuteWinner {
+        proposal_id: Bytes,
+        winner_option: Int,
+    },
 }
 
 // ------------------------------------------------------------------ settings
@@ -1042,8 +1059,12 @@ tx tally(
     }
 }
 
-// Burn a tally-phase proposal: execute the winning effect (withdraw-0) or,
-// below threshold, simply destroy the proposal NFT.
+// Burn a tally-phase proposal and execute the winning effect: the poll-effect
+// candidate runs as a withdraw-0 whose redeemer declares the truthful claim
+// (`ExecuteWinner`), cross-checked by the proposal validator against the tally
+// (and re-derived on-chain by a candidate via `am_i_the_winner`). A proposal
+// without a strict winner above the `execute` threshold cannot be ended through
+// this endpoint (the withdrawal would run an effect that refuses it).
 tx end_proposal(
     /// The settings UTxO (reference input).
     settings_ref: UtxoRef,
@@ -1051,6 +1072,8 @@ tx end_proposal(
     proposal_ref: UtxoRef,
     /// The proposal token name.
     proposal_token_name: Bytes,
+    /// The winning option index (its effect is executed).
+    winner_option: Int,
     /// Slot of the validity lower bound (= tally end).
     since_slot: Int,
 ) {
@@ -1091,7 +1114,10 @@ tx end_proposal(
     cardano::withdrawal {
         from: EffectScript,
         amount: 0,
-        redeemer: (),
+        redeemer: PollEffectRedeemer::ExecuteWinner {
+            proposal_id: proposal_token_name,
+            winner_option: winner_option,
+        },
     }
 
     cardano::plutus_witness {

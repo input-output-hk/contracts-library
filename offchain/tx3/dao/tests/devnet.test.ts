@@ -32,10 +32,11 @@ const ADA = 1_000_000n;
 // Governance parameters (staked-token units).
 const THRESHOLDS = { create: 10, cosign: 5, accept: 30, vote: 5, execute: 10 };
 // Phase durations (POSIX ms). Long enough that a tx submitted a block later
-// (~5s on trix devnets) still lands inside its window.
+// (~5s on trix devnets) still lands inside its window, with slack for the
+// multi-transaction lifecycle (voting window) and its two tallies.
 const DRAFT_LENGTH = 20_000;
-const VOTING_LENGTH = 20_000;
-const TALLY_LENGTH = 20_000;
+const VOTING_LENGTH = 30_000;
+const TALLY_LENGTH = 60_000;
 const TIMINGS = {
   draft_length: DRAFT_LENGTH,
   voting_length: VOTING_LENGTH,
@@ -55,6 +56,9 @@ const ALWAYS_TRUE_HASH = resolveScriptHash(
   applyCborEncoding(ALWAYS_TRUE_SCRIPT),
   "V3",
 );
+// The withdrawal target for a script policy is its reward address, as raw
+// bytes: a `0xf0` header (script credential, testnet) + the script hash.
+const ALWAYS_TRUE_REWARD_ADDRESS = `f0${ALWAYS_TRUE_HASH}`;
 
 let devnet: TrixDevnet;
 let authorizerRef: DevnetUtxo;
@@ -77,7 +81,7 @@ const KIT_ENV = {
   staked_token_name: STAKED_TOKEN_NAME,
   staked_token_script: ALWAYS_TRUE_SCRIPT,
   effect_script_ref: "00#0",
-  effect_script_hash: "00",
+  effect_reward_address: "00",
 };
 
 const daoKit: DevnetKitFactory = (trpUrl, faucet) => {
@@ -146,11 +150,11 @@ const keyCred = (keyHashHex: string) => ({
   Key: { hash: toBytes(keyHashHex) },
 });
 const noneOpt = () => ({ None: {} });
-const lock = (nameHex: string, unlockMs: number, stake: number) => [
-  toBytes(nameHex),
-  unlockMs,
+const lock = (nameHex: string, unlockMs: number, stake: number) => ({
+  proposal_id: toBytes(nameHex),
+  unlock_time: unlockMs,
   stake,
-];
+});
 const draftStatus = (cosigningStake: number) => ({
   Draft: { cosigning_stake: cosigningStake },
 });
@@ -205,7 +209,41 @@ async function confirm(builder: TxBuilder): Promise<void> {
   const submitted = await builder
     .resolve()
     .then((r) => r.sign())
-    .then((s) => s.submit());
+    .then(async (s) => {
+      try {
+        return await s.submit();
+      } catch (err) {
+        // trix's TRP submit only reports "tx script returned failure";
+        // re-evaluate the signed tx against the devnet's Blockfrost-compatible
+        // endpoint, which reports per-script errors with traces.
+        try {
+          const bytes = (
+            s as unknown as {
+              submitParams: { tx: { bytes: Uint8Array | string } };
+            }
+          ).submitParams.tx.bytes;
+          const cbor =
+            typeof bytes === "string"
+              ? bytes
+              : Buffer.from(bytes).toString("hex");
+          const res = await fetch("http://localhost:3164/utils/txs/evaluate", {
+            method: "POST",
+            headers: { "Content-Type": "application/cbor" },
+            body: Buffer.from(cbor, "hex"),
+          });
+          console.error(
+            "tx phase-2 detail:",
+            (await res.text()).slice(0, 5000),
+          );
+        } catch (e) {
+          console.error(
+            "phase-2 re-evaluation unavailable:",
+            (e as Error).message,
+          );
+        }
+        throw err;
+      }
+    });
   await submitted.waitForConfirmed(DEVNET_POLL);
 }
 
@@ -289,7 +327,7 @@ async function setup(): Promise<Instance> {
     staked_token_name: STAKED_TOKEN_NAME,
     staked_token_script: ALWAYS_TRUE_SCRIPT,
     effect_script_ref: authorizerRef.ref,
-    effect_script_hash: ALWAYS_TRUE_HASH,
+    effect_reward_address: ALWAYS_TRUE_REWARD_ADDRESS,
   };
 
   const client = (signer: DevnetWallet) =>
@@ -381,9 +419,20 @@ async function createPosition(
 test("runs the full proposal lifecycle from stake to execution", async () => {
   const inst = await setup();
 
-  // 1. Stake positions for A (20) and B (10).
+  // 1. Stake positions for A (20) and B (10) to create and co-sign with.
+  //    A position that already locks a proposal cannot vote on it
+  //    (`!has_proposal` in the stake validator), so voters will later open
+  //    fresh positions from newly minted tokens.
   const posA = await createPosition(inst, inst.a, inst.seedA, STAKE_A);
   const posB = await createPosition(inst, inst.b, inst.seedB, STAKE_B);
+
+  // Extra staked tokens for the voting positions.
+  const beforeMintA = await snapshot(inst.a.address);
+  await devnet.mintTokensTo(inst.a.address, BigInt(STAKE_A));
+  const [seedA2] = await addedSince(inst.a.address, beforeMintA);
+  const beforeMintB = await snapshot(inst.b.address);
+  await devnet.mintTokensTo(inst.b.address, BigInt(STAKE_B));
+  const [seedB2] = await addedSince(inst.b.address, beforeMintB);
 
   // 2. A creates a proposal (single option -> always-true execution effect).
   const startTip = await devnet.tip();
@@ -460,11 +509,14 @@ test("runs the full proposal lifecycle from stake to execution", async () => {
   );
   const [proposal3] = await addedSince(inst.proposalAddr, beforeProposal3);
 
-  // 5. A and B vote (option 0), during the voting window.
+  // 5. A and B vote (option 0) from FRESH positions, during the voting
+  //    window. The vote continuation only carries the new vote lock (the
+  //    fresh positions hold no other locks).
   const votingEnd = startTime + DRAFT_LENGTH + VOTING_LENGTH;
+  const voterPosA = await createPosition(inst, inst.a, seedA2, STAKE_A);
   const voteNftA = nftNameFromRef({
-    txHash: posA2.txHash,
-    outputIndex: posA2.outputIndex,
+    txHash: voterPosA.utxo.txHash,
+    outputIndex: voterPosA.utxo.outputIndex,
   });
   const beforeStake3 = await snapshot(inst.stakeAddr);
   const beforeVote1 = await snapshot(inst.voteAddr);
@@ -474,13 +526,12 @@ test("runs the full proposal lifecycle from stake to execution", async () => {
       .vote({
         settings_ref: inst.settingsRef,
         proposal_ref: proposal3.ref,
-        stake_ref: posA2.ref,
+        stake_ref: voterPosA.utxo.ref,
         proposal_id: toBytes(proposalTokenName),
         voted_option: 0,
         vote_nft_name: toBytes(voteNftA),
         vote_datum: voteDatum(inst.a.keyHash, proposalTokenName, 0, STAKE_A),
         new_stake_datum: stakeDatum(inst.a.keyHash, noneOpt(), [
-          lock(proposalTokenName, startTime + DRAFT_LENGTH, STAKE_A),
           lock(proposalTokenName, votingEnd, STAKE_A),
         ]),
         since_slot: (await devnet.tip()).slot,
@@ -492,9 +543,10 @@ test("runs the full proposal lifecycle from stake to execution", async () => {
   await addedSince(inst.stakeAddr, beforeStake3);
   const [voteA] = await addedSince(inst.voteAddr, beforeVote1);
 
+  const voterPosB = await createPosition(inst, inst.b, seedB2, STAKE_B);
   const voteNftB = nftNameFromRef({
-    txHash: posB2.txHash,
-    outputIndex: posB2.outputIndex,
+    txHash: voterPosB.utxo.txHash,
+    outputIndex: voterPosB.utxo.outputIndex,
   });
   const beforeStake4 = await snapshot(inst.stakeAddr);
   const beforeVote2 = await snapshot(inst.voteAddr);
@@ -504,13 +556,12 @@ test("runs the full proposal lifecycle from stake to execution", async () => {
       .vote({
         settings_ref: inst.settingsRef,
         proposal_ref: proposal3.ref,
-        stake_ref: posB2.ref,
+        stake_ref: voterPosB.utxo.ref,
         proposal_id: toBytes(proposalTokenName),
         voted_option: 0,
         vote_nft_name: toBytes(voteNftB),
         vote_datum: voteDatum(inst.b.keyHash, proposalTokenName, 0, STAKE_B),
         new_stake_datum: stakeDatum(inst.b.keyHash, noneOpt(), [
-          lock(proposalTokenName, startTime + DRAFT_LENGTH, STAKE_B),
           lock(proposalTokenName, votingEnd, STAKE_B),
         ]),
         since_slot: (await devnet.tip()).slot,
@@ -584,7 +635,9 @@ test("runs the full proposal lifecycle from stake to execution", async () => {
   const [proposal6] = await addedSince(inst.proposalAddr, beforeProposal6);
 
   // 8. End the proposal after the tally window: the winning option (0, with
-  //    30 votes >= execute 10) must run its bound effect (withdraw-0).
+  //    30 votes >= execute 10) must run its bound effect (withdraw-0), whose
+  //    redeemer carries the truthful `ExecuteWinner` claim checked by the
+  //    proposal validator.
   await devnet.waitForChainTimeMs(tallyEnd + 1_000);
   const tallyEndSlot = (await devnet.tip()).slot;
   await confirm(
@@ -594,6 +647,7 @@ test("runs the full proposal lifecycle from stake to execution", async () => {
         settings_ref: inst.settingsRef,
         proposal_ref: proposal6.ref,
         proposal_token_name: toBytes(proposalTokenName),
+        winner_option: 0,
         since_slot: tallyEndSlot,
       } as unknown as Parameters<Client["endProposal"]>[0])
       .env(inst.env),
@@ -603,8 +657,8 @@ test("runs the full proposal lifecycle from stake to execution", async () => {
   expect(await devnet.utxosOf(inst.proposalAddr)).toHaveLength(0);
   // Votes were burned during tally; no vote UTxOs remain.
   expect(await devnet.utxosOf(inst.voteAddr)).toHaveLength(0);
-  // The two stake positions survive with their vote locks recorded.
-  expect(await devnet.utxosOf(inst.stakeAddr)).toHaveLength(2);
+  // The four stake positions survive (create/cosign + voting positions).
+  expect(await devnet.utxosOf(inst.stakeAddr)).toHaveLength(4);
 }, 300_000);
 
 // ---------------------------------------------------------------- mechanics
