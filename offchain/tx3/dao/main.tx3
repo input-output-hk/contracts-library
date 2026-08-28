@@ -1,0 +1,1332 @@
+// DAO governance — token-weighted proposal lifecycle (Tx3 off-chain).
+//
+// Reference Tx3 implementation of the DAO protocol, mirroring the on-chain
+// validators in `onchain/validators/dao/{stake,proposal,vote}.ak` and the
+// MeshJS builders in `offchain/meshjs/lib/src/dao/`.
+//
+// Three Plutus V3 scripts cooperate. Each script is *both* a minting policy
+// (its NFT) and a spending validator (the UTxO at its address), and each is
+// parameterized with `(staked_token_policy, staked_token_name, settings_policy,
+// settings_token_name)`:
+//
+//   - `stake`    a stake position locks the DAO's staked token under a unique
+//                NFT and records vote/co-sign locks.
+//   - `proposal` a proposal NFT carries the lifecycle state machine
+//                (Draft -> Voting -> Tally -> executed/failed).
+//   - `vote`     a vote NFT is minted per vote and burned at tally time.
+//
+// Governance parameters and the sibling script hashes are read at runtime from
+// a *settings* UTxO (the settings contract from `settings/main.tx3`) located by
+// its NFT via reference input. That settings instance stores `DaoSettings` in
+// its opaque `current` datum, so this protocol carries a typed
+// `DaoSettingsDatum` (unlike the settings protocol, whose `current` is an
+// opaque `Bytes`) — `launch_settings` below mints the settings NFT and seeds
+// the typed `current`.
+//
+// The lifecycle:
+//
+//   create_stake_position   mint a stake NFT and lock the first stake
+//   create_proposal         spend a stake position and mint a proposal NFT
+//   cosign                  add co-signing stake during the draft phase
+//   accept_draft            advance Draft -> Voting (threshold + window)
+//   reject_draft            burn a proposal that missed the co-sign threshold
+//   vote                    spend a stake position and mint a vote NFT
+//   end_voting_stage        advance Voting -> Tally
+//   tally                   consume one vote artifact and fold it into results
+//   end_proposal            execute the winner or burn a failed proposal
+//   cancel                  burn an un-tallied vote NFT
+//   deposit/withdraw/delegate/close_position — staking mechanics
+//
+// Authorization: `is_authorized` accepts a key credential (a required signer).
+// Tx3 has no runtime key-vs-script branch, so this reference implements the
+// key-authorized paths only — the named party (`Signer`) is bound to the key
+// credential the validator requires (the stake owner, or the delegatee when
+// one is set).
+//
+// Every transaction except `launch_settings` / `create_stake_position` reads
+// the settings UTxO as a *reference input* (the validator wrapper resolves
+// `DaoSettings` for every spend, even when the action ignores it).
+
+env {
+    /// Hash of the parameterized stake validator (= its NFT policy id).
+    stake_hash: Bytes,
+    /// Single-CBOR flat stake validator script.
+    stake_script: Bytes,
+    /// Hash of the parameterized proposal validator (= its NFT policy id).
+    proposal_hash: Bytes,
+    /// Single-CBOR flat proposal validator script.
+    proposal_script: Bytes,
+    /// Hash of the parameterized vote validator (= its NFT policy id).
+    vote_hash: Bytes,
+    /// Single-CBOR flat vote validator script.
+    vote_script: Bytes,
+    /// Hash of the parameterized settings validator (minted by `launch_settings`).
+    settings_hash: Bytes,
+    /// Single-CBOR flat settings validator script.
+    settings_script: Bytes,
+    /// Policy id of the DAO's staked token (the governance token).
+    staked_token_policy: Bytes,
+    /// Asset name of the DAO's staked token.
+    staked_token_name: Bytes,
+    /// Minting policy script for the staked token (devnet test kit only).
+    staked_token_script: Bytes,
+    /// UTxO carrying the execution-effect authorizer script (reference script).
+    effect_script_ref: UtxoRef,
+    /// Script hash of the execution-effect authorizer.
+    effect_script_hash: Bytes,
+}
+
+/// The transacting stakeholder: signer, gas payer, and the key credential the
+/// validators authorize (stake owner or delegatee).
+party Signer;
+
+/// The stake position script address (holds stake NFT UTxOs).
+party Stake;
+
+/// The proposal script address (holds proposal NFT UTxOs).
+party Proposal;
+
+/// The vote artifact script address (holds vote NFT UTxOs).
+party Vote;
+
+/// The settings script address (holds the settings NFT UTxO).
+party Settings;
+
+// The execution-effect authorizer script, carried by a reference input and
+// invoked via withdraw-0 when a winning proposal executes.
+policy EffectScript {
+    ref: effect_script_ref,
+    hash: effect_script_hash,
+}
+
+// ---------------------------------------------------------------- credentials
+
+// `Credential` in the Aiken sense: constructor 0 is a key credential,
+// constructor 1 a script credential. The carried value is a Blake2b-224 hash.
+type Credential {
+    Key {
+        hash: Bytes,
+    },
+    Script {
+        hash: Bytes,
+    },
+}
+
+// `Option<Credential>` — `Some` is constructor 0, `None` constructor 1.
+type OptionalCredential {
+    Some {
+        credential: Credential,
+    },
+    None,
+}
+
+// `Option<Int>` — `Some` is constructor 0, `None` constructor 1.
+type OptionalInt {
+    Some {
+        value: Int,
+    },
+    None,
+}
+
+// `Option<DaoSettings>` — `Some` is constructor 0, `None` constructor 1.
+type OptionalDaoSettings {
+    Some {
+        value: DaoSettings,
+    },
+    None,
+}
+
+// `OutputReference` as Aiken encodes it (`Constr 0 [txid, index]`), used in the
+// stake NFT mint redeemer. Declared explicitly rather than relying on the
+// `UtxoRef` datum encoding.
+type OutputReference {
+    transaction_id: Bytes,
+    output_index: Int,
+}
+
+// ------------------------------------------------------------------ settings
+
+// Governance thresholds (staked-token units) for each lifecycle stage.
+type ProposalThresholds {
+    create: Int,
+    cosign: Int,
+    accept: Int,
+    vote: Int,
+    execute: Int,
+}
+
+// Phase durations, in POSIX milliseconds.
+type ProposalTimingConfig {
+    draft_length: Int,
+    voting_length: Int,
+    tally_length: Int,
+}
+
+// The DAO configuration stored as the settings contract's `current` datum.
+type DaoSettings {
+    thresholds: ProposalThresholds,
+    timings: ProposalTimingConfig,
+    // Hash of the stake validator (also the stake NFT policy id).
+    stake_validator: Bytes,
+    // Hash of the proposal validator (also the proposal NFT policy id).
+    proposal_validator: Bytes,
+    // Hash of the vote validator (also the vote NFT policy id).
+    vote_validator: Bytes,
+}
+
+// The settings datum with a typed `current` (the DAO's `DaoSettings`).
+type DaoSettingsDatum {
+    current: DaoSettings,
+    next: OptionalDaoSettings,
+    next_apply: OptionalInt,
+}
+
+// Redeemer for the settings mint endpoint (used by `launch_settings`).
+type MintRedeemer {
+    Mint {
+        out_ix: Int,
+    },
+    Burn,
+}
+
+// ------------------------------------------------------------------- stake
+
+// A single stake lock: `(proposal_id, unlock_time_ms, committed_stake)`.
+// Aiken encodes a 3-tuple as a 3-element list.
+type Lock = Tuple<Bytes, Int, Int>;
+
+// Stake position state.
+type StakePositionDatum {
+    owner: Credential,
+    delegatee: OptionalCredential,
+    locks: List<Lock>,
+}
+
+// Actions on a stake position UTxO.
+type StakeRedeemer {
+    Deposit,
+    DelegateTo {
+        delegatee: OptionalCredential,
+    },
+    Withdraw {
+        amount: Int,
+    },
+    ClosePosition,
+    CreateProposal,
+    CosignProposal {
+        proposal_id: Bytes,
+    },
+    VoteProposal {
+        proposal_id: Bytes,
+        voted_option: Int,
+    },
+}
+
+// Redeemer for the stake position NFT minting policy.
+type StakeTokenRedeemer {
+    CreatePosition {
+        owner_utxo: OutputReference,
+        out_idx: Int,
+    },
+    CloseStakePosition,
+}
+
+// ---------------------------------------------------------------- proposal
+
+// Lifecycle status of a proposal.
+type ProposalStatus {
+    Draft {
+        cosigning_stake: Int,
+    },
+    Voting,
+    Tally {
+        votes: List<Int>,
+    },
+}
+
+// Immutable proposal state, written once at creation.
+type ProposalDatum {
+    thresholds: ProposalThresholds,
+    timing_config: ProposalTimingConfig,
+    start_time: Int,
+    status: ProposalStatus,
+    // Ordered execution-effect script hashes (one per vote option).
+    results: List<Bytes>,
+}
+
+// Redeemer for the proposal token minting policy.
+type ProposalTokenRedeemer {
+    MintProposal {
+        results: List<Bytes>,
+        out_idx: Int,
+    },
+    BurnProposal,
+}
+
+// Spent proposal UTxO actions.
+type ProposalRedeemer {
+    Cosign,
+    AcceptDraft,
+    RejectDraft,
+    EndVotingStage,
+    TallyVotes,
+    EndProposal,
+}
+
+// -------------------------------------------------------------------- vote
+
+// Vote artifact datum.
+type VoteDatum {
+    stake_owner: Credential,
+    proposal: Bytes,
+    voted_option: Int,
+    stake: Int,
+}
+
+// Actions on a vote artifact UTxO.
+type VoteRedeemer {
+    TallyVote,
+    Cancel,
+}
+
+// Redeemer for the vote NFT minting policy.
+type VoteTokenRedeemer {
+    MintVote {
+        out_idx: Int,
+    },
+    BurnVotes,
+}
+
+// ------------------------------------------------------------------ settings
+
+// Launch the settings instance that backs the DAO: mint the settings NFT and
+// produce the settings UTxO whose `current` is the given `DaoSettings`.
+tx launch_settings(
+    /// The UTxO consumed as the mint seed (settings validator parameter).
+    seed: UtxoRef,
+    /// The DAO configuration to store as the settings `current`.
+    settings: DaoSettings,
+    /// Index of the settings output within the transaction outputs.
+    out_ix: Int,
+) {
+    input funding {
+        from: Signer,
+        ref: seed,
+        min_amount: Ada(2000000) + fees,
+    }
+
+    mint {
+        amount: AnyAsset(settings_hash, "settings", 1),
+        redeemer: MintRedeemer::Mint {
+            out_ix: out_ix,
+        },
+    }
+
+    output settings_out {
+        to: Settings,
+        amount: AnyAsset(settings_hash, "settings", 1) + Ada(2000000),
+        datum: DaoSettingsDatum {
+            current: settings,
+            next: OptionalDaoSettings::None {},
+            next_apply: OptionalInt::None {},
+        },
+    }
+
+    output {
+        to: Signer,
+        amount: funding - Ada(2000000) - fees,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    signers {
+        Signer,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: settings_script,
+    }
+}
+
+// ------------------------------------------------------------------- stake
+
+// Mint a stake position NFT and lock the first stake.
+tx create_stake_position(
+    /// The owner's UTxO consumed as the mint seed (holds the staked token).
+    seed: UtxoRef,
+    /// The position owner (a key credential; also the required signer).
+    owner: Credential,
+    /// Quantity of the staked token locked into the position.
+    stake: Int,
+    /// The stake NFT name (`blake2b_256` of the seed reference).
+    stake_nft_name: Bytes,
+    /// Index of the stake position output within the transaction outputs.
+    out_ix: Int,
+) {
+    input source {
+        from: Signer,
+        ref: seed,
+        min_amount: AnyAsset(staked_token_policy, staked_token_name, stake),
+    }
+
+    input gas {
+        from: Signer,
+        min_amount: Ada(2000000) + fees,
+    }
+
+    mint {
+        amount: AnyAsset(stake_hash, stake_nft_name, 1),
+        redeemer: StakeTokenRedeemer::CreatePosition {
+            owner_utxo: OutputReference {
+                transaction_id: seed.tx_hash,
+                output_index: seed.output_index,
+            },
+            out_idx: out_ix,
+        },
+    }
+
+    output stake_out {
+        to: Stake,
+        amount: AnyAsset(stake_hash, stake_nft_name, 1) +
+            AnyAsset(staked_token_policy, staked_token_name, stake) +
+            Ada(2000000),
+        datum: StakePositionDatum {
+            owner: owner,
+            delegatee: OptionalCredential::None {},
+            locks: [],
+        },
+    }
+
+    output {
+        to: Signer,
+        amount: source - AnyAsset(staked_token_policy, staked_token_name, stake) +
+            gas - Ada(2000000) - fees,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: stake_script,
+    }
+}
+
+// Add more staked tokens to a stake position. `new_datum` is the continuation
+// datum with expired locks pruned and the added stake reflected off-chain.
+tx deposit(
+    /// The settings UTxO (reference input).
+    settings_ref: UtxoRef,
+    /// The stake position UTxO being acted on.
+    stake_ref: UtxoRef,
+    /// Quantity of the staked token added.
+    added: Int,
+    /// The continuation stake position datum.
+    new_datum: StakePositionDatum,
+    /// Slot of the validity lower bound.
+    since_slot: Int,
+) {
+    reference dao_settings {
+        ref: settings_ref,
+    }
+
+    input stake_in {
+        from: Stake,
+        ref: stake_ref,
+        redeemer: StakeRedeemer::Deposit {},
+    }
+
+    input funding {
+        from: Signer,
+        min_amount: AnyAsset(staked_token_policy, staked_token_name, added) + fees,
+    }
+
+    output stake_out {
+        to: Stake,
+        amount: stake_in + AnyAsset(staked_token_policy, staked_token_name, added),
+        datum: new_datum,
+    }
+
+    output {
+        to: Signer,
+        amount: funding - AnyAsset(staked_token_policy, staked_token_name, added) - fees,
+    }
+
+    validity {
+        since_slot: since_slot,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    signers {
+        Signer,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: stake_script,
+    }
+}
+
+// Withdraw free staked tokens from a stake position.
+tx withdraw(
+    /// The settings UTxO (reference input).
+    settings_ref: UtxoRef,
+    /// The stake position UTxO being acted on.
+    stake_ref: UtxoRef,
+    /// Quantity of the staked token withdrawn (must be <= free stake).
+    amount: Int,
+    /// The continuation stake position datum.
+    new_datum: StakePositionDatum,
+    /// Slot of the validity lower bound.
+    since_slot: Int,
+) {
+    reference dao_settings {
+        ref: settings_ref,
+    }
+
+    input stake_in {
+        from: Stake,
+        ref: stake_ref,
+        redeemer: StakeRedeemer::Withdraw {
+            amount: amount,
+        },
+    }
+
+    input gas {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    output stake_out {
+        to: Stake,
+        amount: stake_in - AnyAsset(staked_token_policy, staked_token_name, amount),
+        datum: new_datum,
+    }
+
+    output {
+        to: Signer,
+        amount: AnyAsset(staked_token_policy, staked_token_name, amount) + gas - fees,
+    }
+
+    validity {
+        since_slot: since_slot,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    signers {
+        Signer,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: stake_script,
+    }
+}
+
+// Redirect a stake position's voting power to a delegatee.
+tx delegate(
+    /// The settings UTxO (reference input).
+    settings_ref: UtxoRef,
+    /// The stake position UTxO being acted on.
+    stake_ref: UtxoRef,
+    /// The new delegatee (None clears delegation).
+    delegatee: OptionalCredential,
+    /// The continuation stake position datum.
+    new_datum: StakePositionDatum,
+) {
+    reference dao_settings {
+        ref: settings_ref,
+    }
+
+    input stake_in {
+        from: Stake,
+        ref: stake_ref,
+        redeemer: StakeRedeemer::DelegateTo {
+            delegatee: delegatee,
+        },
+    }
+
+    input gas {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    output stake_out {
+        to: Stake,
+        amount: stake_in,
+        datum: new_datum,
+    }
+
+    output {
+        to: Signer,
+        amount: gas - fees,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    signers {
+        Signer,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: stake_script,
+    }
+}
+
+// Burn the stake NFT and recover the staked tokens, after all locks expire.
+tx close_position(
+    /// The settings UTxO (reference input).
+    settings_ref: UtxoRef,
+    /// The stake position UTxO being closed.
+    stake_ref: UtxoRef,
+    /// The stake NFT name held by the position.
+    stake_nft_name: Bytes,
+    /// Slot of the validity lower bound.
+    since_slot: Int,
+) {
+    reference dao_settings {
+        ref: settings_ref,
+    }
+
+    input stake_in {
+        from: Stake,
+        ref: stake_ref,
+        redeemer: StakeRedeemer::ClosePosition {},
+    }
+
+    input gas {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    burn {
+        amount: AnyAsset(stake_hash, stake_nft_name, 1),
+        redeemer: StakeTokenRedeemer::CloseStakePosition {},
+    }
+
+    output {
+        to: Signer,
+        amount: stake_in + gas - AnyAsset(stake_hash, stake_nft_name, 1) - fees,
+    }
+
+    validity {
+        since_slot: since_slot,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    signers {
+        Signer,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: stake_script,
+    }
+}
+
+// ---------------------------------------------------------------- proposal
+
+// Spend a stake position and mint a proposal NFT, entering the draft phase.
+// Thresholds and timings must equal the settings `current`; the caller builds
+// both continuation datums and passes them in.
+tx create_proposal(
+    /// The settings UTxO (reference input).
+    settings_ref: UtxoRef,
+    /// The creating stake position UTxO.
+    stake_ref: UtxoRef,
+    /// The proposal token name (`blake2b_256` of the stake reference).
+    proposal_token_name: Bytes,
+    /// Execution-effect script hashes (one per vote option).
+    results: List<Bytes>,
+    /// The continuation stake position datum.
+    new_stake_datum: StakePositionDatum,
+    /// The new proposal datum.
+    new_proposal_datum: ProposalDatum,
+    /// Slot of the validity lower bound.
+    since_slot: Int,
+    /// Index of the proposal output within the transaction outputs.
+    out_ix: Int,
+) {
+    reference dao_settings {
+        ref: settings_ref,
+    }
+
+    input stake_in {
+        from: Stake,
+        ref: stake_ref,
+        redeemer: StakeRedeemer::CreateProposal {},
+    }
+
+    input gas {
+        from: Signer,
+        min_amount: Ada(2000000) + fees,
+    }
+
+    mint {
+        amount: AnyAsset(proposal_hash, proposal_token_name, 1),
+        redeemer: ProposalTokenRedeemer::MintProposal {
+            results: results,
+            out_idx: out_ix,
+        },
+    }
+
+    output stake_out {
+        to: Stake,
+        amount: stake_in,
+        datum: new_stake_datum,
+    }
+
+    output proposal_out {
+        to: Proposal,
+        amount: AnyAsset(proposal_hash, proposal_token_name, 1) + Ada(2000000),
+        datum: new_proposal_datum,
+    }
+
+    output {
+        to: Signer,
+        amount: gas - Ada(2000000) - fees,
+    }
+
+    validity {
+        since_slot: since_slot,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    signers {
+        Signer,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: stake_script,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: proposal_script,
+    }
+}
+
+// Add co-signing stake to a draft proposal.
+tx cosign(
+    /// The settings UTxO (reference input).
+    settings_ref: UtxoRef,
+    /// The proposal UTxO being co-signed.
+    proposal_ref: UtxoRef,
+    /// The co-signing stake position UTxO.
+    stake_ref: UtxoRef,
+    /// The proposal token name.
+    proposal_token_name: Bytes,
+    /// The continuation proposal datum (updated co-signing stake).
+    new_proposal_datum: ProposalDatum,
+    /// The continuation stake position datum (updated locks).
+    new_stake_datum: StakePositionDatum,
+) {
+    reference dao_settings {
+        ref: settings_ref,
+    }
+
+    input proposal_in {
+        from: Proposal,
+        ref: proposal_ref,
+        redeemer: ProposalRedeemer::Cosign {},
+    }
+
+    input stake_in {
+        from: Stake,
+        ref: stake_ref,
+        redeemer: StakeRedeemer::CosignProposal {
+            proposal_id: proposal_token_name,
+        },
+    }
+
+    input gas {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    output proposal_out {
+        to: Proposal,
+        amount: proposal_in,
+        datum: new_proposal_datum,
+    }
+
+    output stake_out {
+        to: Stake,
+        amount: stake_in,
+        datum: new_stake_datum,
+    }
+
+    output {
+        to: Signer,
+        amount: gas - fees,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    signers {
+        Signer,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: proposal_script,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: stake_script,
+    }
+}
+
+// Advance a draft proposal to the voting phase.
+tx accept_draft(
+    /// The settings UTxO (reference input).
+    settings_ref: UtxoRef,
+    /// The proposal UTxO being advanced.
+    proposal_ref: UtxoRef,
+    /// The continuation proposal datum (status -> Voting).
+    new_proposal_datum: ProposalDatum,
+    /// Slot of the validity upper bound (= draft end).
+    until_slot: Int,
+) {
+    reference dao_settings {
+        ref: settings_ref,
+    }
+
+    input proposal_in {
+        from: Proposal,
+        ref: proposal_ref,
+        redeemer: ProposalRedeemer::AcceptDraft {},
+    }
+
+    input gas {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    output proposal_out {
+        to: Proposal,
+        amount: proposal_in,
+        datum: new_proposal_datum,
+    }
+
+    output {
+        to: Signer,
+        amount: gas - fees,
+    }
+
+    validity {
+        until_slot: until_slot,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: proposal_script,
+    }
+}
+
+// Burn a draft proposal that missed the co-sign threshold (after draft end).
+tx reject_draft(
+    /// The settings UTxO (reference input).
+    settings_ref: UtxoRef,
+    /// The proposal UTxO being rejected.
+    proposal_ref: UtxoRef,
+    /// The proposal token name.
+    proposal_token_name: Bytes,
+    /// Slot of the validity lower bound (= draft end).
+    since_slot: Int,
+) {
+    reference dao_settings {
+        ref: settings_ref,
+    }
+
+    input proposal_in {
+        from: Proposal,
+        ref: proposal_ref,
+        redeemer: ProposalRedeemer::RejectDraft {},
+    }
+
+    input gas {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    burn {
+        amount: AnyAsset(proposal_hash, proposal_token_name, 1),
+        redeemer: ProposalTokenRedeemer::BurnProposal {},
+    }
+
+    output {
+        to: Signer,
+        amount: proposal_in + gas - AnyAsset(proposal_hash, proposal_token_name, 1) - fees,
+    }
+
+    validity {
+        since_slot: since_slot,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: proposal_script,
+    }
+}
+
+// Advance a voting proposal to the tally phase (after the voting window).
+tx end_voting_stage(
+    /// The settings UTxO (reference input).
+    settings_ref: UtxoRef,
+    /// The proposal UTxO being advanced.
+    proposal_ref: UtxoRef,
+    /// The continuation proposal datum (status -> Tally, zeroed votes).
+    new_proposal_datum: ProposalDatum,
+    /// Slot of the validity lower bound (= voting end).
+    since_slot: Int,
+) {
+    reference dao_settings {
+        ref: settings_ref,
+    }
+
+    input proposal_in {
+        from: Proposal,
+        ref: proposal_ref,
+        redeemer: ProposalRedeemer::EndVotingStage {},
+    }
+
+    input gas {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    output proposal_out {
+        to: Proposal,
+        amount: proposal_in,
+        datum: new_proposal_datum,
+    }
+
+    output {
+        to: Signer,
+        amount: gas - fees,
+    }
+
+    validity {
+        since_slot: since_slot,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: proposal_script,
+    }
+}
+
+// Tally a single vote artifact: burn its NFT, refund its lovelace to the
+// voter, and fold its weight into the running tally. Repeat once per vote.
+tx tally(
+    /// The settings UTxO (reference input).
+    settings_ref: UtxoRef,
+    /// The proposal UTxO being tallied.
+    proposal_ref: UtxoRef,
+    /// The vote artifact UTxO being tallied.
+    vote_ref: UtxoRef,
+    /// The vote NFT name held by the artifact.
+    vote_nft_name: Bytes,
+    /// The voter's address (receives the refunded lovelace).
+    refund: Address,
+    /// The continuation proposal datum (updated tally).
+    new_proposal_datum: ProposalDatum,
+    /// Slot of the validity upper bound (= tally end).
+    until_slot: Int,
+) {
+    reference dao_settings {
+        ref: settings_ref,
+    }
+
+    input proposal_in {
+        from: Proposal,
+        ref: proposal_ref,
+        redeemer: ProposalRedeemer::TallyVotes {},
+    }
+
+    input vote_in {
+        from: Vote,
+        ref: vote_ref,
+        redeemer: VoteRedeemer::TallyVote {},
+    }
+
+    input gas {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    burn {
+        amount: AnyAsset(vote_hash, vote_nft_name, 1),
+        redeemer: VoteTokenRedeemer::BurnVotes {},
+    }
+
+    output proposal_out {
+        to: Proposal,
+        amount: proposal_in,
+        datum: new_proposal_datum,
+    }
+
+    output {
+        to: refund,
+        amount: vote_in - AnyAsset(vote_hash, vote_nft_name, 1),
+    }
+
+    output {
+        to: Signer,
+        amount: gas - fees,
+    }
+
+    validity {
+        until_slot: until_slot,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: proposal_script,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: vote_script,
+    }
+}
+
+// Burn a tally-phase proposal: execute the winning effect (withdraw-0) or,
+// below threshold, simply destroy the proposal NFT.
+tx end_proposal(
+    /// The settings UTxO (reference input).
+    settings_ref: UtxoRef,
+    /// The proposal UTxO being ended.
+    proposal_ref: UtxoRef,
+    /// The proposal token name.
+    proposal_token_name: Bytes,
+    /// Slot of the validity lower bound (= tally end).
+    since_slot: Int,
+) {
+    reference dao_settings {
+        ref: settings_ref,
+    }
+
+    input proposal_in {
+        from: Proposal,
+        ref: proposal_ref,
+        redeemer: ProposalRedeemer::EndProposal {},
+    }
+
+    input gas {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    burn {
+        amount: AnyAsset(proposal_hash, proposal_token_name, 1),
+        redeemer: ProposalTokenRedeemer::BurnProposal {},
+    }
+
+    output {
+        to: Signer,
+        amount: proposal_in + gas - AnyAsset(proposal_hash, proposal_token_name, 1) - fees,
+    }
+
+    validity {
+        since_slot: since_slot,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    cardano::withdrawal {
+        from: EffectScript,
+        amount: 0,
+        redeemer: (),
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: proposal_script,
+    }
+}
+
+// -------------------------------------------------------------------- vote
+
+// Cast a vote: spend a stake position and mint a vote NFT locked to a choice.
+tx vote(
+    /// The settings UTxO (reference input).
+    settings_ref: UtxoRef,
+    /// The referenced proposal UTxO (reference input).
+    proposal_ref: UtxoRef,
+    /// The voting stake position UTxO.
+    stake_ref: UtxoRef,
+    /// The proposal token name (also the vote datum's `proposal` field).
+    proposal_id: Bytes,
+    /// The chosen option index.
+    voted_option: Int,
+    /// The vote NFT name (`blake2b_256` of the stake reference).
+    vote_nft_name: Bytes,
+    /// The vote artifact datum.
+    vote_datum: VoteDatum,
+    /// The continuation stake position datum (updated locks).
+    new_stake_datum: StakePositionDatum,
+    /// Slot of the validity lower bound.
+    since_slot: Int,
+    /// Slot of the validity upper bound (= voting end).
+    until_slot: Int,
+    /// Index of the vote output within the transaction outputs.
+    out_ix: Int,
+) {
+    reference dao_settings {
+        ref: settings_ref,
+    }
+
+    reference proposal_in {
+        ref: proposal_ref,
+    }
+
+    input stake_in {
+        from: Stake,
+        ref: stake_ref,
+        redeemer: StakeRedeemer::VoteProposal {
+            proposal_id: proposal_id,
+            voted_option: voted_option,
+        },
+    }
+
+    input gas {
+        from: Signer,
+        min_amount: Ada(2000000) + fees,
+    }
+
+    mint {
+        amount: AnyAsset(vote_hash, vote_nft_name, 1),
+        redeemer: VoteTokenRedeemer::MintVote {
+            out_idx: out_ix,
+        },
+    }
+
+    output stake_out {
+        to: Stake,
+        amount: stake_in,
+        datum: new_stake_datum,
+    }
+
+    output vote_out {
+        to: Vote,
+        amount: AnyAsset(vote_hash, vote_nft_name, 1) + Ada(2000000),
+        datum: vote_datum,
+    }
+
+    output {
+        to: Signer,
+        amount: gas - Ada(2000000) - fees,
+    }
+
+    validity {
+        since_slot: since_slot,
+        until_slot: until_slot,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    signers {
+        Signer,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: stake_script,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: vote_script,
+    }
+}
+
+// Cancel a vote: burn the vote NFT and return its value to the voter.
+tx cancel(
+    /// The settings UTxO (reference input).
+    settings_ref: UtxoRef,
+    /// The vote artifact UTxO being cancelled.
+    vote_ref: UtxoRef,
+    /// The vote NFT name held by the artifact.
+    vote_nft_name: Bytes,
+) {
+    reference dao_settings {
+        ref: settings_ref,
+    }
+
+    input vote_in {
+        from: Vote,
+        ref: vote_ref,
+        redeemer: VoteRedeemer::Cancel {},
+    }
+
+    input gas {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    burn {
+        amount: AnyAsset(vote_hash, vote_nft_name, 1),
+        redeemer: VoteTokenRedeemer::BurnVotes {},
+    }
+
+    output {
+        to: Signer,
+        amount: vote_in + gas - AnyAsset(vote_hash, vote_nft_name, 1) - fees,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    signers {
+        Signer,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: vote_script,
+    }
+}
+
+// ============================================================
+// TEST KIT — devnet infrastructure only.
+//
+// Consumed exclusively by `tests/devnet.test.ts` to bootstrap a
+// fresh trix devnet: the faucet pays wallets, the always-true
+// fixture is published as a reference-script UTxO, and the staked
+// governance token is minted to stakeholders.
+//
+// Never used by production builders. Safe to delete wholesale.
+// ============================================================
+
+/// Funds every devnet wallet.
+party Faucet;
+
+/// Holds reference-script UTxOs published by the test kit.
+party Publisher;
+
+/// Pay `quantity` lovelace from the faucet to any runtime address.
+tx devnet_pay(destination: Address, quantity: Int) {
+    input source {
+        from: Faucet,
+        min_amount: Ada(quantity) + fees,
+    }
+
+    output {
+        to: destination,
+        amount: Ada(quantity),
+    }
+
+    output {
+        to: Faucet,
+        amount: source - Ada(quantity) - fees,
+    }
+}
+
+/// Publish the always-true authorizer fixture as a reference script.
+tx devnet_deploy_authorizer(script_code: Bytes, lovelace: Int) {
+    input gas {
+        from: Faucet,
+        min_amount: Ada(lovelace) + fees,
+    }
+
+    cardano::publish {
+        to: Publisher,
+        amount: Ada(lovelace),
+        version: 3,
+        script: script_code,
+    }
+
+    output {
+        to: Faucet,
+        amount: gas - Ada(lovelace) - fees,
+    }
+}
+
+/// Mint staked governance tokens (with lovelace) to a stakeholder.
+tx devnet_mint_staked(destination: Address, quantity: Int) {
+    input source {
+        from: Faucet,
+        min_amount: Ada(2000000) + fees,
+    }
+
+    mint {
+        amount: AnyAsset(staked_token_policy, staked_token_name, quantity),
+        redeemer: (),
+    }
+
+    output {
+        to: destination,
+        amount: AnyAsset(staked_token_policy, staked_token_name, quantity) + Ada(2000000),
+    }
+
+    output {
+        to: Faucet,
+        amount: source - Ada(2000000) - fees,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: staked_token_script,
+    }
+}
