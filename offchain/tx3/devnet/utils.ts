@@ -36,10 +36,6 @@ import { Client } from "../settings/codegen/ts-client/config-parameter-managemen
 export const DEVNET_POLL = new PollConfig(60, 1000);
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-/** Directory holding `trix.toml` + `devnet.toml`; also where trix writes state. */
-const PROTOCOL_ROOT = join(HERE, "..", "settings");
-/** Trix-generated state (generated genesis, `dolos/dolos.toml`, codegen). */
-const STATE_DIR = join(PROTOCOL_ROOT, ".tx3");
 const BOOT_TIMEOUT_MS = 120_000;
 
 const TRIX_BIN = process.env.TRIX_BIN ?? "trix";
@@ -63,12 +59,72 @@ const KIT_ENV = {
 };
 
 /**
+ * The test-kit operations a protocol must implement on top of its generated
+ * client. Each closure submits a real transaction (funded by the faucet) and
+ * resolves only once it is confirmed.
+ */
+export interface DevnetKit {
+  /** Pay lovelace from the faucet to `address` (a `devnet_pay` tx). */
+  pay(address: string, quantity: bigint): Promise<void>;
+  /** Publish `scriptCode` as a reference script held by `publisherAddress`. */
+  deploy(
+    publisherAddress: string,
+    scriptCode: string,
+    lovelace: bigint,
+  ): Promise<void>;
+  /** Mint protocol tokens (with lovelace) to `address`. Optional. */
+  mintTokens?(address: string, quantity: bigint): Promise<void>;
+}
+
+/** Builds a {@link DevnetKit} wired to the given TRP endpoint and faucet signer. */
+export type DevnetKitFactory = (trpUrl: string, faucet: Party) => DevnetKit;
+
+export interface DevnetStartOptions {
+  /** Directory (relative to this file's dir) holding `trix.toml` + `devnet.toml`. */
+  protocolRoot: string;
+  /** Builds the protocol's test-kit transactions. */
+  kit: DevnetKitFactory;
+}
+
+/** Default kit: the settings protocol's `devnet_pay` + `devnet_deploy_authorizer`. */
+const settingsKit: DevnetKitFactory = (trpUrl, faucet) => ({
+  pay: async (address, quantity) => {
+    const submitted = await new Client({ endpoint: trpUrl }, "local")
+      .withFaucet(faucet)
+      .devnetPay({ destination: address, quantity: Number(quantity) })
+      .env(KIT_ENV)
+      .resolve()
+      .then((r) => r.sign())
+      .then((s) => s.submit());
+    await (await submitted).waitForConfirmed(DEVNET_POLL);
+  },
+  deploy: async (publisherAddress, scriptCode, lovelace) => {
+    const submitted = await new Client({ endpoint: trpUrl }, "local")
+      .withFaucet(faucet)
+      .withPublisher(Party.address(publisherAddress))
+      .devnetDeployAuthorizer({
+        // Runtime args are snake_case; the generated param type says camelCase.
+        script_code: Buffer.from(scriptCode, "hex"),
+        lovelace: Number(lovelace),
+      } as unknown as Parameters<Client["devnetDeployAuthorizer"]>[0])
+      .env(KIT_ENV)
+      .resolve()
+      .then((r) => r.sign())
+      .then((s) => s.submit());
+    await (await submitted).waitForConfirmed(DEVNET_POLL);
+  },
+});
+
+/**
  * Read the Shelley genesis trix generated for this boot to build the ledger's
  * linear slot->time mapping: `time(slot) = systemStart + slot * slotLength`.
  */
-function shelleySlotConfig(): { zeroTimeMs: number; slotLengthMs: number } {
+function shelleySlotConfig(stateDir: string): {
+  zeroTimeMs: number;
+  slotLengthMs: number;
+} {
   const genesis = JSON.parse(
-    readFileSync(join(STATE_DIR, "dolos", "shelley.json"), "utf8"),
+    readFileSync(join(stateDir, "dolos", "shelley.json"), "utf8"),
   ) as {
     systemStart?: string;
     slotLength?: number;
@@ -153,6 +209,8 @@ export class TrixDevnet {
     private readonly slotConfig: { zeroTimeMs: number; slotLengthMs: number },
     /** The funded faucet wallet (see [`./faucet.ts`](./faucet.ts)). */
     readonly faucetWallet: DevnetWallet,
+    private readonly kit: DevnetKit,
+    private readonly stateDir: string,
   ) {}
 
   /**
@@ -160,14 +218,20 @@ export class TrixDevnet {
    *
    * Wipes any previous `.tx3` state first, so every run gets a genuinely
    * fresh chain (fresh genesis, fresh stake registrations, no leftover NFTs).
+   *
+   * Defaults to the settings protocol when called with no arguments; pass
+   * `{ protocolRoot, kit }` to boot a different protocol (e.g. `dao`).
    */
-  static async start(): Promise<TrixDevnet> {
-    rmSync(STATE_DIR, { recursive: true, force: true });
+  static async start(options?: DevnetStartOptions): Promise<TrixDevnet> {
+    const protocolRoot = join(HERE, "..", options?.protocolRoot ?? "settings");
+    const stateDir = join(protocolRoot, ".tx3");
+    const kit = options?.kit ?? settingsKit;
+    rmSync(stateDir, { recursive: true, force: true });
 
     // Foreground child: killing the process group below takes trix AND its
     // dolos down together.
     const proc = spawn(TRIX_BIN, ["devnet", "--config", "devnet.toml"], {
-      cwd: PROTOCOL_ROOT,
+      cwd: protocolRoot,
       detached: true,
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -200,7 +264,7 @@ export class TrixDevnet {
       } catch {
         // already gone
       }
-      rmSync(STATE_DIR, { recursive: true, force: true });
+      rmSync(stateDir, { recursive: true, force: true });
       return new Error(`${message}\n${log}`);
     };
 
@@ -216,7 +280,7 @@ export class TrixDevnet {
           `trix devnet exited during boot (code=${exited.code}, signal=${exited.signal})`,
         );
 
-      const tomlPath = join(STATE_DIR, "dolos", "dolos.toml");
+      const tomlPath = join(stateDir, "dolos", "dolos.toml");
       if (!trpPort && existsSync(tomlPath)) {
         const toml = readFileSync(tomlPath, "utf8");
         trpPort = servePort(toml, "trp");
@@ -242,16 +306,25 @@ export class TrixDevnet {
     const privateKey = Buffer.from(FAUCET.privateKeyHex, "hex");
     const publicKey = ed25519.getPublicKey(privateKey);
     const addr = enterpriseAddress(publicKey);
+    const faucetSignerParty = Party.signer(
+      Ed25519Signer.fromHex(FAUCET.address, FAUCET.privateKeyHex),
+    );
 
-    return new TrixDevnet(trpUrl, minibfUrl, proc, shelleySlotConfig(), {
-      name: "faucet",
-      address: FAUCET.address,
-      keyHash: addr.keyHash,
-      privateKeyHex: FAUCET.privateKeyHex,
-      party: Party.signer(
-        Ed25519Signer.fromHex(FAUCET.address, FAUCET.privateKeyHex),
-      ),
-    });
+    return new TrixDevnet(
+      trpUrl,
+      minibfUrl,
+      proc,
+      shelleySlotConfig(stateDir),
+      {
+        name: "faucet",
+        address: FAUCET.address,
+        keyHash: addr.keyHash,
+        privateKeyHex: FAUCET.privateKeyHex,
+        party: faucetSignerParty,
+      },
+      kit(trpUrl, faucetSignerParty),
+      stateDir,
+    );
   }
 
   /**
@@ -279,20 +352,31 @@ export class TrixDevnet {
    * one spendable UTxO at a time (each payment refunds change to itself).
    */
   payTo(address: string, lovelace: bigint): Promise<void> {
-    const run = async (): Promise<void> => {
-      const submitted = await new Client({ endpoint: this.trpUrl }, "local")
-        .withFaucet(this.faucetWallet.party)
-        .devnetPay({ destination: address, quantity: Number(lovelace) })
-        .env(KIT_ENV)
-        .resolve()
-        .then((r) => r.sign())
-        .then((s) => s.submit());
-      await (await submitted).waitForConfirmed(DEVNET_POLL);
-    };
-    this.queue = this.queue.then(run, run);
-    return this.queue;
+    return this.enqueue(() => this.kit.pay(address, lovelace));
   }
+
+  /**
+   * Mint protocol tokens (with lovelace) to `address` through the kit's
+   * `mintTokens`. Also serialized against the faucet. No-op if the kit does
+   * not implement it.
+   */
+  mintTokensTo(address: string, quantity: bigint): Promise<void> {
+    return this.enqueue(
+      async () => await this.kit.mintTokens?.(address, quantity),
+    );
+  }
+
   private queue: Promise<void> = Promise.resolve();
+
+  /** Serialize faucet-funded operations (the faucet holds one spendable UTxO). */
+  private enqueue<T>(fn: () => Promise<T>): Promise<T> {
+    const result = this.queue.then(fn, fn);
+    this.queue = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }
 
   /**
    * Publish `scriptCode` (hex-encoded Plutus V3 flat script) as a reference
@@ -315,20 +399,9 @@ export class TrixDevnet {
     const before = new Set(
       (await this.utxosOf(p.publisherAddress)).map((u) => u.ref),
     );
-    const submitted = await new Client({ endpoint: this.trpUrl }, "local")
-      .withFaucet(this.faucetWallet.party)
-      .withPublisher(Party.address(p.publisherAddress))
-      .devnetDeployAuthorizer({
-        // Runtime args are snake_case; the generated param type says camelCase.
-        script_code: Buffer.from(p.scriptCode, "hex"),
-        lovelace: Number(p.lovelace),
-      } as unknown as Parameters<Client["devnetDeployAuthorizer"]>[0])
-      .env(KIT_ENV)
-      .resolve()
-      .then((r) => r.sign())
-      .then((s) => s.submit());
-    await (await submitted).waitForConfirmed(DEVNET_POLL);
-
+    await this.enqueue(() =>
+      this.kit.deploy(p.publisherAddress, p.scriptCode, p.lovelace),
+    );
     const added = (await this.utxosOf(p.publisherAddress)).find(
       (u) => !before.has(u.ref),
     );
@@ -511,6 +584,16 @@ export class TrixDevnet {
     return { slot, timeMs, height: b.height ?? 0 };
   }
 
+  /**
+   * The enclosing slot whose interval contains `targetMs` (POSIX ms) — the
+   * slot a validity bound must use for a validator reading that instant.
+   */
+  slotAtTimeMs(targetMs: number): number {
+    return Math.floor(
+      (targetMs - this.slotConfig.zeroTimeMs) / this.slotConfig.slotLengthMs,
+    );
+  }
+
   /** Poll until the chain's tip time reaches `targetMs` (or throw on timeout). */
   async waitForChainTimeMs(
     targetMs: number,
@@ -535,7 +618,7 @@ export class TrixDevnet {
     } catch {
       // already gone
     }
-    rmSync(STATE_DIR, { recursive: true, force: true });
+    rmSync(this.stateDir, { recursive: true, force: true });
   }
 }
 
