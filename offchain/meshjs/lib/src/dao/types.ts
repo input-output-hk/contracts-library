@@ -109,6 +109,21 @@ export type VoteTokenRedeemer =
   | { kind: "MintVote"; outIdx: number }
   | { kind: "BurnVotes" };
 
+/** Parameters of the `poll_effect` reference candidate (blueprint order). */
+export interface PollEffectParams {
+  /** The proposal validator's own hash (pinned at compile time on-chain). */
+  proposalPolicy: string;
+}
+
+/**
+ * Redeemer of a poll-effect candidate's withdraw-0 execution. Declares the
+ * intent of whoever triggers the effect: which poll closed and which option
+ * won. Both the proposal validator (`EndProposal`) and the candidate's own
+ * `am_i_the_winner` check that the declaration matches on-chain reality.
+ */
+export type PollEffectRedeemer =
+  | { kind: "ExecuteWinner"; proposalId: string; winnerOption: number };
+
 /** Parameters of the `proposal` validator (blueprint order). */
 export interface ProposalParams {
   stakeTokenPolicy: string;

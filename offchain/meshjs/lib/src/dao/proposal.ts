@@ -14,6 +14,7 @@
 import {
   applyParamsToScript,
   resolveScriptHash,
+  serializeRewardAddress,
   serializePlutusScript,
   SLOT_CONFIG_NETWORK,
   type Asset,
@@ -28,6 +29,7 @@ import {
   burnProposalRedeemer,
   burnVotesRedeemer,
   mintProposalRedeemer,
+  pollEffectRedeemerToData,
   proposalDatumToData,
   proposalParamsToData,
   proposalRedeemerToData,
@@ -36,6 +38,7 @@ import {
   tallyVoteRedeemer,
 } from "./datum";
 import type {
+  PollEffectRedeemer,
   ProposalDatum,
   ProposalParams,
   ProposalRedeemer,
@@ -221,6 +224,7 @@ async function buildProposalSpend(
   p: ProposalSpendParams,
   redeemer: ProposalRedeemer,
   continuationDatum: ProposalDatum | null,
+  winnerEffect?: WinnerEffect,
 ): Promise<string> {
   const network = p.network ?? "preprod";
   const networkId = networkIdOf(network);
@@ -272,6 +276,21 @@ async function buildProposalSpend(
     p.txBuilder.invalidBefore(
       slotBound(network, p.now, p.customSlotConfig).slot,
     );
+  }
+
+  // The winning effect runs as a withdraw-0 alongside the proposal closure.
+  // Its redeemer doubles as the truth-checked claim the proposal validator
+  // and the candidate's `am_i_the_winner` both read.
+  if (redeemer.kind === "EndProposal" && winnerEffect) {
+    const effectHash = resolveScriptHash(
+      winnerEffect.script.code,
+      winnerEffect.script.version,
+    );
+    p.txBuilder
+      .withdrawalPlutusScriptV3()
+      .withdrawal(serializeRewardAddress(effectHash, true, networkId), "0")
+      .withdrawalScript(winnerEffect.script.code)
+      .withdrawalRedeemerValue(pollEffectRedeemerToData(winnerEffect.claim));
   }
 
   return await p.txBuilder
@@ -366,6 +385,22 @@ export interface SimpleProposalParams extends ProposalSpendParams {
   continuationDatum: ProposalDatum;
 }
 
+/**
+ * The winning effect's withdraw-0 execution, required by `EndProposal` when a
+ * strict winner above the `execute` threshold exists: the candidate script and
+ * its `ExecuteWinner` claim, which both the proposal validator and the
+ * candidate's `am_i_the_winner` verify against on-chain reality.
+ */
+export interface WinnerEffect {
+  script: PlutusScript;
+  claim: PollEffectRedeemer;
+}
+
+export interface EndProposalParams extends ProposalSpendParams {
+  /** Required when the poll has a winner above the execute threshold. */
+  winnerEffect?: WinnerEffect;
+}
+
 export async function buildAcceptDraftTx(
   p: SimpleProposalParams,
 ): Promise<string> {
@@ -385,9 +420,9 @@ export async function buildEndVotingStageTx(
 }
 
 export async function buildEndProposalTx(
-  p: ProposalSpendParams,
+  p: EndProposalParams,
 ): Promise<string> {
-  return buildProposalSpend(p, { kind: "EndProposal" }, null);
+  return buildProposalSpend(p, { kind: "EndProposal" }, null, p.winnerEffect);
 }
 
 // ---------------------------------------------------- Tally
