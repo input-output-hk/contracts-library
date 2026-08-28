@@ -1,7 +1,9 @@
 {
   "type": "module",
   "scripts": {
-    "test:devnet": "vitest run settings/tests/devnet.test.ts",
+    "test:settings": "vitest run settings/tests/devnet.test.ts",
+    "test:dao": "vitest run dao/tests/devnet.test.ts",
+    "test:devnet": "vitest run settings/tests/devnet.test.ts dao/tests/devnet.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
