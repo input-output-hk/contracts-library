@@ -2,14 +2,16 @@ use aiken/collection/dict
 use aiken/collection/list
 use aiken/collection/pairs
 use aiken/interval.{Finite}
-use aiken/option
 use cardano/address.{Address, Script}
 use cardano/assets.{AssetName, PolicyId, has_any_nft, lovelace_of, quantity_of}
 use cardano/transaction.{
-  InlineDatum, Input, Output, OutputReference, Transaction, resolve_input,
+  InlineDatum, Input, Output, OutputReference, Transaction, Withdraw,
+  resolve_input,
 }
+use dao/proposal/winner.{winner}
 use dao/types.{
-  CosignProposal, ProposalDatum, ProposalStatus, StakeRedeemer, VoteDatum,
+  CosignProposal, PollEffectRedeemer, ProposalDatum, ProposalStatus,
+  StakeRedeemer, VoteDatum,
 }
 use dao/utils.{
   find_continuation_output, find_input_by_policy, single_nft_name,
@@ -165,9 +167,32 @@ pub fn validate_end_proposal(
   let execution = when winner(votes) is {
     Some((option, tally_votes)) ->
       if tally_votes >= datum.thresholds.execute {
-        // a strict winner above threshold must run its bound effect
+        // a strict winner above threshold must run its bound effect; guarding
+        // against losers executing is each candidate's own job (the
+        // `am_i_the_winner` library), not the proposal's. The withdrawal must
+        // however declare a truthful claim in the same format the candidate
+        // will read: `ExecuteWinner { proposal_id, winner_option }`
         when list.at(datum.results, option) is {
-          Some(effect) -> pairs.has_key(self.withdrawals, Script(effect))
+          Some(effect) ->
+            if pairs.has_key(self.withdrawals, Script(effect)) {
+              // the winning withdrawal must declare a truthful claim in the
+              // same format the candidate will read via `am_i_the_winner`:
+              // `ExecuteWinner { proposal_id, winner_option }`
+              when
+                pairs.get_first(self.redeemers, Withdraw(Script(effect)))
+              is {
+                Some(redeemer) -> {
+                  expect claim: PollEffectRedeemer = redeemer
+                  and {
+                    claim.proposal_id == p_id,
+                    claim.winner_option == option,
+                  }
+                }
+                None -> False
+              }
+            } else {
+              False
+            }
           None -> True
         }
       } else {
@@ -263,32 +288,4 @@ fn upsert(votes: List<Int>, option: Int, weight: Int) -> List<Int> {
       }
     },
   )
-}
-
-/// The strictly-winning option and its vote total, or `None` on a tie / no votes.
-fn winner(votes: List<Int>) -> Option<(Int, Int)> {
-  let (best_option, best_votes, tie) = list.indexed_foldr(
-    votes,
-    (None, 0, False),
-    fn(option, v, acc) {
-      let (bo, bv, tie) = acc
-      if v > bv {
-        (Some(option), v, False)
-      } else if v == bv {
-        (bo, bv, True)
-      } else {
-        (bo, bv, tie)
-      }
-    },
-  )
-  best_option
-    |> option.and_then(
-        fn(option) {
-          if !tie && best_votes > 0 {
-            Some((option, best_votes))
-          } else {
-            None
-          }
-        },
-      )
 }

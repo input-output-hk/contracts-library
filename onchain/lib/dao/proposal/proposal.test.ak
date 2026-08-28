@@ -5,7 +5,7 @@ use cardano/address.{Script, from_script}
 use cardano/assets
 use cardano/transaction.{
   DatumHash, InlineDatum, Input, NoDatum, Output, OutputReference, Spend,
-  Transaction, placeholder,
+  Transaction, Withdraw, placeholder,
 }
 use dao/proposal/mint.{validate_create_proposal}
 use dao/proposal/spend.{
@@ -14,7 +14,7 @@ use dao/proposal/spend.{
 }
 use dao/types.{
   AcceptDraft, Cosign, CosignProposal, CreateProposal, DaoSettings, EndProposal,
-  EndVotingStage, ProposalDatum, ProposalRedeemer, ProposalStatus,
+  EndVotingStage, ExecuteWinner, ProposalDatum, ProposalRedeemer, ProposalStatus,
   ProposalThresholds, ProposalTimingConfig, RejectDraft, TallyVotes, VoteDatum,
   Voting,
 }
@@ -506,7 +506,62 @@ test end_proposal_below_execute_ok() {
   spend(d, EndProposal, tx)
 }
 
+/// The truthful (or mutated, via args) `ExecuteWinner` claim for this
+/// fixture's withdrawal: `effect_hash` is the winner.
+fn effect_claim(option: Int, proposal_id: ByteArray) -> Data {
+  let c: Data = ExecuteWinner { proposal_id, winner_option: option }
+  c
+}
+
 test end_proposal_executes_effect_ok() {
+  let d = datum(
+    ProposalStatus.Tally { votes: [0, 250] },
+    [effect_hash, effect_hash],
+  )
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d)],
+    mint: assets.from_asset(proposal_policy, prop_nft, -1),
+    withdrawals: [Pair(Script(effect_hash), 0)],
+    redeemers: [Pair(Withdraw(Script(effect_hash)), effect_claim(1, prop_nft))],
+    validity_range: interval.after(start + 6000),
+  }
+  spend(d, EndProposal, tx)
+}
+
+test rejects_end_proposal_claiming_other_option() {
+  let d = datum(
+    ProposalStatus.Tally { votes: [0, 250] },
+    [effect_hash, effect_hash],
+  )
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d)],
+    mint: assets.from_asset(proposal_policy, prop_nft, -1),
+    withdrawals: [Pair(Script(effect_hash), 0)],
+    redeemers: [Pair(Withdraw(Script(effect_hash)), effect_claim(0, prop_nft))],
+    validity_range: interval.after(start + 6000),
+  }
+  !spend(d, EndProposal, tx)
+}
+
+test rejects_end_proposal_claiming_other_poll() {
+  let d = datum(
+    ProposalStatus.Tally { votes: [0, 250] },
+    [effect_hash, effect_hash],
+  )
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d)],
+    mint: assets.from_asset(proposal_policy, prop_nft, -1),
+    withdrawals: [Pair(Script(effect_hash), 0)],
+    redeemers: [Pair(Withdraw(Script(effect_hash)), effect_claim(1, "OTHER"))],
+    validity_range: interval.after(start + 6000),
+  }
+  !spend(d, EndProposal, tx)
+}
+
+test rejects_end_proposal_without_claim() {
   let d = datum(
     ProposalStatus.Tally { votes: [0, 250] },
     [effect_hash, effect_hash],
@@ -518,7 +573,7 @@ test end_proposal_executes_effect_ok() {
     withdrawals: [Pair(Script(effect_hash), 0)],
     validity_range: interval.after(start + 6000),
   }
-  spend(d, EndProposal, tx)
+  !spend(d, EndProposal, tx)
 }
 
 test rejects_end_proposal_missing_effect() {

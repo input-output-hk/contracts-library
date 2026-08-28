@@ -116,3 +116,12 @@ pub type VoteTokenRedeemer {
   MintVote { out_idx: Int }
   BurnVotes
 }
+
+/// Redeemer a poll-effect script expects when executed as its winning-effect
+/// withdrawal (withdraw-0). It declares the intent of whoever triggers the
+/// effect: which poll closed and which option won. It is intent, not proof —
+/// both the proposal validator (`EndProposal`) and the candidate's own
+/// `am_i_the_winner` check that the declaration matches on-chain reality.
+pub type PollEffectRedeemer {
+  ExecuteWinner { proposal_id: AssetName, winner_option: Int }
+}
