@@ -2,7 +2,7 @@
  * Datum/redeemer encoding for the DAO contracts.
  *
  * CBOR constructor layout matching the Aiken blueprint in onchain/plutus.json:
- *   StakePositionDatum  = Constr 0 [owner: Credential, delegatee: Option<Credential>, locks: [Tuple3]]
+ *   StakePositionDatum  = Constr 0 [owner: Credential, delegatee: Option<Credential>, locks: [Lock]]
  *   StakeRedeemer       = Deposit=0 | DelegateTo{delegatee}=1 | Withdraw{amount}=2
  *                       | ClosePosition=3 | CreateProposal=4 | CosignProposal{proposal_id}=5
  *                       | VoteProposal{proposal_id, voted_option}=6
@@ -65,7 +65,8 @@ export function stakePositionDatumToData(d: StakePositionDatum): Data {
   return mConStr0([
     credentialToData(d.owner),
     option(d.delegatee, (c) => credentialToData(c)),
-    d.locks.map(([name, unlock, amount]) => [name, unlock, amount]),
+    // A record (unlike the old tuple) encodes as Constr 0 + fields
+    d.locks.map((l) => mConStr0([l.proposalId, l.unlockTime, l.stake])),
   ]);
 }
 
