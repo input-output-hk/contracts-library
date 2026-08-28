@@ -121,8 +121,11 @@ export interface PollEffectParams {
  * won. Both the proposal validator (`EndProposal`) and the candidate's own
  * `am_i_the_winner` check that the declaration matches on-chain reality.
  */
-export type PollEffectRedeemer =
-  | { kind: "ExecuteWinner"; proposalId: string; winnerOption: number };
+export type PollEffectRedeemer = {
+  kind: "ExecuteWinner";
+  proposalId: string;
+  winnerOption: number;
+};
 
 /** Parameters of the `proposal` validator (blueprint order). */
 export interface ProposalParams {
