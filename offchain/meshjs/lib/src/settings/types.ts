@@ -2,8 +2,9 @@
  * Off-chain mirror of the on-chain types in `onchain/lib/settings/types.ak`.
  */
 
+import type { Data, TxInput } from "@meshsdk/core";
+
 import type { Credential } from "../common";
-import type { TxInput } from "@meshsdk/core";
 
 export type { Credential };
 
@@ -20,5 +21,3 @@ export interface SettingsParams {
   applyDelay: number;
   settingsTokenName: string;
 }
-
-type Data = any;
