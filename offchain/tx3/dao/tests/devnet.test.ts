@@ -424,6 +424,125 @@ async function createPosition(
   return { utxo: position, nftName };
 }
 
+interface ProposalState {
+  utxo: DevnetUtxo;
+  /** The continuing stake position (holds the draft lock). */
+  stakeUtxo: DevnetUtxo;
+  tokenName: string;
+  startTime: number;
+}
+
+/** Spend a stake position and mint the proposal NFT (draft phase). */
+async function createProposal(
+  inst: Instance,
+  signer: DevnetWallet,
+  stakeUtxo: DevnetUtxo,
+  stakeAmount: number,
+): Promise<ProposalState> {
+  const tip = await devnet.tip();
+  const startTime = tip.timeMs;
+  const tokenName = nftNameFromRef({
+    txHash: stakeUtxo.txHash,
+    outputIndex: stakeUtxo.outputIndex,
+  });
+  const before = await snapshot(inst.proposalAddr);
+  const beforeStake = await snapshot(inst.stakeAddr);
+  await confirm(
+    inst
+      .client(signer)
+      .createProposal({
+        settings_ref: inst.settingsRef,
+        stake_ref: stakeUtxo.ref,
+        proposal_token_name: toBytes(tokenName),
+        results: inst.results,
+        new_stake_datum: stakeDatum(signer.keyHash, noneOpt(), [
+          lock(tokenName, startTime + DRAFT_LENGTH, stakeAmount),
+        ]),
+        new_proposal_datum: proposalDatum(
+          startTime,
+          draftStatus(stakeAmount),
+          inst.results,
+        ),
+        since_slot: tip.slot,
+        out_ix: 1,
+      } as unknown as Parameters<Client["createProposal"]>[0])
+      .env(inst.env),
+  );
+  const [utxo] = await addedSince(inst.proposalAddr, before);
+  const [stakeContinuation] = await addedSince(inst.stakeAddr, beforeStake);
+  return { utxo, stakeUtxo: stakeContinuation, tokenName, startTime };
+}
+
+/** Advance a draft proposal to the voting phase. */
+async function acceptDraft(
+  inst: Instance,
+  proposal: ProposalState,
+  signer: DevnetWallet,
+): Promise<{ utxo: DevnetUtxo }> {
+  const before = await snapshot(inst.proposalAddr);
+  const continuation = proposalDatum(
+    proposal.startTime,
+    votingStatus(),
+    inst.results,
+  );
+  await confirm(
+    inst
+      .client(signer)
+      .acceptDraft({
+        settings_ref: inst.settingsRef,
+        proposal_ref: proposal.utxo.ref,
+        new_proposal_datum: continuation,
+        until_slot: devnet.slotAtTimeMs(proposal.startTime + DRAFT_LENGTH),
+      } as unknown as Parameters<Client["acceptDraft"]>[0])
+      .env(inst.env),
+  );
+  const [utxo] = await addedSince(inst.proposalAddr, before);
+  return { utxo };
+}
+
+/**
+ * Cast a vote (option `option`) from a stake position. The continuation only
+ * carries the new vote lock, so the caller must use a position that holds no
+ * other lock for this proposal.
+ */
+async function vote(
+  inst: Instance,
+  signer: DevnetWallet,
+  proposalRef: string,
+  stakeUtxo: DevnetUtxo,
+  proposalTokenName: string,
+  votingEnd: number,
+  stake: number,
+): Promise<{ utxo: DevnetUtxo; nftName: string }> {
+  const voteNftName = nftNameFromRef({
+    txHash: stakeUtxo.txHash,
+    outputIndex: stakeUtxo.outputIndex,
+  });
+  const before = await snapshot(inst.voteAddr);
+  await confirm(
+    inst
+      .client(signer)
+      .vote({
+        settings_ref: inst.settingsRef,
+        proposal_ref: proposalRef,
+        stake_ref: stakeUtxo.ref,
+        proposal_id: toBytes(proposalTokenName),
+        voted_option: 0,
+        vote_nft_name: toBytes(voteNftName),
+        vote_datum: voteDatum(signer.keyHash, proposalTokenName, 0, stake),
+        new_stake_datum: stakeDatum(signer.keyHash, noneOpt(), [
+          lock(proposalTokenName, votingEnd, stake),
+        ]),
+        since_slot: (await devnet.tip()).slot,
+        until_slot: devnet.slotAtTimeMs(votingEnd),
+        out_ix: 1,
+      } as unknown as Parameters<Client["vote"]>[0])
+      .env(inst.env),
+  );
+  const [voteUtxo] = await addedSince(inst.voteAddr, before);
+  return { utxo: voteUtxo, nftName: voteNftName };
+}
+
 // ---------------------------------------------------------------- happy path
 
 /**
@@ -454,39 +573,11 @@ async function lifecycleToTally(): Promise<{
   const [seedB2] = await addedSince(inst.b.address, beforeMintB);
 
   // 2. A creates the proposal (single option -> the poll_effect candidate).
-  const startTip = await devnet.tip();
-  const startTime = startTip.timeMs;
-  const proposalTokenName = nftNameFromRef({
-    txHash: posA.utxo.txHash,
-    outputIndex: posA.utxo.outputIndex,
-  });
-  const results = inst.results;
-
-  const beforeStake1 = await snapshot(inst.stakeAddr);
-  const beforeProposal1 = await snapshot(inst.proposalAddr);
-  await confirm(
-    inst
-      .client(inst.a)
-      .createProposal({
-        settings_ref: inst.settingsRef,
-        stake_ref: posA.utxo.ref,
-        proposal_token_name: toBytes(proposalTokenName),
-        results,
-        new_stake_datum: stakeDatum(inst.a.keyHash, noneOpt(), [
-          lock(proposalTokenName, startTime + DRAFT_LENGTH, STAKE_A),
-        ]),
-        new_proposal_datum: proposalDatum(
-          startTime,
-          draftStatus(STAKE_A),
-          results,
-        ),
-        since_slot: startTip.slot,
-        out_ix: 1,
-      } as unknown as Parameters<Client["createProposal"]>[0])
-      .env(inst.env),
-  );
-  const [posA2] = await addedSince(inst.stakeAddr, beforeStake1);
-  const [proposal1] = await addedSince(inst.proposalAddr, beforeProposal1);
+  const created = await createProposal(inst, inst.a, posA.utxo, STAKE_A);
+  const startTime = created.startTime;
+  const proposalTokenName = created.tokenName;
+  const proposal1 = created.utxo;
+  const posA2 = created.stakeUtxo;
 
   // 3. B co-signs, reaching the accept threshold (20 + 10 = 30).
   const beforeStake2 = await snapshot(inst.stakeAddr);
@@ -502,7 +593,7 @@ async function lifecycleToTally(): Promise<{
         new_proposal_datum: proposalDatum(
           startTime,
           draftStatus(STAKE_A + STAKE_B),
-          results,
+          inst.results,
         ),
         new_stake_datum: stakeDatum(inst.b.keyHash, noneOpt(), [
           lock(proposalTokenName, startTime + DRAFT_LENGTH, STAKE_B),
@@ -514,83 +605,40 @@ async function lifecycleToTally(): Promise<{
   const [proposal2] = await addedSince(inst.proposalAddr, beforeProposal2);
 
   // 4. Accept the draft (still within the draft window).
-  const draftEnd = startTime + DRAFT_LENGTH;
-  const beforeProposal3 = await snapshot(inst.proposalAddr);
-  await confirm(
-    inst
-      .client(inst.a)
-      .acceptDraft({
-        settings_ref: inst.settingsRef,
-        proposal_ref: proposal2.ref,
-        new_proposal_datum: proposalDatum(startTime, votingStatus(), results),
-        until_slot: devnet.slotAtTimeMs(draftEnd),
-      } as unknown as Parameters<Client["acceptDraft"]>[0])
-      .env(inst.env),
+  const voting = await acceptDraft(
+    inst,
+    {
+      ...created,
+      utxo: proposal2,
+    },
+    inst.a,
   );
-  const [proposal3] = await addedSince(inst.proposalAddr, beforeProposal3);
+  const proposal3 = voting.utxo;
 
   // 5. A and B vote (option 0) from FRESH positions, during the voting
   //    window. The vote continuation only carries the new vote lock.
   const votingEnd = startTime + DRAFT_LENGTH + VOTING_LENGTH;
   const voterPosA = await createPosition(inst, inst.a, seedA2, STAKE_A);
-  const voteNftA = nftNameFromRef({
-    txHash: voterPosA.utxo.txHash,
-    outputIndex: voterPosA.utxo.outputIndex,
-  });
-  const beforeStake3 = await snapshot(inst.stakeAddr);
-  const beforeVote1 = await snapshot(inst.voteAddr);
-  await confirm(
-    inst
-      .client(inst.a)
-      .vote({
-        settings_ref: inst.settingsRef,
-        proposal_ref: proposal3.ref,
-        stake_ref: voterPosA.utxo.ref,
-        proposal_id: toBytes(proposalTokenName),
-        voted_option: 0,
-        vote_nft_name: toBytes(voteNftA),
-        vote_datum: voteDatum(inst.a.keyHash, proposalTokenName, 0, STAKE_A),
-        new_stake_datum: stakeDatum(inst.a.keyHash, noneOpt(), [
-          lock(proposalTokenName, votingEnd, STAKE_A),
-        ]),
-        since_slot: (await devnet.tip()).slot,
-        until_slot: devnet.slotAtTimeMs(votingEnd),
-        out_ix: 1,
-      } as unknown as Parameters<Client["vote"]>[0])
-      .env(inst.env),
+  const { utxo: voteA, nftName: voteNftA } = await vote(
+    inst,
+    inst.a,
+    proposal3.ref,
+    voterPosA.utxo,
+    proposalTokenName,
+    votingEnd,
+    STAKE_A,
   );
-  await addedSince(inst.stakeAddr, beforeStake3);
-  const [voteA] = await addedSince(inst.voteAddr, beforeVote1);
 
   const voterPosB = await createPosition(inst, inst.b, seedB2, STAKE_B);
-  const voteNftB = nftNameFromRef({
-    txHash: voterPosB.utxo.txHash,
-    outputIndex: voterPosB.utxo.outputIndex,
-  });
-  const beforeStake4 = await snapshot(inst.stakeAddr);
-  const beforeVote2 = await snapshot(inst.voteAddr);
-  await confirm(
-    inst
-      .client(inst.b)
-      .vote({
-        settings_ref: inst.settingsRef,
-        proposal_ref: proposal3.ref,
-        stake_ref: voterPosB.utxo.ref,
-        proposal_id: toBytes(proposalTokenName),
-        voted_option: 0,
-        vote_nft_name: toBytes(voteNftB),
-        vote_datum: voteDatum(inst.b.keyHash, proposalTokenName, 0, STAKE_B),
-        new_stake_datum: stakeDatum(inst.b.keyHash, noneOpt(), [
-          lock(proposalTokenName, votingEnd, STAKE_B),
-        ]),
-        since_slot: (await devnet.tip()).slot,
-        until_slot: devnet.slotAtTimeMs(votingEnd),
-        out_ix: 1,
-      } as unknown as Parameters<Client["vote"]>[0])
-      .env(inst.env),
+  const { utxo: voteB, nftName: voteNftB } = await vote(
+    inst,
+    inst.b,
+    proposal3.ref,
+    voterPosB.utxo,
+    proposalTokenName,
+    votingEnd,
+    STAKE_B,
   );
-  await addedSince(inst.stakeAddr, beforeStake4);
-  const [voteB] = await addedSince(inst.voteAddr, beforeVote2);
 
   // 6. End the voting stage after the voting window.
   await devnet.waitForChainTimeMs(votingEnd + 1_000);
@@ -602,7 +650,11 @@ async function lifecycleToTally(): Promise<{
       .endVotingStage({
         settings_ref: inst.settingsRef,
         proposal_ref: proposal3.ref,
-        new_proposal_datum: proposalDatum(startTime, tallyStatus([0]), results),
+        new_proposal_datum: proposalDatum(
+          startTime,
+          tallyStatus([0]),
+          inst.results,
+        ),
         since_slot: votingEndSlot,
       } as unknown as Parameters<Client["endVotingStage"]>[0])
       .env(inst.env),
@@ -624,7 +676,7 @@ async function lifecycleToTally(): Promise<{
         new_proposal_datum: proposalDatum(
           startTime,
           tallyStatus([STAKE_A]),
-          results,
+          inst.results,
         ),
         until_slot: devnet.slotAtTimeMs(tallyEnd),
       } as unknown as Parameters<Client["tally"]>[0])
@@ -645,7 +697,7 @@ async function lifecycleToTally(): Promise<{
         new_proposal_datum: proposalDatum(
           startTime,
           tallyStatus([STAKE_A + STAKE_B]),
-          results,
+          inst.results,
         ),
         until_slot: devnet.slotAtTimeMs(tallyEnd),
       } as unknown as Parameters<Client["tally"]>[0])
@@ -795,4 +847,107 @@ test("supports deposit, withdraw, delegate and close position", async () => {
   );
 
   expect(await devnet.utxosOf(inst.stakeAddr)).toHaveLength(0);
+}, 300_000);
+
+// --------------------------------------------------- rejects (mesh parity)
+
+test("rejects a proposal mint with insufficient stake", async () => {
+  const inst = await setup();
+  const beforeMint = await snapshot(inst.a.address);
+  await devnet.mintTokensTo(inst.a.address, BigInt(THRESHOLDS.create - 1));
+  const [seed] = await addedSince(inst.a.address, beforeMint);
+  const pos = await createPosition(inst, inst.a, seed, THRESHOLDS.create - 1);
+
+  await expect(
+    createProposal(inst, inst.a, pos.utxo, THRESHOLDS.create - 1),
+  ).rejects.toThrow();
+}, 300_000);
+
+test("rejects a vote below the vote threshold", async () => {
+  const inst = await setup();
+  const posA = await createPosition(inst, inst.a, inst.seedA, STAKE_A);
+  const posB = await createPosition(inst, inst.b, inst.seedB, STAKE_B);
+  const created = await createProposal(inst, inst.a, posA.utxo, STAKE_A);
+  // B co-signs so the draft reaches the accept threshold (20 + 10 = 30).
+  const beforeProposal = await snapshot(inst.proposalAddr);
+  await confirm(
+    inst
+      .client(inst.b)
+      .cosign({
+        settings_ref: inst.settingsRef,
+        proposal_ref: created.utxo.ref,
+        stake_ref: posB.utxo.ref,
+        proposal_token_name: toBytes(created.tokenName),
+        new_proposal_datum: proposalDatum(
+          created.startTime,
+          draftStatus(STAKE_A + STAKE_B),
+          inst.results,
+        ),
+        new_stake_datum: stakeDatum(inst.b.keyHash, noneOpt(), [
+          lock(created.tokenName, created.startTime + DRAFT_LENGTH, STAKE_B),
+        ]),
+      } as unknown as Parameters<Client["cosign"]>[0])
+      .env(inst.env),
+  );
+  const [proposal2] = await addedSince(inst.proposalAddr, beforeProposal);
+  const voting = await acceptDraft(
+    inst,
+    { ...created, utxo: proposal2 },
+    inst.a,
+  );
+
+  // A fresh position holding fewer tokens than the vote threshold.
+  const beforeMint = await snapshot(inst.b.address);
+  await devnet.mintTokensTo(inst.b.address, BigInt(THRESHOLDS.vote - 1));
+  const [seedLow] = await addedSince(inst.b.address, beforeMint);
+  const lowPos = await createPosition(
+    inst,
+    inst.b,
+    seedLow,
+    THRESHOLDS.vote - 1,
+  );
+  const votingEnd = created.startTime + DRAFT_LENGTH + VOTING_LENGTH;
+
+  await expect(
+    vote(
+      inst,
+      inst.b,
+      voting.utxo.ref,
+      lowPos.utxo,
+      created.tokenName,
+      votingEnd,
+      THRESHOLDS.vote - 1,
+    ),
+  ).rejects.toThrow();
+}, 300_000);
+
+test("rejects an accept-draft after the draft phase ends", async () => {
+  const inst = await setup();
+  const posA = await createPosition(inst, inst.a, inst.seedA, STAKE_A);
+  const created = await createProposal(inst, inst.a, posA.utxo, STAKE_A);
+
+  await devnet.waitForChainTimeMs(created.startTime + DRAFT_LENGTH + 1_000);
+
+  await expect(acceptDraft(inst, created, inst.a)).rejects.toThrow();
+}, 300_000);
+
+test("rejects a close while locks are active", async () => {
+  const inst = await setup();
+  const posA = await createPosition(inst, inst.a, inst.seedA, STAKE_A);
+  const created = await createProposal(inst, inst.a, posA.utxo, STAKE_A);
+
+  // The creator's position carries the live draft lock.
+  await expect(
+    confirm(
+      inst
+        .client(inst.a)
+        .closePosition({
+          settings_ref: inst.settingsRef,
+          stake_ref: created.stakeUtxo.ref,
+          stake_nft_name: toBytes(posA.nftName),
+          since_slot: (await devnet.tip()).slot,
+        } as unknown as Parameters<Client["closePosition"]>[0])
+        .env(inst.env),
+    ),
+  ).rejects.toThrow();
 }, 300_000);
