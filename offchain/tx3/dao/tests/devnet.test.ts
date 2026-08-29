@@ -32,12 +32,14 @@ const ADA = 1_000_000n;
 
 // Governance parameters (staked-token units).
 const THRESHOLDS = { create: 10, cosign: 5, accept: 30, vote: 5, execute: 10 };
-// Phase durations (POSIX ms). Long enough that a tx submitted a block later
-// (~5s on trix devnets) still lands inside its window, with slack for the
-// multi-transaction lifecycle (voting window) and its two tallies.
+// Phase durations (POSIX ms). Sized to cover each phase's transaction work
+// with margin for trix's block cadence: draft = create + cosign + accept;
+// voting = two votes (voter positions are opened during the draft); tally =
+// two tallies. The suite sleeps until each deadline, so tighter windows mean
+// a faster run.
 const DRAFT_LENGTH = 20_000;
-const VOTING_LENGTH = 30_000;
-const TALLY_LENGTH = 60_000;
+const VOTING_LENGTH = 20_000;
+const TALLY_LENGTH = 20_000;
 const TIMINGS = {
   draft_length: DRAFT_LENGTH,
   voting_length: VOTING_LENGTH,
@@ -572,6 +574,11 @@ async function lifecycleToTally(): Promise<{
   await devnet.mintTokensTo(inst.b.address, BigInt(STAKE_B));
   const [seedB2] = await addedSince(inst.b.address, beforeMintB);
 
+  // Voter positions: they only need tokens, so they are opened during the
+  // draft phase and the voting window only has to cover the two vote txs.
+  const voterPosA = await createPosition(inst, inst.a, seedA2, STAKE_A);
+  const voterPosB = await createPosition(inst, inst.b, seedB2, STAKE_B);
+
   // 2. A creates the proposal (single option -> the poll_effect candidate).
   const created = await createProposal(inst, inst.a, posA.utxo, STAKE_A);
   const startTime = created.startTime;
@@ -618,7 +625,6 @@ async function lifecycleToTally(): Promise<{
   // 5. A and B vote (option 0) from FRESH positions, during the voting
   //    window. The vote continuation only carries the new vote lock.
   const votingEnd = startTime + DRAFT_LENGTH + VOTING_LENGTH;
-  const voterPosA = await createPosition(inst, inst.a, seedA2, STAKE_A);
   const { utxo: voteA, nftName: voteNftA } = await vote(
     inst,
     inst.a,
@@ -629,7 +635,6 @@ async function lifecycleToTally(): Promise<{
     STAKE_A,
   );
 
-  const voterPosB = await createPosition(inst, inst.b, seedB2, STAKE_B);
   const { utxo: voteB, nftName: voteNftB } = await vote(
     inst,
     inst.b,
