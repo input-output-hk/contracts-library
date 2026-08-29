@@ -3,6 +3,7 @@ import {
   TrixDevnet,
   DEVNET_POLL,
   unwrapCborBytes,
+  type ChainTip,
   type DevnetKitFactory,
   type DevnetUtxo,
   type DevnetWallet,
@@ -24,7 +25,7 @@ import {
   type StakeParams,
   type VoteParams,
 } from "@contracts-library/meshjs";
-import { Party, type TxBuilder } from "tx3-sdk";
+import { Party, type SubmittedTx, type TxBuilder } from "tx3-sdk";
 import { applyCborEncoding, resolveScriptHash } from "@meshsdk/core";
 import { Client } from "../codegen/ts-client/dao-governance/protocol";
 
@@ -200,46 +201,51 @@ const daoSettings = (
 
 // ------------------------------------------------------------------ harness
 
-async function confirm(builder: TxBuilder): Promise<void> {
-  const submitted = await builder
+/** resolve → sign → submit, without waiting for confirmation. */
+function submit(builder: TxBuilder): Promise<SubmittedTx> {
+  return builder
     .resolve()
     .then((r) => r.sign())
-    .then(async (s) => {
-      try {
-        return await s.submit();
-      } catch (err) {
-        // trix's TRP submit only reports "tx script returned failure";
-        // re-evaluate the signed tx against the devnet's Blockfrost-compatible
-        // endpoint, which reports per-script errors with traces.
-        try {
-          const bytes = (
-            s as unknown as {
-              submitParams: { tx: { bytes: Uint8Array | string } };
-            }
-          ).submitParams.tx.bytes;
-          const cbor =
-            typeof bytes === "string"
-              ? bytes
-              : Buffer.from(bytes).toString("hex");
-          const res = await fetch("http://localhost:3164/utils/txs/evaluate", {
-            method: "POST",
-            headers: { "Content-Type": "application/cbor" },
-            body: Buffer.from(cbor, "hex"),
-          });
-          console.error(
-            "tx phase-2 detail:",
-            (await res.text()).slice(0, 5000),
-          );
-        } catch (e) {
-          console.error(
-            "phase-2 re-evaluation unavailable:",
-            (e as Error).message,
-          );
-        }
-        throw err;
-      }
-    });
-  await submitted.waitForConfirmed(DEVNET_POLL);
+    .then((s) => s.submit());
+}
+
+/** Submit a transaction and wait until the devnet confirms it. */
+async function confirm(builder: TxBuilder): Promise<void> {
+  await (await submit(builder)).waitForConfirmed(DEVNET_POLL);
+}
+
+/** A still-unspent UTxO a rejected attack must have left untouched. */
+interface UtxoGuard {
+  address: string;
+  ref: string;
+}
+
+/**
+ * A rejected attack must fail for the RIGHT reason (ledger phase-2 script or
+ * validity failure surfaced through TRP) and must leave the guarded UTxOs
+ * untouched — a generic throw would also catch unrelated build-time failures
+ * and prove nothing about the validator.
+ */
+async function expectAttackRejected(
+  attack: Promise<unknown>,
+  guards: UtxoGuard[],
+): Promise<void> {
+  let message = "";
+  await expect(
+    attack.catch((err: unknown) => {
+      message = err instanceof Error ? err.message : String(err);
+      throw err;
+    }),
+  ).rejects.toThrow();
+  expect(message).toMatch(
+    /script returned failure|-32003|invalid|validity|evaluat/i,
+  );
+  for (const guard of guards) {
+    const stillThere = (await devnet.utxosOf(guard.address)).some(
+      (u) => u.ref === guard.ref,
+    );
+    expect(stillThere, `guarded utxo ${guard.ref} was spent`).toBe(true);
+  }
 }
 
 async function snapshot(address: string): Promise<Set<string>> {
@@ -434,22 +440,19 @@ interface ProposalState {
   startTime: number;
 }
 
-/** Spend a stake position and mint the proposal NFT (draft phase). */
-async function createProposal(
+/** Build and submit the create-proposal transaction (no confirmation wait). */
+async function createProposalTx(
   inst: Instance,
   signer: DevnetWallet,
   stakeUtxo: DevnetUtxo,
   stakeAmount: number,
-): Promise<ProposalState> {
-  const tip = await devnet.tip();
-  const startTime = tip.timeMs;
+  tip: ChainTip,
+): Promise<SubmittedTx> {
   const tokenName = nftNameFromRef({
     txHash: stakeUtxo.txHash,
     outputIndex: stakeUtxo.outputIndex,
   });
-  const before = await snapshot(inst.proposalAddr);
-  const beforeStake = await snapshot(inst.stakeAddr);
-  await confirm(
+  return submit(
     inst
       .client(signer)
       .createProposal({
@@ -458,10 +461,10 @@ async function createProposal(
         proposal_token_name: toBytes(tokenName),
         results: inst.results,
         new_stake_datum: stakeDatum(signer.keyHash, noneOpt(), [
-          lock(tokenName, startTime + DRAFT_LENGTH, stakeAmount),
+          lock(tokenName, tip.timeMs + DRAFT_LENGTH, stakeAmount),
         ]),
         new_proposal_datum: proposalDatum(
-          startTime,
+          tip.timeMs,
           draftStatus(stakeAmount),
           inst.results,
         ),
@@ -470,44 +473,77 @@ async function createProposal(
       } as unknown as Parameters<Client["createProposal"]>[0])
       .env(inst.env),
   );
-  const [utxo] = await addedSince(inst.proposalAddr, before);
-  const [stakeContinuation] = await addedSince(inst.stakeAddr, beforeStake);
-  return { utxo, stakeUtxo: stakeContinuation, tokenName, startTime };
 }
 
-/** Advance a draft proposal to the voting phase. */
+/** Create a proposal and wait until it is confirmed on-chain. */
+async function createProposal(
+  inst: Instance,
+  signer: DevnetWallet,
+  stakeUtxo: DevnetUtxo,
+  stakeAmount: number,
+): Promise<ProposalState> {
+  const before = await snapshot(inst.proposalAddr);
+  const beforeStake = await snapshot(inst.stakeAddr);
+  const tip = await devnet.tip();
+  const submitted = await createProposalTx(
+    inst,
+    signer,
+    stakeUtxo,
+    stakeAmount,
+    tip,
+  );
+  await submitted.waitForConfirmed(DEVNET_POLL);
+  const [utxo] = await addedSince(inst.proposalAddr, before);
+  const [stakeContinuation] = await addedSince(inst.stakeAddr, beforeStake);
+  return {
+    utxo,
+    stakeUtxo: stakeContinuation,
+    tokenName: nftNameFromRef({
+      txHash: stakeUtxo.txHash,
+      outputIndex: stakeUtxo.outputIndex,
+    }),
+    startTime: tip.timeMs,
+  };
+}
+
+/** Build and submit the accept-draft transaction (no confirmation wait). */
+async function acceptDraftTx(
+  inst: Instance,
+  proposal: ProposalState,
+  signer: DevnetWallet,
+): Promise<SubmittedTx> {
+  return submit(
+    inst
+      .client(signer)
+      .acceptDraft({
+        settings_ref: inst.settingsRef,
+        proposal_ref: proposal.utxo.ref,
+        new_proposal_datum: proposalDatum(
+          proposal.startTime,
+          votingStatus(),
+          inst.results,
+        ),
+        until_slot: devnet.slotAtTimeMs(proposal.startTime + DRAFT_LENGTH),
+      } as unknown as Parameters<Client["acceptDraft"]>[0])
+      .env(inst.env),
+  );
+}
+
+/** Accept a draft proposal and wait until it is confirmed on-chain. */
 async function acceptDraft(
   inst: Instance,
   proposal: ProposalState,
   signer: DevnetWallet,
 ): Promise<{ utxo: DevnetUtxo }> {
   const before = await snapshot(inst.proposalAddr);
-  const continuation = proposalDatum(
-    proposal.startTime,
-    votingStatus(),
-    inst.results,
-  );
-  await confirm(
-    inst
-      .client(signer)
-      .acceptDraft({
-        settings_ref: inst.settingsRef,
-        proposal_ref: proposal.utxo.ref,
-        new_proposal_datum: continuation,
-        until_slot: devnet.slotAtTimeMs(proposal.startTime + DRAFT_LENGTH),
-      } as unknown as Parameters<Client["acceptDraft"]>[0])
-      .env(inst.env),
-  );
+  const submitted = await acceptDraftTx(inst, proposal, signer);
+  await submitted.waitForConfirmed(DEVNET_POLL);
   const [utxo] = await addedSince(inst.proposalAddr, before);
   return { utxo };
 }
 
-/**
- * Cast a vote (option `option`) from a stake position. The continuation only
- * carries the new vote lock, so the caller must use a position that holds no
- * other lock for this proposal.
- */
-async function vote(
+/** Build and submit a vote transaction (no confirmation wait). */
+async function voteTx(
   inst: Instance,
   signer: DevnetWallet,
   proposalRef: string,
@@ -515,13 +551,12 @@ async function vote(
   proposalTokenName: string,
   votingEnd: number,
   stake: number,
-): Promise<{ utxo: DevnetUtxo; nftName: string }> {
+): Promise<SubmittedTx> {
   const voteNftName = nftNameFromRef({
     txHash: stakeUtxo.txHash,
     outputIndex: stakeUtxo.outputIndex,
   });
-  const before = await snapshot(inst.voteAddr);
-  await confirm(
+  return submit(
     inst
       .client(signer)
       .vote({
@@ -541,8 +576,37 @@ async function vote(
       } as unknown as Parameters<Client["vote"]>[0])
       .env(inst.env),
   );
+}
+
+/** Cast a vote and wait until it is confirmed on-chain. */
+async function vote(
+  inst: Instance,
+  signer: DevnetWallet,
+  proposalRef: string,
+  stakeUtxo: DevnetUtxo,
+  proposalTokenName: string,
+  votingEnd: number,
+  stake: number,
+): Promise<{ utxo: DevnetUtxo; nftName: string }> {
+  const before = await snapshot(inst.voteAddr);
+  const submitted = await voteTx(
+    inst,
+    signer,
+    proposalRef,
+    stakeUtxo,
+    proposalTokenName,
+    votingEnd,
+    stake,
+  );
+  await submitted.waitForConfirmed(DEVNET_POLL);
   const [voteUtxo] = await addedSince(inst.voteAddr, before);
-  return { utxo: voteUtxo, nftName: voteNftName };
+  return {
+    utxo: voteUtxo,
+    nftName: nftNameFromRef({
+      txHash: stakeUtxo.txHash,
+      outputIndex: stakeUtxo.outputIndex,
+    }),
+  };
 }
 
 // ---------------------------------------------------------------- happy path
@@ -749,8 +813,8 @@ test("rejects EndProposal with a lying effect claim", async () => {
   // The declared claim (option 1) does not match the actual winner (option 0):
   // rejected by the proposal validator's claim check and by the candidate's
   // own am_i_the_winner.
-  await expect(
-    confirm(
+  await expectAttackRejected(
+    submit(
       inst
         .client(inst.a)
         .endProposal({
@@ -762,7 +826,8 @@ test("rejects EndProposal with a lying effect claim", async () => {
         } as unknown as Parameters<Client["endProposal"]>[0])
         .env(inst.env),
     ),
-  ).rejects.toThrow();
+    [{ address: inst.proposalAddr, ref: proposal6.ref }],
+  );
 
   // The failed attempt consumed nothing: a truthful claim still executes.
   await confirm(
@@ -863,9 +928,11 @@ test("rejects a proposal mint with insufficient stake", async () => {
   const [seed] = await addedSince(inst.a.address, beforeMint);
   const pos = await createPosition(inst, inst.a, seed, THRESHOLDS.create - 1);
 
-  await expect(
-    createProposal(inst, inst.a, pos.utxo, THRESHOLDS.create - 1),
-  ).rejects.toThrow();
+  const tip = await devnet.tip();
+  await expectAttackRejected(
+    createProposalTx(inst, inst.a, pos.utxo, THRESHOLDS.create - 1, tip),
+    [{ address: inst.stakeAddr, ref: pos.utxo.ref }],
+  );
 }, 300_000);
 
 test("rejects a vote below the vote threshold", async () => {
@@ -913,8 +980,8 @@ test("rejects a vote below the vote threshold", async () => {
   );
   const votingEnd = created.startTime + DRAFT_LENGTH + VOTING_LENGTH;
 
-  await expect(
-    vote(
+  await expectAttackRejected(
+    voteTx(
       inst,
       inst.b,
       voting.utxo.ref,
@@ -923,7 +990,11 @@ test("rejects a vote below the vote threshold", async () => {
       votingEnd,
       THRESHOLDS.vote - 1,
     ),
-  ).rejects.toThrow();
+    [
+      { address: inst.proposalAddr, ref: voting.utxo.ref },
+      { address: inst.stakeAddr, ref: lowPos.utxo.ref },
+    ],
+  );
 }, 300_000);
 
 test("rejects an accept-draft after the draft phase ends", async () => {
@@ -933,7 +1004,9 @@ test("rejects an accept-draft after the draft phase ends", async () => {
 
   await devnet.waitForChainTimeMs(created.startTime + DRAFT_LENGTH + 1_000);
 
-  await expect(acceptDraft(inst, created, inst.a)).rejects.toThrow();
+  await expectAttackRejected(acceptDraftTx(inst, created, inst.a), [
+    { address: inst.proposalAddr, ref: created.utxo.ref },
+  ]);
 }, 300_000);
 
 test("rejects a close while locks are active", async () => {
@@ -942,8 +1015,8 @@ test("rejects a close while locks are active", async () => {
   const created = await createProposal(inst, inst.a, posA.utxo, STAKE_A);
 
   // The creator's position carries the live draft lock.
-  await expect(
-    confirm(
+  await expectAttackRejected(
+    submit(
       inst
         .client(inst.a)
         .closePosition({
@@ -954,5 +1027,6 @@ test("rejects a close while locks are active", async () => {
         } as unknown as Parameters<Client["closePosition"]>[0])
         .env(inst.env),
     ),
-  ).rejects.toThrow();
+    [{ address: inst.stakeAddr, ref: created.stakeUtxo.ref }],
+  );
 }, 300_000);
