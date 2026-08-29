@@ -1,5 +1,5 @@
 //// On-chain state and actions for the DAO contracts (stake, proposal, vote).
-//// See `docs/explorations/dao/exporation.md` §9.
+//// See `docs/explorations/dao/exploration.md` §9.
 
 use aiken/crypto.{ScriptHash}
 use cardano/address.{Credential}

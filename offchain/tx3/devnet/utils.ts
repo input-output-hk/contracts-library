@@ -18,6 +18,7 @@
  */
 
 import { spawn, type ChildProcess } from "node:child_process";
+import { connect } from "node:net";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { dirname, join } from "node:path";
@@ -39,6 +40,15 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const BOOT_TIMEOUT_MS = 120_000;
 
 const TRIX_BIN = process.env.TRIX_BIN ?? "trix";
+
+/**
+ * Ports trix's embedded dolos template binds (see the `dolos.toml` template
+ * shipped in the tx3-lang/trix source, version-locked to the toolchain on
+ * PATH). Hardcoded there, so any other dolos devnet running concurrently —
+ * or a stale orphan from a crashed run — squats exactly these ports.
+ */
+const DOLOS_TRP_PORT = 8164;
+const DOLOS_MINIBF_PORT = 3164;
 
 /**
  * Env values for TEST KIT transactions.
@@ -227,6 +237,18 @@ export class TrixDevnet {
     const stateDir = join(protocolRoot, ".tx3");
     const kit = options?.kit ?? settingsKit;
     rmSync(stateDir, { recursive: true, force: true });
+
+    // Pre-flight: trix writes its dolos config with FIXED ports and spawns
+    // the node immediately, so a port conflict can only be caught up front.
+    for (const port of [DOLOS_TRP_PORT, DOLOS_MINIBF_PORT]) {
+      if (await portInUse(port)) {
+        throw new Error(
+          `localhost:${port} is already in use: another trix devnet is ` +
+            `running, or a stale dolos was left behind by a crashed run. ` +
+            `Stop it before booting a new devnet.`,
+        );
+      }
+    }
 
     // Foreground child: killing the process group below takes trix AND its
     // dolos down together.
@@ -622,11 +644,25 @@ export class TrixDevnet {
   }
 }
 
+/** Whether any process is listening on the given localhost TCP port. */
+function portInUse(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = connect(port, "127.0.0.1");
+    socket.once("connect", () => {
+      socket.destroy();
+      resolve(true);
+    });
+    socket.once("error", () => resolve(false));
+  });
+}
+
 /**
  * Confirm the discovered endpoints actually belong to OUR freshly booted
  * services: minibf must report a producing chain (height >= 1), and the TRP
- * port must answer with a JSON-RPC envelope — a squatter on either port
- * fails here loudly instead of corrupting tests later.
+ * port must answer with a JSON-RPC envelope. NOTE: this CANNOT distinguish
+ * our node from a foreign dolos — any dolos answers identically — so the
+ * pre-flight port check in {@linkcode TrixDevnet.start} is what guards
+ * against squatters; this only confirms the endpoints are live.
  */
 async function healthcheck(
   minibfPort: number,
