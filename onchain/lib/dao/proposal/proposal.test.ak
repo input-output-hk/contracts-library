@@ -309,6 +309,7 @@ test cosign_ok() {
     inputs: [prop_input(d), stake_input(5)],
     outputs: [cont],
     redeemers: [Pair(Spend(stake_ref()), cosign_r)],
+    validity_range: interval.before(start + 1000),
   }
   spend(d, Cosign, tx)
 }
@@ -325,6 +326,23 @@ test rejects_cosign_wrong_new_stake() {
     inputs: [prop_input(d), stake_input(5)],
     outputs: [cont],
     redeemers: [Pair(Spend(stake_ref()), cosign_r)],
+    validity_range: interval.before(start + 1000),
+  }
+  !spend(d, Cosign, tx)
+}
+
+test rejects_cosign_after_draft_window() {
+  let d = datum(ProposalStatus.Draft { cosigning_stake: 10 }, [])
+  let cont = prop_output(
+    datum(ProposalStatus.Draft { cosigning_stake: 15 }, []),
+  )
+  let cosign_r: Data = CosignProposal { proposal_id: prop_nft }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d), stake_input(5)],
+    outputs: [cont],
+    redeemers: [Pair(Spend(stake_ref()), cosign_r)],
+    validity_range: interval.before(start + 2000),
   }
   !spend(d, Cosign, tx)
 }
