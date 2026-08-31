@@ -1,0 +1,756 @@
+// Settings — configuration-parameter management (Tx3 off-chain).
+//
+// Reference Tx3 implementation of the settings protocol, mirroring the
+// on-chain validators in `onchain/validators/settings.ak` and the MeshJS
+// builders in `offchain/meshjs/lib/src/settings/`.
+//
+// The settings contract is a single Plutus V3 script that acts both as a
+// minting policy (a unique settings NFT) and as the spending validator for
+// the UTxO that carries the current configuration. Governance uses a
+// delayed-apply pattern:
+//
+//   - `launch`  mint the settings NFT and create the state UTxO.
+//   - `propose` record a proposed `next` value together with the earliest
+//               time it may be applied (`now + apply_delay`).
+//   - `apply`   promote a matured `next` value to `current`.
+//   - `close`   burn the NFT and tear down the settings instance.
+//
+// Datum / redeemer CBOR layout (must match the Aiken blueprint):
+//   SettingsDatum = Constr 0 [current, next: Option, next_apply: Option<Int>]
+//   Propose       = Constr 0 [out_ix]
+//   Apply         = Constr 1 [out_ix]
+//   Close         = Constr 2 []
+//   Mint          = Constr 0 [out_ix]
+//   Burn          = Constr 1 []
+//
+// The configuration value (`current` / `next`) is protocol-defined and opaque
+// to the validator (`validate_datum` accepts anything). Tx3 has no raw `Data`
+// type, so this reference carries the opaque value as `Bytes` — the closest
+// opaque carrier to the on-chain `Data`.
+//
+// Authorization: the on-chain `is_authorized` accepts either a key credential
+// (a required signer) or a script credential (a reward withdrawal keyed by
+// that script — the withdraw-0 convention). Tx3 has no runtime key-vs-script
+// branch, so each action has two explicit paths:
+//
+//   - `launch`, `propose`, `apply`, `close`: key-authorized paths for clients
+//     that bind `Proposer` / `Applier` to signers.
+//   - `*_script_authorized`: script-authorized paths. The named party remains
+//     the fee-paying signer while `ProposerScript` / `ApplierScript` supplies
+//     the independent authorization witness.
+//
+// The authorizing scripts travel as *reference inputs*: Tx3 does not attach a
+// script witness to a withdrawal keyed by an inline `script:`, so each
+// authorizer policy is `ref:`-backed — the withdrawal keys the reward account
+// to the policy `hash:` and the `ref:` UTxO carrying the script is added to
+// the transaction's reference inputs, from which the ledger loads the script
+// for the withdrawal purpose.
+
+env {
+    settings_hash: Bytes,
+    settings_script: Bytes,
+    apply_delay: Int,
+    /// UTxO carrying the `propose_auth` authorizer script. When `propose_auth`
+    /// is a script credential, the authorizing script runs from this reference
+    /// input via withdraw-0.
+    proposer_script_ref: UtxoRef,
+    /// Script stake-address bytes for the `propose_auth` authorizer's
+    /// withdraw-0 reward account.
+    proposer_script_address: Bytes,
+    /// UTxO carrying the `apply_auth` authorizer script. When `apply_auth` is
+    /// a script credential, the authorizing script runs from this reference
+    /// input via withdraw-0.
+    applier_script_ref: UtxoRef,
+    /// Script stake-address bytes for the `apply_auth` authorizer's
+    /// withdraw-0 reward account.
+    applier_script_address: Bytes,
+}
+
+/// The party authorized to `propose` new values (the `propose_auth` credential).
+///
+/// When `propose_auth` is a script credential it is bound to `ProposerScript`
+/// (withdraw-0) instead of a key signature.
+party Proposer;
+
+/// The party authorized to `launch`, `apply`, and `close` (the `apply_auth`
+/// credential).
+///
+/// When `apply_auth` is a script credential it is bound to `ApplierScript`
+/// (withdraw-0) instead of a key signature.
+party Applier;
+
+/// The party that receives the settings UTxO and holds the NFT (the `settings`
+/// credential).
+party Settings;
+
+// The authorizing script for the `propose_auth` credential, carried by a
+// reference input.
+//
+// When `propose_auth` is a script credential, the withdraw-0 block below keys
+// the reward withdrawal to this script (via `hash:`) so it runs and approves
+// the proposal; the `ref:` UTxO supplies the script itself.
+policy ProposerScript {
+    ref: proposer_script_ref,
+    hash: proposer_script_address,
+}
+
+// The authorizing script for the `apply_auth` credential, carried by a
+// reference input.
+policy ApplierScript {
+    ref: applier_script_ref,
+    hash: applier_script_address,
+}
+
+// `Option<Bytes>` in the Aiken sense: `Some` is constructor 0, `None` is
+// constructor 1 — the encoding the on-chain `Option` uses. The carried value is
+// the opaque `Bytes` mirror of the on-chain `Data`.
+type OptionalValue {
+    Some {
+        value: Bytes,
+    },
+    None,
+}
+
+// `Option<Int>` — the encoding of the on-chain `Option` for `next_apply`, an
+// absolute POSIX timestamp in milliseconds.
+type OptionalInt {
+    Some {
+        value: Int,
+    },
+    None,
+}
+
+// The inline datum carried by the settings UTxO.
+//
+// `current` is the active value. `next` / `next_apply`, when present, describe
+// a pending proposal and the earliest time it may be applied. `current` and
+// `next` are opaque values carried as `Bytes` (the Tx3 stand-in for `Data`).
+type SettingsDatum {
+    current: Bytes,
+    next: OptionalValue,
+    next_apply: OptionalInt,
+}
+
+// Redeemer for the spend endpoint.
+type SpendRedeemer {
+    Propose {
+        out_ix: Int,
+    },
+    Apply {
+        out_ix: Int,
+    },
+    Close,
+}
+
+// Redeemer for the mint endpoint.
+type MintRedeemer {
+    Mint {
+        out_ix: Int,
+    },
+    Burn,
+}
+
+/// Create a settings instance: mint the unique settings NFT and produce the
+/// state UTxO with the initial value and no pending proposal.
+///
+/// `validate_mint` requires the `apply_auth` (Applier) signature, that the
+/// `seed` UTxO is spent, and that the continuation at `out_ix` carries the NFT
+/// and a fresh datum (`next == None`, `next_apply == None`).
+tx launch(
+    /// The UTxO consumed as the mint seed. Must equal the `seed_utxo` the
+    /// validator was parameterized with.
+    seed: UtxoRef,
+    /// Initial configuration value (opaque `Bytes` mirror of the on-chain
+    /// `Data`).
+    initial_value: Bytes,
+    /// Index of the settings output within the transaction outputs.
+    out_ix: Int,
+) {
+    input funding {
+        from: Applier,
+        ref: seed,
+        min_amount: Ada(2000000) + fees,
+    }
+
+    mint {
+        amount: AnyAsset(settings_hash, "settings", 1),
+        redeemer: MintRedeemer::Mint {
+            out_ix: out_ix,
+        },
+    }
+
+    output settings_out {
+        to: Settings,
+        amount: AnyAsset(settings_hash, "settings", 1) + Ada(2000000),
+        datum: SettingsDatum {
+            current: initial_value,
+            next: OptionalValue::None {},
+            next_apply: OptionalInt::None {},
+        },
+    }
+
+    output {
+        to: Applier,
+        amount: funding - Ada(2000000) - fees,
+    }
+
+    collateral {
+        from: Applier,
+        min_amount: fees,
+    }
+
+    signers {
+        Applier,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: settings_script,
+    }
+}
+
+/// Propose a new value. Writes `next` and `next_apply = now + apply_delay` into
+/// the continuation datum, preserving `current` and the NFT.
+///
+/// `validate_propose` requires the `propose_auth` (Proposer) signature and that
+/// the continuation datum equals `SettingsDatum { current, next: Some(new),
+/// next_apply: Some(now + apply_delay) }` with `new != current`, where `now` is
+/// the lower bound of the validity range.
+tx propose(
+    /// Proposed new value (opaque `Bytes` mirror of the on-chain `Data`). Must
+    /// differ from the current value.
+    new_value: Bytes,
+    /// POSIX time (milliseconds) of the validity lower bound. Used to compute
+    /// `next_apply`; must correspond to `since_slot`.
+    now_ms: Int,
+    /// Slot of the validity lower bound. Must denote the same instant as
+    /// `now_ms`.
+    since_slot: Int,
+    /// Index of the continuation output within the transaction outputs.
+    out_ix: Int,
+) {
+    // The settings UTxO is the unique NFT-bearing UTxO at the script address,
+    // so it is selected by the resolver rather than passed as a `UtxoRef`.
+    input settings_in {
+        from: Settings,
+        datum_is: SettingsDatum,
+        min_amount: AnyAsset(settings_hash, "settings", 1),
+        redeemer: SpendRedeemer::Propose {
+            out_ix: out_ix,
+        },
+    }
+
+    input gas {
+        from: Proposer,
+        min_amount: fees,
+    }
+
+    output settings_out {
+        to: Settings,
+        amount: settings_in,
+        datum: SettingsDatum {
+            current: settings_in.current,
+            next: OptionalValue::Some {
+                value: new_value,
+            },
+            next_apply: OptionalInt::Some {
+                value: now_ms + apply_delay,
+            },
+        },
+    }
+
+    output {
+        to: Proposer,
+        amount: gas - fees,
+    }
+
+    validity {
+        since_slot: since_slot,
+    }
+
+    collateral {
+        from: Proposer,
+        min_amount: fees,
+    }
+
+    signers {
+        Proposer,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: settings_script,
+    }
+}
+
+/// Apply a matured proposal: promote `next` to `current` and clear the pending
+/// fields. `new_current` must equal the previously proposed `next` value.
+///
+/// `validate_apply` requires the `apply_auth` (Applier) signature, that the
+/// validity lower bound is `>= next_apply`, and that the continuation datum
+/// equals `SettingsDatum { current: next, next: None, next_apply: None }`.
+tx apply(
+    /// The proposed value being promoted to `current` (opaque `Bytes` mirror of
+    /// the on-chain `Data`). Must equal the datum's pending `next`.
+    new_current: Bytes,
+    /// Slot of the validity lower bound. Must be at or after the proposal's
+    /// `next_apply` time.
+    since_slot: Int,
+    /// Index of the continuation output within the transaction outputs.
+    out_ix: Int,
+) {
+    // Resolver-selected: the unique settings UTxO at the script address.
+    input settings_in {
+        from: Settings,
+        datum_is: SettingsDatum,
+        min_amount: AnyAsset(settings_hash, "settings", 1),
+        redeemer: SpendRedeemer::Apply {
+            out_ix: out_ix,
+        },
+    }
+
+    input gas {
+        from: Applier,
+        min_amount: fees,
+    }
+
+    output settings_out {
+        to: Settings,
+        amount: settings_in,
+        datum: SettingsDatum {
+            current: new_current,
+            next: OptionalValue::None {},
+            next_apply: OptionalInt::None {},
+        },
+    }
+
+    output {
+        to: Applier,
+        amount: gas - fees,
+    }
+
+    validity {
+        since_slot: since_slot,
+    }
+
+    collateral {
+        from: Applier,
+        min_amount: fees,
+    }
+
+    signers {
+        Applier,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: settings_script,
+    }
+}
+
+/// Close the settings instance: burn the NFT and recover the locked lovelace.
+///
+/// `validate_close` requires the `apply_auth` (Applier) signature and that the
+/// settings NFT is burned under the script's own policy.
+tx close() {
+    // Resolver-selected: the unique settings UTxO at the script address.
+    input settings_in {
+        from: Settings,
+        datum_is: SettingsDatum,
+        min_amount: AnyAsset(settings_hash, "settings", 1),
+        redeemer: SpendRedeemer::Close {},
+    }
+
+    input gas {
+        from: Applier,
+        min_amount: fees,
+    }
+
+    burn {
+        amount: AnyAsset(settings_hash, "settings", 1),
+        redeemer: MintRedeemer::Burn {},
+    }
+
+    output {
+        to: Applier,
+        amount: gas + settings_in - AnyAsset(settings_hash, "settings", 1) - fees,
+    }
+
+    collateral {
+        from: Applier,
+        min_amount: fees,
+    }
+
+    signers {
+        Applier,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: settings_script,
+    }
+}
+
+/// Attack-only variant of `close`: spends with `Close` redeemer but does not
+/// burn the settings NFT.
+///
+/// This exists strictly for negative e2e coverage; it should fail phase-2
+/// validation because `validate_close` requires a negative mint quantity for
+/// the script policy token.
+tx close_without_burn_attack() {
+    // Resolver-selected: the unique settings UTxO at the script address.
+    input settings_in {
+        from: Settings,
+        datum_is: SettingsDatum,
+        min_amount: AnyAsset(settings_hash, "settings", 1),
+        redeemer: SpendRedeemer::Close {},
+    }
+
+    input gas {
+        from: Applier,
+        min_amount: fees,
+    }
+
+    output {
+        to: Applier,
+        amount: gas + settings_in - fees,
+    }
+
+    collateral {
+        from: Applier,
+        min_amount: fees,
+    }
+
+    signers {
+        Applier,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: settings_script,
+    }
+}
+
+// ------------------------------------------------ script-authorized paths
+
+/// Script-authorized counterpart of `launch`.
+tx launch_script_authorized(
+    seed: UtxoRef,
+    initial_value: Bytes,
+    out_ix: Int,
+) {
+    input funding {
+        from: Applier,
+        ref: seed,
+        min_amount: Ada(2000000) + fees,
+    }
+
+    mint {
+        amount: AnyAsset(settings_hash, "settings", 1),
+        redeemer: MintRedeemer::Mint {
+            out_ix: out_ix,
+        },
+    }
+
+    output settings_out {
+        to: Settings,
+        amount: AnyAsset(settings_hash, "settings", 1) + Ada(2000000),
+        datum: SettingsDatum {
+            current: initial_value,
+            next: OptionalValue::None {},
+            next_apply: OptionalInt::None {},
+        },
+    }
+
+    output {
+        to: Applier,
+        amount: funding - Ada(2000000) - fees,
+    }
+
+    collateral {
+        from: Applier,
+        min_amount: fees,
+    }
+
+    signers {
+        Applier,
+    }
+
+    cardano::withdrawal {
+        from: ApplierScript,
+        amount: 0,
+        redeemer: (),
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: settings_script,
+    }
+}
+
+/// Script-authorized counterpart of `propose`.
+tx propose_script_authorized(
+    new_value: Bytes,
+    now_ms: Int,
+    since_slot: Int,
+    out_ix: Int,
+) {
+    input settings_in {
+        from: Settings,
+        datum_is: SettingsDatum,
+        min_amount: AnyAsset(settings_hash, "settings", 1),
+        redeemer: SpendRedeemer::Propose {
+            out_ix: out_ix,
+        },
+    }
+
+    input gas {
+        from: Proposer,
+        min_amount: fees,
+    }
+
+    output settings_out {
+        to: Settings,
+        amount: settings_in,
+        datum: SettingsDatum {
+            current: settings_in.current,
+            next: OptionalValue::Some {
+                value: new_value,
+            },
+            next_apply: OptionalInt::Some {
+                value: now_ms + apply_delay,
+            },
+        },
+    }
+
+    output {
+        to: Proposer,
+        amount: gas - fees,
+    }
+
+    validity {
+        since_slot: since_slot,
+    }
+
+    collateral {
+        from: Proposer,
+        min_amount: fees,
+    }
+
+    signers {
+        Proposer,
+    }
+
+    cardano::withdrawal {
+        from: ProposerScript,
+        amount: 0,
+        redeemer: (),
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: settings_script,
+    }
+}
+
+/// Script-authorized counterpart of `apply`.
+tx apply_script_authorized(
+    new_current: Bytes,
+    since_slot: Int,
+    out_ix: Int,
+) {
+    input settings_in {
+        from: Settings,
+        datum_is: SettingsDatum,
+        min_amount: AnyAsset(settings_hash, "settings", 1),
+        redeemer: SpendRedeemer::Apply {
+            out_ix: out_ix,
+        },
+    }
+
+    input gas {
+        from: Applier,
+        min_amount: fees,
+    }
+
+    output settings_out {
+        to: Settings,
+        amount: settings_in,
+        datum: SettingsDatum {
+            current: new_current,
+            next: OptionalValue::None {},
+            next_apply: OptionalInt::None {},
+        },
+    }
+
+    output {
+        to: Applier,
+        amount: gas - fees,
+    }
+
+    validity {
+        since_slot: since_slot,
+    }
+
+    collateral {
+        from: Applier,
+        min_amount: fees,
+    }
+
+    signers {
+        Applier,
+    }
+
+    cardano::withdrawal {
+        from: ApplierScript,
+        amount: 0,
+        redeemer: (),
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: settings_script,
+    }
+}
+
+/// Script-authorized counterpart of `close`.
+tx close_script_authorized() {
+    input settings_in {
+        from: Settings,
+        datum_is: SettingsDatum,
+        min_amount: AnyAsset(settings_hash, "settings", 1),
+        redeemer: SpendRedeemer::Close {},
+    }
+
+    input gas {
+        from: Applier,
+        min_amount: fees,
+    }
+
+    burn {
+        amount: AnyAsset(settings_hash, "settings", 1),
+        redeemer: MintRedeemer::Burn {},
+    }
+
+    output {
+        to: Applier,
+        amount: gas + settings_in - AnyAsset(settings_hash, "settings", 1) - fees,
+    }
+
+    collateral {
+        from: Applier,
+        min_amount: fees,
+    }
+
+    signers {
+        Applier,
+    }
+
+    cardano::withdrawal {
+        from: ApplierScript,
+        amount: 0,
+        redeemer: (),
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: settings_script,
+    }
+}
+
+/// Script-authorized counterpart of `close_without_burn_attack`.
+tx close_without_burn_attack_script_authorized() {
+    input settings_in {
+        from: Settings,
+        datum_is: SettingsDatum,
+        min_amount: AnyAsset(settings_hash, "settings", 1),
+        redeemer: SpendRedeemer::Close {},
+    }
+
+    input gas {
+        from: Applier,
+        min_amount: fees,
+    }
+
+    output {
+        to: Applier,
+        amount: gas + settings_in - fees,
+    }
+
+    collateral {
+        from: Applier,
+        min_amount: fees,
+    }
+
+    signers {
+        Applier,
+    }
+
+    cardano::withdrawal {
+        from: ApplierScript,
+        amount: 0,
+        redeemer: (),
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: settings_script,
+    }
+}
+
+// ============================================================
+// TEST KIT — devnet infrastructure only.
+//
+// Consumed exclusively by `tests/devnet.test.ts` to bootstrap a
+// fresh trix devnet: the faucet pays wallets, and the authorizer
+// fixture script is published as a reference-script UTxO.
+//
+// Never used by production builders. Safe to delete wholesale.
+// ============================================================
+
+/// Funds every devnet wallet. Bound in tests to a fixed throwaway
+/// keypair whose address is committed in `devnet.toml`.
+party Faucet;
+
+/// Pay `quantity` lovelace from the faucet to any runtime address,
+/// returning change to the faucet. Called sequentially: while the
+/// chain is live the faucet holds exactly one spendable UTxO.
+tx devnet_pay(destination: Address, quantity: Int) {
+    input source {
+        from: Faucet,
+        min_amount: Ada(quantity) + fees,
+    }
+
+    output {
+        to: destination,
+        amount: Ada(quantity),
+    }
+
+    output {
+        to: Faucet,
+        amount: source - Ada(quantity) - fees,
+    }
+}
+
+/// Publish the always-true authorizer fixture as a reference
+/// script (Plutus V3) held by the publisher party.
+party Publisher;
+
+tx devnet_deploy_authorizer(script_code: Bytes, lovelace: Int) {
+    input gas {
+        from: Faucet,
+        min_amount: Ada(lovelace) + fees,
+    }
+
+    cardano::publish {
+        to: Publisher,
+        amount: Ada(lovelace),
+        version: 3,
+        script: script_code,
+    }
+
+    output {
+        to: Faucet,
+        amount: gas - Ada(lovelace) - fees,
+    }
+}

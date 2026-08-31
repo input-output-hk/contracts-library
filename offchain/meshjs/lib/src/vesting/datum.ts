@@ -10,12 +10,10 @@
  */
 
 import { mConStr0, mConStr1, type Data } from "@meshsdk/core";
-import type { Credential, VestedAsset, VestingDatum } from "./types";
+import { credentialToData } from "../common";
+import type { VestedAsset, VestingDatum } from "./types";
 
-export function credentialToData(c: Credential): Data {
-  // bytes are passed as hex strings in Mesh's Data representation
-  return c.kind === "key" ? mConStr0([c.hash]) : mConStr1([c.hash]);
-}
+export { credentialToData };
 
 export function vestedAssetToData(a: VestedAsset): Data {
   return mConStr0([a.policyId, a.assetName, a.total]);

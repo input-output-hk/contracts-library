@@ -1,0 +1,15 @@
+[protocol]
+name = "config-parameter-management"
+scope = ""
+version = "0.1.0"
+description = "Settings contract: delayed-apply governance of a protocol configuration value (launch, propose, apply, close)."
+main = "main.tx3"
+
+[ledger]
+family = "cardano"
+
+# Generated client lives OUTSIDE `.tx3/`: that directory is trix's runtime
+# node state, which the test harness wipes on every boot for a fresh chain.
+[[codegen]]
+plugin = "ts-client"
+output_dir = "codegen/ts-client"

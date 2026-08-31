@@ -1,0 +1,21 @@
+{
+  "name": "contracts-library",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Standardized, reusable smart contracts for Cardano",
+  "license": "Apache-2.0",
+  "scripts": {
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.2.6",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.1.5"
+  },
+  "lint-staged": {
+    "*.{ts,js,mjs,cjs,json}": "biome format --write",
+    "*.ak": "bash scripts/aiken-fmt.sh"
+  }
+}
