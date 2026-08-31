@@ -45,7 +45,7 @@ Grouped by fit. "Primitives" = which of P1 (free transfer), P2 (event hooks), P3
 **Strong fit: instruments with a lifecycle that ends in settlement.**
 
 | Use case | Ecosystem analog | Primitives | Related |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Token vesting (linear / cliff) | Toku RTUs, 1yr-cliff/4yr | P2 (time) + P3 | #3 |
 | Employee / contributor comp (milestone) | Toku Restricted Token Units | P2 + P3 | #3 |
 | Streaming vesting / payroll | Superfluid, Sablier | P2 (time) + P3 | Streaming Payments cand. |
@@ -72,7 +72,7 @@ Grouped by fit. "Primitives" = which of P1 (free transfer), P2 (event hooks), P3
 **Partial fit / explicit non-goals (belong to sibling standards).**
 
 | Case | Why it does not fit here | Belongs to |
-|---|---|---|
+| --- | --- | --- |
 | Regulated security token with lockup | Restricted phase needs a transfer gate (violates P1); only P3 (restricted to free-float) applies | transfer-permissioned CIP-113 (#2) |
 | Vote-escrow lock (veCRV) | Needs non-transferability during the lock | separate locked-governance design |
 | KYC/AML-gated RWA | Transfer-permissioning first | mainstream CIP-113 |
@@ -104,6 +104,7 @@ Carried from the companion feasibility research; these are the load-bearing cons
 **In scope:** discrete-event conditioning (P2), permissive transfer (P1), and event-gated graduation/burn (P3), for per-holder instruments with a settlement end state.
 
 **Out of scope (non-goals):**
+
 - Transfer permissioning (KYC/AML, blacklists) - separate CIP-113 profile.
 - Continuous / autonomous / "real-time" behaviour - impossible on eUTxO; every state change is keeper-submitted.
 - Pooled cross-protocol capital management (yield aggregation, auto-compounding, hedging, dynamic collateralization) - belongs to the Tokenized Vault candidate; CIP-113 is not the enabler there.
