@@ -52,7 +52,7 @@ export function settingsScript(params: SettingsParams): PlutusScript {
 
 /**
  * Parameterized script for the `settings_typed` fork, whose `validate_datum`
- * requires the setting value to be `Constr(0, [Int])` (spec §3.1, §7 R7).
+ * requires the setting value to be `Constr(0, [_])` (spec §3.1, §7 R7).
  * Everything else behaves like the reference `settings` contract.
  */
 export function settingsTypedScript(params: SettingsParams): PlutusScript {
