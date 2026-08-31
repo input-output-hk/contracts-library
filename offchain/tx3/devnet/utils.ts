@@ -245,7 +245,8 @@ export class TrixDevnet {
         throw new Error(
           `localhost:${port} is already in use: another trix devnet is ` +
             `running, or a stale dolos was left behind by a crashed run. ` +
-            `Stop it before booting a new devnet.`,
+            `Kill it before booting, e.g.: pkill -f dolos — or target only ` +
+            `these listeners: lsof -ti :8164 -ti :3164 | xargs kill`,
         );
       }
     }
