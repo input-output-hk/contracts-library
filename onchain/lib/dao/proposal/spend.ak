@@ -3,7 +3,9 @@ use aiken/collection/list
 use aiken/collection/pairs
 use aiken/interval.{Finite}
 use cardano/address.{Address, Script}
-use cardano/assets.{AssetName, PolicyId, has_any_nft, lovelace_of, quantity_of}
+use cardano/assets.{
+  AssetName, PolicyId, from_asset, has_any_nft, lovelace_of, match, quantity_of,
+}
 use cardano/transaction.{
   InlineDatum, Input, Output, OutputReference, Transaction, Withdraw,
   resolve_input,
@@ -42,8 +44,9 @@ pub fn validate_cosign(
   self: Transaction,
 ) -> Bool {
   let (own_addr, own_hash, p_id) = proposal_own(self, own_ref)
-  let Transaction { inputs, outputs, .. } = self
+  let Transaction { inputs, outputs, validity_range, .. } = self
   expect ProposalStatus.Draft { cosigning_stake: n } = datum.status
+  expect Finite(upper) = validity_range.upper_bound.bound_type
   let cont = continuation_datum(outputs, own_addr, own_hash, p_id)
   let stake_input = find_input_by_policy(inputs, stake_policy)
   let s = quantity_of(
@@ -60,6 +63,7 @@ pub fn validate_cosign(
   }
   and {
     cosigning,
+    upper <= datum.start_time + datum.timing_config.draft_length,
     cont.status == ProposalStatus.Draft { cosigning_stake: n + s },
     immutables_ok(cont, datum),
   }
@@ -216,8 +220,8 @@ fn continuation_datum(
   p_id: AssetName,
 ) -> ProposalDatum {
   let out = find_continuation_output(outputs, own_addr)
-  expect quantity_of(out.value, own_hash, p_id) == 1
-  expect InlineDatum(d) = out.datum
+  expect Output { value, datum: InlineDatum(d), reference_script: None, .. } = out
+  expect match(value, from_asset(own_hash, p_id, 1), >=) == True
   expect cd: ProposalDatum = d
   cd
 }
