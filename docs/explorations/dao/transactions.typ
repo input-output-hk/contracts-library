@@ -406,10 +406,14 @@ Adds stake to a proposal's cosigning requirements during the draft phase.
   signatures: (
     [*auth*],
   ),
+  validRange: (
+    "upper": [*T'*],
+  ),
   notes: [
     - `pId = proposalNFT.tokenName`
     - `pId not in L`
-    - `L' = [..L, (pId, startingTime + timingConfig.draftLength, S)]`
+    - `T' = startingTime + timingConfig.draftLength`
+    - `L' = [..L, (pId, T', S)]`
     - `S >= thresholds.cosign`
     ```
     auth = when delegatee is
