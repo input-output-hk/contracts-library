@@ -669,6 +669,7 @@ async function lifecycleToTally(): Promise<{
         new_stake_datum: stakeDatum(inst.b.keyHash, noneOpt(), [
           lock(proposalTokenName, startTime + DRAFT_LENGTH, STAKE_B),
         ]),
+        until_slot: devnet.slotAtTimeMs(startTime + DRAFT_LENGTH),
       } as unknown as Parameters<Client["cosign"]>[0])
       .env(inst.env),
   );
@@ -958,6 +959,7 @@ test("rejects a vote below the vote threshold", async () => {
         new_stake_datum: stakeDatum(inst.b.keyHash, noneOpt(), [
           lock(created.tokenName, created.startTime + DRAFT_LENGTH, STAKE_B),
         ]),
+        until_slot: devnet.slotAtTimeMs(created.startTime + DRAFT_LENGTH),
       } as unknown as Parameters<Client["cosign"]>[0])
       .env(inst.env),
   );
