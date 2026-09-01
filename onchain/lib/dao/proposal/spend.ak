@@ -1,19 +1,18 @@
 use aiken/collection/dict
 use aiken/collection/list
 use aiken/collection/pairs
+use aiken/crypto.{ScriptHash}
 use aiken/interval.{Finite}
 use cardano/address.{Address, Script}
 use cardano/assets.{
   AssetName, PolicyId, from_asset, has_any_nft, lovelace_of, match, quantity_of,
 }
 use cardano/transaction.{
-  InlineDatum, Input, Output, OutputReference, Transaction, Withdraw,
-  resolve_input,
+  InlineDatum, Input, Output, OutputReference, Transaction, resolve_input,
 }
 use dao/proposal/winner.{winner}
 use dao/types.{
-  CosignProposal, PollEffectRedeemer, ProposalDatum, ProposalStatus,
-  StakeRedeemer, VoteDatum,
+  CosignProposal, ProposalDatum, ProposalStatus, StakeRedeemer, VoteDatum,
 }
 use dao/utils.{
   find_continuation_output, find_input_by_policy, single_nft_name,
@@ -157,6 +156,7 @@ pub fn validate_tally_votes(
 }
 
 pub fn validate_end_proposal(
+  declared: Option<ScriptHash>,
   datum: ProposalDatum,
   own_ref: OutputReference,
   self: Transaction,
@@ -168,40 +168,22 @@ pub fn validate_end_proposal(
   let tally_end = datum.start_time + datum.timing_config.draft_length + datum.timing_config.voting_length + datum.timing_config.tally_length
   let time_ok = lower >= tally_end
   let burned = quantity_of(mint, own_hash, p_id) == -1
-  let execution = when winner(votes) is {
+  // the redeemer declares the winner; the declaration must match the tally:
+  // the effect bound to the strict winner above the `execute` threshold, or
+  // `None` when no outcome qualifies for execution. A declared effect must
+  // run as its withdraw-0; guarding losers against executing is each
+  // candidate's own job (the `am_i_the_winner` library), not the proposal's.
+  let expected = when winner(votes) is {
     Some((option, tally_votes)) ->
       if tally_votes >= datum.thresholds.execute {
-        // a strict winner above threshold must run its bound effect; guarding
-        // against losers executing is each candidate's own job (the
-        // `am_i_the_winner` library), not the proposal's. The withdrawal must
-        // however declare a truthful claim in the same format the candidate
-        // will read: `ExecuteWinner { proposal_id, winner_option }`
-        when list.at(datum.results, option) is {
-          Some(effect) ->
-            if pairs.has_key(self.withdrawals, Script(effect)) {
-              // the winning withdrawal must declare a truthful claim in the
-              // same format the candidate will read via `am_i_the_winner`:
-              // `ExecuteWinner { proposal_id, winner_option }`
-              when
-                pairs.get_first(self.redeemers, Withdraw(Script(effect)))
-              is {
-                Some(redeemer) -> {
-                  expect claim: PollEffectRedeemer = redeemer
-                  and {
-                    claim.proposal_id == p_id,
-                    claim.winner_option == option,
-                  }
-                }
-                None -> False
-              }
-            } else {
-              False
-            }
-          None -> True
-        }
+        list.at(datum.results, option)
       } else {
-        True
+        None
       }
+    None -> None
+  }
+  let execution = declared == expected && when declared is {
+    Some(effect) -> pairs.has_key(self.withdrawals, Script(effect))
     None -> True
   }
   and {
