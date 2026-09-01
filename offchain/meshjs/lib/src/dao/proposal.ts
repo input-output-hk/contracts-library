@@ -367,7 +367,12 @@ export async function buildCosignProposalTx(
     )
     .txOutInlineDatumValue(stakePositionDatumToData(p.stakeDatum));
 
+  // Cosigning must close before the draft window does (see proposal/spend.ak).
   return await p.txBuilder
+    .invalidHereafter(
+      slotBound(network, phaseBounds(p.datum).draftEnd, p.customSlotConfig)
+        .slot,
+    )
     .txInCollateral(
       p.collateralUtxo.input.txHash,
       p.collateralUtxo.input.outputIndex,
