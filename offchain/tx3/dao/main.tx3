@@ -763,6 +763,8 @@ tx cosign(
     new_proposal_datum: ProposalDatum,
     /// The continuation stake position datum (updated locks).
     new_stake_datum: StakePositionDatum,
+    /// Slot of the validity upper bound (= draft end).
+    until_slot: Int,
 ) {
     reference dao_settings {
         ref: settings_ref,
@@ -802,6 +804,10 @@ tx cosign(
     output {
         to: Signer,
         amount: gas - fees,
+    }
+
+    validity {
+        until_slot: until_slot,
     }
 
     collateral {
