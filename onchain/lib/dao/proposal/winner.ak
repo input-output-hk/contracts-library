@@ -1,8 +1,10 @@
 //// Strict-winner resolution for a proposal's vote tally.
 ////
-//// This single definition is shared by the proposal validator
-//// (`validate_end_proposal`) and the poll-effect library (`am_i_the_winner`)
-//// so neither can drift from the other's notion of "won".
+//// This single definition backs the proposal validator's own check in
+//// `validate_end_proposal`: the tally-derived winner is what the
+//// `EndProposal { winner }` redeemer declaration is measured against, and it
+//// is the same enforcement poll-effect candidates rely on via
+//// `am_i_the_winner`.
 
 use aiken/collection/list
 use aiken/option

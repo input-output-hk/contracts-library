@@ -68,7 +68,8 @@ validator proposal(
           own_ref,
           self,
         )
-      EndProposal -> validate_end_proposal(proposal_datum, own_ref, self)
+      EndProposal { winner } ->
+        validate_end_proposal(winner, proposal_datum, own_ref, self)
     }
   }
 

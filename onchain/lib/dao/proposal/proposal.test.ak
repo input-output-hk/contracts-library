@@ -5,7 +5,7 @@ use cardano/address.{Script, from_script}
 use cardano/assets
 use cardano/transaction.{
   DatumHash, InlineDatum, Input, NoDatum, Output, OutputReference, Spend,
-  Transaction, Withdraw, placeholder,
+  Transaction, placeholder,
 }
 use dao/proposal/mint.{validate_create_proposal}
 use dao/proposal/spend.{
@@ -14,7 +14,7 @@ use dao/proposal/spend.{
 }
 use dao/types.{
   AcceptDraft, Cosign, CosignProposal, CreateProposal, DaoSettings, EndProposal,
-  EndVotingStage, ExecuteWinner, ProposalDatum, ProposalRedeemer, ProposalStatus,
+  EndVotingStage, ProposalDatum, ProposalRedeemer, ProposalStatus,
   ProposalThresholds, ProposalTimingConfig, RejectDraft, TallyVotes, VoteDatum,
   Voting,
 }
@@ -40,6 +40,8 @@ const settings_policy =
 const settings_name = "SETTINGS"
 
 const effect_hash = #"dddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+
+const other_hash = #"55555555555555555555555555555555555555555555555555555555"
 
 const voter_hash = #"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
 
@@ -221,7 +223,7 @@ fn spend(d: ProposalDatum, r: ProposalRedeemer, self: Transaction) -> Bool {
     RejectDraft -> validate_reject_draft(d, prop_ref(), self)
     EndVotingStage -> validate_end_voting_stage(d, prop_ref(), self)
     TallyVotes -> validate_tally_votes(vote_policy, d, prop_ref(), self)
-    EndProposal -> validate_end_proposal(d, prop_ref(), self)
+    EndProposal { winner } -> validate_end_proposal(winner, d, prop_ref(), self)
   }
 }
 
@@ -510,7 +512,8 @@ test rejects_tally_without_burn() {
 // ---------------------------------------------------------------- EndProposal
 
 test end_proposal_below_execute_ok() {
-  // winner has 150 votes (< execute threshold 200): no effect required
+  // winner has 150 votes (< execute threshold 200): the closure declares no
+  // winner and runs no effect
   let d = datum(
     ProposalStatus.Tally { votes: [0, 150] },
     [effect_hash, effect_hash],
@@ -521,14 +524,7 @@ test end_proposal_below_execute_ok() {
     mint: assets.from_asset(proposal_policy, prop_nft, -1),
     validity_range: interval.after(start + 6000),
   }
-  spend(d, EndProposal, tx)
-}
-
-/// The truthful (or mutated, via args) `ExecuteWinner` claim for this
-/// fixture's withdrawal: `effect_hash` is the winner.
-fn effect_claim(option: Int, proposal_id: ByteArray) -> Data {
-  let c: Data = ExecuteWinner { proposal_id, winner_option: option }
-  c
+  spend(d, EndProposal { winner: None }, tx)
 }
 
 test end_proposal_executes_effect_ok() {
@@ -541,13 +537,31 @@ test end_proposal_executes_effect_ok() {
     inputs: [prop_input(d)],
     mint: assets.from_asset(proposal_policy, prop_nft, -1),
     withdrawals: [Pair(Script(effect_hash), 0)],
-    redeemers: [Pair(Withdraw(Script(effect_hash)), effect_claim(1, prop_nft))],
     validity_range: interval.after(start + 6000),
   }
-  spend(d, EndProposal, tx)
+  spend(d, EndProposal { winner: Some(effect_hash) }, tx)
 }
 
-test rejects_end_proposal_claiming_other_option() {
+test rejects_end_proposal_lying_winner() {
+  // the declared winner is not the effect bound to the tally's strict winner
+  // (option 1 with 250 votes binds `effect_hash`, not `other_hash`)
+  let d = datum(
+    ProposalStatus.Tally { votes: [0, 250] },
+    [other_hash, effect_hash],
+  )
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d)],
+    mint: assets.from_asset(proposal_policy, prop_nft, -1),
+    withdrawals: [Pair(Script(other_hash), 0)],
+    validity_range: interval.after(start + 6000),
+  }
+  !spend(d, EndProposal { winner: Some(other_hash) }, tx)
+}
+
+test rejects_end_proposal_without_required_effect() {
+  // a strict winner above the execute threshold MUST run its bound effect:
+  // declaring no winner does not skip it
   let d = datum(
     ProposalStatus.Tally { votes: [0, 250] },
     [effect_hash, effect_hash],
@@ -556,45 +570,13 @@ test rejects_end_proposal_claiming_other_option() {
     ..placeholder,
     inputs: [prop_input(d)],
     mint: assets.from_asset(proposal_policy, prop_nft, -1),
-    withdrawals: [Pair(Script(effect_hash), 0)],
-    redeemers: [Pair(Withdraw(Script(effect_hash)), effect_claim(0, prop_nft))],
     validity_range: interval.after(start + 6000),
   }
-  !spend(d, EndProposal, tx)
-}
-
-test rejects_end_proposal_claiming_other_poll() {
-  let d = datum(
-    ProposalStatus.Tally { votes: [0, 250] },
-    [effect_hash, effect_hash],
-  )
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [prop_input(d)],
-    mint: assets.from_asset(proposal_policy, prop_nft, -1),
-    withdrawals: [Pair(Script(effect_hash), 0)],
-    redeemers: [Pair(Withdraw(Script(effect_hash)), effect_claim(1, "OTHER"))],
-    validity_range: interval.after(start + 6000),
-  }
-  !spend(d, EndProposal, tx)
-}
-
-test rejects_end_proposal_without_claim() {
-  let d = datum(
-    ProposalStatus.Tally { votes: [0, 250] },
-    [effect_hash, effect_hash],
-  )
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [prop_input(d)],
-    mint: assets.from_asset(proposal_policy, prop_nft, -1),
-    withdrawals: [Pair(Script(effect_hash), 0)],
-    validity_range: interval.after(start + 6000),
-  }
-  !spend(d, EndProposal, tx)
+  !spend(d, EndProposal { winner: None }, tx)
 }
 
 test rejects_end_proposal_missing_effect() {
+  // the declared winner's effect is not withdrawn in this tx
   let d = datum(
     ProposalStatus.Tally { votes: [0, 250] },
     [effect_hash, effect_hash],
@@ -605,7 +587,7 @@ test rejects_end_proposal_missing_effect() {
     mint: assets.from_asset(proposal_policy, prop_nft, -1),
     validity_range: interval.after(start + 6000),
   }
-  !spend(d, EndProposal, tx)
+  !spend(d, EndProposal { winner: Some(effect_hash) }, tx)
 }
 
 test rejects_end_proposal_too_early() {
@@ -619,11 +601,11 @@ test rejects_end_proposal_too_early() {
     mint: assets.from_asset(proposal_policy, prop_nft, -1),
     validity_range: interval.after(start + 5000),
   }
-  !spend(d, EndProposal, tx)
+  !spend(d, EndProposal { winner: None }, tx)
 }
 
 test end_proposal_tie_needs_no_effect() {
-  // a tie yields no winner, so no effect withdrawal is required
+  // a tie yields no winner, so the closure declares None and runs no effect
   let d = datum(
     ProposalStatus.Tally { votes: [0, 250, 250] },
     [effect_hash, effect_hash, effect_hash],
@@ -634,7 +616,23 @@ test end_proposal_tie_needs_no_effect() {
     mint: assets.from_asset(proposal_policy, prop_nft, -1),
     validity_range: interval.after(start + 6000),
   }
-  spend(d, EndProposal, tx)
+  spend(d, EndProposal { winner: None }, tx)
+}
+
+test rejects_end_proposal_tie_declaring_winner() {
+  // a tie cannot declare a winner, not even a listed effect hash
+  let d = datum(
+    ProposalStatus.Tally { votes: [0, 250, 250] },
+    [effect_hash, effect_hash, effect_hash],
+  )
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d)],
+    mint: assets.from_asset(proposal_policy, prop_nft, -1),
+    withdrawals: [Pair(Script(effect_hash), 0)],
+    validity_range: interval.after(start + 6000),
+  }
+  !spend(d, EndProposal { winner: Some(effect_hash) }, tx)
 }
 
 // ------------------------------------------------------------- mint happy path

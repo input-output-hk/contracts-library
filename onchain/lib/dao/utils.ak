@@ -48,7 +48,7 @@ pub fn spend_redeemer(self: Transaction, ref: OutputReference) -> Data {
 
 /// The redeemer data attached to this script's own reward withdrawal
 /// (withdraw-0 convention). Lets a script read the intent declared by whoever
-/// triggered its execution, e.g. claiming it won a poll.
+/// triggered its execution.
 pub fn withdraw_redeemer(self: Transaction, own_hash: ScriptHash) -> Data {
   expect Some(r) = pairs.get_first(self.redeemers, Withdraw(Script(own_hash)))
   r
