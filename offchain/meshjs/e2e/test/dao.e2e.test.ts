@@ -876,17 +876,11 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
   it("executes the winning effect via the poll_effect candidate", async () => {
     const s = await lifecycleToTallyWithEffect();
 
-    // The candidate's own validator re-derives the verdict with
-    // `am_i_the_winner` while the proposal validator checks the claim.
+    // The closure's `EndProposal { winner }` redeemer (built from the winner
+    // effect's hash) is checked against the tally by the proposal validator,
+    // and the candidate's `am_i_the_winner` verifies the closure named it.
     const tx = await buildEndProposalTx(
-      await endProposalParams(s, {
-        script: s.effect.script,
-        claim: {
-          kind: "ExecuteWinner",
-          proposalId: s.tokenName,
-          winnerOption: 0,
-        },
-      }),
+      await endProposalParams(s, { script: s.effect.script }),
     );
     const hash = await signAndSubmit(s.ctx.owner, tx);
     await waitForTx(provider, hash);
@@ -897,7 +891,7 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
     );
   });
 
-  it("rejects EndProposal with a missing or lying effect claim", async () => {
+  it("rejects EndProposal with a missing or lying winner declaration", async () => {
     const s = await lifecycleToTallyWithEffect();
     const expectRejected = (params: EndProposalParams) =>
       expect(
@@ -905,21 +899,16 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
           signAndSubmit(s.ctx.owner, await buildEndProposalTx(params)))(),
       ).rejects.toThrow();
 
-    // A strict winner above the execute threshold MUST run its bound effect.
+    // A strict winner above the execute threshold MUST run its bound effect:
+    // closing without a declared winner is rejected.
     await expectRejected(await endProposalParams(s));
 
-    // A withdrawal whose claim lies about the winning option is rejected by
-    // both the proposal validator and the candidate's am_i_the_winner.
-    await expectRejected(
-      await endProposalParams(s, {
-        script: s.effect.script,
-        claim: {
-          kind: "ExecuteWinner",
-          proposalId: s.tokenName,
-          winnerOption: 1,
-        },
-      }),
-    );
+    // A closure declaring an imposter effect as the winner is rejected: the
+    // declaration must match the effect bound to the tally's winner.
+    const imposter = pollEffectScript({
+      proposalPolicy: resolveScriptHash(s.ctx.vote.script.code, "V3"),
+    });
+    await expectRejected(await endProposalParams(s, { script: imposter }));
   });
 
   it("closes a stake position", async () => {

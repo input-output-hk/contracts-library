@@ -17,7 +17,7 @@ export {
   mintProposalRedeemer,
   mintVoteRedeemer,
   pollEffectParamsToData,
-  pollEffectRedeemerToData,
+  pollEffectWithdrawalRedeemer,
   proposalDatumToData,
   proposalParamsToData,
   proposalRedeemerToData,

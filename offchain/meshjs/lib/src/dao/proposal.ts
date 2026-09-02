@@ -29,7 +29,7 @@ import {
   burnProposalRedeemer,
   burnVotesRedeemer,
   mintProposalRedeemer,
-  pollEffectRedeemerToData,
+  pollEffectWithdrawalRedeemer,
   proposalDatumToData,
   proposalParamsToData,
   proposalRedeemerToData,
@@ -38,7 +38,6 @@ import {
   tallyVoteRedeemer,
 } from "./datum";
 import type {
-  PollEffectRedeemer,
   ProposalDatum,
   ProposalParams,
   ProposalRedeemer,
@@ -278,9 +277,10 @@ async function buildProposalSpend(
     );
   }
 
-  // The winning effect runs as a withdraw-0 alongside the proposal closure.
-  // Its redeemer doubles as the truth-checked claim the proposal validator
-  // and the candidate's `am_i_the_winner` both read.
+  // The winning effect runs as a withdraw-0 alongside the proposal closure,
+  // whose `EndProposal { winner }` redeemer declares the effect's hash. The
+  // effect's own redeemer is its private interface and is ignored by the
+  // reference candidate.
   if (redeemer.kind === "EndProposal" && winnerEffect) {
     const effectHash = resolveScriptHash(
       winnerEffect.script.code,
@@ -290,7 +290,7 @@ async function buildProposalSpend(
       .withdrawalPlutusScriptV3()
       .withdrawal(serializeRewardAddress(effectHash, true, networkId), "0")
       .withdrawalScript(winnerEffect.script.code)
-      .withdrawalRedeemerValue(pollEffectRedeemerToData(winnerEffect.claim));
+      .withdrawalRedeemerValue(pollEffectWithdrawalRedeemer());
   }
 
   return await p.txBuilder
@@ -392,13 +392,13 @@ export interface SimpleProposalParams extends ProposalSpendParams {
 
 /**
  * The winning effect's withdraw-0 execution, required by `EndProposal` when a
- * strict winner above the `execute` threshold exists: the candidate script and
- * its `ExecuteWinner` claim, which both the proposal validator and the
- * candidate's `am_i_the_winner` verify against on-chain reality.
+ * strict winner above the `execute` threshold exists. Its script hash is the
+ * winner declared in the `EndProposal { winner }` redeemer, checked against
+ * the tally by the proposal validator; the candidate's `am_i_the_winner` in
+ * turn verifies that the closure named it.
  */
 export interface WinnerEffect {
   script: PlutusScript;
-  claim: PollEffectRedeemer;
 }
 
 export interface EndProposalParams extends ProposalSpendParams {
@@ -427,7 +427,18 @@ export async function buildEndVotingStageTx(
 export async function buildEndProposalTx(
   p: EndProposalParams,
 ): Promise<string> {
-  return buildProposalSpend(p, { kind: "EndProposal" }, null, p.winnerEffect);
+  const winner = p.winnerEffect
+    ? resolveScriptHash(
+        p.winnerEffect.script.code,
+        p.winnerEffect.script.version,
+      )
+    : null;
+  return buildProposalSpend(
+    p,
+    { kind: "EndProposal", winner },
+    null,
+    p.winnerEffect,
+  );
 }
 
 // ---------------------------------------------------- Tally
