@@ -41,12 +41,9 @@ pub fn am_i_the_winner(
 ) -> Bool {
   let is_proposal = fn(input: Input) {
     let out = input.output
-    has_any_nft(out.value, proposal_policy) && when
-      out.address.payment_credential
-    is {
-      Script(policy) -> policy == proposal_policy
-      _ -> False
-    }
+    has_any_nft(out.value, proposal_policy) && out.address.payment_credential == Script(
+      proposal_policy,
+    )
   }
   when list.filter(self.inputs, is_proposal) is {
     [input] -> {
