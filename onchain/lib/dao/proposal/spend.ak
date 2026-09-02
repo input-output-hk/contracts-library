@@ -203,7 +203,7 @@ fn continuation_datum(
 ) -> ProposalDatum {
   let out = find_continuation_output(outputs, own_addr)
   expect Output { value, datum: InlineDatum(d), reference_script: None, .. } = out
-  expect match(value, from_asset(own_hash, p_id, 1), >=) == True
+  expect match(value, from_asset(own_hash, p_id, 1), >=)
   expect cd: ProposalDatum = d
   cd
 }
