@@ -1,46 +1,35 @@
-# Protocol Settings — Specification
-
-> Status: Draft · Contract: `settings` · This document defines _what_ the
-> contract does. The on-chain (`onchain/`) and off-chain (`offchain/`)
-> implementations are correct insofar as they match this spec, not insofar as
-> they match each other. See
-> [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md) §2.3.
+# Settings Protocol Specification
 
 ## 1. Summary
 
-A **protocol settings** instance is a single NFT-guarded UTxO holding the
-**current** value of one governance-controlled parameter, as arbitrary `Data`,
-together with at most one **pending change**. A change is _proposed_ by the
-proposer: the pending pair `(next, next_apply)` is written with
-`next_apply = now + apply_delay`. Once the delay has passed, the (separately
-authorized) applier _applies_ the proposal, promoting `next` to `current`. The
-instance is _launched_ by minting its NFT, which requires spending a
-parameterized **seed UTxO**; because a UTxO can only be spent once, the NFT —
-and therefore the settings UTxO — can never be duplicated. Closing burns the NFT
-and permanently destroys the instance.
+This protocol is meant to manage the settings of another (a.k.a., "main") protocol.
+
+An instance of this protocol governs a single UTxO (called the "Settings UTxO") that, in its datum, contains the main protocol's settings. This UTxO, uniquely identified by the "Settings NFT" minted at deploy-time, contains a datum with three fields: the current settings, optionally the next settings, and optionally when the next settings will be applied if approved. 
+
+The way it works is: 
+1. The _applier_ creates the first instance of the Settings protocol by minting the "Settings NFT" and locking it in the "Settings UTxO" containing the main protocol settings in its datum.
+1. The main protocol consumes those settings by reading them via reference inputs.
+1. A change is proposed by the _proposer_, which provides the possible next settings and when they will be applied if approved. 
+1. Once the delay has passed, the _applier_ replaces the current settings with the new ones (if it chooses to accept them). Effectively changing the settings for the main protocol.
+1. Once an instance of the protocol is no longer needed, the Settings UTxO can be consumed while burning the NFT permanently.
 
 ### Design choices
 
-| Decision            | Choice                                       | Rationale                                                                                                                                                                    |
-| ------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Instance identity   | **One NFT-guarded UTxO**                     | The whole state lives in one UTxO; the NFT keeps it distinguishable from any other output at the same address, and the state is always locatable by scanning for the NFT.    |
-| Instance uniqueness | **One-shot mint via a seed UTxO nonce**      | Minting `+1` requires spending the parameterized `seed_utxo`. A UTxO can only be spent once, so a second launch is impossible by construction.                               |
-| Change mechanism    | **Propose / delayed apply split**            | The proposer can never change `current` directly; a proposal must sit for `apply_delay` before the applier can commit it. Two credentials, two actions.                      |
-| Parameter value     | **Arbitrary `Data` + `validate_datum` hook** | The validator is agnostic about what the setting _means_; a deployer-supplied predicate constrains admissible values. The reference validator ships `validate_datum = True`. |
-| Authorization       | **Pluggable `Credential`**                   | `propose_auth` and `apply_auth` are `Credential`s, so a key, multisig, DAO, or smart wallet can fill either role (`ARCHITECTURE.md` §3).                                     |
-| Teardown            | **Burn to close**                            | Closing burns the NFT; the seed nonce is already spent, so the instance can never be relaunched.                                                                             |
+| Decision            | Choice                                       | Rationale                                                                                                                                            |
+| ------------------- | -------------------------------------------- | -----------------------------------------------------------------------------------------------------------------------------------------------------|
+| Instance identity   | **One NFT-guarded UTxO (thread token)**      | The whole state lives in one UTxO.                                                                                                                   |
+| Instance uniqueness | **One-shot mint via a seed UTxO nonce**      | Minting `+1` requires spending the parameterized `seed_utxo`. A UTxO can be spent only once, so a second instance differs by construction.           |
+| Change mechanism    | **Propose / delayed apply split**            | The **proposer** can never change the settings directly. A proposal must sit _at least_ for `apply_delay` before the **applier** can commit to it.   |
+| Parameter value     | **Arbitrary `Data` + `validate_datum` hook** | The validator is agnostic about what the setting contains. A deployer-supplied predicate constrains admissible values.                               |
+| Authorization       | **Pluggable `Credential`**                   | `propose_auth` and `apply_auth` are flexible `Credential`s, so a key, multisig, DAO, or smart wallet can fill either role.                           |
+| Teardown            | **Burn to close**                            | Closing burns the NFT. The seed nonce is already spent, so you can never relaunch the instance.                                                     |
+
 
 ## 2. Roles
 
-- **Proposer** (`propose_auth`): proposes a new value. Its only power is to
-  write (or overwrite) the pending pair `(next, next_apply)`. It cannot apply,
-  close, or touch `current`.
-- **Applier** (`apply_auth`): launches the instance (mints the NFT), applies a
-  pending proposal once `now >= next_apply`, and closes the instance (burns the
-  NFT).
-- **Consumer**: any party that reads `current` from the settings UTxO, typically
-  as a reference input. Consumption is not constrained by this validator; it
-  only requires the UTxO to exist.
+- **Applier** (`apply_auth`): Launches the instance, applies a pending proposal once `now >= next_apply`, and closes the instance.
+- **Proposer** (`propose_auth`): Proposes a new value. Its only power is to write (or overwrite) the pending pair `(next, next_apply)`. It cannot apply, close, or touch `current`.
+- **Consumer**: Any party that reads `current` from the Settings UTxO as a reference input.
 
 ## 3. State model
 
@@ -48,43 +37,43 @@ and permanently destroys the instance.
 
 Baked into the script hash (the validator is parameterized by them):
 
-| Parameter             | Type                | Meaning                                                                                                                                      |
-| --------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `seed_utxo`           | `OutputReference`   | One-shot nonce; must be spent to mint.                                                                                                       |
-| `propose_auth`        | `Credential`        | Who may `Propose`.                                                                                                                           |
-| `apply_auth`          | `Credential`        | Who may launch, `Apply`, and `Close`.                                                                                                        |
-| `apply_delay`         | `Int`, milliseconds | Minimum delay between a proposal's reference time and its earliest apply.                                                                    |
-| `settings_token_name` | `AssetName`         | Name of the instance NFT under the script's policy.                                                                                          |
-| `validate_datum`      | `fn(Data) -> Bool`  | Predicate admissible setting values must satisfy. In the reference validator it is the constant `True` (a stub to be replaced when forking). |
+| Parameter             | Type                 | Meaning                                                                                |
+| --------------------- | -------------------- | ---------------------------------------------------------------------------------------|
+| `seed_utxo`           | `OutputReference`    | One-shot nonce; must be spent to mint.                                                 |
+| `propose_auth`        | `Credential`         | Who may `Propose`.                                                                     |
+| `apply_auth`          | `Credential`         | Who may launch, `Apply`, and `Close`.                                                  |
+| `apply_delay`         | `Int` (milliseconds) | Minimum delay between when new settings are proposed and when they can be applied.     |
+| `settings_token_name` | `AssetName`          | Name of the instance NFT under the script's policy.                                    |
+| `validate_datum`      | `fn(Data) -> Bool`   | Predicate admissible setting values must satisfy. |
 
-### 3.2 Datum (on-chain state)
 
-Inline datum on the settings UTxO:
+### 3.2 Settings UTxO Datum
 
-| Field        | Type           | Meaning                                                                |
-| ------------ | -------------- | ---------------------------------------------------------------------- |
-| `current`    | `Data`         | The active setting value.                                              |
-| `next`       | `Option<Data>` | The proposed next value.                                               |
-| `next_apply` | `Option<Int>`  | POSIX time, **milliseconds**, at or after which `next` may be applied. |
+Inline datum on the Settings UTxO:
 
-A datum is **well-formed** when `next` and `next_apply` are both `None` or both
-`Some`. The actions maintain this: launch produces both `None`; `Propose`
-produces both `Some`; `Apply` returns to both `None`. State transitions:
+| Field        | Type           | Meaning                                                                     |
+| ------------ | -------------- | --------------------------------------------------------------------------- |
+| `current`    | `Data`         | The active setting value.                                                   |
+| `next`       | `Option<Data>` | The proposed next value (if any).                                           |
+| `next_apply` | `Option<Int>`  | POSIX time (milliseconds) at or after which `next` may be applied (if any). |
+
+
+A datum is **well-formed** when `next` and `next_apply` are both `None` or both `Some`. The protocol checks maintain this: launch produces both `None`; `Propose` produces both `Some`; `Apply` returns both `None`. State transitions:
 
 ```
-Mint (Launch)    ⊥  ───────────────────────────► (d, None, None)
+Mint (Launch)    ⊥  ─────────────────────────────────► (d, None, None)
 
-Propose          (d, ·, ·) ────────────────────► (d, Some(d′), Some(now + apply_delay))
-                                                        with d′ ≠ d and validate_datum(d′)
+Propose          (d, ·, ·) ──────────────────────────► (d, Some(d′), Some(now + apply_delay))
+                                                            with d′ ≠ d and validate_datum(d′)
 
 Apply            (d, Some(d′), Some(t)), now ≥ t ────► (d′, None, None)
 
-Close + Burn     (·, ·, ·) ─────────────────────────► ⊥
+Close + Burn     (·, ·, ·) ──────────────────────────► ⊥
 ```
 
 ### 3.3 Redeemers
 
-**Spend** (on the settings UTxO):
+**Spend** (on the Settings UTxO):
 
 | Redeemer             | Action                                                                |
 | -------------------- | --------------------------------------------------------------------- |
@@ -99,37 +88,51 @@ Close + Burn     (·, ·, ·) ────────────────�
 | `Mint { out_ix }` | Launch: mint the NFT exactly once.  |
 | `Burn`            | Mint-side of `Close`: burn the NFT. |
 
-`out_ix` is the **index in the transaction's output list** of the continuation
-output the redeemer identifies. The validator checks that output in full; it
-never infers it.
+
+`out_ix` is the index of the Settings UTxO in the transaction's output list (the continuation output). The validator checks that output in full and ignores the rest.
 
 ### 3.4 Value shape
 
-The settings UTxO's value must contain **the NFT and nothing else but ada**:
-exactly `1` of `(policy_id, settings_token_name)` and no other multi-asset. This
-is enforced on the launch output and on every continuation.
+The settings UTxO's value must contain **the NFT and nothing else but ADA**: exactly `1` of `(policy_id, settings_token_name)` and no other non-ADA asset. This is enforced on the launch output and on every continuation.
 
-## 4. Action set (off-chain transaction shapes)
+## 4. Transactions
 
-This is the language-agnostic interface every off-chain package implements (PRD
-§6.3). "Contract input/output" means a UTxO at the settings address.
+All possible protocol transactions.
 
-### 4.1 Launch (`Mint`)
+### 4.1 Deploy Settings
 
-Creates the instance by minting the NFT.
+This transaction deploys the **Settings UTxO**, which holds the main protocol parameters. The **SettingsNFT** minted from the **Settings Policy** uniquely identifies the **Settings UTxO** and validates the datum’s correctness. Other protocols will use this **Settings UTxO** as a reference input.
 
-|                    |                                                                                                                                                                                                                                                                           |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Inputs**         | The parameterized `seed_utxo` MUST be spent. Any wallet UTxOs for fees.                                                                                                                                                                                                   |
-| **Outputs**        | One **settings output** at `out_ix`: payment credential `Script(policy_id)` (staking any), value = ada + exactly the NFT (§3.4), **inline datum**, no reference script. Datum = `SettingsDatum { current, next: None, next_apply: None }` with `validate_datum(current)`. |
-| **Mint**           | Exactly one token minted under `policy_id`: `(settings_token_name, 1)`.                                                                                                                                                                                                   |
-| **Redeemer**       | mint `Mint { out_ix }`.                                                                                                                                                                                                                                                   |
-| **Authorization**  | `apply_auth` satisfied.                                                                                                                                                                                                                                                   |
-| **Validity range** | Unconstrained.                                                                                                                                                                                                                                                            |
+**Transaction overview:**
 
-The seed UTxO is the one-shot guard: the minting policy equals the validator,
-and minting `+1` requires the seed to be spent, so a second launch is impossible
-once the seed is consumed.
+|                    |                                                                                                                                                                                                  |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Inputs**         | The parameterized `seed_utxo`. Any wallet UTxO.                                                                                                                                                  |
+| **Outputs**        | One **Settings UTxO** at `out_ix`: payment credential `Script(policy_id)` (staking any), value = ADA + exactly the NFT (§3.4), **inline datum**, no reference script. Datum = `SettingsDatum { current, next: None, next_apply: None }` with `validate_datum(current)`. |
+| **Mint**           | Exactly one token minted under `policy_id`: `(settings_token_name, 1)`.                                                                                                                          |
+| **Redeemer**       | mint `Mint { out_ix }`.                                                                                                                                                                          |
+| **Authorization**  | `apply_auth` satisfied.                                                                                                                                                                          |
+| **Validity range** | Unconstrained.                                                                                                                                                                                   |
+
+
+Expected transaction-level failure scenarios:
+
+| Transaction |
+|-------------|
+| 𝑁 ≠ 1 asset classes (specific PolicyId and AssetName combination) are being minted/burnt in the transaction. |
+| 𝑁 ≠ 1 amount of assets are being minted in the transaction with `settings_token_name` as their name |
+| There’s no input UTxO with reference equal to the `utxo_ref` parameter |
+
+
+Expected Settings UTxO-level failure scenarios:
+
+| Overall |
+|-------------|
+| The Settings UTxO output has a different index than the provided in the Mint redeemer. |
+| The Settings UTxO address's payment credential differs from the Settings validator.|
+| The Settings UTxO Datum is not inline and has a different shape than the Settings Datum.|
+| The Settings UTxO Value is different than 1 Settings NFT and M ADA.|
+
 
 ### 4.2 Propose
 
@@ -140,6 +143,7 @@ once the seed is consumed.
 | **Redeemer**       | spend `Propose { out_ix }`.                                                                                                                                                                                                                                                                                            |
 | **Validity range** | Lower bound **finite**; `now` = lower bound (§5).                                                                                                                                                                                                                                                                      |
 | **Authorization**  | `propose_auth` satisfied.                                                                                                                                                                                                                                                                                              |
+
 
 The spent datum's `next`/`next_apply` are **ignored**: proposing always writes a
 fresh pending pair and thereby supersedes any pending proposal (and resets the
