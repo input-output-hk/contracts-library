@@ -14,11 +14,10 @@
  *   DaoSettings         = Constr 0 [thresholds, timings, stake, proposal, vote validator]
  *   ProposalTokenRedeemer = MintProposal{results, out_idx}=0 | BurnProposal=1
  *   ProposalRedeemer    = Cosign=0 | AcceptDraft=1 | RejectDraft=2 | EndVotingStage=3
- *                       | TallyVotes=4 | EndProposal=5
+ *                       | TallyVotes=4 | EndProposal{winner: Option<ScriptHash>}=5
  *   VoteDatum           = Constr 0 [stake_owner: Credential, proposal, voted_option, stake]
  *   VoteRedeemer        = TallyVote=0 | Cancel=1
  *   VoteTokenRedeemer   = MintVote{out_idx}=0 | BurnVotes=1
- *   PollEffectRedeemer  = ExecuteWinner{proposal_id, winner_option}=0
  */
 
 import {
@@ -35,7 +34,6 @@ import { outputRefToData } from "../settings/datum";
 import type {
   DaoSettings,
   PollEffectParams,
-  PollEffectRedeemer,
   ProposalDatum,
   ProposalParams,
   ProposalRedeemer,
@@ -180,7 +178,7 @@ export function proposalRedeemerToData(r: ProposalRedeemer): Data {
     case "TallyVotes":
       return mConStr(4, []);
     case "EndProposal":
-      return mConStr(5, []);
+      return mConStr(5, [option(r.winner, (w) => w)]);
   }
 }
 
@@ -204,8 +202,8 @@ export function tallyVotesRedeemer(): Data {
   return proposalRedeemerToData({ kind: "TallyVotes" });
 }
 
-export function endProposalRedeemer(): Data {
-  return proposalRedeemerToData({ kind: "EndProposal" });
+export function endProposalRedeemer(winner: string | null): Data {
+  return proposalRedeemerToData({ kind: "EndProposal", winner });
 }
 
 // ------------------------------------------------------------ vote datum
@@ -278,9 +276,11 @@ export function pollEffectParamsToData(p: PollEffectParams): Data[] {
   return [p.proposalPolicy];
 }
 
-export function pollEffectRedeemerToData(r: PollEffectRedeemer): Data {
-  switch (r.kind) {
-    case "ExecuteWinner":
-      return mConStr0([r.proposalId, r.winnerOption]);
-  }
+/**
+ * Redeemer of the poll-effect candidate's withdraw-0 execution. The protocol
+ * never inspects it (the reference candidate re-checks the closure with
+ * `am_i_the_winner` instead), so any well-formed Data works — this is the unit.
+ */
+export function pollEffectWithdrawalRedeemer(): Data {
+  return mConStr0([]);
 }

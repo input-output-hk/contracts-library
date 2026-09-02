@@ -99,7 +99,14 @@ export type ProposalRedeemer =
   | { kind: "RejectDraft" }
   | { kind: "EndVotingStage" }
   | { kind: "TallyVotes" }
-  | { kind: "EndProposal" };
+  /**
+   * Closes the poll, declaring which effect script won: a hash executes that
+   * winner's bound effect (a strict winner above the `execute` threshold whose
+   * withdrawal must be present), `null` closes without executing. The proposal
+   * validator checks the declaration against the tally; candidate scripts
+   * verify the closure named them via `am_i_the_winner`.
+   */
+  | { kind: "EndProposal"; winner: string | null };
 
 /** Vote artifact datum. */
 export interface VoteDatum {
@@ -122,18 +129,6 @@ export interface PollEffectParams {
   /** The proposal validator's own hash (pinned at compile time on-chain). */
   proposalPolicy: string;
 }
-
-/**
- * Redeemer of a poll-effect candidate's withdraw-0 execution. Declares the
- * intent of whoever triggers the effect: which poll closed and which option
- * won. Both the proposal validator (`EndProposal`) and the candidate's own
- * `am_i_the_winner` check that the declaration matches on-chain reality.
- */
-export type PollEffectRedeemer = {
-  kind: "ExecuteWinner";
-  proposalId: string;
-  winnerOption: number;
-};
 
 /** Parameters of the `proposal` validator (blueprint order). */
 export interface ProposalParams {
