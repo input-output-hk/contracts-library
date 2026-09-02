@@ -784,9 +784,9 @@ async function lifecycleToTally(): Promise<{
 test("executes the winning effect via the poll_effect candidate", async () => {
   const { inst, proposal6, proposalTokenName } = await lifecycleToTally();
 
-  // The withdrawal runs the candidate's own validator, which re-derives the
-  // verdict with `am_i_the_winner`, while the proposal validator checks the
-  // truthful `ExecuteWinner` claim.
+  // The closure declares the winning effect in the `EndProposal` redeemer: the
+  // proposal validator checks that declaration against the tally, and the
+  // candidate's `am_i_the_winner` verifies the closure named it.
   await confirm(
     inst
       .client(inst.a)
@@ -794,7 +794,7 @@ test("executes the winning effect via the poll_effect candidate", async () => {
         settings_ref: inst.settingsRef,
         proposal_ref: proposal6.ref,
         proposal_token_name: toBytes(proposalTokenName),
-        winner_option: 0,
+        effect_hash: toBytes(inst.effectHash),
         since_slot: (await devnet.tip()).slot,
       } as unknown as Parameters<Client["endProposal"]>[0])
       .env(inst.env),
@@ -808,12 +808,11 @@ test("executes the winning effect via the poll_effect candidate", async () => {
   expect(await devnet.utxosOf(inst.stakeAddr)).toHaveLength(4);
 }, 300_000);
 
-test("rejects EndProposal with a lying effect claim", async () => {
+test("rejects EndProposal with a lying winner declaration", async () => {
   const { inst, proposal6, proposalTokenName } = await lifecycleToTally();
 
-  // The declared claim (option 1) does not match the actual winner (option 0):
-  // rejected by the proposal validator's claim check and by the candidate's
-  // own am_i_the_winner.
+  // The declared winner is not the effect bound to the tally's actual winner
+  // (option 0): rejected by the proposal validator's declaration check.
   await expectAttackRejected(
     submit(
       inst
@@ -822,7 +821,7 @@ test("rejects EndProposal with a lying effect claim", async () => {
           settings_ref: inst.settingsRef,
           proposal_ref: proposal6.ref,
           proposal_token_name: toBytes(proposalTokenName),
-          winner_option: 1,
+          effect_hash: toBytes("11".repeat(28)),
           since_slot: (await devnet.tip()).slot,
         } as unknown as Parameters<Client["endProposal"]>[0])
         .env(inst.env),
@@ -830,7 +829,7 @@ test("rejects EndProposal with a lying effect claim", async () => {
     [{ address: inst.proposalAddr, ref: proposal6.ref }],
   );
 
-  // The failed attempt consumed nothing: a truthful claim still executes.
+  // The failed attempt consumed nothing: a truthful declaration still executes.
   await confirm(
     inst
       .client(inst.a)
@@ -838,9 +837,81 @@ test("rejects EndProposal with a lying effect claim", async () => {
         settings_ref: inst.settingsRef,
         proposal_ref: proposal6.ref,
         proposal_token_name: toBytes(proposalTokenName),
-        winner_option: 0,
+        effect_hash: toBytes(inst.effectHash),
         since_slot: (await devnet.tip()).slot,
       } as unknown as Parameters<Client["endProposal"]>[0])
+      .env(inst.env),
+  );
+  expect(await devnet.utxosOf(inst.proposalAddr)).toHaveLength(0);
+}, 300_000);
+
+test("closes a failed proposal without executing an effect", async () => {
+  const inst = await setup();
+  const posA = await createPosition(inst, inst.a, inst.seedA, STAKE_A);
+  const posB = await createPosition(inst, inst.b, inst.seedB, STAKE_B);
+  const created = await createProposal(inst, inst.a, posA.utxo, STAKE_A);
+
+  // B co-signs, reaching the accept threshold (20 + 10 = 30).
+  const beforeProposal = await snapshot(inst.proposalAddr);
+  await confirm(
+    inst
+      .client(inst.b)
+      .cosign({
+        settings_ref: inst.settingsRef,
+        proposal_ref: created.utxo.ref,
+        stake_ref: posB.utxo.ref,
+        proposal_token_name: toBytes(created.tokenName),
+        new_proposal_datum: proposalDatum(
+          created.startTime,
+          draftStatus(STAKE_A + STAKE_B),
+          inst.results,
+        ),
+        new_stake_datum: stakeDatum(inst.b.keyHash, noneOpt(), [
+          lock(created.tokenName, created.startTime + DRAFT_LENGTH, STAKE_B),
+        ]),
+        until_slot: devnet.slotAtTimeMs(created.startTime + DRAFT_LENGTH),
+      } as unknown as Parameters<Client["cosign"]>[0])
+      .env(inst.env),
+  );
+  const [proposal2] = await addedSince(inst.proposalAddr, beforeProposal);
+  const voting = await acceptDraft(
+    inst,
+    { ...created, utxo: proposal2 },
+    inst.a,
+  );
+
+  // Drive Draft -> Tally with no votes cast: the tally is all zeros.
+  const votingEnd = created.startTime + DRAFT_LENGTH + VOTING_LENGTH;
+  await devnet.waitForChainTimeMs(votingEnd + 1_000);
+  await confirm(
+    inst
+      .client(inst.a)
+      .endVotingStage({
+        settings_ref: inst.settingsRef,
+        proposal_ref: voting.utxo.ref,
+        new_proposal_datum: proposalDatum(
+          created.startTime,
+          tallyStatus([0]),
+          inst.results,
+        ),
+        since_slot: (await devnet.tip()).slot,
+      } as unknown as Parameters<Client["endVotingStage"]>[0])
+      .env(inst.env),
+  );
+
+  // After the tally deadline the poll closes with no declared winner.
+  const tallyEnd =
+    created.startTime + DRAFT_LENGTH + VOTING_LENGTH + TALLY_LENGTH;
+  await devnet.waitForChainTimeMs(tallyEnd + 1_000);
+  await confirm(
+    inst
+      .client(inst.a)
+      .endProposalFailed({
+        settings_ref: inst.settingsRef,
+        proposal_ref: (await devnet.utxosOf(inst.proposalAddr))[0].ref,
+        proposal_token_name: toBytes(created.tokenName),
+        since_slot: (await devnet.tip()).slot,
+      } as unknown as Parameters<Client["endProposalFailed"]>[0])
       .env(inst.env),
   );
   expect(await devnet.utxosOf(inst.proposalAddr)).toHaveLength(0);
