@@ -34,7 +34,8 @@
 //   end_voting_stage        advance Voting -> Tally
 //   tally                   consume one vote artifact and fold it into results
 //   end_proposal            burn the proposal NFT and run the winning effect
-//                           (withdraw-0 with a truthful `ExecuteWinner` claim)
+//                           (withdraw-0; the winner is declared in the redeemer)
+//   end_proposal_failed     burn a proposal whose poll has no executable winner
 //   cancel                  burn an un-tallied vote NFT
 //   deposit/withdraw/delegate/close_position — staking mechanics
 //
@@ -126,6 +127,14 @@ type OptionalCredential {
 type OptionalInt {
     Some {
         value: Int,
+    },
+    None,
+}
+
+// `Option<ScriptHash>` — `Some` is constructor 0, `None` constructor 1.
+type OptionalBytes {
+    Some {
+        value: Bytes,
     },
     None,
 }
@@ -276,7 +285,14 @@ type ProposalRedeemer {
     RejectDraft,
     EndVotingStage,
     TallyVotes,
-    EndProposal,
+    // Closes the poll, declaring which effect script won: `Some(hash)` executes
+    // the winner's bound effect (a strict winner above the `execute` threshold
+    // whose withdrawal must be present), `None` closes without executing. The
+    // proposal validator checks the declaration against the tally; candidate
+    // scripts verify the closure named them via `am_i_the_winner`.
+    EndProposal {
+        winner: OptionalBytes,
+    },
 }
 
 // -------------------------------------------------------------------- vote
@@ -303,15 +319,13 @@ type VoteTokenRedeemer {
     BurnVotes,
 }
 
-// Redeemer of a poll-effect candidate's withdraw-0 execution. Declares the
-// intent of whoever triggers the effect: which poll closed and which option
-// won. The proposal validator (`EndProposal`) checks it against the tally,
-// and a well-formed candidate re-verifies it with `am_i_the_winner`.
-type PollEffectRedeemer {
-    ExecuteWinner {
-        proposal_id: Bytes,
-        winner_option: Int,
-    },
+// Redeemer of the poll-effect candidate's withdraw-0 execution. The protocol
+// never inspects it: the winner is declared in the `EndProposal` redeemer and
+// checked against the tally by the proposal validator, and a well-formed
+// candidate re-verifies the closure with `am_i_the_winner`. The redeemer is
+// the candidate's private interface — this unit matches the reference one.
+type EffectRedeemer {
+    Run,
 }
 
 // ------------------------------------------------------------------ settings
@@ -1065,12 +1079,13 @@ tx tally(
     }
 }
 
-// Burn a tally-phase proposal and execute the winning effect: the poll-effect
-// candidate runs as a withdraw-0 whose redeemer declares the truthful claim
-// (`ExecuteWinner`), cross-checked by the proposal validator against the tally
-// (and re-derived on-chain by a candidate via `am_i_the_winner`). A proposal
-// without a strict winner above the `execute` threshold cannot be ended through
-// this endpoint (the withdrawal would run an effect that refuses it).
+// Burn a tally-phase proposal and execute the winning effect. The closure
+// declares the winner (`effect_hash`) in the `EndProposal` redeemer; the
+// proposal validator checks that declaration against the tally, and the
+// declared effect runs as a withdraw-0 whose redeemer the protocol never
+// inspects (the reference candidate re-checks the closure with
+// `am_i_the_winner` instead). This endpoint always executes: for polls with
+// no strict winner above the `execute` threshold, use `end_proposal_failed`.
 tx end_proposal(
     /// The settings UTxO (reference input).
     settings_ref: UtxoRef,
@@ -1078,8 +1093,9 @@ tx end_proposal(
     proposal_ref: UtxoRef,
     /// The proposal token name.
     proposal_token_name: Bytes,
-    /// The winning option index (its effect is executed).
-    winner_option: Int,
+    /// Hash of the winning effect script (the declared winner; its bound
+    /// effect is executed as the withdraw-0).
+    effect_hash: Bytes,
     /// Slot of the validity lower bound (= tally end).
     since_slot: Int,
 ) {
@@ -1090,7 +1106,11 @@ tx end_proposal(
     input proposal_in {
         from: Proposal,
         ref: proposal_ref,
-        redeemer: ProposalRedeemer::EndProposal {},
+        redeemer: ProposalRedeemer::EndProposal {
+            winner: OptionalBytes::Some {
+                value: effect_hash,
+            },
+        },
     }
 
     input gas {
@@ -1120,10 +1140,63 @@ tx end_proposal(
     cardano::withdrawal {
         from: EffectScript,
         amount: 0,
-        redeemer: PollEffectRedeemer::ExecuteWinner {
-            proposal_id: proposal_token_name,
-            winner_option: winner_option,
+        redeemer: EffectRedeemer::Run {},
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: proposal_script,
+    }
+}
+
+// Burn a tally-phase proposal whose poll has no strict winner above the
+// `execute` threshold (a tie or a losing tally): the closure declares no
+// winner and no effect runs. Declaring a winner instead would be rejected
+// unless it matches the tally; `end_proposal` covers the executing case.
+tx end_proposal_failed(
+    /// The settings UTxO (reference input).
+    settings_ref: UtxoRef,
+    /// The proposal UTxO being ended.
+    proposal_ref: UtxoRef,
+    /// The proposal token name.
+    proposal_token_name: Bytes,
+    /// Slot of the validity lower bound (= tally end).
+    since_slot: Int,
+) {
+    reference dao_settings {
+        ref: settings_ref,
+    }
+
+    input proposal_in {
+        from: Proposal,
+        ref: proposal_ref,
+        redeemer: ProposalRedeemer::EndProposal {
+            winner: OptionalBytes::None {},
         },
+    }
+
+    input gas {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    burn {
+        amount: AnyAsset(proposal_hash, proposal_token_name, 1),
+        redeemer: ProposalTokenRedeemer::BurnProposal {},
+    }
+
+    output {
+        to: Signer,
+        amount: proposal_in + gas - AnyAsset(proposal_hash, proposal_token_name, 1) - fees,
+    }
+
+    validity {
+        since_slot: since_slot,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
     }
 
     cardano::plutus_witness {
