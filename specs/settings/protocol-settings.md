@@ -196,13 +196,7 @@ authorized) applier can apply at all.
 
 ### 5.3 Single instance ⇒ no double-satisfaction or batching surface
 
-Because the one-shot NFT guarantees at most one settings UTxO exists, a
-transaction spends at most one contract input. There is no need for
-count-preserving continuation rules (contrast
-[`vesting/linear`](../vesting/linear-vesting.md) §5.1): the single continuation
-identified by `out_ix` is checked in full, and merging or splitting instances is
-impossible. The validator still makes no assertion about total transaction
-input/output counts, so it composes freely (`ARCHITECTURE.md` §1.1).
+Because the one-shot NFT guarantees that at most one settings UTxO exists, a transaction spends at most one contract input. The single continuation identified by `out_ix` is checked in full, and merging or splitting instances is impossible. The validator makes no assertion about total transaction input/output counts.
 
 ## 6. Invariants
 
