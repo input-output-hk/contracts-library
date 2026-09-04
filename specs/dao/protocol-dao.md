@@ -14,6 +14,7 @@ The protocol is a set of three cooperating validators, each guarding its own sin
 Governance parameters (thresholds, timings, and the sibling script hashes) are **not** compiled into the validators. They are read at runtime from a **settings UTxO** (see `specs/settings/protocol-settings.md`), located by its NFT via reference input, whose opaque `current` datum is cast to `DaoSettings`. This keeps the three DAO validators free of circular compile-time dependencies and lets the settings protocol govern the DAO's parameters.
 
 The way it works is:
+
 1. A holder **creates a stake position** by spending a wallet UTxO and minting its position NFT; ownership is established by proof-of-spend, and governance tokens deposited there weight everything that follows (§5.a).
 2. The _owner_ **creates a proposal** once the position meets the `create` threshold; it starts in `Draft` and a lock freezes the position's stake until the draft deadline (§5.f).
 3. Other holders **cosign** the draft, each adding their staked weight and taking their own lock (§5.g).
@@ -39,9 +40,7 @@ The way it works is:
 
 ### 2.b Limitations
 
-- **One proposal per position lifetime** — the proposal NFT's name is the hash of the creating stake UTxO's reference, which is spend-once (§3.c, §6.a).
 - **One proposal tally per transaction** — and no `Cancel` burn inside a tallying transaction (§5.m, §6.a).
-- **Continuation lookup is first-match** — a builder must never place two contract outputs at the same script address in one transaction (§4, §6.a).
 - **Vote cancellation has no deadline** (§5.k, §6.a).
 - **Create threshold is live; the other thresholds and timings are snapshotted** into the proposal at creation (§6.a).
 
@@ -98,8 +97,8 @@ Cosign and accept require inclusion `<= draft_end`; reject requires `>= draft_en
 | Settings NFT | `settings_policy` | `settings_token_name` | The settings UTxO (§4.a). |
 
 - **Naming rule.** A token name is `blake2b_256(serialise(<OutputReference>))`: hashing a *consumed* output reference yields a globally unique, unforgeable name.
-- **Uniqueness consequences.** Because the reference is consumed once, it can never be minted again: a position can originate **at most one proposal** over its entire lifetime, and each vote artifact is globally unique even for repeated votes from the same position (each vote spends a distinct stake UTxO).
-- **NFT-quantity strictness.** Proposal and vote continuation/creation outputs must hold **exactly one** own-policy NFT; the stake creation output requires at least one.
+- **Uniqueness consequences.** Because the reference is consumed once, it can never be minted again: every proposal and vote NFT name is globally unique and unforgeable.
+- **NFT-quantity strictness.** Proposal, stake and vote continuation/creation outputs must hold **exactly one** own-policy NFT.
 
 ### 3.d Validators
 
@@ -166,7 +165,7 @@ Each validator's **own hash is its NFT policy id and its address payment credent
 
 ## 4. UTxOs
 
-Each validator's UTxO sits at an address whose payment credential is `Script(policy)` where `policy` is the validator's own hash. Continuation outputs are located by **address** (equal to the spent input's address) for stake/proposal; by explicit `out_idx` for the mint-created outputs. The address lookup matches the **first** such output: a builder must never place two contract outputs at the same address in one transaction, since the validator does not enforce that uniqueness. Inline datums and no reference script are required throughout.
+Each validator's UTxO sits at an address whose payment credential is `Script(policy)` where `policy` is the validator's own hash. Continuation outputs are located by **address** (equal to the spent input's address) for stake/proposal; by explicit `out_idx` for the mint-created outputs. Inline datums and no reference script are required throughout.
 
 ### 4.a Settings UTxO
 
@@ -184,7 +183,7 @@ The cast is a hard `expect`: if the settings `current` datum is not a `DaoSettin
 
 ### 4.b Stake Position UTxO
 
-Address `Script(stake_policy)`; value = one stake NFT + staked tokens + lovelace. On create/deposit/withdraw the value must contain *nothing else*: exactly three flattened entries (lovelace + the NFT + the staked token); the other actions only require a superset of the spent value.
+Address `Script(stake_policy)`; value = one stake NFT + staked tokens + lovelace.
 
 Datum (inline, on the stake address):
 
@@ -196,7 +195,7 @@ Datum (inline, on the stake address):
 
 The **frozen** stake of a position is `max(lock.stake)` over all locks (0 when empty); the **free** stake is `total - frozen`. A lock is **expired** when `unlock_time <= now`; expired locks are dropped by `prune_expired`.
 
-Locks are pruned when `unlock_time <= now` by `Deposit`, `Withdraw`, `ClosePosition`, and `Vote`. A lock also blocks a *second* cosign/vote on the same proposal via `has_proposal`. Creating a proposal is treated as locking until `start_time + draft_length` (the position can keep cosigning that proposal because `has_proposal` is checked on cosign, not create).
+Locks are pruned when `unlock_time <= now` by `Deposit`, `Withdraw`, `ClosePosition`, and `Vote`. A lock also blocks a *second* cosign/vote on the same proposal via `has_proposal`. Creating a proposal is treated as locking until `start_time + draft_length`.
 
 ### 4.c Proposal UTxO
 
@@ -225,13 +224,13 @@ The transition graph (see §5 for exact per-action conditions):
 ```
                  Cosign (accumulate)                    AcceptDraft
 Draft ──────────────────────────────► Draft ─────────────► Voting
-   │                                    │                    │
-   └── RejectDraft (burn) ◄─────────────┘                    │ EndVotingStage
+                                        │                    │
+       RejectDraft (burn) ◄─────────────┘                    │ EndVotingStage
                                                              ▼
-                                             Tally ◄─────────┘
-                                               │
-                                               ├── TallyVotes (accumulate)
-                                               └── EndProposal (burn + execute winner)
+                                        Tally ◄──────────────┘
+                                          │
+                                          ├── TallyVotes (accumulate)
+                                          └── EndProposal (burn + execute winner)
 
 ```
 
@@ -497,8 +496,6 @@ An effect script runs as a reward withdrawal (`withdraw-0`). The reference `poll
 - **Settings authority is trusted.** The DAO reads its governance parameters and sibling hashes from the settings UTxO's `current` datum, located by its NFT. A party able to change settings can change thresholds/timings/sibling hashes. A malformed `current` fails the DAO closed (reject), never unsafely.
 - **Create threshold is live; the rest are snapshotted.** `settings.thresholds.create` is read live at creation; `cosign`/`accept`/`vote`/`execute` and the timings are copied into the proposal at creation and frozen. Changing settings mid-lifecycle does not affect an already-created proposal.
 - **One proposal tally per transaction.** `TallyVotes` requires the count of burned vote tokens to equal the votes counted for *this* proposal, which precludes tallying two proposals in one transaction (and precludes a `Cancel` burn inside a tallying transaction, §5.k).
-- **One proposal per position lifetime.** The proposal NFT's name is the hash of the creating stake UTxO's reference (§3.c); since that reference is consumed once and can never be re-minted, a position can originate at most one proposal ever — even after all locks expire.
-- **Continuation lookup is first-match.** Stake/proposal continuations are located as the first output at the spent input's address (§4). The validators do not assert output uniqueness at that address; an off-chain builder must never emit two contract outputs at the same script address in one transaction.
 - **Vote cancellation has no deadline.** `Cancel` is authorized by the vote's recorded `stake_owner` at any time (§5.k), so a voter can retract a vote mid-voting — freeing the position's stake only at the lock's own expiry, not at cancel time.
 - **Effect scripts are untrusted.** Being listed in `results` or having a withdrawal present proves nothing about the poll outcome; each candidate must verify its own victory via `am_i_the_winner`. The reference `poll_effect` does so; a deployer writing a real effect must reproduce this guard (and pin `proposal_policy` at compile time, §5.o).
 
