@@ -71,8 +71,8 @@ pub fn nft_name_from_ref(ref: OutputReference) -> AssetName {
 }
 
 /// The proposal token name: a blake2b-256 hash of the creating stake UTxO's
-/// output reference. This binds a proposal 1:1 to the stake position that
-/// created it, so a stake position can originate at most one proposal.
+/// output reference. Because a spent output reference can never be consumed
+/// again, every proposal NFT is globally unique.
 pub fn proposal_token_name(stake_ref: OutputReference) -> AssetName {
   nft_name_from_ref(stake_ref)
 }
