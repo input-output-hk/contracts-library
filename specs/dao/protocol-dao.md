@@ -137,7 +137,7 @@ Draft ────────────────────────�
 | Redeemer | Action |
 | --- | --- |
 | `Deposit` | Owner adds stake (or prunes locks). |
-| `DelegateTo { delegatee }` | Owner sets/changes the delegatee. |
+| `DelegateTo { delegatee: Option<Credential> }` | Owner sets, changes, or clears (`None`) the delegatee. |
 | `Withdraw { amount }` | Owner withdraws free stake. |
 | `ClosePosition` | Owner closes the position (all locks expired). |
 | `CreateProposal` | Owner creates a proposal (records a lock). |
@@ -149,7 +149,7 @@ Draft ────────────────────────�
 | Redeemer | Action |
 | --- | --- |
 | `MintProposal { results, out_idx }` | Mint a proposal NFT; create the proposal UTxO. |
-| `BurnProposal` | Mint side of reject/end: burn proposal NFTs. |
+| `BurnProposal` | Mint side of reject/end: burn proposal NFTs. Admits **batch burns** so `RejectDraft` and `EndProposal` share one endpoint. |
 
 **`proposal`** — spend (`ProposalRedeemer`):
 
@@ -184,7 +184,9 @@ Draft ────────────────────────�
 - A position holds **one** stake NFT under the stake policy (name = `blake2b_256(serialise(owner_utxo))`), plus staked tokens and lovelace. On create/deposit/withdraw the value must contain *nothing else*: exactly three flattened entries (lovelace + the NFT + the staked token).
 - A proposal holds **one** proposal NFT (name = hash of the creating stake UTxO's reference). Continuations must preserve it.
 - A vote artifact holds **one** vote NFT (name = hash of the voting stake UTxO's reference) plus lovelace.
-- Continuation outputs are located by **address** (equal to the spent input's address) for stake/proposal; by explicit `out_idx` for the mint-created outputs. Inline datums and no reference script are required throughout.
+- **Uniqueness consequences.** Because a token name is the hash of a *consumed* output reference, it can never be minted again: a position can originate **at most one proposal** over its entire lifetime, and each vote artifact is globally unique even for repeated votes from the same position (each vote spends a distinct stake UTxO).
+- **NFT-quantity strictness.** Proposal and vote continuation/creation outputs must hold **exactly one** own-policy NFT; the stake creation output requires at least one.
+- Continuation outputs are located by **address** (equal to the spent input's address) for stake/proposal; by explicit `out_idx` for the mint-created outputs. The address lookup matches the **first** such output: a builder must never place two contract outputs at the same address in one transaction, since the validator does not enforce that uniqueness. Inline datums and no reference script are required throughout.
 
 ## 4. Transactions
 
@@ -216,7 +218,7 @@ All possible protocol transactions, grouped by validator. "The own input" is the
 | | |
 | --- | --- |
 | **Inputs** | The position UTxO. |
-| **Outputs** | One continuation at the same address: owner unchanged, `delegatee = delegatee`, `locks` unchanged (not pruned), value a superset of the spent value (`match(out, own, >=)`). |
+| **Outputs** | One continuation at the same address: owner unchanged, `delegatee = delegatee` (set, changed, or cleared with `None`), `locks` unchanged (not pruned), value a superset of the spent value (`match(out, own, >=)`). |
 | **Redeemer** | `DelegateTo { delegatee }`. |
 | **Authorization** | `owner` satisfied. |
 | **Validity range** | Unconstrained. |
@@ -317,7 +319,7 @@ All possible protocol transactions, grouped by validator. "The own input" is the
 | | |
 | --- | --- |
 | **Inputs** | The proposal UTxO. |
-| **Mint** | The proposal NFT is burned (quantity `-1`). |
+| **Mint** | The proposal NFT is burned. |
 | **Outputs** | No continuation. |
 | **Redeemer** | `RejectDraft` (and mint `BurnProposal`). |
 | **Validity range** | Lower bound finite and `>= start_time + draft_length`. |
@@ -339,10 +341,12 @@ All possible protocol transactions, grouped by validator. "The own input" is the
 | --- | --- |
 | **Inputs** | The proposal UTxO, plus one or more vote UTxOs (spent, consumed with `TallyVote`). |
 | **Mint** | Each consumed vote's NFT is burned (quantity `-1` under the vote policy). |
-| **Outputs** | One continuation at the same address with status `Tally { votes: counted }`; immutables preserved. Each consumed vote's lovelace is refunded to an output whose payment credential is its `stake_owner`. |
+| **Outputs** | One continuation at the same address with status `Tally { votes: counted }`; immutables preserved. Each consumed vote's lovelace is refunded to an output whose payment credential is its `stake_owner`, holding **at least** the vote UTxO's lovelace. |
 | **Redeemer** | `TallyVotes`. |
 | **Validity range** | Upper bound finite and `<= start_time + draft_length + voting_length + tally_length`. |
 | **Precondition** | Status `Tally { votes }`; at least one vote consumed; the number of burned vote tokens equals the number of votes counted for *this* proposal. |
+
+Votes whose recorded `voted_option` falls outside `0 .. len(results) - 1` are consumed and burned but their stake is **silently dropped** from the tally. `MintVote` already rejects such options, so this is defense in depth against hand-forged artifacts.
 
 ### 4.15 Proposal: End Proposal
 
@@ -356,6 +360,8 @@ All possible protocol transactions, grouped by validator. "The own input" is the
 | **Withdrawals** | If `winner = Some(effect)`, a withdrawal keyed by `Script(effect)` must be present (the effect runs). |
 
 The declared `winner` must match the tally: the **strict winner** of `votes` (a unique option with the highest total and no tie, total `> 0`); if that total is `>= thresholds.execute`, the expected effect is `results[option]`, otherwise `None` (no outcome qualifies for execution). `winner` must equal this expected value exactly.
+
+Losing candidates are **not** forced to stay silent: nothing forbids a withdrawal keyed by a losing effect script in the same transaction. Guarding against an illegitimate claim of victory is each effect script's own job via `am_i_the_winner` (§4.19).
 
 ### 4.16 Vote: Mint (vote side)
 
@@ -372,7 +378,7 @@ The declared `winner` must match the tally: the **strict winner** of `votes` (a 
 
 | | |
 | --- | --- |
-| **Inputs** | The vote artifact, and the proposal UTxO (spent, consumed with `TallyVotes`). |
+| **Inputs** | The vote artifact, and the proposal UTxO (spent, consumed with `TallyVotes`). The proposal input is located by its NFT among the spent inputs, and its payment credential must hash to `proposal_policy`. |
 | **Mint** | The vote's NFT is burned. |
 | **Redeemer** | `TallyVote`. |
 | **Authorization** | None directly; delegated to the proposal's `TallyVotes`. |
@@ -387,9 +393,13 @@ The declared `winner` must match the tally: the **strict winner** of `votes` (a 
 | **Redeemer** | `Cancel`. |
 | **Authorization** | `stake_owner` (the vote's recorded owner) satisfied. |
 
+`Cancel` is valid **at any time** while the artifact exists as long as the artifact is not consumed by a tally in the same transaction. The tally's burned-count check (§4.14) forbids canceling a vote inside the transaction that counts it without it being counted, so a canceled vote can never influence a tally.
+
 ### 4.19 Effect: run (withdraw)
 
-An effect script runs as a reward withdrawal (`withdraw-0`). The reference `poll_effect` checks `am_i_the_winner`: exactly one input carrying an NFT under `proposal_policy` at `Script(proposal_policy)` must be consumed with `EndProposal { winner: Some(own_hash) }`. Additional business logic composes with `and`.
+An effect script runs as a reward withdrawal (`withdraw-0`). The reference `poll_effect` checks `am_i_the_winner`: **exactly one** input carrying an NFT under `proposal_policy` **and** sitting at payment credential `Script(proposal_policy)` must be consumed with `EndProposal { winner: Some(own_hash) }`. The shape check defeats spoofed proposal UTxOs (right token, wrong address) and rejects transactions closing two polls at once; any other redeemer on that input (e.g. a mid-transition `TallyVotes`) also fails. Additional business logic composes with `and`.
+
+`proposal_policy` is **pinned at compile time** on purpose: deriving it from transaction data would let anyone forge an approving poll under their own proposal. Effect scripts must therefore be parameterized per deployed proposal validator.
 
 ## 5. Determinism & time
 
@@ -447,5 +457,8 @@ The winning option is the unique highest-voted option with a positive total; tie
 
 - **Settings authority is trusted.** The DAO reads its governance parameters and sibling hashes from the settings UTxO's `current` datum, located by its NFT. A party able to change settings can change thresholds/timings/sibling hashes. A malformed `current` fails the DAO closed (reject), never unsafely.
 - **Create threshold is live; the rest are snapshotted.** `settings.thresholds.create` is read live at creation; `cosign`/`accept`/`vote`/`execute` and the timings are copied into the proposal at creation and frozen. Changing settings mid-lifecycle does not affect an already-created proposal.
-- **One proposal tally per transaction.** `TallyVotes` requires the count of burned vote tokens to equal the votes counted for *this* proposal, which precludes tallying two proposals in one transaction.
-- **Effect scripts are untrusted.** Being listed in `results` or having a withdrawal present proves nothing about the poll outcome; each candidate must verify its own victory via `am_i_the_winner`. The reference `poll_effect` does so; a deployer writing a real effect must reproduce this guard.
+- **One proposal tally per transaction.** `TallyVotes` requires the count of burned vote tokens to equal the votes counted for *this* proposal, which precludes tallying two proposals in one transaction (and precludes a `Cancel` burn inside a tallying transaction, §4.18).
+- **One proposal per position lifetime.** The proposal NFT's name is the hash of the creating stake UTxO's reference (§3.5); since that reference is consumed once and can never be re-minted, a position can originate at most one proposal ever — even after all locks expire.
+- **Continuation lookup is first-match.** Stake/proposal continuations are located as the first output at the spent input's address (§3.5). The validators do not assert output uniqueness at that address; an off-chain builder must never emit two contract outputs at the same script address in one transaction.
+- **Vote cancellation has no deadline.** `Cancel` is authorized by the vote's recorded `stake_owner` at any time (§4.18), so a voter can retract a vote mid-voting — freeing the position's stake only at the lock's own expiry, not at cancel time.
+- **Effect scripts are untrusted.** Being listed in `results` or having a withdrawal present proves nothing about the poll outcome; each candidate must verify its own victory via `am_i_the_winner`. The reference `poll_effect` does so; a deployer writing a real effect must reproduce this guard (and pin `proposal_policy` at compile time, §4.19).
