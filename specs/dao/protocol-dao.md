@@ -13,6 +13,16 @@ The protocol is a set of three cooperating validators, each guarding its own sin
 
 Governance parameters (thresholds, timings, and the sibling script hashes) are **not** compiled into the validators. They are read at runtime from a **settings UTxO** (see `specs/settings/protocol-settings.md`), located by its NFT via reference input, whose opaque `current` datum is cast to `DaoSettings`. This keeps the three DAO validators free of circular compile-time dependencies and lets the settings protocol govern the DAO's parameters.
 
+The way it works is:
+1. A holder **creates a stake position** by spending a wallet UTxO and minting its position NFT; ownership is established by proof-of-spend, and governance tokens deposited there weight everything that follows (§5.a).
+2. The _owner_ **creates a proposal** once the position meets the `create` threshold; it starts in `Draft` and a lock freezes the position's stake until the draft deadline (§5.f).
+3. Other holders **cosign** the draft, each adding their staked weight and taking their own lock (§5.g).
+4. Once cosign stake reaches the `accept` threshold, anyone **accepts the draft**, promoting it to `Voting` (§5.h). If the deadline passes without acceptance, the draft is **rejected** and burned (§5.i).
+5. During the voting window, holders **vote** on an option; each vote mints a vote artifact weighted by the position's stake, under a fresh lock (§5.j).
+6. When voting ends, the proposal enters `Tally`, where votes are consumed in batches, their stakes counted per option, and their lovelace refunded (§5.l, §5.m).
+7. After the tally deadline, `EndProposal` closes the poll: the **strict winner** is declared and, if it meets the `execute` threshold, its effect script runs as a reward withdrawal — otherwise the poll closes with nothing executed (§5.n, §5.o).
+8. Throughout, positions can deposit, withdraw free stake, delegate, or cancel votes; a position closes only once all its locks have expired (§5.b–5.e, §5.k).
+
 ## 2. Design choices and limitations
 
 ### 2.a Design choices
