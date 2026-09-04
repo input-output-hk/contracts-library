@@ -1,8 +1,10 @@
-# Linear Vesting: MeshJS end-to-end tests
+# MeshJS end-to-end tests
 
-These tests run the published library (`@contracts-library/vesting-meshjs`, consumed by its package name via `file:../lib`) against a real local [Yaci DevKit](https://devkit.yaci.xyz) devnet. They are a **separate package**, so they exercise the library exactly as a downstream consumer would and never ship with it.
+These tests run the published library (`@contracts-library/meshjs`, consumed by its package name via `file:../lib`) against a real local [Yaci DevKit](https://devkit.yaci.xyz) devnet. They are a **separate package**, so they exercise the library exactly as a downstream consumer would and never ship with it.
 
 ## What they cover
+
+### Linear Vesting
 
 Through the public API (`buildLockTx` / `buildClaimTx` / `buildCancelTx`):
 
@@ -33,9 +35,10 @@ npm run test:devnet
 
 ## Authorizer fixtures
 
-The script-credential tests use two tiny Plutus V3 authorizer scripts compiled from [`fixtures/aiken`](./fixtures/aiken): 
+The script-credential tests use two tiny Plutus V3 authorizer scripts compiled from [`fixtures/aiken`](./fixtures/aiken):
+
 - `always_true` (approves everything)
-- `reject_withdraw` (rejects withdrawals, approves the rest so its stake credential can still be registered). 
+- `reject_withdraw` (rejects withdrawals, approves the rest so its stake credential can still be registered).
 
 Their compiled CBOR is committed in [`src/fixtures.ts`](./src/fixtures.ts), so running the tests needs no Aiken toolchain; rebuild the project there only to regenerate them. The tests register the authorizer's stake credential (a withdraw-0 needs a registered reward account) before claiming.
 

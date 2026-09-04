@@ -11,6 +11,7 @@
  */
 
 import {
+  ADA,
   buildCancelTx,
   buildClaimTx,
   buildLockTx,
@@ -22,7 +23,7 @@ import {
   vestingScriptAddress,
   type Credential,
   type VestingDatum,
-} from "@contracts-library/vesting-meshjs";
+} from "@contracts-library/meshjs";
 import { ALWAYS_TRUE, REJECT_WITHDRAW } from "../src/fixtures";
 import {
   unixTimeToEnclosingSlot,
@@ -31,6 +32,9 @@ import {
 } from "@meshsdk/core";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
+  collateralOf,
+  lovelaceOf,
+  signAndSubmit,
   chainNowMs,
   devnetReachable,
   devnetSlotConfig,
@@ -52,12 +56,6 @@ if (!reachable) {
     `[e2e] Skipping all e2e tests: no Yaci devnet at ${STORE_URL}. ` +
       `Run \`npm run test:devnet\` (or start one and set INDEXER_URL / YACI_STORE_URL).`,
   );
-}
-const ADA = 1_000_000n;
-
-function lovelaceOf(utxo: UTxO): bigint {
-  const a = utxo.output.amount.find((x) => x.unit === "lovelace");
-  return BigInt(a?.quantity ?? "0");
 }
 
 describe.skipIf(!reachable)("linear vesting e2e (Yaci devnet)", () => {
@@ -87,8 +85,10 @@ describe.skipIf(!reachable)("linear vesting e2e (Yaci devnet)", () => {
     const grantor = await fundedAccount(provider);
     const beneficiary = await fundedAccount(provider);
     const datum: VestingDatum = {
-      beneficiary:
-        opts.beneficiaryCredential ?? { kind: "key", hash: beneficiary.keyHash },
+      beneficiary: opts.beneficiaryCredential ?? {
+        kind: "key",
+        hash: beneficiary.keyHash,
+      },
       locker: { kind: "key", hash: grantor.keyHash },
       vesting: [{ policyId: "", assetName: "", total: opts.totalAda }],
       startTime: opts.startMs,
@@ -102,9 +102,7 @@ describe.skipIf(!reachable)("linear vesting e2e (Yaci devnet)", () => {
       changeAddress: grantor.address,
       networkId: NETWORK_ID,
     });
-    const lockHash = await grantor.wallet.submitTx(
-      await grantor.wallet.signTx(lockTx, true),
-    );
+    const lockHash = await signAndSubmit(grantor, lockTx);
     await waitForTx(provider, lockHash);
     const vestingUtxo = await scriptOutputOf(provider, lockHash, scriptAddr);
     return { grantor, beneficiary, datum, vestingUtxo };
@@ -128,7 +126,9 @@ describe.skipIf(!reachable)("linear vesting e2e (Yaci devnet)", () => {
         p.vestingUtxo.output.address,
       )
       .txInInlineDatumPresent()
-      .txInRedeemerValue(p.action === "claim" ? claimRedeemer() : cancelRedeemer())
+      .txInRedeemerValue(
+        p.action === "claim" ? claimRedeemer() : cancelRedeemer(),
+      )
       .txInScript(vestingScript().code);
 
     if (p.continuation) {
@@ -140,7 +140,7 @@ describe.skipIf(!reachable)("linear vesting e2e (Yaci devnet)", () => {
     tb.invalidBefore(unixTimeToEnclosingSlot(p.validityNow, slotConfig));
     if (p.requiredSigner) tb.requiredSignerHash(p.requiredSigner);
 
-    const col = (await p.signer.wallet.getCollateral())[0];
+    const col = await collateralOf(p.signer);
     const unsigned = await tb
       .txInCollateral(
         col.input.txHash,
@@ -211,7 +211,12 @@ describe.skipIf(!reachable)("linear vesting e2e (Yaci devnet)", () => {
     const tb = newTxBuilder(provider);
     for (const u of p.inputs) {
       tb.spendingPlutusScriptV3()
-        .txIn(u.input.txHash, u.input.outputIndex, u.output.amount, u.output.address)
+        .txIn(
+          u.input.txHash,
+          u.input.outputIndex,
+          u.output.amount,
+          u.output.address,
+        )
         .txInInlineDatumPresent()
         .txInRedeemerValue(claimRedeemer())
         .txInScript(vestingScript().code);
@@ -257,13 +262,11 @@ describe.skipIf(!reachable)("linear vesting e2e (Yaci devnet)", () => {
       datum: ctx.datum,
       now: claimNow,
       beneficiaryAddress: ctx.beneficiary.address,
-      collateralUtxo: (await ctx.beneficiary.wallet.getCollateral())[0],
+      collateralUtxo: await collateralOf(ctx.beneficiary),
       utxos: await ctx.beneficiary.wallet.getUtxos(),
       customSlotConfig: slotConfig,
     });
-    const hash = await ctx.beneficiary.wallet.submitTx(
-      await ctx.beneficiary.wallet.signTx(claimTx, true),
-    );
+    const hash = await signAndSubmit(ctx.beneficiary, claimTx);
     await waitForTx(provider, hash);
 
     const continuation = await scriptOutputOf(provider, hash, scriptAddr);
@@ -289,13 +292,11 @@ describe.skipIf(!reachable)("linear vesting e2e (Yaci devnet)", () => {
       datum: ctx.datum,
       now: claimNow,
       beneficiaryAddress: ctx.beneficiary.address,
-      collateralUtxo: (await ctx.beneficiary.wallet.getCollateral())[0],
+      collateralUtxo: await collateralOf(ctx.beneficiary),
       utxos: await ctx.beneficiary.wallet.getUtxos(),
       customSlotConfig: slotConfig,
     });
-    const hash = await ctx.beneficiary.wallet.submitTx(
-      await ctx.beneficiary.wallet.signTx(claimTx, true),
-    );
+    const hash = await signAndSubmit(ctx.beneficiary, claimTx);
     await waitForTx(provider, hash);
 
     const outs = await provider.fetchUTxOs(hash);
@@ -321,13 +322,11 @@ describe.skipIf(!reachable)("linear vesting e2e (Yaci devnet)", () => {
       datum: ctx.datum,
       now: cancelNow,
       lockerAddress: ctx.grantor.address,
-      collateralUtxo: (await ctx.grantor.wallet.getCollateral())[0],
+      collateralUtxo: await collateralOf(ctx.grantor),
       utxos: await ctx.grantor.wallet.getUtxos(),
       customSlotConfig: slotConfig,
     });
-    const hash = await ctx.grantor.wallet.submitTx(
-      await ctx.grantor.wallet.signTx(cancelTx, true),
-    );
+    const hash = await signAndSubmit(ctx.grantor, cancelTx);
     await waitForTx(provider, hash);
 
     const outs = await provider.fetchUTxOs(hash);
@@ -355,14 +354,12 @@ describe.skipIf(!reachable)("linear vesting e2e (Yaci devnet)", () => {
       datum: ctx.datum,
       now: claimNow,
       beneficiaryAddress: ctx.beneficiary.address,
-      collateralUtxo: (await ctx.beneficiary.wallet.getCollateral())[0],
+      collateralUtxo: await collateralOf(ctx.beneficiary),
       utxos: await ctx.beneficiary.wallet.getUtxos(),
       customSlotConfig: slotConfig,
       authorizer: { scriptCbor: ALWAYS_TRUE.cbor },
     });
-    const hash = await ctx.beneficiary.wallet.submitTx(
-      await ctx.beneficiary.wallet.signTx(claimTx, true),
-    );
+    const hash = await signAndSubmit(ctx.beneficiary, claimTx);
     await waitForTx(provider, hash);
 
     const continuation = await scriptOutputOf(provider, hash, scriptAddr);
@@ -379,7 +376,11 @@ describe.skipIf(!reachable)("linear vesting e2e (Yaci devnet)", () => {
       recoveryMs: now + 600_000,
       beneficiaryCredential: { kind: "script", hash: REJECT_WITHDRAW.hash },
     });
-    await registerStakeCredential(provider, ctx.beneficiary, REJECT_WITHDRAW.hash);
+    await registerStakeCredential(
+      provider,
+      ctx.beneficiary,
+      REJECT_WITHDRAW.hash,
+    );
 
     const claimNow = await chainNowMs();
     await expect(
@@ -390,14 +391,12 @@ describe.skipIf(!reachable)("linear vesting e2e (Yaci devnet)", () => {
           datum: ctx.datum,
           now: claimNow,
           beneficiaryAddress: ctx.beneficiary.address,
-          collateralUtxo: (await ctx.beneficiary.wallet.getCollateral())[0],
+          collateralUtxo: await collateralOf(ctx.beneficiary),
           utxos: await ctx.beneficiary.wallet.getUtxos(),
           customSlotConfig: slotConfig,
           authorizer: { scriptCbor: REJECT_WITHDRAW.cbor },
         });
-        return ctx.beneficiary.wallet.submitTx(
-          await ctx.beneficiary.wallet.signTx(claimTx, true),
-        );
+        return signAndSubmit(ctx.beneficiary, claimTx);
       })(),
     ).rejects.toThrow();
   });
@@ -461,7 +460,10 @@ describe.skipIf(!reachable)("linear vesting e2e (Yaci devnet)", () => {
     });
     const validityNow = await chainNowMs();
     // bring end_time forward so more appears "vested": continuation datum differs
-    const tampered: VestingDatum = { ...ctx.datum, endTime: ctx.datum.startTime + 1 };
+    const tampered: VestingDatum = {
+      ...ctx.datum,
+      endTime: ctx.datum.startTime + 1,
+    };
 
     await expect(
       rawSpend({

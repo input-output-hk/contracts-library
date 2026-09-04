@@ -22,11 +22,10 @@ import {
   type Data,
   type MeshTxBuilder,
   type UTxO,
+  type LanguageVersion,
 } from "@meshsdk/core";
 
-import type { Credential } from "./types";
-
-export type PlutusVersion = "V1" | "V2" | "V3";
+import type { Credential } from "./common";
 
 /**
  * How to satisfy a **script** credential: invoke its approving script as a
@@ -46,7 +45,7 @@ export interface ScriptAuthorizer {
   /** Redeemer the approving script expects. Defaults to unit (`Constr 0 []`). */
   redeemer?: Data;
   /** Plutus version of the approving script. Default `"V3"`. */
-  version?: PlutusVersion;
+  version?: LanguageVersion;
   /**
    * Escape hatch: you already attached the authorizer to the `txBuilder`
    * yourself, so the library wires nothing. For genuinely custom invocations.
@@ -129,7 +128,7 @@ export function applyAuthorization(
 
 function withdrawalScriptVersion(
   txBuilder: MeshTxBuilder,
-  version: PlutusVersion,
+  version: LanguageVersion,
 ): MeshTxBuilder {
   if (version === "V1") return txBuilder.withdrawalPlutusScriptV1();
   if (version === "V2") return txBuilder.withdrawalPlutusScriptV2();
