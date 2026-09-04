@@ -4,15 +4,15 @@
 
 This protocol is meant to manage the settings of another (a.k.a., "main") protocol.
 
-An instance of this protocol governs a single UTxO (called the "Settings UTxO") that, in its datum, contains the main protocol's settings. This UTxO, uniquely identified by the "Settings NFT" minted at deploy-time, contains a datum with three fields: the current settings, optionally the next settings, and optionally when the next settings will be applied if approved. 
+An instance of this protocol governs a single UTxO (called the "Settings UTxO") that, in its datum, contains the main protocol's settings. This UTxO, uniquely identified by the "Settings NFT" minted at deploy-time, contains a datum with three fields: the current settings, optionally the next settings, and optionally when the next settings will be applied if approved.
 
 The way it works is:
 
 1. The _applier_ creates the first instance of the Settings protocol by minting the "Settings NFT" and locking it in the "Settings UTxO" containing the main protocol settings in its datum.
-1. The main protocol consumes those settings by reading them via reference inputs.
-1. A change is proposed by the _proposer_, which provides the possible next settings and when they will be applied if approved. 
-1. Once the delay has passed, the _applier_ replaces the current settings with the new ones (if it chooses to accept them). Effectively changing the settings for the main protocol.
-1. Once an instance of the protocol is no longer needed, the Settings UTxO can be consumed while burning the NFT permanently.
+2. The main protocol consumes those settings by reading them via reference inputs.
+3. A change is proposed by the _proposer_, which provides the possible next settings and when they will be applied if approved.
+4. Once the delay has passed, the _applier_ replaces the current settings with the new ones (if it chooses to accept them). Effectively changing the settings for the main protocol.
+5. Once an instance of the protocol is no longer needed, the Settings UTxO can be consumed while burning the NFT permanently.
 
 ## 2. Design choices and limitations
 
@@ -105,7 +105,6 @@ The Settings UTxO is uniquely identified by the Settings NFT (§3.c) and locked 
 | `next`       | `Option<Data>` | The proposed next value (if any).                                           |
 | `next_apply` | `Option<Int>`  | POSIX time (milliseconds) at or after which `next` may be applied (if any). |
 
-
 A datum is **well-formed** when `next` and `next_apply` are both `None` or both `Some`. The protocol checks maintain this: launch produces both `None`; `Propose` produces both `Some`; `Apply` returns both `None`. State transitions:
 
 ```
@@ -157,7 +156,6 @@ This transaction deploys the **Settings UTxO**, which holds the main protocol pa
 | **Redeemer**       | spend `Propose { out_ix }`.                                                                                                                                                                                                                                                                                            |
 | **Validity range** | Lower bound **finite**; `now` = lower bound (§5).                                                                                                                                                                                                                                                                      |
 | **Authorization**  | `propose_auth` satisfied.                                                                                                                                                                                                                                                                                              |
-
 
 The spent datum's `next`/`next_apply` are **ignored**: proposing always writes a
 fresh pending pair and thereby supersedes any pending proposal (and resets the
