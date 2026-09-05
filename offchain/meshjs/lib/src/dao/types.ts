@@ -1,0 +1,155 @@
+/**
+ * Off-chain mirror of the on-chain types in `onchain/lib/dao/types.ak`.
+ */
+
+import type { TxInput } from "@meshsdk/core";
+
+import type { Credential } from "../common";
+
+export type { Credential };
+
+/** A stake locked by a proposal interaction (co-sign, creation, or vote). */
+export interface Lock {
+  proposalId: string;
+  /** POSIX ms at which the lock expires. */
+  unlockTime: number;
+  /** The staked-token amount committed by this lock. */
+  stake: bigint;
+}
+
+/** A stake position holds the DAO's staked token under an NFT. */
+export interface StakePositionDatum {
+  owner: Credential;
+  delegatee: Credential | null;
+  locks: Lock[];
+}
+
+/** Actions on a stake position UTxO. */
+export type StakeRedeemer =
+  | { kind: "Deposit" }
+  | { kind: "DelegateTo"; delegatee: Credential | null }
+  | { kind: "Withdraw"; amount: bigint }
+  | { kind: "ClosePosition" }
+  | { kind: "CreateProposal" }
+  | { kind: "CosignProposal"; proposalId: string }
+  | { kind: "VoteProposal"; proposalId: string; votedOption: number };
+
+/** Redeemer for the stake position NFT minting policy. */
+export type StakePositionTokenRedeemer =
+  | { kind: "CreatePosition"; ownerUtxo: TxInput; outIdx: number }
+  | { kind: "CloseStakePosition" };
+
+/** Governance thresholds required at each stage of a proposal's lifecycle. */
+export interface ProposalThresholds {
+  create: bigint;
+  cosign: bigint;
+  accept: bigint;
+  vote: bigint;
+  execute: bigint;
+}
+
+/** Phase durations (POSIX milliseconds) for a proposal's lifecycle. */
+export interface ProposalTimingConfig {
+  draftLength: number;
+  votingLength: number;
+  tallyLength: number;
+}
+
+/** Lifecycle status of a proposal. */
+export type ProposalStatus =
+  | { kind: "Draft"; cosigningStake: bigint }
+  | { kind: "Voting" }
+  | { kind: "Tally"; votes: bigint[] };
+
+/** Immutable proposal state, written once at creation. */
+export interface ProposalDatum {
+  thresholds: ProposalThresholds;
+  timingConfig: ProposalTimingConfig;
+  startTime: number;
+  status: ProposalStatus;
+  /** Ordered list of execution-effect script hashes (one per vote option). */
+  results: string[];
+}
+
+/**
+ * DAO configuration, stored as the settings contract's opaque `current` datum.
+ * Publishes thresholds/timings plus the sibling validator hashes so the
+ * validators can resolve cross-references at runtime.
+ */
+export interface DaoSettings {
+  thresholds: ProposalThresholds;
+  timings: ProposalTimingConfig;
+  /** Hash of the stake validator (also the stake NFT policy id). */
+  stakeValidator: string;
+  /** Hash of the proposal validator (also the proposal NFT policy id). */
+  proposalValidator: string;
+  /** Hash of the vote validator (also the vote NFT policy id). */
+  voteValidator: string;
+}
+
+/** Redeemer for the proposal token minting policy. */
+export type ProposalTokenRedeemer =
+  | { kind: "MintProposal"; results: string[]; outIdx: number }
+  | { kind: "BurnProposal" };
+
+/** Spent proposal UTxO actions. */
+export type ProposalRedeemer =
+  | { kind: "Cosign" }
+  | { kind: "AcceptDraft" }
+  | { kind: "RejectDraft" }
+  | { kind: "EndVotingStage" }
+  | { kind: "TallyVotes" }
+  /**
+   * Closes the poll, declaring which effect script won: a hash executes that
+   * winner's bound effect (a strict winner above the `execute` threshold whose
+   * withdrawal must be present), `null` closes without executing. The proposal
+   * validator checks the declaration against the tally; candidate scripts
+   * verify the closure named them via `am_i_the_winner`.
+   */
+  | { kind: "EndProposal"; winner: string | null };
+
+/** Vote artifact datum. */
+export interface VoteDatum {
+  stakeOwner: Credential;
+  proposal: string;
+  votedOption: number;
+  stake: bigint;
+}
+
+/** Actions on a vote artifact UTxO. */
+export type VoteRedeemer = { kind: "TallyVote" } | { kind: "Cancel" };
+
+/** Redeemer for the vote NFT minting policy. */
+export type VoteTokenRedeemer =
+  | { kind: "MintVote"; outIdx: number }
+  | { kind: "BurnVotes" };
+
+/** Parameters of the `poll_effect` reference candidate (blueprint order). */
+export interface PollEffectParams {
+  /** The proposal validator's own hash (pinned at compile time on-chain). */
+  proposalPolicy: string;
+}
+
+/** Parameters of the `proposal` validator (blueprint order). */
+export interface ProposalParams {
+  stakeTokenPolicy: string;
+  stakeTokenName: string;
+  settingsPolicy: string;
+  settingsTokenName: string;
+}
+
+/** Parameters of the `stake` validator (blueprint order). */
+export interface StakeParams {
+  stakeTokenPolicy: string;
+  stakeTokenName: string;
+  settingsPolicy: string;
+  settingsTokenName: string;
+}
+
+/** Parameters of the `vote` validator (blueprint order). */
+export interface VoteParams {
+  stakeTokenPolicy: string;
+  stakeTokenName: string;
+  settingsPolicy: string;
+  settingsTokenName: string;
+}
