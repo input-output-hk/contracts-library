@@ -251,232 +251,282 @@ The artifact is destroyed exactly once, either at tally time (§5.m) or by cance
 
 ## 5. Transactions
 
-All possible protocol transactions. "The own input" is the contract UTxO being spent; cross-references to sibling inputs/outputs are checked locally and each sibling's own validator re-checks its detailed constraints.
+All possible protocol transactions. Each section below describes one complete, atomic transaction: **5.x.a Scripts executed** names every validator instance the transaction runs (validator, purpose, and redeemer), and **5.x.b Transaction** describes the transaction as a whole, rather than a per-script fraction. When a check belongs to one validator only, the constraints row labels it; otherwise it holds for the transaction as a whole.
+
+Every transaction also resolves the settings UTxO — the reference input holding the settings NFT (§4.a) — to read thresholds, timings, and sibling hashes; it is omitted from the tables for brevity. "The own input" is the contract UTxO being spent; cross-references to sibling inputs/outputs are checked locally and each sibling's own validator re-checks its detailed constraints.
 
 Scripts read the transaction's validity range. The **lower bound** is read as `now` where an action anchors *itself* in time or requires time to have *passed* (creating, pruning locks, "after deadline" checks); the **upper bound** is used where an action must occur *before* a deadline. An "after" check `now >= deadline` on the lower bound is sound because the ledger guarantees `real_slot >= lower_bound`; a "before" check `upper <= deadline` means the transaction is only valid if included before the deadline. Both bounds are required finite wherever they are read; each transaction's **Validity range** row below states which bound it reads.
 
 ### 5.a Create Position
 
+A holder turns a wallet UTxO into a stake position: the position NFT is minted, the position UTxO is created at the stake address, and ownership is established by proof-of-spend of the `owner_utxo`.
+
+#### 5.a.a Scripts executed
+
+- Stake validator with mint purpose and `CreatePosition { owner_utxo, out_idx }` redeemer.
+
+#### 5.a.b Transaction
+
 | | |
 | --- | --- |
 | **Inputs** | The `owner_utxo` (must be spent). Any wallet UTxOs funding the staked tokens. |
 | **Mint** | Exactly one token under the stake policy, name = hash of `owner_utxo`, quantity `1`. |
-| **Outputs** | One position at `out_idx`: address `Script(stake_policy)`, value = NFT + ≥ 1 staked token + lovelace (exactly three assets), inline datum, no reference script. |
-| **Datum** | `StakePositionDatum { owner: payment_credential(owner_utxo), delegatee: None, locks: [] }`. |
-| **Redeemer** | mint `CreatePosition { owner_utxo, out_idx }`. |
+| **Outputs** | One position at `out_idx`: address `Script(stake_policy)`, value = NFT + ≥ 1 staked token + lovelace (exactly three assets), inline datum `StakePositionDatum { owner: payment_credential(owner_utxo), delegatee: None, locks: [] }`, no reference script. |
+| **Validity range** | Unconstrained. |
 | **Authorization** | None. The owner is the payment credential of the consumed `owner_utxo`; ownership is established by proof-of-spend, not a signature. |
 
 ### 5.b Deposit
+
+The owner adds governance tokens to the position (or merely prunes its expired locks); the position continues at the same address.
+
+#### 5.b.a Scripts executed
+
+- Stake validator with spend purpose and `Deposit` redeemer.
+
+#### 5.b.b Transaction
 
 | | |
 | --- | --- |
 | **Inputs** | The position UTxO. |
 | **Outputs** | One continuation at the same address: owner/delegatee unchanged, `locks = prune_expired(locks, now)`, staked token `>=` the spent amount, NFT quantity `1`, exactly three assets. |
-| **Redeemer** | `Deposit`. |
-| **Authorization** | `owner` satisfied. |
 | **Validity range** | Lower bound finite (`now`). |
+| **Authorization** | `owner` satisfied. |
 
 ### 5.c Delegate
+
+The owner sets, changes, or clears the position's delegatee; locks and value pass through untouched.
+
+#### 5.c.a Scripts executed
+
+- Stake validator with spend purpose and `DelegateTo { delegatee }` redeemer.
+
+#### 5.c.b Transaction
 
 | | |
 | --- | --- |
 | **Inputs** | The position UTxO. |
-| **Outputs** | One continuation at the same address: owner unchanged, `delegatee = delegatee` (set, changed, or cleared with `None`), `locks` unchanged (not pruned), value a superset of the spent value (`match(out, own, >=)`). |
-| **Redeemer** | `DelegateTo { delegatee }`. |
-| **Authorization** | `owner` satisfied. |
+| **Outputs** | One continuation at the same address: owner unchanged, `delegatee = delegatee` (set, changed, or cleared with `None`), `locks` unchanged (not pruned). |
 | **Validity range** | Unconstrained. |
+| **Authorization** | `owner` satisfied. |
 
 ### 5.d Withdraw
+
+The owner withdraws free stake — total minus the maximum live lock — from the position; the withdrawn amount may go anywhere.
+
+#### 5.d.a Scripts executed
+
+- Stake validator with spend purpose and `Withdraw { amount }` redeemer.
+
+#### 5.d.b Transaction
 
 | | |
 | --- | --- |
 | **Inputs** | The position UTxO. |
 | **Outputs** | One continuation at the same address: owner/delegatee unchanged, `locks = prune_expired(locks, now)`, staked token `= in_stake - amount`, NFT quantity `1`, exactly three assets. The withdrawn amount may go anywhere. |
-| **Redeemer** | `Withdraw { amount }`. |
-| **Authorization** | `owner` satisfied. |
 | **Validity range** | Lower bound finite (`now`). |
-| **Constraint** | `0 <= amount <= free_stake(in_stake, prune_expired(locks, now))`. |
+| **Authorization** | `owner` satisfied. |
+| **Constraints** | `0 <= amount <= free_stake(in_stake, prune_expired(locks, now))`. |
 
 ### 5.e Close Position
+
+The owner closes the position once all its locks have expired: the position NFT is burned and the remaining stake/ada may go anywhere.
+
+#### 5.e.a Scripts executed
+
+- Stake validator with spend purpose and `ClosePosition` redeemer.
+- Stake validator with mint purpose and `CloseStakePosition` redeemer.
+
+#### 5.e.b Transaction
 
 | | |
 | --- | --- |
 | **Inputs** | The position UTxO. |
 | **Mint** | The position NFT is burned (quantity `-1`). |
 | **Outputs** | No continuation required; remaining stake/ada may go anywhere. |
-| **Redeemer** | `ClosePosition` (and mint `CloseStakePosition`). |
-| **Authorization** | `owner` satisfied. |
 | **Validity range** | Lower bound finite (`now`); **all locks must be expired** (`prune_expired(locks, now) == []`). |
+| **Authorization** | `owner` satisfied. |
 
 ### 5.f Create Proposal
 
-One transaction; the stake and proposal validators both approve it.
+The owner commits the position's stake to a new proposal: a lock freezes the stake until the draft deadline, and a fresh proposal UTxO starts in `Draft` weighted by the position's stake, its NFT named after the position's spent reference.
 
-**Stake side:**
+#### 5.f.a Scripts executed
+
+- Stake validator with spend purpose and `CreateProposal` redeemer.
+- Proposal validator with mint purpose and `MintProposal { results, out_idx }` redeemer.
+
+#### 5.f.b Transaction
 
 | | |
 | --- | --- |
 | **Inputs** | The position UTxO. |
-| **Mint** | Exactly one proposal NFT minted under `proposal_validator`, name = hash of this position's reference, quantity `1`. |
-| **Outputs** | One continuation at the same address: owner/delegatee unchanged, `locks = push(locks, Lock { proposal_id, now + draft_length, in_stake })`, value a superset of the spent value. |
-| **Redeemer** | `CreateProposal`. |
-| **Authorization** | `owner` satisfied. |
-| **Validity range** | Lower bound finite (`now`). |
-| **Constraint** | `in_stake >= settings.thresholds.create`. |
-
-**Proposal side:**
-
-| | |
-| --- | --- |
-| **Inputs** | A stake input holding an NFT under `stake_validator` (spent). |
-| **Mint** | Exactly one token under the proposal policy, name = hash of the stake input's reference, quantity `1`. |
-| **Outputs** | One proposal at `out_idx`: address `Script(proposal_policy)`, value holds the NFT and nothing extra, inline datum, no reference script. |
-| **Datum** | `ProposalDatum { thresholds: settings.thresholds, timing_config: settings.timings, start_time: now, status: Draft { cosigning_stake: staked_amount }, results }`. |
-| **Redeemer** | mint `MintProposal { results, out_idx }`. |
-| **Authorization** | None directly; requires the stake input to be consumed with `CreateProposal` (the stake side enforces owner auth). |
-| **Validity range** | Lower bound finite (`now` = `start_time`). |
-| **Constraint** | `staked_amount >= settings.thresholds.create`. |
+| **Mint** | Exactly one proposal NFT under `proposal_validator`, name = hash of this position's reference, quantity `1`. |
+| **Outputs** | 1. One position continuation at the same address: owner/delegatee unchanged, `locks = push(locks, Lock { proposal_id, now + draft_length, in_stake })`. 2. One proposal at `out_idx`: address `Script(proposal_policy)`, value holds the NFT and nothing extra, inline datum `ProposalDatum { thresholds: settings.thresholds, timing_config: settings.timings, start_time: now, status: Draft { cosigning_stake: staked_amount }, results }`, no reference script. |
+| **Validity range** | Lower bound finite (`now` = proposal `start_time`). |
+| **Authorization** | The position `owner` on the stake spend; the proposal mint has none directly — it requires the stake input to be consumed with `CreateProposal`. |
+| **Constraints** | `in_stake = staked_amount >= settings.thresholds.create` (checked by both validators). |
 
 ### 5.g Cosign
 
-One transaction; the proposal and stake validators both approve it.
+Another holder commits their position's stake to a draft proposal: the proposal's cosigning stake grows and the cosigning position takes its own lock until the draft deadline.
 
-**Proposal side:**
+#### 5.g.a Scripts executed
 
-| | |
-| --- | --- |
-| **Inputs** | The proposal UTxO, and the cosigning stake UTxO (spent). |
-| **Outputs** | One continuation at the same address with status `Draft { cosigning_stake: n + s }` (`s` = the cosigner's staked amount); immutables preserved. |
-| **Redeemer** | `Cosign`. |
-| **Authorization** | None directly; requires the stake input consumed with `CosignProposal { proposal_id }`. |
-| **Validity range** | Upper bound finite and `<= start_time + draft_length`. |
-| **Precondition** | Status is `Draft { cosigning_stake: n }`. |
+- Proposal validator with spend purpose and `Cosign` redeemer.
+- Stake validator with spend purpose and `CosignProposal { proposal_id }` redeemer.
 
-**Stake side:**
+#### 5.g.b Transaction
 
 | | |
 | --- | --- |
-| **Inputs** | The position UTxO, and the proposal UTxO (spent). |
-| **Outputs** | One continuation at the same address: owner/delegatee unchanged, `locks = concat(locks, [Lock { proposal_id, proposal.start_time + proposal.draft_length, in_stake }])`, value a superset of the spent value. |
-| **Redeemer** | `CosignProposal { proposal_id }`. |
-| **Authorization** | `vote_auth` (delegatee if set, else owner). |
-| **Validity range** | Unconstrained (the deadline is enforced by the proposal's `Cosign` side). |
-| **Constraint** | The proposal is `Draft`; `in_stake >= proposal.thresholds.cosign`; the position has no lock for `proposal_id` (`!has_proposal`). |
+| **Inputs** | The proposal UTxO, and the cosigning position UTxO. |
+| **Outputs** | 1. One proposal continuation at the same address with status `Draft { cosigning_stake: n + s }` (`s` = the cosigner's staked amount); immutables preserved. 2. One position continuation at the same address: owner/delegatee unchanged, `locks = concat(locks, [Lock { proposal_id, proposal.start_time + proposal.draft_length, in_stake }])`. |
+| **Validity range** | Upper bound finite and `<= start_time + draft_length` (enforced by the proposal validator; the stake side reads no bound). |
+| **Authorization** | `vote_auth` (delegatee if set, else owner) on the stake spend; the proposal spend has none directly — it requires the stake input consumed with `CosignProposal { proposal_id }`. |
+| **Constraints** | (proposal) Status is `Draft { cosigning_stake: n }`. (stake) The proposal is `Draft`; `in_stake >= proposal.thresholds.cosign`; the position has no lock for `proposal_id` (`!has_proposal`). |
 
 ### 5.h Accept Draft
+
+Once the accumulated cosign stake reaches the accept threshold, anyone can promote the draft to `Voting`.
+
+#### 5.h.a Scripts executed
+
+- Proposal validator with spend purpose and `AcceptDraft` redeemer.
+
+#### 5.h.b Transaction
 
 | | |
 | --- | --- |
 | **Inputs** | The proposal UTxO. |
 | **Outputs** | One continuation at the same address with status `Voting`; immutables preserved. |
-| **Redeemer** | `AcceptDraft`. |
 | **Validity range** | Upper bound finite and `<= start_time + draft_length`. |
-| **Precondition** | Status `Draft { cosigning_stake: n }` with `n >= thresholds.accept`. |
+| **Constraints** | Status `Draft { cosigning_stake: n }` with `n >= thresholds.accept`. |
 
 ### 5.i Reject Draft
+
+After the draft deadline, anyone can reject an unaccepted draft: the proposal NFT is burned and the poll never happens.
+
+#### 5.i.a Scripts executed
+
+- Proposal validator with spend purpose and `RejectDraft` redeemer.
+- Proposal validator with mint purpose and `BurnProposal` redeemer.
+
+#### 5.i.b Transaction
 
 | | |
 | --- | --- |
 | **Inputs** | The proposal UTxO. |
 | **Mint** | The proposal NFT is burned. |
 | **Outputs** | No continuation. |
-| **Redeemer** | `RejectDraft` (and mint `BurnProposal`). |
 | **Validity range** | Lower bound finite and `>= start_time + draft_length`. |
-| **Precondition** | Status `Draft`. |
+| **Constraints** | Status `Draft`. |
 
 ### 5.j Vote
 
-One transaction; the stake and vote validators both approve it.
+A position casts its staked weight on one option of a `Voting` proposal: a vote artifact is minted — named after the position's spent reference, recording the owner, option, and exact staked amount — and the stake is locked until the voting deadline.
 
-**Stake side:**
+#### 5.j.a Scripts executed
 
-| | |
-| --- | --- |
-| **Inputs** | The position UTxO (spent); the proposal UTxO (reference input). |
-| **Mint** | Exactly one vote NFT minted under `vote_validator`, name = hash of this position's reference, quantity `1`. |
-| **Outputs** | One continuation at the same address: owner/delegatee unchanged, `locks = prune_expired(concat(locks, [Lock { proposal_id, start + draft + voting, in_stake }]), now)`, value a superset of the spent value. |
-| **Redeemer** | `VoteProposal { proposal_id, voted_option }` (`voted_option` is ignored here; the vote mint validates it). |
-| **Authorization** | `vote_auth` (delegatee if set, else owner). |
-| **Validity range** | Lower and upper bounds finite; `upper <= start + draft + voting`. |
-| **Constraint** | The proposal is `Voting`; `in_stake >= proposal.thresholds.vote`; no existing lock for `proposal_id`. |
+- Stake validator with spend purpose and `VoteProposal { proposal_id, voted_option }` redeemer.
+- Vote validator with mint purpose and `MintVote { out_idx }` redeemer.
 
-**Vote side:**
+#### 5.j.b Transaction
 
 | | |
 | --- | --- |
-| **Inputs** | A stake input under the stake policy (spent, consumed with `VoteProposal { proposal_id: p_id, voted_option }`). The proposal (reference input) under the proposal policy. |
-| **Mint** | Exactly one token under the vote policy, name = hash of the stake input's reference, quantity `1`. |
-| **Outputs** | One vote artifact at `out_idx`: address `Script(vote_policy)`, value holds the NFT and lovelace, inline datum, no reference script. |
-| **Datum** | `VoteDatum { stake_owner: owner, proposal: p_id, voted_option, stake }` (`owner` from the stake datum, `stake` = the staked amount). |
-| **Redeemer** | mint `MintVote { out_idx }`. |
-| **Constraint** | The proposal is `Voting`; `0 <= voted_option < len(results)`. |
+| **Inputs** | The position UTxO. |
+| **Reference inputs** | The proposal UTxO. |
+| **Mint** | Exactly one vote NFT under `vote_validator`, name = hash of the position's reference, quantity `1`. |
+| **Outputs** | 1. One position continuation at the same address: owner/delegatee unchanged, `locks = prune_expired(concat(locks, [Lock { proposal_id, start + draft + voting, in_stake }]), now)`. 2. One vote artifact at `out_idx`: address `Script(vote_policy)`, value holds the NFT and lovelace, inline datum `VoteDatum { stake_owner: owner, proposal: p_id, voted_option, stake }` (`owner` from the stake datum, `stake` = the staked amount), no reference script. |
+| **Validity range** | Lower and upper bounds finite; `upper <= start + draft + voting` (enforced by the stake validator). |
+| **Authorization** | `vote_auth` (delegatee if set, else owner) on the stake spend; the vote mint has none directly — it requires the stake input consumed with `VoteProposal { proposal_id: p_id, voted_option }`. |
+| **Constraints** | The proposal is `Voting`; `in_stake >= proposal.thresholds.vote`; no existing lock for `proposal_id`; `0 <= voted_option < len(results)` (checked by the vote mint; the stake side ignores `voted_option`). |
 
 ### 5.k Cancel Vote
+
+The vote's recorded owner can cancel the artifact at any time, burning its NFT; the position's stake is freed only when the lock itself expires.
+
+#### 5.k.a Scripts executed
+
+- Vote validator with spend purpose and `Cancel` redeemer.
+- Vote validator with mint purpose and `BurnVotes` redeemer.
+
+#### 5.k.b Transaction
 
 | | |
 | --- | --- |
 | **Inputs** | The vote artifact. |
 | **Mint** | The vote's NFT is burned. |
 | **Outputs** | No continuation; the vote's ada may go anywhere. |
-| **Redeemer** | `Cancel`. |
+| **Validity range** | Unconstrained. |
 | **Authorization** | `stake_owner` (the vote's recorded owner) satisfied. |
 
 `Cancel` is valid **at any time** while the artifact exists as long as the artifact is not consumed by a tally in the same transaction. The tally's burned-count check (§5.m) forbids canceling a vote inside the transaction that counts it without it being counted, so a canceled vote can never influence a tally.
 
 ### 5.l End Voting Stage
 
+After the voting deadline, anyone can freeze the poll into `Tally` with zeroed counters, ready to accumulate vote totals.
+
+#### 5.l.a Scripts executed
+
+- Proposal validator with spend purpose and `EndVotingStage` redeemer.
+
+#### 5.l.b Transaction
+
 | | |
 | --- | --- |
 | **Inputs** | The proposal UTxO. |
 | **Outputs** | One continuation at the same address with status `Tally { votes: [0 × len(results)] }`; immutables preserved. |
-| **Redeemer** | `EndVotingStage`. |
 | **Validity range** | Lower bound finite and `>= start_time + draft_length + voting_length`. |
-| **Precondition** | Status `Voting`. |
+| **Constraints** | Status `Voting`. |
 
 ### 5.m Tally
 
-One transaction; the proposal validator and each consumed vote's validator approve it.
+One or more vote artifacts are consumed in a batch: their stakes are added to the per-option totals, their NFTs are burned, and their lovelace is refunded to their recorded owners.
 
-**Proposal side:**
+#### 5.m.a Scripts executed
+
+- Proposal validator with spend purpose and `TallyVotes` redeemer.
+- Vote validator with spend purpose and `TallyVote` redeemer (one per consumed vote).
+
+#### 5.m.b Transaction
 
 | | |
 | --- | --- |
-| **Inputs** | The proposal UTxO, plus one or more vote UTxOs (spent, consumed with `TallyVote`). |
+| **Inputs** | The proposal UTxO, plus one or more vote UTxOs (each spent with `TallyVote`). |
 | **Mint** | Each consumed vote's NFT is burned (quantity `-1` under the vote policy). |
-| **Outputs** | One continuation at the same address with status `Tally { votes: counted }`; immutables preserved. Each consumed vote's lovelace is refunded to an output whose payment credential is its `stake_owner`, holding **at least** the vote UTxO's lovelace. |
-| **Redeemer** | `TallyVotes`. |
-| **Validity range** | Upper bound finite and `<= start_time + draft_length + voting_length + tally_length`. |
-| **Precondition** | Status `Tally { votes }`; at least one vote consumed; the number of burned vote tokens equals the number of votes counted for *this* proposal. |
+| **Outputs** | 1. One proposal continuation at the same address with status `Tally { votes: counted }`; immutables preserved. 2. Per consumed vote, a refund to an output whose payment credential is its `stake_owner`, holding **at least** the vote UTxO's lovelace. |
+| **Validity range** | Upper bound finite and `<= start_time + draft_length + voting_length + tally_length` (enforced by the proposal validator). |
+| **Constraints** | (proposal) Status `Tally { votes }`; at least one vote consumed; the number of burned vote tokens equals the number of votes counted for *this* proposal. (vote, each) The proposal input is located by its NFT among the spent inputs, and its payment credential must hash to `proposal_policy`. |
 
 Votes whose recorded `voted_option` falls outside `0 .. len(results) - 1` are consumed and burned but their stake is **silently dropped** from the tally. `MintVote` already rejects such options, so this is defense in depth against hand-forged artifacts.
 
-**Vote side** (per consumed vote):
-
-| | |
-| --- | --- |
-| **Inputs** | The vote artifact, and the proposal UTxO (spent, consumed with `TallyVotes`). The proposal input is located by its NFT among the spent inputs, and its payment credential must hash to `proposal_policy`. |
-| **Mint** | The vote's NFT is burned. |
-| **Redeemer** | `TallyVote`. |
-| **Authorization** | None directly; delegated to the proposal's `TallyVotes`. |
-
 ### 5.n End Proposal
+
+After the tally deadline the poll closes: the strict winner is declared, the proposal NFT is burned, and — if the `execute` threshold is met — the winning effect script runs as a reward withdrawal.
+
+#### 5.n.a Scripts executed
+
+- Proposal validator with spend purpose and `EndProposal { winner }` redeemer.
+- Proposal validator with mint purpose and `BurnProposal` redeemer.
+- (If `winner = Some(effect)`.) Effect script with withdraw purpose (`withdraw-0`), §5.o.
+
+#### 5.n.b Transaction
 
 | | |
 | --- | --- |
 | **Inputs** | The proposal UTxO. |
 | **Mint** | The proposal NFT is burned (quantity `-1`). |
 | **Outputs** | No continuation. |
-| **Redeemer** | `EndProposal { winner }` (and mint `BurnProposal`). |
-| **Validity range** | Lower bound finite and `>= start_time + draft_length + voting_length + tally_length`. |
 | **Withdrawals** | If `winner = Some(effect)`, a withdrawal keyed by `Script(effect)` must be present (the effect runs). |
-
-The declared `winner` must match the tally: the **strict winner** of `votes` (a unique option with the highest total and no tie, total `> 0`); if that total is `>= thresholds.execute`, the expected effect is `results[option]`, otherwise `None` (no outcome qualifies for execution). `winner` must equal this expected value exactly. Ties and zero votes yield no winner.
+| **Validity range** | Lower bound finite and `>= start_time + draft_length + voting_length + tally_length`. |
+| **Constraints** | `winner` must equal the expected value exactly: the **strict winner** of `votes` (a unique option with the highest total and no tie, total `> 0`); if that total is `>= thresholds.execute`, the expected effect is `results[option]`, otherwise `None` (no outcome qualifies for execution). Ties and zero votes yield no winner. |
 
 Losing candidates are **not** forced to stay silent: nothing forbids a withdrawal keyed by a losing effect script in the same transaction. Guarding against an illegitimate claim of victory is each effect script's own job via `am_i_the_winner` (§5.o).
 
 ### 5.o Run Effect
 
-An effect script runs as a reward withdrawal (`withdraw-0`). The reference `poll_effect` checks `am_i_the_winner`: **exactly one** input carrying an NFT under `proposal_policy` **and** sitting at payment credential `Script(proposal_policy)` must be consumed with `EndProposal { winner: Some(own_hash) }`. The shape check defeats spoofed proposal UTxOs (right token, wrong address) and rejects transactions closing two polls at once; any other redeemer on that input (e.g. a mid-transition `TallyVotes`) also fails. Additional business logic composes with `and`.
+The same transaction as End Proposal (§5.n), from the effect script's point of view: an effect script runs as a reward withdrawal (`withdraw-0`). The reference candidate script `poll_effect` checks `am_i_the_winner`: **exactly one** input carrying an NFT under `proposal_policy` **and** sitting at payment credential `Script(proposal_policy)` must be consumed with `EndProposal { winner: Some(own_hash) }`. The shape check defeats spoofed proposal UTxOs (right token, wrong address) and rejects transactions closing two polls at once; any other redeemer on that input (e.g. a mid-transition `TallyVotes`) also fails. Additional business logic composes with `and`.
 
 `proposal_policy` is **pinned at compile time** on purpose: deriving it from transaction data would let anyone forge an approving poll under their own proposal. Effect scripts must therefore be parameterized per deployed proposal validator.
 
