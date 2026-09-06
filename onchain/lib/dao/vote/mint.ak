@@ -8,7 +8,7 @@ use dao/types.{
   VoteProposal,
 }
 use dao/utils.{
-  find_input_by_policy, nft_name_from_ref, single_minted, spend_redeemer,
+  find_input_by_policy, get_unique_token_name, nft_name_from_ref, spend_redeemer,
 }
 
 /// Validate minting a vote NFT (`MintVote`).
@@ -31,7 +31,7 @@ pub fn validate_mint_vote(
 ) -> Bool {
   let Transaction { inputs, reference_inputs, outputs, mint, .. } = self
 
-  expect (vote_name, 1) = single_minted(mint, own_policy)
+  let vote_name = get_unique_token_name(mint, own_policy)
 
   let stake_input = find_input_by_policy(inputs, stake_policy)
 

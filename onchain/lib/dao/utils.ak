@@ -11,22 +11,13 @@ use cardano/transaction.{
 use dao/types.{DaoSettings}
 use settings/utils.{get_settings_datum}
 
-/// The single asset name held under `policy` in `value`. Fails unless there is
-/// exactly one token of that policy (the NFT convention used throughout the DAO).
-pub fn single_nft_name(value: Value, policy: PolicyId) -> AssetName {
-  expect [Pair(name, _)] = value
+/// Get the AssetName of the only token of a value under `policy`.
+/// Fails unless there's exactly one (quantity == 1) Token for that policy.
+pub fn get_unique_token_name(value: Value, policy: PolicyId) -> AssetName {
+  expect [Pair(name, 1)] = value
     |> assets.tokens(policy)
     |> dict.to_pairs()
   name
-}
-
-/// The single mint entry under `policy` as `(name, quantity)`. Fails unless
-/// exactly one token of that policy is minted or burned.
-pub fn single_minted(mint: Value, policy: PolicyId) -> (AssetName, Int) {
-  expect [Pair(name, quantity)] = mint
-    |> assets.tokens(policy)
-    |> dict.to_pairs()
-  (name, quantity)
 }
 
 /// The unique continuation output at `own_addr`, if any.

@@ -8,7 +8,7 @@ use cardano/transaction.{InlineDatum, Output, Transaction}
 use dao/types.{
   CreateProposal, DaoSettings, ProposalDatum, ProposalStatus, StakeRedeemer,
 }
-use dao/utils.{proposal_token_name, single_minted, spend_redeemer}
+use dao/utils.{get_unique_token_name, proposal_token_name, spend_redeemer}
 
 /// Validate the mint of a proposal NFT: the first step of creating a proposal.
 ///
@@ -43,8 +43,8 @@ pub fn validate_create_proposal(
   let token_name = proposal_token_name(stake_input.output_reference)
 
   let correct_mint = {
-    let (minted_name, quantity) = single_minted(mint, own_policy)
-    quantity == 1 && minted_name == token_name
+    let minted_name = get_unique_token_name(mint, own_policy)
+    minted_name == token_name
   }
 
   let staked_amount = assets.quantity_of(
