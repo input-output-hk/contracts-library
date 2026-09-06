@@ -9,8 +9,8 @@ use cardano/transaction.{
 use dao/locks.{Lock, free_stake, has_proposal, prune_expired}
 use dao/types.{DaoSettings, ProposalDatum, ProposalStatus, StakePositionDatum}
 use dao/utils.{
-  find_continuation_output, nft_name_from_ref, proposal_token_name,
-  single_nft_name,
+  find_continuation_output, get_unique_token_name, nft_name_from_ref,
+  proposal_token_name,
 }
 
 /// Spending logic for a stake position UTxO.
@@ -34,7 +34,7 @@ fn position(
   let own_input = resolve_input(inputs, own_ref)
   let Output { address: own_addr, value: own_value, .. } = own_input
   expect Script(own_hash) = own_addr.payment_credential
-  let nft = single_nft_name(own_value, own_hash)
+  let nft = get_unique_token_name(own_value, own_hash)
   let in_stake = quantity_of(own_value, staked_token_policy, staked_token_name)
   (own_addr, own_value, own_hash, nft, in_stake)
 }

@@ -15,7 +15,7 @@ use dao/types.{
   CosignProposal, ProposalDatum, ProposalStatus, StakeRedeemer, VoteDatum,
 }
 use dao/utils.{
-  find_continuation_output, find_input_by_policy, single_nft_name,
+  find_continuation_output, find_input_by_policy, get_unique_token_name,
   spend_redeemer,
 }
 
@@ -30,7 +30,7 @@ fn proposal_own(
   let own_input = resolve_input(self.inputs, own_ref)
   let own_addr = own_input.address
   expect Script(own_hash) = own_addr.payment_credential
-  let p_id = single_nft_name(own_input.value, own_hash)
+  let p_id = get_unique_token_name(own_input.value, own_hash)
   (own_addr, own_hash, p_id)
 }
 

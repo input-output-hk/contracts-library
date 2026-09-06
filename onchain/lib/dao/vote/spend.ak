@@ -3,7 +3,7 @@ use cardano/address.{Script}
 use cardano/assets.{PolicyId, quantity_of}
 use cardano/transaction.{OutputReference, Transaction, find_input}
 use dao/types.{ProposalRedeemer, TallyVotes, VoteDatum}
-use dao/utils.{find_proposal_input, single_nft_name, spend_redeemer}
+use dao/utils.{find_proposal_input, get_unique_token_name, spend_redeemer}
 
 /// Spending logic for a vote artifact UTxO.
 ///
@@ -19,7 +19,7 @@ fn nft_burned(self: Transaction, own_ref: OutputReference) -> Bool {
   let Transaction { inputs, mint, .. } = self
   expect Some(own_input) = find_input(inputs, own_ref)
   expect Script(own_hash) = own_input.output.address.payment_credential
-  let own_nft = single_nft_name(own_input.output.value, own_hash)
+  let own_nft = get_unique_token_name(own_input.output.value, own_hash)
   quantity_of(mint, own_hash, own_nft) == -1
 }
 
