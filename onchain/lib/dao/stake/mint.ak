@@ -6,7 +6,7 @@ use cardano/transaction.{
   InlineDatum, Output, OutputReference, Transaction, find_input,
 }
 use dao/types.{StakePositionDatum}
-use dao/utils.{get_unique_token_name, nft_name_from_ref}
+use dao/utils.{get_unique_token_name, token_name_from_ref}
 
 /// Validate minting a stake position NFT (`CreatePosition`).
 ///
@@ -24,7 +24,7 @@ pub fn validate_create_position(
 ) -> Bool {
   let Transaction { inputs, outputs, mint, .. } = self
 
-  let stake_nft_name = nft_name_from_ref(owner_utxo)
+  let stake_nft_name = token_name_from_ref(owner_utxo)
 
   let correct_mint = {
     let minted_token_name = get_unique_token_name(mint, own_policy)

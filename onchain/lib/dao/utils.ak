@@ -54,18 +54,12 @@ pub fn find_input_by_policy(inputs: List<Input>, policy: PolicyId) -> Input {
   input
 }
 
-/// A unique NFT name derived from a consumed output reference. Because an
-/// output reference is spent at most once, hashing it yields a globally unique,
-/// unforgeable token name.
-pub fn nft_name_from_ref(ref: OutputReference) -> AssetName {
+/// A unique Token name derived from a consumed output reference. Because an
+/// output reference is spent at most once, forcing the policy to use its hashing
+/// as AssetName and mint at most one of it while consuming the output in the
+/// same transaction, we can generate an NFT
+pub fn token_name_from_ref(ref: OutputReference) -> AssetName {
   blake2b_256(builtin.serialise_data(ref))
-}
-
-/// The proposal token name: a blake2b-256 hash of the creating stake UTxO's
-/// output reference. Because a spent output reference can never be consumed
-/// again, every proposal NFT is globally unique.
-pub fn proposal_token_name(stake_ref: OutputReference) -> AssetName {
-  nft_name_from_ref(stake_ref)
 }
 
 /// Locate the spent proposal UTxO among the inputs by its NFT.

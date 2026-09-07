@@ -8,7 +8,7 @@ use dao/types.{
   VoteProposal,
 }
 use dao/utils.{
-  find_input_by_policy, get_unique_token_name, nft_name_from_ref, spend_redeemer,
+  find_input_by_policy, get_unique_token_name, token_name_from_ref, spend_redeemer,
 }
 
 /// Validate minting a vote NFT (`MintVote`).
@@ -73,7 +73,7 @@ pub fn validate_mint_vote(
   and {
     proposal_voting,
     valid_option,
-    vote_name == nft_name_from_ref(stake_input.output_reference),
+    vote_name == token_name_from_ref(stake_input.output_reference),
     hash == own_policy,
     has_nft_strict(vote_output.value, own_policy, vote_name),
     vote_output.reference_script == None,
