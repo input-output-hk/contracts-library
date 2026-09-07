@@ -46,7 +46,7 @@ validator vote(
   ) {
     expect Some(vote_datum) = datum
     when redeemer is {
-      TallyVote -> {
+      TallyVote { out_idx } -> {
         let settings = get_dao_settings(
           self,
           settings_policy,
@@ -55,6 +55,7 @@ validator vote(
         validate_vote_tally(
           settings.proposal_validator,
           vote_datum,
+          out_idx,
           own_ref,
           self,
         )

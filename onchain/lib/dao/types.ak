@@ -112,7 +112,9 @@ pub type VoteDatum {
 
 /// Actions on a vote artifact UTxO.
 pub type VoteRedeemer {
-  TallyVote
+  /// Tally the vote for the associated proposal. The `out_idx` specifies the
+  /// index of the output where the refunded minUTxO should be sent.
+  TallyVote { out_idx: Int }
   Cancel
 }
 

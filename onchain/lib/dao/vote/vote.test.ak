@@ -140,6 +140,18 @@ fn vote_utxo(d: VoteDatum) -> Input {
   }
 }
 
+/// The refund output a tallying transaction must provide for this vote:
+/// paid to the vote's recorded `stake_owner`, tagged with the vote's own
+/// output reference as inline datum, and holding nothing but lovelace.
+fn refund_output() -> Output {
+  Output {
+    address: from_script(voter_hash),
+    value: assets.from_lovelace(2_000_000),
+    datum: InlineDatum(vote_ref()),
+    reference_script: None,
+  }
+}
+
 // --------------------------------------------------------------- spend a vote
 
 test vote_spend_ok() {
@@ -149,10 +161,107 @@ test vote_spend_ok() {
   let tx = Transaction {
     ..placeholder,
     inputs: [proposal_in, vote_utxo(d)],
+    outputs: [refund_output()],
     mint: assets.from_asset(vote_policy, vote_name(), -1),
     redeemers: [Pair(Spend(proposal_ref()), tally_r)],
   }
-  validate_vote_tally(proposal_policy, d, stake_ref(), tx)
+  validate_vote_tally(proposal_policy, d, 0, stake_ref(), tx)
+}
+
+test rejects_tally_refund_wrong_address() {
+  // the refund must go to the vote's recorded stake owner
+  let d = vote_datum()
+  let tally_r: Data = TallyVotes
+  let proposal_in = proposal_utxo(ProposalStatus.Tally { votes: [] })
+  let wrong = Output { ..refund_output(), address: from_script(stake_hash) }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [proposal_in, vote_utxo(d)],
+    outputs: [wrong],
+    mint: assets.from_asset(vote_policy, vote_name(), -1),
+    redeemers: [Pair(Spend(proposal_ref()), tally_r)],
+  }
+  !validate_vote_tally(proposal_policy, d, 0, stake_ref(), tx)
+}
+
+test rejects_tally_refund_below_owed() {
+  // the refund must hold at least the vote UTxO's lovelace
+  let d = vote_datum()
+  let tally_r: Data = TallyVotes
+  let proposal_in = proposal_utxo(ProposalStatus.Tally { votes: [] })
+  let owed = 1_000_000
+  let vote_in = Input {
+    ..vote_utxo(d),
+    output: Output {
+      ..vote_utxo(d).output,
+      value: assets.from_lovelace(owed)
+        |> assets.add(vote_policy, vote_name(), 1),
+    },
+  }
+  let short = Output {
+    ..refund_output(),
+    value: assets.from_lovelace(owed - 1),
+  }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [proposal_in, vote_in],
+    outputs: [short],
+    mint: assets.from_asset(vote_policy, vote_name(), -1),
+    redeemers: [Pair(Spend(proposal_ref()), tally_r)],
+  }
+  !validate_vote_tally(proposal_policy, d, 0, stake_ref(), tx)
+}
+
+test rejects_tally_refund_with_extra_tokens() {
+  // the refund output must carry nothing but lovelace
+  let d = vote_datum()
+  let tally_r: Data = TallyVotes
+  let proposal_in = proposal_utxo(ProposalStatus.Tally { votes: [] })
+  let padded = Output {
+    ..refund_output(),
+    value: assets.from_lovelace(2_000_000)
+      |> assets.add(gov_policy, gov_name, 1),
+  }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [proposal_in, vote_utxo(d)],
+    outputs: [padded],
+    mint: assets.from_asset(vote_policy, vote_name(), -1),
+    redeemers: [Pair(Spend(proposal_ref()), tally_r)],
+  }
+  !validate_vote_tally(proposal_policy, d, 0, stake_ref(), tx)
+}
+
+test rejects_tally_refund_wrong_tag() {
+  // the refund output must be tagged with the vote's own output reference
+  let d = vote_datum()
+  let tally_r: Data = TallyVotes
+  let proposal_in = proposal_utxo(ProposalStatus.Tally { votes: [] })
+  let untagged = Output { ..refund_output(), datum: NoDatum }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [proposal_in, vote_utxo(d)],
+    outputs: [untagged],
+    mint: assets.from_asset(vote_policy, vote_name(), -1),
+    redeemers: [Pair(Spend(proposal_ref()), tally_r)],
+  }
+  !validate_vote_tally(proposal_policy, d, 0, stake_ref(), tx)
+}
+
+test rejects_tally_refund_out_of_range() fail {
+  // out_idx must point at an existing output: the validator crashes on an
+  // out-of-bounds index, failing the transaction
+  let d = vote_datum()
+  let tally_r: Data = TallyVotes
+  let proposal_in = proposal_utxo(ProposalStatus.Tally { votes: [] })
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [proposal_in, vote_utxo(d)],
+    outputs: [refund_output()],
+    mint: assets.from_asset(vote_policy, vote_name(), -1),
+    redeemers: [Pair(Spend(proposal_ref()), tally_r)],
+  }
+  validate_vote_tally(proposal_policy, d, 3, stake_ref(), tx)
 }
 
 test rejects_vote_spend_without_tally() {
@@ -165,7 +274,7 @@ test rejects_vote_spend_without_tally() {
     inputs: [proposal_in, vote_utxo(d)],
     redeemers: [Pair(Spend(proposal_ref()), other_r)],
   }
-  !validate_vote_tally(proposal_policy, d, stake_ref(), tx)
+  !validate_vote_tally(proposal_policy, d, 0, stake_ref(), tx)
 }
 
 test rejects_vote_spend_transferring_nft() {
@@ -182,10 +291,11 @@ test rejects_vote_spend_transferring_nft() {
   let tx = Transaction {
     ..placeholder,
     inputs: [proposal_in, vote_utxo(d)],
-    outputs: [transfer],
+    outputs: [refund_output(), transfer],
+    mint: assets.from_asset(vote_policy, vote_name(), 1),
     redeemers: [Pair(Spend(proposal_ref()), tally_r)],
   }
-  !validate_vote_tally(proposal_policy, d, stake_ref(), tx)
+  !validate_vote_tally(proposal_policy, d, 0, stake_ref(), tx)
 }
 
 test rejects_vote_spend_wrong_proposal_address() {
@@ -200,9 +310,10 @@ test rejects_vote_spend_wrong_proposal_address() {
   let tx = Transaction {
     ..placeholder,
     inputs: [bad_proposal, vote_utxo(d)],
+    outputs: [refund_output()],
     redeemers: [Pair(Spend(proposal_ref()), tally_r)],
   }
-  !validate_vote_tally(proposal_policy, d, stake_ref(), tx)
+  !validate_vote_tally(proposal_policy, d, 0, stake_ref(), tx)
 }
 
 // ----------------------------------------------------------------- mint votes
