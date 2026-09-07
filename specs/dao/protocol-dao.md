@@ -103,9 +103,9 @@ Each transaction's **Validity range** row (§5) states which bound is used for t
 | Vote NFT | vote validator hash | hash of the voting stake UTxO's reference | The vote artifact UTxO. |
 | Settings NFT | `settings_policy` | `settings_token_name` | The settings UTxO (§4.a). |
 
-- **Naming rule.** A token name is `blake2b_256(serialise(<OutputReference>))`: hashing a *consumed* output reference yields a globally unique, unforgeable name.
-- **Uniqueness consequences.** Because the reference is consumed once, it can never be minted again: every proposal and vote NFT name is globally unique and unforgeable.
-- **NFT-quantity strictness.** Proposal, stake and vote continuation/creation outputs must hold **exactly one** own-policy NFT.
+- **Naming rule:** A token name is `blake2b_256(serialise(<OutputReference>))`. Hashing a *consumed* output reference yields a globally unique, unforgeable name.
+- **Uniqueness consequences:** Because the reference is consumed once, it can never be minted again: every proposal and vote NFT name is globally unique and unforgeable.
+- **NFT-quantity strictness:** Proposal, stake, and vote continuation/creation outputs must hold **exactly one** own-policy NFT.
 
 ### 3.d Validators
 
