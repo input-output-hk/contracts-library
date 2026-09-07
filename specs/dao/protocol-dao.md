@@ -215,7 +215,7 @@ Datum (inline, on the proposal address):
 | `thresholds` | `ProposalThresholds` | Copied from settings at creation; immutable thereafter. |
 | `timing_config` | `ProposalTimingConfig` | Copied from settings at creation; immutable. |
 | `start_time` | `Int` | POSIX ms of creation (the create transaction's validity lower bound). |
-| `status` | `ProposalStatus` | The only mutable field. |
+| `status` | `ProposalStatus` | Proposal's current status. The only mutable field. |
 | `results` | `List<ScriptHash>` | Per-option effect script hash; index = option id. |
 
 `ProposalStatus` is the lifecycle state machine:
