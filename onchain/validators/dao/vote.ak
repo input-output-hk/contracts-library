@@ -45,15 +45,20 @@ validator vote(
     self: Transaction,
   ) {
     expect Some(vote_datum) = datum
-    let settings = get_dao_settings(self, settings_policy, settings_token_name)
     when redeemer is {
-      TallyVote ->
+      TallyVote -> {
+        let settings = get_dao_settings(
+          self,
+          settings_policy,
+          settings_token_name,
+        )
         validate_vote_tally(
           settings.proposal_validator,
           vote_datum,
           own_ref,
           self,
         )
+      }
       Cancel -> validate_vote_cancel(vote_datum, own_ref, self)
     }
   }

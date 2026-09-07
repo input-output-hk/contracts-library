@@ -47,9 +47,13 @@ validator proposal(
     self: Transaction,
   ) {
     expect Some(proposal_datum) = datum
-    let settings = get_dao_settings(self, settings_policy, settings_token_name)
     when redeemer is {
-      Cosign ->
+      Cosign -> {
+        let settings = get_dao_settings(
+          self,
+          settings_policy,
+          settings_token_name,
+        )
         validate_cosign(
           settings.stake_validator,
           staked_token_policy,
@@ -58,16 +62,23 @@ validator proposal(
           own_ref,
           self,
         )
+      }
       AcceptDraft -> validate_accept_draft(proposal_datum, own_ref, self)
       RejectDraft -> validate_reject_draft(proposal_datum, own_ref, self)
       EndVotingStage -> validate_end_voting_stage(proposal_datum, own_ref, self)
-      TallyVotes ->
+      TallyVotes -> {
+        let settings = get_dao_settings(
+          self,
+          settings_policy,
+          settings_token_name,
+        )
         validate_tally_votes(
           settings.vote_validator,
           proposal_datum,
           own_ref,
           self,
         )
+      }
       EndProposal { winner } ->
         validate_end_proposal(winner, proposal_datum, own_ref, self)
     }

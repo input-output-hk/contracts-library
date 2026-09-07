@@ -177,7 +177,7 @@ Each validator's UTxO sits at an address whose payment credential is `Script(pol
 
 ### 4.a Settings UTxO
 
-Each DAO action resolves the settings UTxO (the reference input holding `settings_token_name` under `settings_policy`) and casts its inline datum's `current` field (an opaque `Data` in the settings contract) to:
+The actions that read governance parameters resolve the settings UTxO (the reference input holding `settings_token_name` under `settings_policy`) and cast its inline datum's `current` field (an opaque `Data` in the settings contract) to:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -261,7 +261,7 @@ The artifact is destroyed exactly once, either at tally time (§5.m) or by cance
 
 All possible protocol transactions. Each section below describes one complete, atomic transaction: **5.x.a Scripts executed** names every validator instance the transaction runs (validator, purpose, and redeemer), and **5.x.b Transaction** describes the transaction as a whole, rather than a per-script fraction. When a check belongs to one validator only, the constraints row labels it; otherwise it holds for the transaction as a whole.
 
-Every transaction also resolves the settings UTxO — the reference input holding the settings NFT (§4.a) — to read thresholds, timings, and sibling hashes; it is omitted from the tables for brevity. "The own input" is the contract UTxO being spent; cross-references to sibling inputs/outputs are checked locally and each sibling's own validator re-checks its detailed constraints.
+Only actions that read governance parameters resolve the settings UTxO — the reference input holding the settings NFT (§4.a) — to read thresholds, timings, and sibling hashes: **Create Proposal (5.f), Cosign (5.g), Vote (5.j), Tally (5.m)**. The remaining transactions (position lifecycle 5.a–5.e, Accept Draft 5.h, Reject Draft 5.i, Cancel Vote 5.k, End Voting Stage 5.l, End Proposal 5.n) require no settings UTxO; this reference input is omitted from the tables for brevity. "The own input" is the contract UTxO being spent; cross-references to sibling inputs/outputs are checked locally and each sibling's own validator re-checks its detailed constraints.
 
 Scripts read the transaction's validity range. The **lower bound** is read as `now` where an action anchors *itself* in time or requires time to have *passed* (creating, pruning locks, "after deadline" checks); the **upper bound** is used where an action must occur *before* a deadline. Both bounds are required to be finite wherever they are read; each transaction's **Validity range** row below states which bound it reads.
 
@@ -551,7 +551,7 @@ The effect script runs as a reward withdrawal (`withdraw-0`). The reference cand
 
 ### 6.a Assumptions
 
-- **Settings authority is trusted.** The DAO reads its governance parameters and sibling hashes from the settings UTxO's `current` datum, located by its NFT. A party able to change settings can change thresholds/timings/sibling hashes. A malformed `current` makes all DAO protocol transactions fail. Halting the protocol until fixed.
+- **Settings authority is trusted.** The DAO reads its governance parameters and sibling hashes from the settings UTxO's `current` datum, located by its NFT. A party able to change settings can change thresholds/timings/sibling hashes. A malformed `current` makes every settings-reading action fail (Create Proposal, Cosign, Vote, Tally, §5); actions that do not read settings keep working. Halting the affected actions until fixed.
 - **Create threshold is live; the rest are snapshotted.** `settings.thresholds.create` is read live at creation; `cosign`/`accept`/`vote`/`execute` and the timings are copied into the proposal at creation and frozen. Changing settings mid-lifecycle does not affect successful transactions of an already-created proposal.
 - **One proposal tally per transaction.** `TallyVotes` requires the count of burned vote tokens to equal the votes counted for *this* proposal, which precludes tallying two proposals in one transaction (and precludes a `Cancel` burn inside a tallying transaction, §5.k).
 - **Vote cancellation has no deadline.** `Cancel` is authorized by the vote's recorded `stake_owner` at any time (§5.k), so a voter can retract a vote mid-voting — freeing the position's stake only at the lock's own expiry, not at cancel time.

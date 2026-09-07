@@ -44,7 +44,6 @@ validator stake(
     self: Transaction,
   ) {
     expect Some(stake_datum) = datum
-    let settings = get_dao_settings(self, settings_policy, settings_token_name)
     when redeemer is {
       Deposit ->
         validate_stake_deposit(
@@ -80,7 +79,12 @@ validator stake(
           own_ref,
           self,
         )
-      CreateProposal ->
+      CreateProposal -> {
+        let settings = get_dao_settings(
+          self,
+          settings_policy,
+          settings_token_name,
+        )
         validate_stake_create_proposal(
           settings,
           staked_token_policy,
@@ -89,7 +93,13 @@ validator stake(
           own_ref,
           self,
         )
-      CosignProposal { proposal_id } ->
+      }
+      CosignProposal { proposal_id } -> {
+        let settings = get_dao_settings(
+          self,
+          settings_policy,
+          settings_token_name,
+        )
         validate_stake_cosign(
           settings,
           staked_token_policy,
@@ -99,7 +109,13 @@ validator stake(
           own_ref,
           self,
         )
-      VoteProposal { proposal_id, voted_option: _ } ->
+      }
+      VoteProposal { proposal_id, voted_option: _ } -> {
+        let settings = get_dao_settings(
+          self,
+          settings_policy,
+          settings_token_name,
+        )
         validate_stake_vote(
           settings,
           staked_token_policy,
@@ -109,6 +125,7 @@ validator stake(
           own_ref,
           self,
         )
+      }
     }
   }
 
