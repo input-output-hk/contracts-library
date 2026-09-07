@@ -5,7 +5,7 @@ use aiken/crypto.{ScriptHash}
 use aiken/interval.{Finite}
 use cardano/address.{Address, Script}
 use cardano/assets.{
-  AssetName, PolicyId, from_asset, has_any_nft, lovelace_of, match, quantity_of,
+  AssetName, PolicyId, from_asset, has_any_nft, match, quantity_of,
 }
 use cardano/transaction.{
   InlineDatum, Input, Output, OutputReference, Transaction, resolve_input,
@@ -134,22 +134,16 @@ pub fn validate_tally_votes(
   expect ProposalStatus.Tally { votes } = datum.status
   expect Finite(upper) = validity_range.upper_bound.bound_type
   let cont = continuation_datum(outputs, own_addr, own_hash, p_id)
-  let (counted, vote_count, refunds_ok) = fold_votes(
-    vote_policy,
-    p_id,
-    inputs,
-    outputs,
-    votes,
-  )
+  let (counted, vote_count) = fold_votes(vote_policy, p_id, inputs, votes)
   let burned = mint |> assets.tokens(vote_policy) |> dict.to_pairs()
   let tally_end = datum.start_time + datum.timing_config.draft_length + datum.timing_config.voting_length + datum.timing_config.tally_length
   and {
     upper <= tally_end,
-    // every consumed vote is refunded to its owner and its NFT burned; the
-    // number of burns must match the votes consumed so none slip through
+    // every consumed vote's NFT is burned; the number of burns must match
+    // the votes counted for this proposal so none slip through (each vote
+    // validator enforces its own lovelace refund)
     vote_count > 0,
     list.length(burned) == vote_count,
-    refunds_ok,
     cont.status == ProposalStatus.Tally { votes: counted },
     immutables_ok(cont, datum),
   }
@@ -219,38 +213,23 @@ fn immutables_ok(cont: ProposalDatum, datum: ProposalDatum) -> Bool {
 }
 
 /// Fold the transaction inputs once: each consumed vote is decoded exactly
-/// once, then (if it belongs to this proposal) tallied, counted, and checked
-/// for its lovelace refund. Returns (tally, vote_count, refunds_ok).
+/// once, then (if it belongs to this proposal) tallied and counted. Returns (tally, vote_count).
 fn fold_votes(
   vote_policy: PolicyId,
   p_id: AssetName,
   inputs: List<Input>,
-  outputs: List<Output>,
   prior: List<Int>,
-) -> (List<Int>, Int, Bool) {
+) -> (List<Int>, Int) {
   list.reduce(
     inputs,
-    (prior, 0, True),
+    (prior, 0),
     fn(acc, input) {
-      let (tally, count, refunds_ok) = acc
+      let (tally, count) = acc
       if has_any_nft(input.output.value, vote_policy) {
         expect InlineDatum(d) = input.output.datum
         expect vote: VoteDatum = d
         if vote.proposal == p_id {
-          let owed = lovelace_of(input.output.value)
-          let refunded = list.any(
-            outputs,
-            fn(o) {
-              o.address.payment_credential == vote.stake_owner && lovelace_of(
-                o.value,
-              ) >= owed
-            },
-          )
-          (
-            upsert(tally, vote.voted_option, vote.stake),
-            count + 1,
-            refunds_ok && refunded,
-          )
+          (upsert(tally, vote.voted_option, vote.stake), count + 1)
         } else {
           acc
         }

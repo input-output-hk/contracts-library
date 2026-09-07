@@ -166,7 +166,7 @@ Each validator's **own hash is its NFT policy ID and its address payment credent
 
 | Redeemer | Action |
 | --- | --- |
-| `TallyVote` | Consume a vote as part of tallying its proposal. |
+| `TallyVote { out_idx }` | Consume a vote as part of tallying its proposal, declaring the index of the output where its lovelace refund must go. |
 | `Cancel` | Owner cancels the vote before tally (burns its NFT). |
 
 **Effect scripts** (`poll_effect` reference): a `withdraw` endpoint under the withdraw-0 convention whose redeemer is entirely private to the script (`Data` in the reference). The protocol never inspects it.
@@ -501,11 +501,11 @@ One or more vote artifacts are consumed in a batch: their stakes are added to th
 
 | | |
 | --- | --- |
-| **Inputs** | The proposal UTxO, plus one or more vote UTxOs (each spent with `TallyVote`). |
+| **Inputs** | The proposal UTxO, plus one or more vote UTxOs (each spent with `TallyVote { out_idx }`). |
 | **Mint** | Each consumed vote's NFT is burned (quantity `-1` under the vote policy). |
-| **Outputs** | 1. One proposal continuation at the same address with status `Tally { votes: counted }`; immutables preserved. 2. Per consumed vote, a refund to an output whose payment credential is its `stake_owner`, holding **at least** the vote UTxO's lovelace. |
+| **Outputs** | 1. One proposal continuation at the same address with status `Tally { votes: counted }`; immutables preserved. 2. Per consumed vote, a refund output at its declared `out_idx`: payment credential equal to the vote's recorded `stake_owner`, inline datum equal to the vote UTxO's own output reference (the refund tag), holding **at least** the vote UTxO's lovelace and **nothing but** lovelace, no reference script. |
 | **Validity range** | Upper bound finite and `<= start_time + draft_length + voting_length + tally_length` (enforced by the proposal validator). |
-| **Constraints** | (proposal) Status `Tally { votes }`; at least one vote consumed; the number of burned vote tokens equals the number of votes counted for *this* proposal. (vote, each) The proposal input is located by its NFT among the spent inputs, and its payment credential must hash to `proposal_policy`. |
+| **Constraints** | (proposal) Status `Tally { votes }`; at least one vote consumed; the number of burned vote tokens equals the number of votes counted for *this* proposal. (vote, each) The proposal input is located by its NFT among the spent inputs, its payment credential must hash to `proposal_policy`, and the refund output at `out_idx` satisfies the tag, address, lovelace-floor, and lovelace-only checks (enforced by the vote validator). |
 
 Votes whose recorded `voted_option` falls outside `0 .. len(results) - 1` are consumed and burned but their stake is **silently dropped** from the tally. `MintVote` already rejects such options, so this is defense in depth against hand-forged artifacts.
 
@@ -546,7 +546,7 @@ The effect script runs as a reward withdrawal (`withdraw-0`). The reference cand
 - **Double-voting / double-cosigning.** Locks freeze stake and `has_proposal` blocks a second cosign/vote on the same proposal. (I3)
 - **Premature phase transitions.** Every transition is gated by its deadline via the validity range (lower for "after", upper for "before"); a proposal cannot be accepted/tallied/ended early. (I4)
 - **Proposal tampering.** The proposal body is immutable across transitions; a continuation must reproduce it exactly. (I4)
-- **Tally manipulation.** Votes are bound to a proposal and counted once each; the number of burned vote NFTs must match the votes counted; refunds go to the vote's recorded owner. The declared winner is checked against the tally, and the effect script self-guards via `am_i_the_winner`. (I5, I6)
+- **Tally manipulation.** Votes are bound to a proposal and counted once each; the number of burned vote NFTs must match the votes counted; refunds go to the vote's recorded owner (tagged output checked by the vote validator). The declared winner is checked against the tally, and the effect script self-guards via `am_i_the_winner`. (I5, I6)
 - **NFT detachment / forgery.** NFT names hash a consumed reference (unique), and continuations must keep the NFT at the script address. (I2)
 
 ### 6.a Assumptions

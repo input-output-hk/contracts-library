@@ -472,25 +472,6 @@ test tally_votes_ok() {
   spend(d, TallyVotes, tx)
 }
 
-test rejects_tally_without_refund() {
-  let d = datum(
-    ProposalStatus.Tally { votes: [0, 0] },
-    [effect_hash, effect_hash],
-  )
-  let cont = prop_output(
-    datum(ProposalStatus.Tally { votes: [0, 5] }, [effect_hash, effect_hash]),
-  )
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [prop_input(d), vote_input(2, 1, 5, 2_000_000)],
-    reference_inputs: [settings_input()],
-    outputs: [cont],
-    mint: assets.from_asset(vote_policy, "V", -1),
-    validity_range: interval.before(start + 6000),
-  }
-  !spend(d, TallyVotes, tx)
-}
-
 test rejects_tally_without_burn() {
   let d = datum(
     ProposalStatus.Tally { votes: [0, 0] },
