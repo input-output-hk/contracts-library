@@ -318,7 +318,7 @@ The owner sets, changes, or clears the position's delegatee; locks and value pas
 
 ### 5.d Withdraw
 
-The owner withdraws free stake — total minus the maximum live lock — from the position; the withdrawn amount may go anywhere.
+The owner withdraws free stake (total minus the maximum live lock) from the position; the withdrawn amount may go anywhere.
 
 #### 5.d.a Scripts executed
 
