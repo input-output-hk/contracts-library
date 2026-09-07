@@ -391,7 +391,7 @@ Another holder commits their position's stake to a draft proposal: the proposal'
 | **Outputs** | 1. One proposal continuation at the same address with status `Draft { cosigning_stake: n + s }` (`s` = the cosigner's staked amount); immutables preserved. 2. One position continuation at the same address: owner/delegatee unchanged, `locks = concat(locks, [Lock { proposal_id, proposal.start_time + proposal.draft_length, in_stake }])`. |
 | **Validity range** | Upper bound finite and `<= start_time + draft_length` (enforced by the proposal validator; the stake side reads no bound). |
 | **Authorization** | `vote_auth` (delegatee if set, else owner) on the stake spend; the proposal spend has none directly — it requires the stake input consumed with `CosignProposal { proposal_id }`. |
-| **Constraints** | (proposal) Status is `Draft { cosigning_stake: n }`; the cosigner's stake `s >= proposal.thresholds.cosign`. (stake) The proposal is `Draft`; the position has no lock for `proposal_id` (`!has_proposal`). |
+| **Constraints** | (proposal) Status is `Draft { cosigning_stake: n }`; the cosigner's stake `s >= proposal.thresholds.cosign`. (stake) The position has no lock for `proposal_id` (`!has_proposal`). |
 
 ### 5.h Accept Draft
 
