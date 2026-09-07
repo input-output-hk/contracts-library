@@ -109,7 +109,7 @@ Each transaction's **Validity range** row (§5) states which bound is used for t
 
 ### 3.d Validators
 
-Each validator's **own hash is its NFT policy id and its address payment credential**: `Script(policy)`.
+Each validator's **own hash is its NFT policy ID and its address payment credential**.
 
 **`stake`** — guards a stake position UTxO.
 
