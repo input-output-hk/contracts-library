@@ -40,7 +40,7 @@ The way it works is:
 
 ### 2.b Limitations
 
-- **One proposal tally per transaction** — and no `Cancel` burn inside a tallying transaction (§5.m, §6.a).
+- **One proposal tally per transaction** and no `Cancel` burn inside a tallying transaction (§5.m, §6.a).
 - **Vote cancellation has no deadline** (§5.k, §6.a).
 - **Create threshold is live; the other thresholds and timings are snapshotted** into the proposal at creation (§6.a).
 
