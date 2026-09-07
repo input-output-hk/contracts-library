@@ -186,7 +186,7 @@ Each DAO action resolves the settings UTxO (the reference input holding `setting
 | `proposal_validator` | `ScriptHash` | Proposal validator hash (also the proposal-NFT policy id). |
 | `vote_validator` | `ScriptHash` | Vote validator hash (also the vote-NFT policy id). |
 
-The cast is a hard `expect`: if the settings `current` datum is not a `DaoSettings`, the DAO action fails closed (rejected), never unsafely.
+The cast is strict and explicit: if the Settings UTxO datum's `current` field is not of type `DaoSettings`, the DAO action fails (rejected).
 
 ### 4.b Stake Position UTxO
 
