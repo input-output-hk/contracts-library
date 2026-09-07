@@ -186,7 +186,12 @@ export interface StakeSpendParams {
   script: PlutusScript;
   /** The stake position UTxO being acted on. */
   stakeUtxo: UTxO;
-  settingsUtxo: UTxO;
+  /**
+   * The settings UTxO, required only by proposal interactions
+   * (CreateProposal, CosignProposal, VoteProposal); the position lifecycle
+   * actions resolve none on-chain.
+   */
+  settingsUtxo?: UTxO;
   /** The position owner (added as a required signer when a key credential). */
   owner: Credential;
   /** Wall-clock used to set the validity lower bound (POSIX ms). */
@@ -228,11 +233,14 @@ async function buildStakeSpend(
     )
     .txInInlineDatumPresent()
     .txInRedeemerValue(stakeRedeemerToData(redeemer))
-    .txInScript(p.script.code)
-    .readOnlyTxInReference(
+    .txInScript(p.script.code);
+
+  if (p.settingsUtxo) {
+    p.txBuilder.readOnlyTxInReference(
       p.settingsUtxo.input.txHash,
       p.settingsUtxo.input.outputIndex,
     );
+  }
 
   if (continuation) {
     p.txBuilder
@@ -339,14 +347,17 @@ export async function buildClosePositionTx(
     .txInInlineDatumPresent()
     .txInRedeemerValue(stakeRedeemerToData({ kind: "ClosePosition" }))
     .txInScript(p.script.code)
-    .readOnlyTxInReference(
-      p.settingsUtxo.input.txHash,
-      p.settingsUtxo.input.outputIndex,
-    )
     .mintPlutusScriptV3()
     .mint("-1", policyId, stakeNftName)
     .mintRedeemerValue(closeStakePositionRedeemer())
     .mintingScript(p.script.code);
+
+  if (p.settingsUtxo) {
+    p.txBuilder.readOnlyTxInReference(
+      p.settingsUtxo.input.txHash,
+      p.settingsUtxo.input.outputIndex,
+    );
+  }
 
   return await p.txBuilder
     .invalidBefore(bound.slot)

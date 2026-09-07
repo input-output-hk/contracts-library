@@ -117,7 +117,9 @@ export interface VoteDatum {
 }
 
 /** Actions on a vote artifact UTxO. */
-export type VoteRedeemer = { kind: "TallyVote" } | { kind: "Cancel" };
+export type VoteRedeemer =
+  | { kind: "TallyVote"; outIdx: number }
+  | { kind: "Cancel" };
 
 /** Redeemer for the vote NFT minting policy. */
 export type VoteTokenRedeemer =

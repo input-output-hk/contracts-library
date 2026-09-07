@@ -3,15 +3,13 @@
  * `TallyVotes` transaction can consume on the Yaci devnet when every vote
  * belongs to a *distinct* owner — one vote per wallet.
  *
- * This is the true worst case for the tally: the on-chain refund check
- * (`list.any` over tx outputs, onchain/lib/dao/proposal/spend.ak) short-circuits
- * at the first output addressed to the vote's stake_owner. With N distinct
- * owners each vote only matches its own refund output, so the scan walks
- * j+1 outputs for the j-th vote: N(N+1)/2 output checks in total. With
- * repeated owners the scan collapses to a near-constant; this mode cannot be
- * improved by merging refund outputs, so it measures the honest floor of the
- * current design. It is also order-independent: the parallel creation
- * interleaving does not affect the verdict.
+ * Each consumed vote carries its own refund output (declared by the
+ * `TallyVote { out_idx }` redeemer and checked by the vote validator, see
+ * onchain/lib/dao/vote/spend.ak), so with N distinct owners the tx grows by
+ * N tagged refund outputs and N vote spends. With repeated owners the refund
+ * outputs could merge, but one-wallet-per-vote is the honest worst case for
+ * tx size and script budget, and it is order-independent: the parallel
+ * creation interleaving does not affect the verdict.
  *
  * Strategy: pre-create an upper bound of votes (env TALLY_MAX_VOTES, default
  * 50), then binary-search the largest k whose tally tx survives `complete()`
@@ -556,7 +554,6 @@ describe.skipIf(!reachable || TALLY_MAX_VOTES <= 0)(
         txBuilder: newTxBuilder(provider),
         script: ctx.proposal.script,
         proposalUtxo: proposal.utxo,
-        settingsUtxo: ctx.settingsUtxo,
         datum: proposal.datum,
         now: await chainNowMs(),
         continuationDatum: continuation,
@@ -667,7 +664,6 @@ describe.skipIf(!reachable || TALLY_MAX_VOTES <= 0)(
         txBuilder: newTxBuilder(provider),
         script: ctx.proposal.script,
         proposalUtxo: voting.utxo,
-        settingsUtxo: ctx.settingsUtxo,
         datum: voting.datum,
         now: await chainNowMs(),
         continuationDatum: proposalDatum(voting.datum.startTime, {
