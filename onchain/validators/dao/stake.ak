@@ -8,8 +8,8 @@ use dao/stake/spend.{
 }
 use dao/types.{
   ClosePosition, CloseStakePosition, CosignProposal, CreatePosition,
-  CreateProposal, DelegateTo, Deposit, StakePositionDatum,
-  StakePositionTokenRedeemer, StakeRedeemer, VoteProposal, Withdraw,
+  CreateProposal, DelegateTo, Deposit, StakePositionDatum, StakeRedeemer,
+  StakeTokenRedeemer, VoteProposal, Withdraw,
 }
 use dao/utils.{get_dao_settings}
 
@@ -22,11 +22,7 @@ validator stake(
   settings_policy: PolicyId,
   settings_token_name: AssetName,
 ) {
-  mint(
-    redeemer: StakePositionTokenRedeemer,
-    own_policy: PolicyId,
-    self: Transaction,
-  ) {
+  mint(redeemer: StakeTokenRedeemer, own_policy: PolicyId, self: Transaction) {
     when redeemer is {
       CreatePosition { owner_utxo, out_idx } ->
         validate_create_position(

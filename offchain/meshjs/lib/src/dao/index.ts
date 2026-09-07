@@ -28,7 +28,7 @@ export {
   rejectDraftRedeemer,
   stakeParamsToData,
   stakePositionDatumToData,
-  stakePositionTokenRedeemerToData,
+  stakeTokenRedeemerToData,
   stakeRedeemerToData,
   tallyVotesRedeemer,
   tallyVoteRedeemer,

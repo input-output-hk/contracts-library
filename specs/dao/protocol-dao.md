@@ -16,7 +16,7 @@ Governance parameters (thresholds, timings, and the sibling script hashes) are *
 The way it works is:
 
 1. A holder **creates a stake position** by spending a wallet UTxO and minting its position NFT; ownership is established by proof-of-spend, and governance tokens deposited there weight everything that follows (§5.a).
-2. The _owner_ **creates a proposal** once the position meets the `create` threshold; it starts in `Draft` and a lock freezes the position's stake until the draft deadline (§5.f).
+2. The *owner* **creates a proposal** once the position meets the `create` threshold; it starts in `Draft` and a lock freezes the position's stake until the draft deadline (§5.f).
 3. Other holders **cosign** the draft, each adding their staked weight and taking their own lock (§5.g).
 4. Once cosign stake reaches the `accept` threshold, anyone **accepts the draft**, promoting it to `Voting` (§5.h). If the deadline passes without acceptance, the draft is **rejected** and burned (§5.i).
 5. During the voting window, holders **vote** on an option; each vote mints a vote artifact weighted by the position's stake, under a fresh lock (§5.j).
@@ -85,9 +85,10 @@ tally_end  = voting_end + tally_length
 ```
 
 Which are then used for:
+
 - Cosign and accept require inclusion `<= draft_end`
 - Reject requires `>= draft_end`
-- End-voting requires `>= voting_end` 
+- End-voting requires `>= voting_end`
 - Voting requires inclusion `<= voting_end`
 - Tally requires `<= tally_end`
 - End-proposal requires `>= tally_end`
@@ -113,7 +114,7 @@ Each validator's **own hash is its NFT policy ID and its address payment credent
 
 **`stake`** — guards a stake position UTxO.
 
-- mint (`StakePositionTokenRedeemer`):
+- mint (`StakeTokenRedeemer`):
 
 | Redeemer | Action |
 | --- | --- |

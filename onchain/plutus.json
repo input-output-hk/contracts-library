@@ -165,7 +165,7 @@
       "redeemer": {
         "title": "redeemer",
         "schema": {
-          "$ref": "#/definitions/dao~1types~1StakePositionTokenRedeemer"
+          "$ref": "#/definitions/dao~1types~1stakeTokenRedeemer"
         }
       },
       "parameters": [
@@ -1119,8 +1119,8 @@
         }
       ]
     },
-    "dao/types/StakePositionTokenRedeemer": {
-      "title": "StakePositionTokenRedeemer",
+    "dao/types/StakeTokenRedeemer": {
+      "title": "StakeTokenRedeemer",
       "description": "Redeemer for the stake position NFT minting policy.",
       "anyOf": [
         {

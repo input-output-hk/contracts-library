@@ -35,7 +35,7 @@ export type StakeRedeemer =
   | { kind: "VoteProposal"; proposalId: string; votedOption: number };
 
 /** Redeemer for the stake position NFT minting policy. */
-export type StakePositionTokenRedeemer =
+export type StakeTokenRedeemer =
   | { kind: "CreatePosition"; ownerUtxo: TxInput; outIdx: number }
   | { kind: "CloseStakePosition" };
 
