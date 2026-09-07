@@ -524,9 +524,9 @@ After the tally deadline the poll closes: the strict winner is declared, the pro
 
 Losing candidates are **not** forced to stay silent: nothing forbids a withdrawal keyed by a losing effect script in the same transaction. Guarding against an illegitimate claim of victory is each effect script's own job via `am_i_the_winner` (§5.o).
 
-### 5.o Run Effect
+#### 5.n.c If there's an effect script
 
-The same transaction as End Proposal (§5.n), from the effect script's point of view: an effect script runs as a reward withdrawal (`withdraw-0`). The reference candidate script `poll_effect` checks `am_i_the_winner`: **exactly one** input carrying an NFT under `proposal_policy` **and** sitting at payment credential `Script(proposal_policy)` must be consumed with `EndProposal { winner: Some(own_hash) }`. The shape check defeats spoofed proposal UTxOs (right token, wrong address) and rejects transactions closing two polls at once; any other redeemer on that input (e.g. a mid-transition `TallyVotes`) also fails. Additional business logic composes with `and`.
+The effect script runs as a reward withdrawal (`withdraw-0`). The reference candidate script `poll_effect` checks `am_i_the_winner`: **exactly one** input carrying an NFT under `proposal_policy` **and** sitting at payment credential `Script(proposal_policy)` must be consumed with `EndProposal { winner: Some(own_hash) }`. The shape check defeats spoofed proposal UTxOs (right token, wrong address) and rejects transactions closing two polls at once; any other redeemer on that input (e.g., a mid-transition `TallyVotes`) also fails. Additional business logic composes with `and`.
 
 `proposal_policy` is **pinned at compile time** on purpose: deriving it from transaction data would let anyone forge an approving poll under their own proposal. Effect scripts must therefore be parameterized per deployed proposal validator.
 
