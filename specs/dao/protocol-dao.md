@@ -176,7 +176,7 @@ Each validator's UTxO sits at an address whose payment credential is `Script(pol
 
 ### 4.a Settings UTxO
 
-Each DAO action resolves the settings UTxO — the reference input holding `settings_token_name` under `settings_policy` — and casts its inline datum's `current` field (an opaque `Data` in the settings contract) to:
+Each DAO action resolves the settings UTxO (the reference input holding `settings_token_name` under `settings_policy`) and casts its inline datum's `current` field (an opaque `Data` in the settings contract) to:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
