@@ -262,7 +262,7 @@ All possible protocol transactions. Each section below describes one complete, a
 
 Every transaction also resolves the settings UTxO — the reference input holding the settings NFT (§4.a) — to read thresholds, timings, and sibling hashes; it is omitted from the tables for brevity. "The own input" is the contract UTxO being spent; cross-references to sibling inputs/outputs are checked locally and each sibling's own validator re-checks its detailed constraints.
 
-Scripts read the transaction's validity range. The **lower bound** is read as `now` where an action anchors *itself* in time or requires time to have *passed* (creating, pruning locks, "after deadline" checks); the **upper bound** is used where an action must occur *before* a deadline. An "after" check `now >= deadline` on the lower bound is sound because the ledger guarantees `real_slot >= lower_bound`; a "before" check `upper <= deadline` means the transaction is only valid if included before the deadline. Both bounds are required finite wherever they are read; each transaction's **Validity range** row below states which bound it reads.
+Scripts read the transaction's validity range. The **lower bound** is read as `now` where an action anchors *itself* in time or requires time to have *passed* (creating, pruning locks, "after deadline" checks); the **upper bound** is used where an action must occur *before* a deadline. Both bounds are required to be finite wherever they are read; each transaction's **Validity range** row below states which bound it reads.
 
 ### 5.a Create Position
 
