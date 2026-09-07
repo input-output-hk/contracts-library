@@ -84,7 +84,14 @@ voting_end = draft_end + voting_length
 tally_end  = voting_end + tally_length
 ```
 
-Cosign and accept require inclusion `<= draft_end`; reject requires `>= draft_end`; end-voting requires `>= voting_end`; voting requires inclusion `<= voting_end`; tally requires `<= tally_end`; end-proposal requires `>= tally_end`. Each transaction's **Validity range** row (§5) states which bound it reads.
+Which are then used for:
+- Cosign and accept require inclusion `<= draft_end`
+- Reject requires `>= draft_end`
+- End-voting requires `>= voting_end` 
+- Voting requires inclusion `<= voting_end`
+- Tally requires `<= tally_end`
+- End-proposal requires `>= tally_end`
+Each transaction's **Validity range** row (§5) states which bound is used for the comparison.
 
 ### 3.c Tokens
 
