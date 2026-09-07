@@ -543,7 +543,7 @@ The effect script runs as a reward withdrawal (`withdraw-0`). The reference cand
 
 ### 6.a Assumptions
 
-- **Settings authority is trusted.** The DAO reads its governance parameters and sibling hashes from the settings UTxO's `current` datum, located by its NFT. A party able to change settings can change thresholds/timings/sibling hashes. A malformed `current` fails the DAO closed (reject), never unsafely.
+- **Settings authority is trusted.** The DAO reads its governance parameters and sibling hashes from the settings UTxO's `current` datum, located by its NFT. A party able to change settings can change thresholds/timings/sibling hashes. A malformed `current` makes all DAO protocol transactions fail. Halting the protocol until fixed.
 - **Create threshold is live; the rest are snapshotted.** `settings.thresholds.create` is read live at creation; `cosign`/`accept`/`vote`/`execute` and the timings are copied into the proposal at creation and frozen. Changing settings mid-lifecycle does not affect successful transactions of an already-created proposal.
 - **One proposal tally per transaction.** `TallyVotes` requires the count of burned vote tokens to equal the votes counted for *this* proposal, which precludes tallying two proposals in one transaction (and precludes a `Cancel` burn inside a tallying transaction, §5.k).
 - **Vote cancellation has no deadline.** `Cancel` is authorized by the vote's recorded `stake_owner` at any time (§5.k), so a voter can retract a vote mid-voting — freeing the position's stake only at the lock's own expiry, not at cancel time.
