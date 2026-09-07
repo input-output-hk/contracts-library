@@ -372,7 +372,7 @@ The owner commits the position's stake to a new proposal: a lock freezes the sta
 | **Outputs** | 1. One position continuation at the same address: owner/delegatee unchanged, `locks = push(locks, Lock { proposal_id, now + draft_length, in_stake })`. 2. One proposal at `out_idx`: address `Script(proposal_policy)`, value holds the NFT and nothing extra, inline datum `ProposalDatum { thresholds: settings.thresholds, timing_config: settings.timings, start_time: now, status: Draft { cosigning_stake: staked_amount }, results }`, no reference script. |
 | **Validity range** | Lower bound finite (`now` = proposal `start_time`). |
 | **Authorization** | The position `owner` on the stake spend; the proposal mint has none directly — it requires the stake input to be consumed with `CreateProposal`. |
-| **Constraints** | `in_stake = staked_amount >= settings.thresholds.create` (checked by both validators). |
+| **Constraints** | `in_stake = staked_amount >= settings.thresholds.create` (checked by the proposal mint). |
 
 ### 5.g Cosign
 
@@ -391,7 +391,7 @@ Another holder commits their position's stake to a draft proposal: the proposal'
 | **Outputs** | 1. One proposal continuation at the same address with status `Draft { cosigning_stake: n + s }` (`s` = the cosigner's staked amount); immutables preserved. 2. One position continuation at the same address: owner/delegatee unchanged, `locks = concat(locks, [Lock { proposal_id, proposal.start_time + proposal.draft_length, in_stake }])`. |
 | **Validity range** | Upper bound finite and `<= start_time + draft_length` (enforced by the proposal validator; the stake side reads no bound). |
 | **Authorization** | `vote_auth` (delegatee if set, else owner) on the stake spend; the proposal spend has none directly — it requires the stake input consumed with `CosignProposal { proposal_id }`. |
-| **Constraints** | (proposal) Status is `Draft { cosigning_stake: n }`. (stake) The proposal is `Draft`; `in_stake >= proposal.thresholds.cosign`; the position has no lock for `proposal_id` (`!has_proposal`). |
+| **Constraints** | (proposal) Status is `Draft { cosigning_stake: n }`; the cosigner's stake `s >= proposal.thresholds.cosign`. (stake) The proposal is `Draft`; the position has no lock for `proposal_id` (`!has_proposal`). |
 
 ### 5.h Accept Draft
 

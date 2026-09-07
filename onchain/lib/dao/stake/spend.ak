@@ -200,7 +200,6 @@ pub fn validate_stake_create_proposal(
   let cont = out_datum(out)
   and {
     is_authorized(datum.owner, extra_signatories, withdrawals),
-    in_stake >= settings.thresholds.create,
     quantity_of(mint, settings.proposal_validator, p_id) == 1,
     cont.owner == datum.owner,
     cont.delegatee == datum.delegatee,
@@ -240,7 +239,6 @@ pub fn validate_stake_cosign(
   and {
     is_authorized(vote_auth(datum), extra_signatories, withdrawals),
     is_draft(proposal.status),
-    in_stake >= proposal.thresholds.cosign,
     !has_proposal(datum.locks, proposal_id),
     cont.owner == datum.owner,
     cont.delegatee == datum.delegatee,

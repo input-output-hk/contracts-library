@@ -62,6 +62,7 @@ pub fn validate_cosign(
   }
   and {
     cosigning,
+    s >= datum.thresholds.cosign,
     upper <= datum.start_time + datum.timing_config.draft_length,
     cont.status == ProposalStatus.Draft { cosigning_stake: n + s },
     immutables_ok(cont, datum),
