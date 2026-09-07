@@ -190,7 +190,7 @@ The cast is strict and explicit: if the Settings UTxO datum's `current` field is
 
 ### 4.b Stake Position UTxO
 
-Address `Script(stake_policy)`; value = one stake NFT + staked tokens + lovelace.
+Address `Script(stake_policy)`; value = one stake NFT + staked tokens + lovelace, and nothing extra.
 
 Datum (inline, on the stake address):
 
