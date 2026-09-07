@@ -507,7 +507,23 @@ One or more vote artifacts are consumed in a batch: their stakes are added to th
 | **Validity range** | Upper bound finite and `<= start_time + draft_length + voting_length + tally_length` (enforced by the proposal validator). |
 | **Constraints** | (proposal) Status `Tally { votes }`; at least one vote consumed; the number of burned vote tokens equals the number of votes counted for *this* proposal. (vote, each) The proposal input is located by its NFT among the spent inputs, its payment credential must hash to `proposal_policy`, and the refund output at `out_idx` satisfies the tag, address, lovelace-floor, and lovelace-only checks (enforced by the vote validator). |
 
-Votes whose recorded `voted_option` falls outside `0 .. len(results) - 1` are consumed and burned but their stake is **silently dropped** from the tally. `MintVote` already rejects such options, so this is defense in depth against hand-forged artifacts.
+Our protection against purposely avoiding counting votes is:
+
+- There's enough time to do the tally that anyone could have time to ensure their vote was counted because the protocol's deadlines are long enough.
+- Anyone can tally their own vote.
+- A DoS attack (continuously counting one vote at a time until the deadline) requires many vote UTxOs that couldn't be created if the deployed minimum amount of stake to create a vote threshold is set high enough.
+
+In order to maintain these assurances, some heuristics are provided. Let's say the total amount of governance tokens is known in advance (`total_stake = 1_000_000`) and we want the tally phase to last 10 days. This simple calculation can help determine the minimum `min_voting_threshold` required to make a DoS attack economically unfeasible, and also ensuring that all votes can be counted within the available time frame:
+
+```text
+tally_delta_ms = 864_000_000 -- 10 days
+total_stake = 1_000_000
+avg_block_ms = 20_000 -- average block time in milliseconds
+available_blocks = tally_delta_ms / avg_block_ms
+min_voting_threshold = total_stake / available_blocks
+```
+
+in this example, we would get a `min_voting_threshold` of approximately `23.15`.
 
 ### 5.n End Proposal
 
