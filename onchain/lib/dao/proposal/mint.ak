@@ -8,7 +8,7 @@ use cardano/transaction.{InlineDatum, Output, Transaction}
 use dao/types.{
   CreateProposal, DaoSettings, ProposalDatum, ProposalStatus, StakeRedeemer,
 }
-use dao/utils.{get_unique_token_name, token_name_from_ref, spend_redeemer}
+use dao/utils.{get_unique_token_name, spend_redeemer, token_name_from_ref}
 
 /// Validate the mint of a proposal NFT: the first step of creating a proposal.
 ///

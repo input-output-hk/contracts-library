@@ -8,7 +8,8 @@ use dao/types.{
   VoteProposal,
 }
 use dao/utils.{
-  find_input_by_policy, get_unique_token_name, token_name_from_ref, spend_redeemer,
+  find_input_by_policy, get_unique_token_name, spend_redeemer,
+  token_name_from_ref,
 }
 
 /// Validate minting a vote NFT (`MintVote`).

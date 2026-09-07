@@ -9,7 +9,7 @@ use cardano/transaction.{
 use dao/locks.{Lock, free_stake, has_proposal, prune_expired}
 use dao/types.{DaoSettings, ProposalDatum, ProposalStatus, StakePositionDatum}
 use dao/utils.{
-  find_continuation_output, get_unique_token_name, token_name_from_ref
+  find_continuation_output, get_unique_token_name, token_name_from_ref,
 }
 
 /// Spending logic for a stake position UTxO.
@@ -51,7 +51,7 @@ pub fn validate_stake_deposit(
     own_ref,
     self,
   )
-  let
+  let  
       Transaction {
         outputs,
         extra_signatories,
@@ -114,7 +114,7 @@ pub fn validate_stake_withdraw(
     own_ref,
     self,
   )
-  let
+  let  
       Transaction {
         outputs,
         extra_signatories,
@@ -179,7 +179,7 @@ pub fn validate_stake_create_proposal(
     own_ref,
     self,
   )
-  let
+  let  
       Transaction {
         outputs,
         mint,
@@ -264,7 +264,7 @@ pub fn validate_stake_vote(
     own_ref,
     self,
   )
-  let
+  let  
       Transaction {
         reference_inputs,
         outputs,
