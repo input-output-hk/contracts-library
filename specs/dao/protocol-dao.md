@@ -243,7 +243,7 @@ Draft ────────────────────────�
 
 ### 4.d Vote Artifact UTxO
 
-Address `Script(vote_policy)`; value holds the vote NFT and lovelace.
+Address `Script(vote_policy)`; the value holds the vote NFT + lovelace, and nothing more.
 
 Datum (inline, on the vote address):
 
