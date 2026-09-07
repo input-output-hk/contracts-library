@@ -16,7 +16,7 @@
  *   ProposalRedeemer    = Cosign=0 | AcceptDraft=1 | RejectDraft=2 | EndVotingStage=3
  *                       | TallyVotes=4 | EndProposal{winner: Option<ScriptHash>}=5
  *   VoteDatum           = Constr 0 [stake_owner: Credential, proposal, voted_option, stake]
- *   VoteRedeemer        = TallyVote=0 | Cancel=1
+ *   VoteRedeemer        = TallyVote{out_idx}=0 | Cancel=1
  *   VoteTokenRedeemer   = MintVote{out_idx}=0 | BurnVotes=1
  */
 
@@ -215,8 +215,13 @@ export function voteDatumToData(d: VoteDatum): Data {
   ]);
 }
 
-export function tallyVoteRedeemer(): Data {
-  return mConStr0([]);
+/**
+ * Redeemer `TallyVote { out_idx }`: `outIdx` points at the output where this
+ * vote's lovelace refund must go (tagged with the vote's own output reference
+ * as inline datum — see `dao/vote/spend.ak`).
+ */
+export function tallyVoteRedeemer(outIdx: number): Data {
+  return mConStr0([outIdx]);
 }
 
 export function cancelVoteRedeemer(): Data {
@@ -224,7 +229,9 @@ export function cancelVoteRedeemer(): Data {
 }
 
 export function voteRedeemerToData(r: VoteRedeemer): Data {
-  return r.kind === "TallyVote" ? tallyVoteRedeemer() : cancelVoteRedeemer();
+  return r.kind === "TallyVote"
+    ? tallyVoteRedeemer(r.outIdx)
+    : cancelVoteRedeemer();
 }
 
 export function voteTokenRedeemerToData(r: VoteTokenRedeemer): Data {

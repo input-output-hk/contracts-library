@@ -29,6 +29,7 @@ import {
   burnProposalRedeemer,
   burnVotesRedeemer,
   mintProposalRedeemer,
+  outputRefToData,
   pollEffectWithdrawalRedeemer,
   proposalDatumToData,
   proposalParamsToData,
@@ -202,7 +203,11 @@ export interface ProposalSpendParams {
   txBuilder: MeshTxBuilder;
   script: PlutusScript;
   proposalUtxo: UTxO;
-  settingsUtxo: UTxO;
+  /**
+   * The settings UTxO, required only by actions that read governance
+   * parameters (Cosign, TallyVotes); the rest resolve none on-chain.
+   */
+  settingsUtxo?: UTxO;
   /** The spent proposal's state (for phase-boundary derivation). */
   datum: ProposalDatum;
   /** Wall-clock used for lower-bound validity intervals (POSIX ms). */
@@ -241,11 +246,14 @@ async function buildProposalSpend(
     )
     .txInInlineDatumPresent()
     .txInRedeemerValue(proposalRedeemerToData(redeemer))
-    .txInScript(p.script.code)
-    .readOnlyTxInReference(
+    .txInScript(p.script.code);
+
+  if (p.settingsUtxo) {
+    p.txBuilder.readOnlyTxInReference(
       p.settingsUtxo.input.txHash,
       p.settingsUtxo.input.outputIndex,
     );
+  }
 
   if (continuationDatum) {
     p.txBuilder
@@ -308,6 +316,8 @@ async function buildProposalSpend(
 // ---------------------------------------------------- Cosign
 
 export interface CosignProposalParams extends ProposalSpendParams {
+  /** Cosigning reads the settings (stake validator hash) on-chain. */
+  settingsUtxo: UTxO;
   /** The stake validator script used to spend the cosigning stake position. */
   stakeScript: PlutusScript;
   stakeUtxo: UTxO;
@@ -444,10 +454,12 @@ export async function buildEndProposalTx(
 // ---------------------------------------------------- Tally
 
 export interface TallyParams extends ProposalSpendParams {
+  /** Tallying reads the settings (vote validator hash) on-chain. */
+  settingsUtxo: UTxO;
   continuationDatum: ProposalDatum;
   /** The vote validator script used to spend the vote artifacts. */
   voteScript: PlutusScript;
-  /** Each vote artifact UTxO and the address to return its ada to. */
+  /** Each vote artifact UTxO and the address to refund its ada to. */
   votes: Array<{ voteUtxo: UTxO; ownerAddress: string }>;
 }
 
@@ -459,7 +471,15 @@ export async function buildTallyTx(p: TallyParams): Promise<string> {
   const votePolicy = resolveScriptHash(p.voteScript.code, p.voteScript.version);
   const bounds = phaseBounds(p.datum);
 
-  for (const { voteUtxo } of p.votes) {
+  /**
+   * Per vote: spend with `TallyVote { out_idx }` and emit the refund output
+   * it declares — pure lovelace (>= the vote UTxO's), tagged with the vote's
+   * own output reference as inline datum, addressed to the stake owner (see
+   * `dao/vote/spend.ak`). Refunds are the first N explicit outputs, so vote i
+   * refunds at out_idx i (same explicit-output-order assumption as
+   * `MintVote { out_idx: 0 }`).
+   */
+  for (const [i, { voteUtxo }] of p.votes.entries()) {
     p.txBuilder
       .spendingPlutusScriptV3()
       .txIn(
@@ -469,7 +489,7 @@ export async function buildTallyTx(p: TallyParams): Promise<string> {
         voteUtxo.output.address,
       )
       .txInInlineDatumPresent()
-      .txInRedeemerValue(tallyVoteRedeemer())
+      .txInRedeemerValue(tallyVoteRedeemer(i))
       .txInScript(p.voteScript.code);
   }
 
@@ -495,12 +515,15 @@ export async function buildTallyTx(p: TallyParams): Promise<string> {
     }
   }
 
-  for (const { voteUtxo, ownerAddress } of p.votes) {
-    // Return the vote artifact's ada (minus the NFT, which this tx burns).
-    const value = voteUtxo.output.amount.filter(
+  for (const [i, { voteUtxo, ownerAddress }] of p.votes.entries()) {
+    // Refund the vote artifact's ada (minus the NFT, which this tx burns):
+    // pure lovelace, tagged with the vote's own output reference.
+    const refund = voteUtxo.output.amount.filter(
       (a) => a.unit === "lovelace" || !a.unit.startsWith(votePolicy),
     );
-    p.txBuilder.txOut(ownerAddress, value);
+    p.txBuilder
+      .txOut(ownerAddress, refund)
+      .txOutInlineDatumValue(outputRefToData(voteUtxo.input));
   }
 
   p.txBuilder
