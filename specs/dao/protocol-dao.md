@@ -57,7 +57,7 @@ The way it works is:
 
 ### 3.b Constants
 
-Baked into each script hash (all four are parameterized):
+Baked into each script hash (all are parameterized):
 
 | Parameter | Type | Meaning |
 | --- | --- | --- |
