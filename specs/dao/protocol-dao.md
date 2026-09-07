@@ -6,10 +6,10 @@ Token-based governance of a protocol and its treasury: token holders **stake** t
 
 The protocol is a set of three cooperating validators, each guarding its own single-NFT-threaded UTxO type, plus user-supplied per-option **effect** scripts:
 
-- **`stake`** — a *stake position* UTxO holds a holder's staked tokens and records the locks that freeze them while a proposal is live. The validator's own hash is the stake-NFT policy id and the position address.
-- **`proposal`** — a *proposal* UTxO carries a governance proposal through its lifecycle (Draft → Voting → Tally → closed). The validator's own hash is the proposal-NFT policy id and the proposal address.
-- **`vote`** — a *vote artifact* UTxO records one holder's vote on one proposal and is destroyed at tally time. The validator's own hash is the vote-NFT policy id and the vote address.
-- **Effect scripts** — the per-option validators a proposal references in its `results`. They are *not* part of the protocol; a proposal just names them, and the winning one runs under the withdraw-0 convention.
+- **`stake`**: A *stake position* UTxO holds a holder's staked tokens and records the locks that freeze them while a proposal is live. The validator's own hash is the stake-NFT policy ID and the position address.
+- **`proposal`**: A *proposal* UTxO carries a governance proposal through its lifecycle (Draft → Voting → Tally → closed). The validator's own hash is the proposal-NFT policy ID and the proposal address.
+- **`vote`**: A *vote artifact* UTxO records one holder's vote on one proposal and is destroyed at tally time. The validator's own hash is the vote-NFT policy ID and the vote address.
+- **Effect scripts**: The per-option/outcome validators a proposal references in its `results`. They are *not* part of the protocol; a proposal just names them, and the winning one runs under the withdraw-0 convention.
 
 Governance parameters (thresholds, timings, and the sibling script hashes) are **not** compiled into the validators. They are read at runtime from a **settings UTxO** (see `specs/settings/protocol-settings.md`), located by its NFT via reference input, whose opaque `current` datum is cast to `DaoSettings`. This keeps the three DAO validators free of circular compile-time dependencies and lets the settings protocol govern the DAO's parameters.
 
