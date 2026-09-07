@@ -266,7 +266,7 @@ Scripts read the transaction's validity range. The **lower bound** is read as `n
 
 ### 5.a Create Position
 
-A holder turns a wallet UTxO into a stake position: the position NFT is minted, the position UTxO is created at the stake address, and ownership is established by proof-of-spend of the `owner_utxo`.
+A governance token holder creates a stake position: the position NFT is minted, the position UTxO is created at the stake address, and ownership is established by proof-of-spend of the `owner_utxo`.
 
 #### 5.a.a Scripts executed
 
