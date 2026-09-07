@@ -8,7 +8,7 @@ use dao/types.{
   Cosign, ProposalDatum, ProposalStatus, ProposalThresholds,
   ProposalTimingConfig, StakePositionDatum, TallyVotes, VoteDatum, VoteProposal,
 }
-use dao/utils.{nft_name_from_ref}
+use dao/utils.{token_name_from_ref}
 use dao/vote/mint.{validate_burn_votes, validate_mint_vote}
 use dao/vote/spend.{validate_vote_tally}
 
@@ -100,7 +100,7 @@ fn vote_ref() -> OutputReference {
 /// The vote NFT name: the hash of the spent stake UTxO's output reference, as
 /// enforced by the vote mint.
 fn vote_name() -> ByteArray {
-  nft_name_from_ref(stake_ref())
+  token_name_from_ref(stake_ref())
 }
 
 fn vote_output(proposal: ByteArray, s: Int) -> Output {

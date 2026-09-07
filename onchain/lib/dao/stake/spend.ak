@@ -9,8 +9,7 @@ use cardano/transaction.{
 use dao/locks.{Lock, free_stake, has_proposal, prune_expired}
 use dao/types.{DaoSettings, ProposalDatum, ProposalStatus, StakePositionDatum}
 use dao/utils.{
-  find_continuation_output, get_unique_token_name, nft_name_from_ref,
-  proposal_token_name,
+  find_continuation_output, get_unique_token_name, token_name_from_ref
 }
 
 /// Spending logic for a stake position UTxO.
@@ -52,7 +51,7 @@ pub fn validate_stake_deposit(
     own_ref,
     self,
   )
-  let  
+  let
       Transaction {
         outputs,
         extra_signatories,
@@ -115,7 +114,7 @@ pub fn validate_stake_withdraw(
     own_ref,
     self,
   )
-  let  
+  let
       Transaction {
         outputs,
         extra_signatories,
@@ -180,7 +179,7 @@ pub fn validate_stake_create_proposal(
     own_ref,
     self,
   )
-  let  
+  let
       Transaction {
         outputs,
         mint,
@@ -191,7 +190,7 @@ pub fn validate_stake_create_proposal(
       }
     = self
   expect Finite(now) = validity_range.lower_bound.bound_type
-  let p_id = proposal_token_name(own_ref)
+  let p_id = token_name_from_ref(own_ref)
   let new_lock = Lock {
     proposal_id: p_id,
     unlock_time: now + settings.timings.draft_length,
@@ -265,7 +264,7 @@ pub fn validate_stake_vote(
     own_ref,
     self,
   )
-  let  
+  let
       Transaction {
         reference_inputs,
         outputs,
@@ -297,7 +296,7 @@ pub fn validate_stake_vote(
     cont.delegatee == datum.delegatee,
     cont.locks == prune_expired(list.concat(datum.locks, [new_lock]), now),
     assets.match(out.value, own_value, >=),
-    quantity_of(mint, settings.vote_validator, nft_name_from_ref(own_ref)) == 1,
+    quantity_of(mint, settings.vote_validator, token_name_from_ref(own_ref)) == 1,
   }
 }
 

@@ -18,7 +18,7 @@ use dao/types.{
   ProposalThresholds, ProposalTimingConfig, RejectDraft, TallyVotes, VoteDatum,
   Voting,
 }
-use dao/utils.{get_dao_settings, proposal_token_name}
+use dao/utils.{get_dao_settings, token_name_from_ref}
 use settings/types as settings_types
 
 // ------------------------------------------------------------------- fixtures
@@ -270,7 +270,7 @@ fn proposal_output_named(token_name: ByteArray, d: ProposalDatum) -> Output {
 // held by the creating stake UTxO.
 fn create_tx(create: Int, stake: Int, now: Int) -> Transaction {
   let stake_in = mint_stake_input(0, stake)
-  let token_name = proposal_token_name(stake_in.output_reference)
+  let token_name = token_name_from_ref(stake_in.output_reference)
   let create_r: Data = CreateProposal
   Transaction {
     ..placeholder,
@@ -653,7 +653,7 @@ test rejects_stake_below_threshold() fail {
 
 test rejects_wrong_thresholds_in_datum() fail {
   let tx = create_tx(100, 100, 5000)
-  let token_name = proposal_token_name(
+  let token_name = token_name_from_ref(
     OutputReference { transaction_id: tx_id, output_index: 0 },
   )
   let mutated = mint_proposal_datum(200, 100, 5000)
@@ -664,7 +664,7 @@ test rejects_wrong_thresholds_in_datum() fail {
 
 test rejects_wrong_timings_in_datum() fail {
   let tx = create_tx(100, 100, 5000)
-  let token_name = proposal_token_name(
+  let token_name = token_name_from_ref(
     OutputReference { transaction_id: tx_id, output_index: 0 },
   )
   let mutated = ProposalDatum {
@@ -682,7 +682,7 @@ test rejects_wrong_timings_in_datum() fail {
 
 test rejects_wrong_start_time() fail {
   let tx = create_tx(100, 100, 5000)
-  let token_name = proposal_token_name(
+  let token_name = token_name_from_ref(
     OutputReference { transaction_id: tx_id, output_index: 0 },
   )
   let mutated = ProposalDatum {
@@ -696,7 +696,7 @@ test rejects_wrong_start_time() fail {
 
 test rejects_wrong_cosigning_stake() fail {
   let tx = create_tx(100, 100, 5000)
-  let token_name = proposal_token_name(
+  let token_name = token_name_from_ref(
     OutputReference { transaction_id: tx_id, output_index: 0 },
   )
   let mutated = ProposalDatum {
@@ -710,7 +710,7 @@ test rejects_wrong_cosigning_stake() fail {
 
 test rejects_non_draft_status() fail {
   let tx = create_tx(100, 100, 5000)
-  let token_name = proposal_token_name(
+  let token_name = token_name_from_ref(
     OutputReference { transaction_id: tx_id, output_index: 0 },
   )
   let mutated = ProposalDatum {
@@ -724,7 +724,7 @@ test rejects_non_draft_status() fail {
 
 test rejects_non_empty_results() fail {
   let tx = create_tx(100, 100, 5000)
-  let token_name = proposal_token_name(
+  let token_name = token_name_from_ref(
     OutputReference { transaction_id: tx_id, output_index: 0 },
   )
   let mutated = ProposalDatum {
@@ -738,7 +738,7 @@ test rejects_non_empty_results() fail {
 
 test rejects_wrong_address() fail {
   let tx = create_tx(100, 100, 5000)
-  let token_name = proposal_token_name(
+  let token_name = token_name_from_ref(
     OutputReference { transaction_id: tx_id, output_index: 0 },
   )
   let bad_output = Output {
@@ -750,7 +750,7 @@ test rejects_wrong_address() fail {
 
 test rejects_reference_script() fail {
   let tx = create_tx(100, 100, 5000)
-  let token_name = proposal_token_name(
+  let token_name = token_name_from_ref(
     OutputReference { transaction_id: tx_id, output_index: 0 },
   )
   let bad_output = Output {
@@ -769,7 +769,7 @@ test rejects_wrong_token_name() fail {
 
 test rejects_wrong_mint_quantity() fail {
   let tx = create_tx(100, 100, 5000)
-  let token_name = proposal_token_name(
+  let token_name = token_name_from_ref(
     OutputReference { transaction_id: tx_id, output_index: 0 },
   )
   validate_mint(
@@ -792,7 +792,7 @@ test rejects_missing_settings_ref() fail {
 
 test rejects_datum_hash_output() fail {
   let tx = create_tx(100, 100, 5000)
-  let token_name = proposal_token_name(
+  let token_name = token_name_from_ref(
     OutputReference { transaction_id: tx_id, output_index: 0 },
   )
   let bad_output = Output {

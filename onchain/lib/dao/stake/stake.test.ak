@@ -19,7 +19,7 @@ use dao/types.{
   ProposalTimingConfig, StakePositionDatum, StakeRedeemer, VoteProposal,
   Withdraw,
 }
-use dao/utils.{nft_name_from_ref, proposal_token_name}
+use dao/utils.{token_name_from_ref}
 use settings/types as settings_types
 
 // ------------------------------------------------------------------- fixtures
@@ -384,7 +384,7 @@ test rejects_close_without_burn() {
 
 test create_proposal_ok() {
   let now = 500
-  let p_id = proposal_token_name(pos_ref())
+  let p_id = token_name_from_ref(pos_ref())
   let new_lock = Lock { proposal_id: p_id, unlock_time: now + 1000, stake: 100 }
   let d = stake_datum(None, [])
   let out = pos_output(100, stake_datum(None, [new_lock]))
@@ -402,7 +402,7 @@ test create_proposal_ok() {
 
 test rejects_create_below_threshold() {
   let now = 500
-  let p_id = proposal_token_name(pos_ref())
+  let p_id = token_name_from_ref(pos_ref())
   let new_lock = Lock { proposal_id: p_id, unlock_time: now + 1000, stake: 99 }
   let d = stake_datum(None, [])
   let out = pos_output(99, stake_datum(None, [new_lock]))
@@ -496,7 +496,7 @@ test vote_proposal_ok() {
     inputs: [pos_input(20)],
     reference_inputs: [settings_input(), proposal_ref_voting(start)],
     outputs: [out],
-    mint: assets.from_asset(vote_policy, nft_name_from_ref(pos_ref()), 1),
+    mint: assets.from_asset(vote_policy, token_name_from_ref(pos_ref()), 1),
     extra_signatories: [owner_hash],
     validity_range: interval.between(start, unlock),
   }
@@ -514,7 +514,7 @@ test rejects_vote_when_not_voting_stage() {
     inputs: [pos_input(20)],
     reference_inputs: [settings_input(), proposal_input_draft(start)],
     outputs: [out],
-    mint: assets.from_asset(vote_policy, nft_name_from_ref(pos_ref()), 1),
+    mint: assets.from_asset(vote_policy, token_name_from_ref(pos_ref()), 1),
     extra_signatories: [owner_hash],
     validity_range: interval.between(start, unlock),
   }
@@ -525,7 +525,7 @@ test rejects_vote_when_not_voting_stage() {
 
 test create_position_ok() {
   let seed = OutputReference { transaction_id: tx_id, output_index: 7 }
-  let name = nft_name_from_ref(seed)
+  let name = token_name_from_ref(seed)
   let seed_input = Input {
     output_reference: seed,
     output: Output {
@@ -554,7 +554,7 @@ test create_position_ok() {
 
 test rejects_create_position_with_locks() {
   let seed = OutputReference { transaction_id: tx_id, output_index: 7 }
-  let name = nft_name_from_ref(seed)
+  let name = token_name_from_ref(seed)
   let seed_input = Input {
     output_reference: seed,
     output: Output {
