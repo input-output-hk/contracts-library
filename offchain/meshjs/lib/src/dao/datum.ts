@@ -6,7 +6,7 @@
  *   StakeRedeemer       = Deposit=0 | DelegateTo{delegatee}=1 | Withdraw{amount}=2
  *                       | ClosePosition=3 | CreateProposal=4 | CosignProposal{proposal_id}=5
  *                       | VoteProposal{proposal_id, voted_option}=6
- *   StakePositionTokenRedeemer = CreatePosition{owner_utxo, out_idx}=0 | CloseStakePosition=1
+ *   StakeTokenRedeemer = CreatePosition{owner_utxo, out_idx}=0 | CloseStakePosition=1
  *   ProposalThresholds  = Constr 0 [create, cosign, accept, vote, execute]
  *   ProposalTimingConfig= Constr 0 [draft_length, voting_length, tally_length]
  *   ProposalStatus      = Draft{cosigning_stake}=0 | Voting=1 | Tally{votes: [Int]}=2
@@ -43,7 +43,7 @@ import type {
   ProposalTokenRedeemer,
   StakeParams,
   StakePositionDatum,
-  StakePositionTokenRedeemer,
+  StakeTokenRedeemer,
   StakeRedeemer,
   VoteDatum,
   VoteParams,
@@ -100,9 +100,7 @@ export function closeStakePositionRedeemer(): Data {
   return mConStr1([]);
 }
 
-export function stakePositionTokenRedeemerToData(
-  r: StakePositionTokenRedeemer,
-): Data {
+export function stakeTokenRedeemerToData(r: StakeTokenRedeemer): Data {
   return r.kind === "CreatePosition"
     ? createPositionRedeemer(r.ownerUtxo, r.outIdx)
     : closeStakePositionRedeemer();

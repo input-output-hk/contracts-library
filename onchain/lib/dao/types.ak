@@ -26,7 +26,7 @@ pub type StakeRedeemer {
 }
 
 /// Redeemer for the stake position NFT minting policy.
-pub type StakePositionTokenRedeemer {
+pub type StakeTokenRedeemer {
   CreatePosition { owner_utxo: OutputReference, out_idx: Int }
   CloseStakePosition
 }
