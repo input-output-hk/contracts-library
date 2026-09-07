@@ -91,7 +91,7 @@ Cosign and accept require inclusion `<= draft_end`; reject requires `>= draft_en
 | Token | Policy | Name | Held by |
 | --- | --- | --- | --- |
 | Governance token | `staked_token_policy` | `staked_token_name` | Stake positions (the staked quantity weights votes and thresholds). |
-| Stake NFT | stake validator hash | `blake2b_256(serialise(owner_utxo))` | The stake position UTxO. |
+| Stake NFT | stake validator hash | hash of the owner UTxO's reference | The stake position UTxO. |
 | Proposal NFT | proposal validator hash | hash of the creating stake UTxO's reference | The proposal UTxO. |
 | Vote NFT | vote validator hash | hash of the voting stake UTxO's reference | The vote artifact UTxO. |
 | Settings NFT | `settings_policy` | `settings_token_name` | The settings UTxO (§4.a). |
