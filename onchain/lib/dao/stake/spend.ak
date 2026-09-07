@@ -238,7 +238,6 @@ pub fn validate_stake_cosign(
   let cont = out_datum(out)
   and {
     is_authorized(vote_auth(datum), extra_signatories, withdrawals),
-    is_draft(proposal.status),
     !has_proposal(datum.locks, proposal_id),
     cont.owner == datum.owner,
     cont.delegatee == datum.delegatee,
@@ -303,13 +302,6 @@ fn vote_auth(datum: StakePositionDatum) -> Credential {
   when datum.delegatee is {
     Some(d) -> d
     None -> datum.owner
-  }
-}
-
-fn is_draft(status: ProposalStatus) -> Bool {
-  when status is {
-    ProposalStatus.Draft { .. } -> True
-    _ -> False
   }
 }
 
