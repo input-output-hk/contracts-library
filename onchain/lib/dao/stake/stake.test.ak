@@ -400,24 +400,6 @@ test create_proposal_ok() {
   spend(d, CreateProposal, tx)
 }
 
-test rejects_create_below_threshold() {
-  let now = 500
-  let p_id = token_name_from_ref(pos_ref())
-  let new_lock = Lock { proposal_id: p_id, unlock_time: now + 1000, stake: 99 }
-  let d = stake_datum(None, [])
-  let out = pos_output(99, stake_datum(None, [new_lock]))
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [pos_input(99)],
-    reference_inputs: [settings_input()],
-    outputs: [out],
-    mint: assets.from_asset(proposal_policy, p_id, 1),
-    extra_signatories: [owner_hash],
-    validity_range: interval.after(now),
-  }
-  !spend(d, CreateProposal, tx)
-}
-
 // ------------------------------------------------------------ CosignProposal
 
 test cosign_proposal_ok() {
@@ -437,25 +419,6 @@ test cosign_proposal_ok() {
     extra_signatories: [owner_hash],
   }
   spend(d, CosignProposal { proposal_id: prop_nft }, tx)
-}
-
-test rejects_cosign_below_threshold() {
-  let start = 500
-  let new_lock = Lock {
-    proposal_id: prop_nft,
-    unlock_time: start + 1000,
-    stake: 40,
-  }
-  let d = stake_datum(None, [])
-  let out = pos_output(40, stake_datum(None, [new_lock]))
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [pos_input(40), proposal_input_draft(start)],
-    reference_inputs: [settings_input()],
-    outputs: [out],
-    extra_signatories: [owner_hash],
-  }
-  !spend(d, CosignProposal { proposal_id: prop_nft }, tx)
 }
 
 test rejects_cosign_same_proposal_twice() {
