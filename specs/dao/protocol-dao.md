@@ -514,13 +514,19 @@ Our protection against purposely avoiding counting votes is:
 - There's enough time to tally all the votes, even if all votes contain the minimum token voting amount (the maximum possible number of vote UTxOs) and only one is counted per transaction.
 - Anyone can tally their own vote.
 
-
 In order to maintain these assurances, and assuming the total amount of governance tokens is known in advance, we provide this heuristic:
+
 ```math
   v \;\ge\; \frac{S \cdot b}{T}
 ```
 
-in this example, we would get a `min_voting_threshold` of approximately `23.15`.
+Where $v$ is the vote threshold, $S$ is the total governance-token supply, $b$ is the average block time, and $T$ is the tally length (both in ms).
+
+You can replace the desired tally time here to find the minimum governance-token amount needed to meet the voting threshold. For example, for $S = 1{,}000{,}000$ and $T = 864{,}000{,}000$ (approx. 10 days), we get:
+
+```math
+  v \;\ge\; \frac{S \cdot b}{T} \;\ge\; \frac{1{,}000{,}000 \cdot 20{,}000}{864{,}000{,}000} \;\ge\; 23.15
+```
 
 These assurances rely on two assumptions (§6.a): the governance token supply is known in advance when parameters are set, and the voting stage is closed promptly by at least one honest actor.
 
