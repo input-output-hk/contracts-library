@@ -524,6 +524,8 @@ min_voting_threshold = total_stake / available_blocks
 
 in this example, we would get a `min_voting_threshold` of approximately `23.15`.
 
+These assurances rely on two assumptions (§6.a): the governance token supply is known in advance when parameters are set, and the voting stage is closed promptly by at least one honest actor.
+
 ### 5.n End Proposal
 
 After the tally deadline the poll closes: the strict winner is declared, the proposal NFT is burned, and — if the `execute` threshold is met — the winning effect script runs as a reward withdrawal.
@@ -571,6 +573,8 @@ The effect script runs as a reward withdrawal (`withdraw-0`). The reference cand
 - **One proposal tally per transaction.** `TallyVotes` requires the count of burned vote tokens to equal the votes counted for *this* proposal, which precludes tallying two proposals in one transaction (and precludes a `Cancel` burn inside a tallying transaction, §5.k).
 - **Vote cancellation has no deadline.** `Cancel` is authorized by the vote's recorded `stake_owner` at any time (§5.k), so a voter can retract a vote mid-voting — freeing the position's stake only at the lock's own expiry, not at cancel time.
 - **Effect scripts are untrusted.** Being listed in `results` or having a withdrawal present proves nothing about the poll outcome; each candidate must verify its own victory via `am_i_the_winner`. The reference `poll_effect` does so; a deployer writing a real effect must reproduce this guard (and pin `proposal_policy` at compile time, §5.o).
+- **Governance token supply can grow.** The tally DoS heuristic (§5.m) assumes `total_stake` is known in advance; nothing enforces it. Minting more governance tokens lets an attacker create more vote UTxOs than the deployed `min_voting_threshold` anticipates. Snapshotting (§2.b) means updated `DaoSettings` params only apply to proposals created afterwards — existing proposals keep the old params until they end. Mitigation: update settings **before** minting more tokens, and wait for every proposal created under the old params to finish before minting.
+- **Voting stage closure is only lower-bounded.** `EndVotingStage` (§5.l) requires `now >= voting_end` but has no upper bound, so the transition to `Tally` can be delayed indefinitely — and since `tally_end` is fixed, every delay shrinks the window available to count votes. The protocol assumes at least one honest actor (e.g., any voter wanting their vote counted) advances the stage as soon as the voting deadline passes.
 
 ### 6.b Invariants
 
