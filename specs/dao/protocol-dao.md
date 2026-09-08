@@ -199,11 +199,13 @@ Datum (inline, on the stake address):
 | --- | --- | --- |
 | `owner` | `Credential` | Who may deposit/withdraw/delegate/close/create. |
 | `delegatee` | `Option<Credential>` | If set, who may cosign/vote on this position. |
-| `locks` | `List<Lock>` | Live locks freezing stake; `Lock { proposal_id: ByteArray, unlock_time: Int, stake: Int }`. |
+| `locks` | `List<Lock>` | Live locks freezing stake; `Lock { proposal_id: ByteArray, unlock_time: Int, stake: Int }`. Proposed cap: at most `max_locks = 100` entries (design note below — not yet implemented). |
 
 The **frozen** stake of a position is `max(lock.stake)` over all locks (0 when empty); the **free** stake is `total - frozen`. A lock is **expired** when `unlock_time <= now`; expired locks are dropped by `prune_expired`.
 
 Locks are pruned when `unlock_time <= now` by `Deposit`, `Withdraw`, `ClosePosition`, and `Vote`. A lock also blocks a *second* cosign/vote on the same proposal via `has_proposal`. Creating a proposal is treated as locking until `start_time + draft_length`.
+
+**Design note (not implemented).** The `locks` list is intended to be at most `max_locks = 100` entries as a safeguard against datum bloat, not because unbounded growth would break the protocol. A delegatee could otherwise cosign many dummy drafts with a victim's position, but the position cannot be permanently frozen: **(1)** the pruning paths (`Deposit`, `Withdraw`, `ClosePosition`) do strictly less work over `locks` than the lock-adding actions, so any datum the attacker can still append to, the owner can still spend and once the dummy locks expire (≤ `draft_length` after the last cosign, the stake frozen meanwhile as with any cosign), a single `Deposit` prunes them all; **(2)** with `draft_length < voting_length` (to be enforced at settings updates), a one-shot fill during a proposal's draft phase expires before the whole voting window passes, so the position can still vote within it; **(3)** the owner can revoke the delegation at any time (`DelegateTo`), immediately stopping further fills. The cap would additionally bound the datum for cost: ~5.1 KB at 100 locks, versus ~14 KB at ~274 locks (the memory budget binds at ~910 locks, the CPU budget at ~1,830 — datum size first).
 
 ### 4.c Proposal UTxO
 
