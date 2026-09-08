@@ -6,5 +6,7 @@
 .opencode
 .agents
 .claude
+opencode.json
+.vscode
 
 node_modules/
