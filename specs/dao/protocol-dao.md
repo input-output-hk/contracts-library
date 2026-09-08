@@ -509,7 +509,7 @@ One or more vote artifacts are consumed in a batch: their stakes are added to th
 
 Our protection against purposely avoiding counting votes is:
 
-- There's enough time to do the tally that anyone could have time to ensure their vote was counted because the protocol's deadlines are long enough.
+- There's enough time to tally all the votes, even if all votes contain the minimum token voting amount (the maximum possible number of vote UTxOs) and only one is counted per transaction.
 - Anyone can tally their own vote.
 - A DoS attack (continuously counting one vote at a time until the deadline) requires many vote UTxOs that couldn't be created if the deployed minimum amount of stake to create a vote threshold is set high enough.
 
