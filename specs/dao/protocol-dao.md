@@ -511,7 +511,6 @@ Our protection against purposely avoiding counting votes is:
 
 - There's enough time to tally all the votes, even if all votes contain the minimum token voting amount (the maximum possible number of vote UTxOs) and only one is counted per transaction.
 - Anyone can tally their own vote.
-- A DoS attack (continuously counting one vote at a time until the deadline) requires many vote UTxOs that couldn't be created if the deployed minimum amount of stake to create a vote threshold is set high enough.
 
 In order to maintain these assurances, some heuristics are provided. Let's say the total amount of governance tokens is known in advance (`total_stake = 1_000_000`) and we want the tally phase to last 10 days. This simple calculation can help determine the minimum `min_voting_threshold` required to make a DoS attack economically unfeasible, and also ensuring that all votes can be counted within the available time frame:
 
