@@ -45,9 +45,11 @@
 // credential the validator requires (the stake owner, or the delegatee when
 // one is set).
 //
-// Every transaction except `launch_settings` / `create_stake_position` reads
-// the settings UTxO as a *reference input* (the validator wrapper resolves
-// `DaoSettings` for every spend, even when the action ignores it).
+// Only actions that read governance parameters resolve the settings UTxO as
+// a *reference input*: `create_proposal`, `cosign`, `vote`, and `tally`
+// (matching the on-chain validators, where only those redeemers call
+// `get_dao_settings`). The remaining transactions carry no settings
+// reference.
 
 env {
     /// Hash of the parameterized stake validator (= its NFT policy id).
@@ -307,7 +309,14 @@ type VoteDatum {
 
 // Actions on a vote artifact UTxO.
 type VoteRedeemer {
-    TallyVote,
+    // Tally the vote for the associated proposal. `out_idx` is the index of
+    // the output where the refunded lovelace must go: a refund output tagged
+    // with the vote's own output reference as inline datum, holding nothing
+    // but lovelace, addressed to the vote's recorded stake owner (enforced
+    // by the vote validator, see onchain/lib/dao/vote/spend.ak).
+    TallyVote {
+        out_idx: Int,
+    },
     Cancel,
 }
 
@@ -332,6 +341,7 @@ type EffectRedeemer {
 
 // Launch the settings instance that backs the DAO: mint the settings NFT and
 // produce the settings UTxO whose `current` is the given `DaoSettings`.
+
 tx launch_settings(
     /// The UTxO consumed as the mint seed (settings validator parameter).
     seed: UtxoRef,
@@ -451,8 +461,6 @@ tx create_stake_position(
 // Add more staked tokens to a stake position. `new_datum` is the continuation
 // datum with expired locks pruned and the added stake reflected off-chain.
 tx deposit(
-    /// The settings UTxO (reference input).
-    settings_ref: UtxoRef,
     /// The stake position UTxO being acted on.
     stake_ref: UtxoRef,
     /// Quantity of the staked token added.
@@ -462,10 +470,6 @@ tx deposit(
     /// Slot of the validity lower bound.
     since_slot: Int,
 ) {
-    reference dao_settings {
-        ref: settings_ref,
-    }
-
     input stake_in {
         from: Stake,
         ref: stake_ref,
@@ -509,8 +513,6 @@ tx deposit(
 
 // Withdraw free staked tokens from a stake position.
 tx withdraw(
-    /// The settings UTxO (reference input).
-    settings_ref: UtxoRef,
     /// The stake position UTxO being acted on.
     stake_ref: UtxoRef,
     /// Quantity of the staked token withdrawn (must be <= free stake).
@@ -520,10 +522,6 @@ tx withdraw(
     /// Slot of the validity lower bound.
     since_slot: Int,
 ) {
-    reference dao_settings {
-        ref: settings_ref,
-    }
-
     input stake_in {
         from: Stake,
         ref: stake_ref,
@@ -569,8 +567,6 @@ tx withdraw(
 
 // Redirect a stake position's voting power to a delegatee.
 tx delegate(
-    /// The settings UTxO (reference input).
-    settings_ref: UtxoRef,
     /// The stake position UTxO being acted on.
     stake_ref: UtxoRef,
     /// The new delegatee (None clears delegation).
@@ -578,10 +574,6 @@ tx delegate(
     /// The continuation stake position datum.
     new_datum: StakePositionDatum,
 ) {
-    reference dao_settings {
-        ref: settings_ref,
-    }
-
     input stake_in {
         from: Stake,
         ref: stake_ref,
@@ -623,8 +615,6 @@ tx delegate(
 
 // Burn the stake NFT and recover the staked tokens, after all locks expire.
 tx close_position(
-    /// The settings UTxO (reference input).
-    settings_ref: UtxoRef,
     /// The stake position UTxO being closed.
     stake_ref: UtxoRef,
     /// The stake NFT name held by the position.
@@ -632,10 +622,6 @@ tx close_position(
     /// Slot of the validity lower bound.
     since_slot: Int,
 ) {
-    reference dao_settings {
-        ref: settings_ref,
-    }
-
     input stake_in {
         from: Stake,
         ref: stake_ref,
@@ -846,8 +832,6 @@ tx cosign(
 
 // Advance a draft proposal to the voting phase.
 tx accept_draft(
-    /// The settings UTxO (reference input).
-    settings_ref: UtxoRef,
     /// The proposal UTxO being advanced.
     proposal_ref: UtxoRef,
     /// The continuation proposal datum (status -> Voting).
@@ -855,10 +839,6 @@ tx accept_draft(
     /// Slot of the validity upper bound (= draft end).
     until_slot: Int,
 ) {
-    reference dao_settings {
-        ref: settings_ref,
-    }
-
     input proposal_in {
         from: Proposal,
         ref: proposal_ref,
@@ -898,8 +878,6 @@ tx accept_draft(
 
 // Burn a draft proposal that missed the co-sign threshold (after draft end).
 tx reject_draft(
-    /// The settings UTxO (reference input).
-    settings_ref: UtxoRef,
     /// The proposal UTxO being rejected.
     proposal_ref: UtxoRef,
     /// The proposal token name.
@@ -907,10 +885,6 @@ tx reject_draft(
     /// Slot of the validity lower bound (= draft end).
     since_slot: Int,
 ) {
-    reference dao_settings {
-        ref: settings_ref,
-    }
-
     input proposal_in {
         from: Proposal,
         ref: proposal_ref,
@@ -949,8 +923,6 @@ tx reject_draft(
 
 // Advance a voting proposal to the tally phase (after the voting window).
 tx end_voting_stage(
-    /// The settings UTxO (reference input).
-    settings_ref: UtxoRef,
     /// The proposal UTxO being advanced.
     proposal_ref: UtxoRef,
     /// The continuation proposal datum (status -> Tally, zeroed votes).
@@ -958,10 +930,6 @@ tx end_voting_stage(
     /// Slot of the validity lower bound (= voting end).
     since_slot: Int,
 ) {
-    reference dao_settings {
-        ref: settings_ref,
-    }
-
     input proposal_in {
         from: Proposal,
         ref: proposal_ref,
@@ -999,8 +967,11 @@ tx end_voting_stage(
     }
 }
 
-// Tally a single vote artifact: burn its NFT, refund its lovelace to the
-// voter, and fold its weight into the running tally. Repeat once per vote.
+// Tally a single vote artifact: burn its NFT, refund its lovelace through a
+// *tagged* output (inline datum = the vote's own output reference, holding
+// nothing but lovelace, addressed to the vote's recorded stake owner — all
+// enforced by the vote validator), and fold its weight into the running
+// tally. Repeat once per vote.
 tx tally(
     /// The settings UTxO (reference input).
     settings_ref: UtxoRef,
@@ -1008,6 +979,9 @@ tx tally(
     proposal_ref: UtxoRef,
     /// The vote artifact UTxO being tallied.
     vote_ref: UtxoRef,
+    /// The consumed vote artifact's own output reference: encoded as the
+    /// inline datum tagging the refund output.
+    vote_output_ref: OutputReference,
     /// The vote NFT name held by the artifact.
     vote_nft_name: Bytes,
     /// The voter's address (receives the refunded lovelace).
@@ -1016,6 +990,9 @@ tx tally(
     new_proposal_datum: ProposalDatum,
     /// Slot of the validity upper bound (= tally end).
     until_slot: Int,
+    /// Index of the refund output within the transaction outputs (declared
+    /// in the `TallyVote` redeemer).
+    out_ix: Int,
 ) {
     reference dao_settings {
         ref: settings_ref,
@@ -1030,7 +1007,9 @@ tx tally(
     input vote_in {
         from: Vote,
         ref: vote_ref,
-        redeemer: VoteRedeemer::TallyVote {},
+        redeemer: VoteRedeemer::TallyVote {
+            out_idx: out_ix,
+        },
     }
 
     input gas {
@@ -1049,9 +1028,12 @@ tx tally(
         datum: new_proposal_datum,
     }
 
+    // The tagged refund declared by `TallyVote { out_idx }`: the vote
+    // artifact's ada (minus the burned NFT), nothing else.
     output {
         to: refund,
         amount: vote_in - AnyAsset(vote_hash, vote_nft_name, 1),
+        datum: vote_output_ref,
     }
 
     output {
@@ -1087,8 +1069,6 @@ tx tally(
 // `am_i_the_winner` instead). This endpoint always executes: for polls with
 // no strict winner above the `execute` threshold, use `end_proposal_failed`.
 tx end_proposal(
-    /// The settings UTxO (reference input).
-    settings_ref: UtxoRef,
     /// The proposal UTxO being ended.
     proposal_ref: UtxoRef,
     /// The proposal token name.
@@ -1099,10 +1079,6 @@ tx end_proposal(
     /// Slot of the validity lower bound (= tally end).
     since_slot: Int,
 ) {
-    reference dao_settings {
-        ref: settings_ref,
-    }
-
     input proposal_in {
         from: Proposal,
         ref: proposal_ref,
@@ -1154,8 +1130,6 @@ tx end_proposal(
 // winner and no effect runs. Declaring a winner instead would be rejected
 // unless it matches the tally; `end_proposal` covers the executing case.
 tx end_proposal_failed(
-    /// The settings UTxO (reference input).
-    settings_ref: UtxoRef,
     /// The proposal UTxO being ended.
     proposal_ref: UtxoRef,
     /// The proposal token name.
@@ -1163,10 +1137,6 @@ tx end_proposal_failed(
     /// Slot of the validity lower bound (= tally end).
     since_slot: Int,
 ) {
-    reference dao_settings {
-        ref: settings_ref,
-    }
-
     input proposal_in {
         from: Proposal,
         ref: proposal_ref,
@@ -1305,17 +1275,11 @@ tx vote(
 
 // Cancel a vote: burn the vote NFT and return its value to the voter.
 tx cancel(
-    /// The settings UTxO (reference input).
-    settings_ref: UtxoRef,
     /// The vote artifact UTxO being cancelled.
     vote_ref: UtxoRef,
     /// The vote NFT name held by the artifact.
     vote_nft_name: Bytes,
 ) {
-    reference dao_settings {
-        ref: settings_ref,
-    }
-
     input vote_in {
         from: Vote,
         ref: vote_ref,

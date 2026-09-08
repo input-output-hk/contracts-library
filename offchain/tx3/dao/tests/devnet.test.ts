@@ -516,7 +516,6 @@ async function acceptDraftTx(
     inst
       .client(signer)
       .acceptDraft({
-        settings_ref: inst.settingsRef,
         proposal_ref: proposal.utxo.ref,
         new_proposal_datum: proposalDatum(
           proposal.startTime,
@@ -718,7 +717,6 @@ async function lifecycleToTally(): Promise<{
     inst
       .client(inst.a)
       .endVotingStage({
-        settings_ref: inst.settingsRef,
         proposal_ref: proposal3.ref,
         new_proposal_datum: proposalDatum(
           startTime,
@@ -741,6 +739,10 @@ async function lifecycleToTally(): Promise<{
         settings_ref: inst.settingsRef,
         proposal_ref: proposal4.ref,
         vote_ref: voteA.ref,
+        vote_output_ref: {
+          transaction_id: toBytes(voteA.txHash),
+          output_index: voteA.outputIndex,
+        },
         vote_nft_name: toBytes(voteNftA),
         refund: inst.a.address,
         new_proposal_datum: proposalDatum(
@@ -749,6 +751,8 @@ async function lifecycleToTally(): Promise<{
           inst.results,
         ),
         until_slot: devnet.slotAtTimeMs(tallyEnd),
+        // proposal_out is output 0; the tagged refund output is output 1
+        out_ix: 1,
       } as unknown as Parameters<Client["tally"]>[0])
       .env(inst.env),
   );
@@ -762,6 +766,10 @@ async function lifecycleToTally(): Promise<{
         settings_ref: inst.settingsRef,
         proposal_ref: proposal5.ref,
         vote_ref: voteB.ref,
+        vote_output_ref: {
+          transaction_id: toBytes(voteB.txHash),
+          output_index: voteB.outputIndex,
+        },
         vote_nft_name: toBytes(voteNftB),
         refund: inst.b.address,
         new_proposal_datum: proposalDatum(
@@ -770,6 +778,8 @@ async function lifecycleToTally(): Promise<{
           inst.results,
         ),
         until_slot: devnet.slotAtTimeMs(tallyEnd),
+        // proposal_out is output 0; the tagged refund output is output 1
+        out_ix: 1,
       } as unknown as Parameters<Client["tally"]>[0])
       .env(inst.env),
   );
@@ -791,7 +801,6 @@ test("executes the winning effect via the poll_effect candidate", async () => {
     inst
       .client(inst.a)
       .endProposal({
-        settings_ref: inst.settingsRef,
         proposal_ref: proposal6.ref,
         proposal_token_name: toBytes(proposalTokenName),
         effect_hash: toBytes(inst.effectHash),
@@ -818,7 +827,6 @@ test("rejects EndProposal with a lying winner declaration", async () => {
       inst
         .client(inst.a)
         .endProposal({
-          settings_ref: inst.settingsRef,
           proposal_ref: proposal6.ref,
           proposal_token_name: toBytes(proposalTokenName),
           effect_hash: toBytes("11".repeat(28)),
@@ -834,7 +842,6 @@ test("rejects EndProposal with a lying winner declaration", async () => {
     inst
       .client(inst.a)
       .endProposal({
-        settings_ref: inst.settingsRef,
         proposal_ref: proposal6.ref,
         proposal_token_name: toBytes(proposalTokenName),
         effect_hash: toBytes(inst.effectHash),
@@ -887,7 +894,6 @@ test("closes a failed proposal without executing an effect", async () => {
     inst
       .client(inst.a)
       .endVotingStage({
-        settings_ref: inst.settingsRef,
         proposal_ref: voting.utxo.ref,
         new_proposal_datum: proposalDatum(
           created.startTime,
@@ -907,7 +913,6 @@ test("closes a failed proposal without executing an effect", async () => {
     inst
       .client(inst.a)
       .endProposalFailed({
-        settings_ref: inst.settingsRef,
         proposal_ref: (await devnet.utxosOf(inst.proposalAddr))[0].ref,
         proposal_token_name: toBytes(created.tokenName),
         since_slot: (await devnet.tip()).slot,
@@ -933,7 +938,6 @@ test("supports deposit, withdraw, delegate and close position", async () => {
     inst
       .client(inst.a)
       .deposit({
-        settings_ref: inst.settingsRef,
         stake_ref: pos.utxo.ref,
         added: 5,
         new_datum: stakeDatum(inst.a.keyHash, noneOpt(), []),
@@ -949,7 +953,6 @@ test("supports deposit, withdraw, delegate and close position", async () => {
     inst
       .client(inst.a)
       .withdraw({
-        settings_ref: inst.settingsRef,
         stake_ref: posDeposited.ref,
         amount: 5,
         new_datum: stakeDatum(inst.a.keyHash, noneOpt(), []),
@@ -966,7 +969,6 @@ test("supports deposit, withdraw, delegate and close position", async () => {
     inst
       .client(inst.a)
       .delegate({
-        settings_ref: inst.settingsRef,
         stake_ref: posWithdrawn.ref,
         delegatee,
         new_datum: stakeDatum(inst.a.keyHash, delegatee, []),
@@ -980,7 +982,6 @@ test("supports deposit, withdraw, delegate and close position", async () => {
     inst
       .client(inst.a)
       .closePosition({
-        settings_ref: inst.settingsRef,
         stake_ref: posDelegated.ref,
         stake_nft_name: toBytes(pos.nftName),
         since_slot: (await devnet.tip()).slot,
@@ -1093,7 +1094,6 @@ test("rejects a close while locks are active", async () => {
       inst
         .client(inst.a)
         .closePosition({
-          settings_ref: inst.settingsRef,
           stake_ref: created.stakeUtxo.ref,
           stake_nft_name: toBytes(posA.nftName),
           since_slot: (await devnet.tip()).slot,
