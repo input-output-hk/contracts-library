@@ -22,15 +22,15 @@ hashes) are **not** compiled in — they are read at runtime from a
 reference input.
 
 > **Source of truth.** Behavior, threat model, and invariants are specified in
-> [`specs/dao/protocol-dao.md`](../../../specs/dao/protocol-dao.md).
+> [`spec.md`](spec.md).
 > This guide only covers day-to-day usage.
 
 | Part | Where |
 |---|---|
-| On-chain validators | [`onchain/validators/dao/`](../../../onchain/validators/dao/) (+ composable predicates in [`onchain/lib/dao/`](../../../onchain/lib/dao/)) |
-| MeshJS builders | [`offchain/meshjs/lib/src/dao/`](../../../offchain/meshjs/lib/src/dao/) |
-| Tx3 protocol + client | [`offchain/tx3/dao/`](../../../offchain/tx3/dao/) |
-| Compiled blueprint | [`onchain/plutus.json`](../../../onchain/plutus.json) |
+| On-chain validators | [`onchain/validators/dao/`](../../onchain/validators/dao/) (+ composable predicates in [`onchain/lib/dao/`](../../onchain/lib/dao/)) |
+| MeshJS builders | [`offchain/meshjs/lib/src/dao/`](../../offchain/meshjs/lib/src/dao/) |
+| Tx3 protocol + client | [`offchain/tx3/dao/`](../../offchain/tx3/dao/) |
+| Compiled blueprint | [`onchain/plutus.json`](../../onchain/plutus.json) |
 
 ## Contents
 
@@ -98,7 +98,7 @@ any role.
 The DAO validators read `DaoSettings` from the settings contract's opaque
 `current` datum — the settings protocol governs the DAO's parameters. You
 need a live settings instance (see the
-[settings usage guide](../protocol-settings/README.md)) whose `current` is:
+[settings usage guide](../settings/usage.md)) whose `current` is:
 
 ```ts
 import { daoSettingsToData, type DaoSettings } from "@contracts-library/meshjs";
@@ -136,7 +136,7 @@ parameterized by the proposal validator's hash:
 **Deploy in this order** — each step's output parameterizes the next:
 
 1. **Settings script** (parameters include the settings seed; see the
-   [settings guide](../protocol-settings/README.md)) → yields `settingsPolicy`.
+   [settings guide](../settings/usage.md)) → yields `settingsPolicy`.
 2. **Stake / proposal / vote scripts** — parameterized with the governance
    token and settings policy/name:
 
@@ -412,8 +412,8 @@ against an illegitimate victory claim is each effect script's own job
 ## Off-chain usage: Tx3 client
 
 The Tx3 implementation lives in
-[`offchain/tx3/dao/`](../../../offchain/tx3/dao/) with a generated client in
-[`codegen/ts-client/dao-governance`](../../../offchain/tx3/dao/codegen/ts-client/dao-governance/README.md)
+[`offchain/tx3/dao/`](../../offchain/tx3/dao/) with a generated client in
+[`codegen/ts-client/dao-governance`](../../offchain/tx3/dao/codegen/ts-client/dao-governance/README.md)
 (regenerate with `trix codegen`; do not edit by hand). Unlike the MeshJS
 builders it also covers **vote cancel** and the settings launch
 (`launchSettings` mints the settings NFT with a typed `DaoSettings` as
@@ -463,7 +463,7 @@ Every `tx` exposes the four-stage lifecycle `resolve → sign → submit → wai
 The template's runtime argument names are **snake_case** while the generated
 parameter types declare camelCase — cast past them at each call site, as the
 reference harness does
-([`offchain/tx3/dao/tests/devnet.test.ts`](../../../offchain/tx3/dao/tests/devnet.test.ts)).
+([`offchain/tx3/dao/tests/devnet.test.ts`](../../offchain/tx3/dao/tests/devnet.test.ts)).
 
 ### Key actions
 
@@ -585,21 +585,21 @@ Notes:
   required signers for key credentials only; to authorize by script
   (multisig, DAO, smart wallet), attach the withdraw-0 authorizer to the
   `txBuilder` yourself (see `applyAuthorization` in
-  [`offchain/meshjs/lib/src/authorization.ts`](../../../offchain/meshjs/lib/src/authorization.ts)
+  [`offchain/meshjs/lib/src/authorization.ts`](../../offchain/meshjs/lib/src/authorization.ts)
   and ARCHITECTURE.md §3).
 
 ## Where to go next
 
-- [Spec](../../../specs/dao/protocol-dao.md) — full transaction tables (§5),
+- [Spec](spec.md) — full transaction tables (§5),
   threat model, invariants, and assumptions (§6).
-- [On-chain code](../../../onchain/validators/dao/) — the four validators;
-  composable predicates and tests in [`onchain/lib/dao/`](../../../onchain/lib/dao/).
-- [MeshJS e2e tests](../../../offchain/meshjs/e2e/test/dao.e2e.test.ts) —
+- [On-chain code](../../onchain/validators/dao/) — the four validators;
+  composable predicates and tests in [`onchain/lib/dao/`](../../onchain/lib/dao/).
+- [MeshJS e2e tests](../../offchain/meshjs/e2e/test/dao.e2e.test.ts) —
   the complete happy path against a Yaci devnet, including
-  [maximum-tally batching](../../../offchain/meshjs/e2e/test/dao-tally-max.e2e.test.ts).
-- [Tx3 devnet test](../../../offchain/tx3/dao/tests/devnet.test.ts) — the
+  [maximum-tally batching](../../offchain/meshjs/e2e/test/dao-tally-max.e2e.test.ts).
+- [Tx3 devnet test](../../offchain/tx3/dao/tests/devnet.test.ts) — the
   full lifecycle with the generated client, plus negative (must-reject) cases.
-- [Settings usage guide](../protocol-settings/README.md) — operating the
+- [Settings usage guide](../settings/usage.md) — operating the
   settings instance that governs this protocol's parameters.
-- [Architecture](../../ARCHITECTURE.md) — composability conventions shared by
+- [Architecture](../ARCHITECTURE.md) — composability conventions shared by
   every contract in the library.

@@ -1,6 +1,6 @@
 # Linear Vesting — Specification
 
-> Status: Draft · Contract: `vesting/linear` · This document defines *what* the contract does. The (`onchain/`) and off-chain (`offchain/`) implementations are correct insofar as they match this spec, not insofar as they match each other. See [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md) §2.3.
+> Status: Draft · Contract: `vesting/linear` · This document defines *what* the contract does. The (`onchain/`) and off-chain (`offchain/`) implementations are correct insofar as they match this spec, not insofar as they match each other. See [`ARCHITECTURE.md`](../ARCHITECTURE.md) §2.3.
 
 ## 1. Summary
 

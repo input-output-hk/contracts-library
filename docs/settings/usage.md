@@ -11,15 +11,15 @@ one-shot **Settings NFT**, whose inline datum holds the active configuration
 **applier** commits or discards them.
 
 > **Source of truth.** Behavior, threat model, and invariants are specified in
-> [`specs/settings/protocol-settings.md`](../../../specs/settings/protocol-settings.md).
+> [`spec.md`](spec.md).
 > This guide only covers day-to-day usage.
 
 | Part | Where |
 |---|---|
-| On-chain validator | [`onchain/validators/settings.ak`](../../../onchain/validators/settings.ak) (+ composable predicates in [`onchain/lib/settings/`](../../../onchain/lib/settings/)) |
-| MeshJS builders | [`offchain/meshjs/lib/src/settings/`](../../../offchain/meshjs/lib/src/settings/) |
-| Tx3 protocol + client | [`offchain/tx3/settings/`](../../../offchain/tx3/settings/) |
-| Compiled blueprint | [`onchain/plutus.json`](../../../onchain/plutus.json) |
+| On-chain validator | [`onchain/validators/settings.ak`](../../onchain/validators/settings.ak) (+ composable predicates in [`onchain/lib/settings/`](../../onchain/lib/settings/)) |
+| MeshJS builders | [`offchain/meshjs/lib/src/settings/`](../../offchain/meshjs/lib/src/settings/) |
+| Tx3 protocol + client | [`offchain/tx3/settings/`](../../offchain/tx3/settings/) |
+| Compiled blueprint | [`onchain/plutus.json`](../../onchain/plutus.json) |
 
 ## Contents
 
@@ -71,7 +71,7 @@ stateDiagram-v2
 Both `propose_auth` and `apply_auth` are pluggable `Credential`s: a key
 (required signer) or a script (invoked via a withdraw-0 reward withdrawal).
 A multisig, DAO, or smart wallet can fill either role — see
-[offchain/meshjs/lib/src/authorization.ts](../../../offchain/meshjs/lib/src/authorization.ts)
+[offchain/meshjs/lib/src/authorization.ts](../../offchain/meshjs/lib/src/authorization.ts)
 and ARCHITECTURE.md §3.
 
 ## Deploying an instance
@@ -99,7 +99,7 @@ The main protocol never spends the Settings UTxO — it reads `current` by
 adding the Settings UTxO to its transactions as a **reference input**:
 
 - **On-chain (Aiken):** use
-  [`onchain/lib/settings/utils.ak`](../../../onchain/lib/settings/) →
+  [`onchain/lib/settings/utils.ak`](../../onchain/lib/settings/) →
 
   ```aiken
   let settings = get_settings_datum(tx, settings_ref, policy, token_name)
@@ -240,9 +240,9 @@ authorizer: { scriptCbor: daoScriptCbor },            // redeemer defaults to un
 ## Off-chain usage: Tx3 client
 
 The Tx3 implementation lives in
-[`offchain/tx3/settings/`](../../../offchain/tx3/settings/) with a generated
+[`offchain/tx3/settings/`](../../offchain/tx3/settings/) with a generated
 TypeScript client in
-[`codegen/ts-client/config-parameter-management`](../../../offchain/tx3/settings/codegen/ts-client/config-parameter-management/README.md)
+[`codegen/ts-client/config-parameter-management`](../../offchain/tx3/settings/codegen/ts-client/config-parameter-management/README.md)
 (regenerate with `trix codegen`; do not edit by hand).
 
 Install the runtime SDK in the directory that consumes the client:
@@ -336,7 +336,7 @@ and invoked via a withdraw-0 keyed by its reward address
 
 > Note: the generated parameter types may name fields in camelCase while the
 > Tx3 template's runtime arguments are snake_case (see
-> [`offchain/tx3/settings/tests/devnet.test.ts`](../../../offchain/tx3/settings/tests/devnet.test.ts)
+> [`offchain/tx3/settings/tests/devnet.test.ts`](../../offchain/tx3/settings/tests/devnet.test.ts)
 > for the exact call shapes used in CI).
 
 ## Gotchas and safety notes
@@ -361,13 +361,13 @@ and invoked via a withdraw-0 keyed by its reward address
 
 ## Where to go next
 
-- [Spec](../../../specs/settings/protocol-settings.md) — full behavior,
+- [Spec](spec.md) — full behavior,
   threat model (§6), invariants, and the formal must-accept/must-reject
   characterization.
-- [On-chain code](../../../onchain/validators/settings.ak) — reference
-  validator; composable predicates in [`onchain/lib/settings/`](../../../onchain/lib/settings/).
-- [Devnet e2e test](../../../offchain/tx3/settings/tests/devnet.test.ts) —
+- [On-chain code](../../onchain/validators/settings.ak) — reference
+  validator; composable predicates in [`onchain/lib/settings/`](../../onchain/lib/settings/).
+- [Devnet e2e test](../../offchain/tx3/settings/tests/devnet.test.ts) —
   end-to-end usage of both key- and script-authorized paths, including the
   negative (must-reject) cases.
-- [Architecture](../../ARCHITECTURE.md) — composability conventions shared by
+- [Architecture](../ARCHITECTURE.md) — composability conventions shared by
   every contract in the library.

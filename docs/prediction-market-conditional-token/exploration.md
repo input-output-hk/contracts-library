@@ -2,7 +2,7 @@
 
 > Status: **Exploring** (pre-triage). Working design log, not a spec. Triage is deferred to team discussion.
 >
-> **Sibling investigation:** [`prediction-market-parimutuel.md`](prediction-market-parimutuel.md) explores the pooled alternative. The two split a single earlier exploration; this document is the **recommended default** and the parimutuel one is the no-liquidity alternative for illiquid markets. §3 of each carries the head-to-head comparison.
+> **Sibling investigation:** [`../prediction-market-parimutuel/exploration.md`](../prediction-market-parimutuel/exploration.md) explores the pooled alternative. The two split a single earlier exploration; this document is the **recommended default** and the parimutuel one is the no-liquidity alternative for illiquid markets. §3 of each carries the head-to-head comparison.
 
 ## 1. Use case
 
