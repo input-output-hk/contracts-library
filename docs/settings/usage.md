@@ -99,7 +99,7 @@ The main protocol never spends the Settings UTxO — it reads `current` by
 adding the Settings UTxO to its transactions as a **reference input**:
 
 - **On-chain (Aiken):** use
-  [`onchain/lib/settings/utils.ak`](../../onchain/lib/settings/) →
+  [`onchain/lib/settings/utils.ak`](../../onchain/lib/settings/utils.ak) →
 
   ```aiken
   let settings = get_settings_datum(tx, settings_ref, policy, token_name)
