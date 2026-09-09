@@ -1,7 +1,8 @@
 # Formal proofs
 
-Machine-checked proofs of the contract **specifications** under [`../specs`](../specs).
-This is a fourth artifact alongside `onchain/`, `offchain/`, and `specs/`: the
+Machine-checked proofs of the contract **specifications** under [`docs/<contract>/spec.md`](../docs).
+This is a fourth artifact alongside `onchain/`, `offchain/`, and the spec
+(`docs/<contract>/spec.md`): the
 proofs are *about the spec* (the source of truth), not about any one
 implementation. See [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md) §2.
 

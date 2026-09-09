@@ -1,7 +1,7 @@
 # vesting/linear — formal proofs
 
 Machine-checked proofs for the **linear vesting** contract, against the compiled
-validator. See the spec [`linear-vesting.md`](../../../../specs/vesting/linear-vesting.md)
+validator. See the spec [`spec.md`](../../../../docs/vesting/spec.md)
 (the source of truth, with §8 completeness / §9 soundness clauses) and the
 on-chain types [`types.ak`](../../../../onchain/lib/vesting/types.ak). For the
 toolchain, build, and general `blaster` notes, see the

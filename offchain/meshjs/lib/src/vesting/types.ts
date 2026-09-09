@@ -1,6 +1,6 @@
 /**
  * Off-chain mirror of the on-chain types in `onchain/lib/vesting/types.ak`.
- * See specs/vesting/linear-vesting.md §3.
+ * See docs/vesting/spec.md §3.
  */
 
 import type { Credential } from "../common";

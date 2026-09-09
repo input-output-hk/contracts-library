@@ -9,7 +9,7 @@ Two layers:
      relations the Completeness/Soundness/Robustness proofs are stated against.
      The encodings mirror `onchain/lib/vesting/types.ak` exactly.
 
-See `specs/vesting/linear-vesting.md`.
+See `docs/vesting/spec.md`.
 -/
 import Blaster
 import PlutusCore.UPLC

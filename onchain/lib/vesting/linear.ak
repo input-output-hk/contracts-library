@@ -1,5 +1,5 @@
 //// Linear vesting — parameterized validation logic.
-//// See `specs/vesting/linear-vesting.md`. This module holds the reusable
+//// See `docs/vesting/spec.md`. This module holds the reusable
 //// predicates; `validators/linear_vesting.ak` is a thin wrapper over them.
 
 use aiken/collection/list
