@@ -215,7 +215,7 @@ Directional (hard targets/dates live in the Roadmap):
 - Whether **IOG deploys canonical reference scripts** for non-parameterized contracts (designed-for, undecided).
 - **Additional off-chain languages** beyond MeshJS + Tx3.
 - The interactive **Wizard / configurator**.
-- **Formal verification** of implementations via the specs folder.
+- **Formal verification** of implementations against the per-contract specs (`docs/<contract>/spec.md`), with proofs in `formal/`.
 - **Audits** of contracts (beyond current scope).
 
 ## 15. Relationship to Other Documents & Libraries
