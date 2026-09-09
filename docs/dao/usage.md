@@ -413,8 +413,9 @@ against an illegitimate victory claim is each effect script's own job
 
 The Tx3 implementation lives in
 [`offchain/tx3/dao/`](../../offchain/tx3/dao/) with a generated client in
-[`codegen/ts-client/dao-governance`](../../offchain/tx3/dao/codegen/ts-client/dao-governance/README.md)
-(regenerate with `trix codegen`; do not edit by hand). Unlike the MeshJS
+`codegen/ts-client/dao-governance` (regenerate it from
+[`main.tx3`](../../offchain/tx3/dao/main.tx3) with `trix codegen`; do not edit
+by hand). Unlike the MeshJS
 builders it also covers **vote cancel** and the settings launch
 (`launchSettings` mints the settings NFT with a typed `DaoSettings` as
 `current`).
@@ -595,8 +596,7 @@ Notes:
 - [On-chain code](../../onchain/validators/dao/) — the four validators;
   composable predicates and tests in [`onchain/lib/dao/`](../../onchain/lib/dao/).
 - [MeshJS e2e tests](../../offchain/meshjs/e2e/test/dao.e2e.test.ts) —
-  the complete happy path against a Yaci devnet, including
-  [maximum-tally batching](../../offchain/meshjs/e2e/test/dao-tally-max.e2e.test.ts).
+  the complete happy path against a Yaci devnet.
 - [Tx3 devnet test](../../offchain/tx3/dao/tests/devnet.test.ts) — the
   full lifecycle with the generated client, plus negative (must-reject) cases.
 - [Settings usage guide](../settings/usage.md) — operating the

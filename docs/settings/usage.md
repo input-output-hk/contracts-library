@@ -242,8 +242,9 @@ authorizer: { scriptCbor: daoScriptCbor },            // redeemer defaults to un
 The Tx3 implementation lives in
 [`offchain/tx3/settings/`](../../offchain/tx3/settings/) with a generated
 TypeScript client in
-[`codegen/ts-client/config-parameter-management`](../../offchain/tx3/settings/codegen/ts-client/config-parameter-management/README.md)
-(regenerate with `trix codegen`; do not edit by hand).
+`codegen/ts-client/config-parameter-management`
+(regenerate it from [`main.tx3`](../../offchain/tx3/settings/main.tx3) with
+`trix codegen`; do not edit by hand).
 
 Install the runtime SDK in the directory that consumes the client:
 
