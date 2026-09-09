@@ -208,7 +208,21 @@ export async function fundedAccount(
   await wallet.init();
   const address = await wallet.getChangeAddress();
   for (const amount of adaTopups) {
-    await provider.addressTopup(address, String(amount));
+    // The faucet intermittently answers 500 "Topup failed" once a suite has
+    // hit it many times; retry briefly before giving up.
+    for (let attempt = 1; ; attempt++) {
+      try {
+        await provider.addressTopup(address, String(amount));
+        break;
+      } catch (err) {
+        if (attempt >= 5) throw err;
+        console.warn(
+          `[devnet] topup failed (attempt ${attempt}), retrying:`,
+          describeError(err).slice(0, 120),
+        );
+        await sleep(1_500 * attempt);
+      }
+    }
   }
   await waitForUtxoCount(provider, address, adaTopups.length);
   const { pubKeyHash } = deserializeAddress(address);

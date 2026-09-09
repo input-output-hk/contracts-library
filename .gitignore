@@ -2,5 +2,7 @@
 !docs/*
 !specs/*
 .claude
+opencode.json
+.vscode
 
 node_modules/

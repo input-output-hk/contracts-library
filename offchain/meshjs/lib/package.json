@@ -25,6 +25,9 @@
   },
   "blueprint": {
     "vesting": "95da21788eb1f59f51aad9669eb8c8b7081ab618c1f29b871925894a",
+    "dao.proposal": "0222c427016359c662a5ec9da8548cd502ede975dfaee74127c4f44a",
+    "dao.stake": "2590ef411a0d1524b803dd00fdc4cb47b0424d3f4054501cef00e975",
+    "dao.vote": "159c194c38c731f22357da05d3f7ddd1078e80067222340a55789bf1",
     "settings": "2404b296676c4ab96a657c873a5bf58d01c77c6021f380a481a9a0bd",
     "settings_typed": "df77ce7f7d573025b2176af1efaa36ac27bfd324fd68be775c11c04a",
     "compiler": "aiken-v1.1.22"
