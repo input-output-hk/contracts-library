@@ -25,7 +25,7 @@ You can choose how you want to use this library depending on your needs. While t
 
 1. **Use** — drive a finished contract through its off-chain builders. Each contract ships transaction builders under `offchain/`; for linear vesting see [`offchain/meshjs/lib`](offchain/meshjs/lib) (`buildLockTx` / `buildClaimTx` / `buildCancelTx`) and its [README](offchain/meshjs/lib/README.md).
 2. **Compose** — import the parameterized on-chain predicates from [`onchain/lib/<contract>/`](onchain/) and the off-chain helpers to build something new, instead of the ready-made validator.
-3. **Fork** — copy the contract's `onchain/`, `offchain/`, and `specs/` modules and modify them for your needs.
+3. **Fork** — copy the contract's `onchain/`, `offchain/`, and `docs/<contract>/` modules and modify them for your needs.
 
 Start from the contract's **spec** to understand the behavior, then pick a layer above. Compiled blueprints live in [`onchain/plutus.json`](onchain/plutus.json).
 
@@ -37,7 +37,7 @@ Each contract ships as four parts:
 | --- | --- | --- |
 | **On-chain** | `onchain/` | Aiken validation logic the ledger enforces. The only part that carries security. |
 | **Off-chain** | `offchain/` | Transaction builders developers call. The primary developer-facing API. |
-| **Spec** | `specs/` | Implementation-independent description of behavior. The source of truth. |
+| **Spec** | `docs/<contract>/spec.md` | Implementation-independent description of behavior. The source of truth. |
 | **Formal proofs** | `formal/` | Machine-checked Lean 4 proofs _about the spec_ (completeness, soundness, robustness). |
 
 Validators are written as well-behaved predicates that avoid global assumptions about transaction shape, so contracts compose freely in shared transactions. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the composability rules.
@@ -49,9 +49,8 @@ onchain/      Aiken workspace (lib/<contract>/, validators/)
 offchain/
   meshjs/     MeshJS implementations
   tx3/        Tx3 implementations
-specs/        decoupled per-contract specifications
 formal/       Lean 4 proofs of the specs (Lean-Blaster / Z3)
-docs/         PRD, ARCHITECTURE, contributor docs
+docs/         PRD, ARCHITECTURE, and per-contract docs (spec, design, usage, exploration)
 ```
 
 ## Contract catalog
@@ -60,7 +59,7 @@ The full, status-tracked catalog lives in the [PRD](docs/PRD.md#7-contract-catal
 
 | Contract | Category | Status | Spec |
 |---|---|---|---|
-| Linear vesting | DeFi | In progress | [spec](specs/vesting/linear-vesting.md) |
+| Linear vesting | DeFi | In progress | [spec](docs/vesting/spec.md) |
 
 More candidates (escrow, AMM, CIP-68, programmable tokens, multisig, DAO, …) are explored and triaged in the PRD.
 

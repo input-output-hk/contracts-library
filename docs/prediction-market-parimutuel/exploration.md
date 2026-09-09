@@ -2,7 +2,7 @@
 
 > Status: **Exploring** (pre-triage). Working design log, not a spec. Triage is deferred to team discussion.
 >
-> **Sibling investigation:** [`prediction-market-conditional-token.md`](prediction-market-conditional-token.md) explores the conditional-token settlement layer, which is the **recommended default**.
+> **Sibling investigation:** [`../prediction-market-conditional-token/exploration.md`](../prediction-market-conditional-token/exploration.md) explores the conditional-token settlement layer, which is the **recommended default**.
 
 ## 1. Use case
 

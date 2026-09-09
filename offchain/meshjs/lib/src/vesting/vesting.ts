@@ -1,7 +1,7 @@
 /**
  * Transaction builders for linear vesting (MeshJS).
  *
- * Implements the action set in specs/vesting/linear-vesting.md §4:
+ * Implements the action set in docs/vesting/spec.md §4:
  *   - `buildLockTx`   create a vesting instance (no script runs).
  *   - `buildClaimTx`  withdraw the vested portion (beneficiary).
  *   - `buildCancelTx` recover the remainder after recoveryTime (locker).

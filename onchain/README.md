@@ -25,7 +25,7 @@ See [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md) for the composability c
 
 A validator here is an *implementation*. The authoritative description of what each contract does (its state, actions, and invariants) lives outside this workspace:
 
-- **Specs**: Implementation-independent behavior, the source of truth: [`../specs/`](../specs/).
+- **Specs**: Implementation-independent behavior, the source of truth: [`docs/<contract>/spec.md`](../docs/).
 - **Formal proofs**: Machine-checked Lean 4 proofs of those specs (completeness, soundness, robustness): [`../formal/`](../formal/).
 
 When reading a validator, start from its spec; the code comments reference spec sections (e.g. `§5.2`) rather than restating them.
@@ -35,7 +35,7 @@ When reading a validator, start from its spec; the code comments reference spec 
 
 | Contract | Library | Validator | Spec |
 |---|---|---|---|
-| Linear vesting | `lib/vesting/` | `validators/linear_vesting.ak` | [`../specs/vesting/linear-vesting.md`](../specs/vesting/linear-vesting.md) |
+| Linear vesting | `lib/vesting/` | `validators/linear_vesting.ak` | [`../docs/vesting/spec.md`](../docs/vesting/spec.md) |
 
 
 More contracts (escrow, AMM, CIP-68, multisig, …) are triaged in the [PRD](../docs/PRD.md#7-contract-catalog).

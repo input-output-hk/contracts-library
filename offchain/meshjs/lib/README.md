@@ -2,7 +2,7 @@
 
 Transaction builders for all the implemented contracts. These constitute the primary developer-facing APIs.
 
-- **Specs**: [`specs/`](../../../specs/)
+- **Specs**: [`docs/<contract>/spec.md`](../../../docs/)
 - **On-chain**: [`onchain/`](../../../onchain), pinned via `src/<contract-name>/blueprint.ts`.
 
 ## Install

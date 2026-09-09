@@ -8,7 +8,7 @@
 //// The frozen amount is the **maximum** stake across live locks (not the sum),
 //// because the same tokens back every concurrent action — a position with
 //// `N` tokens can lend all `N` to several proposals at once. See
-//// `docs/explorations/dao/transactions.typ` (Withdraw notes).
+//// `docs/dao/design.typ` (Withdraw notes).
 
 use aiken/collection/list
 

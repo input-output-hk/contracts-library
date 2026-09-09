@@ -11,7 +11,7 @@ The protocol is a set of three cooperating validators, each guarding its own sin
 - **`vote`**: A *vote artifact* UTxO records one holder's vote on one proposal and is destroyed at tally time. The validator's own hash is the vote-NFT policy ID and the vote address.
 - **Effect scripts**: The per-option/outcome validators a proposal references in its `results`. They are *not* part of the protocol; a proposal just names them, and the winning one runs under the withdraw-0 convention.
 
-Governance parameters (thresholds, timings, and the sibling script hashes) are **not** compiled into the validators. They are read at runtime from a **settings UTxO** (see `specs/settings/protocol-settings.md`), located by its NFT via reference input, whose opaque `current` datum is cast to `DaoSettings`. This keeps the three DAO validators free of circular compile-time dependencies and lets the settings protocol govern the DAO's parameters.
+Governance parameters (thresholds, timings, and the sibling script hashes) are **not** compiled into the validators. They are read at runtime from a **settings UTxO** (see `../settings/spec.md`), located by its NFT via reference input, whose opaque `current` datum is cast to `DaoSettings`. This keeps the three DAO validators free of circular compile-time dependencies and lets the settings protocol govern the DAO's parameters.
 
 The way it works is:
 

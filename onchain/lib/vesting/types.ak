@@ -1,5 +1,5 @@
 //// On-chain state and actions for the linear vesting contract.
-//// See `specs/vesting/linear-vesting.md` §3.
+//// See `docs/vesting/spec.md` §3.
 
 use cardano/address.{Credential}
 use cardano/assets.{AssetName, PolicyId}

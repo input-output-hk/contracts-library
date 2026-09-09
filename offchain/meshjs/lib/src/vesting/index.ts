@@ -1,6 +1,6 @@
 /**
  * Linear vesting — MeshJS off-chain submodule.
- * Spec: specs/vesting/linear-vesting.md
+ * Spec: docs/vesting/spec.md
  */
 
 export * from "./types";

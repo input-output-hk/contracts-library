@@ -35,7 +35,7 @@ Every contract is made of three parts, each living in its own top-level director
 
 - **On-chain** (`onchain/`): the validation logic that the ledger enforces.
 - **Off-chain** (`offchain/`): the transaction builders developers call.
-- **Spec** (`specs/`): the implementation-independent description of behavior.
+- **Spec** (`docs/<contract>/spec.md`): the implementation-independent description of behavior.
 
 The off-chain layer is the primary developer-facing API unless they want to change how the protocol works. The on-chain layer is a dependency of it, and the spec is the source of truth both implement against. Section 2 defines the role and contents of each part.
 
@@ -69,7 +69,7 @@ A contract is a single use case (a vesting schedule, an auction, a token standar
 - **Helpers** for constructing and reading the contract's datums and redeemers, and for off-chain parameter application where the contract allows it.
 - **A pin to a specific on-chain blueprint** (version/hash) if possible so off-chain code and on-chain logic cannot silently drift apart.
 
-### 2.3 Spec part (`specs/`)
+### 2.3 Spec part (`docs/<contract>/spec.md`)
 
 **Role.** The source of truth for what the contract does, written so it can be understood and checked independently of any implementation. It is what makes the contract verifiable and re-implementable: a second on-chain language or a new off-chain package is correct insofar as it matches the spec, not insofar as it matches the existing code. It is decoupled from implementation by design and contains no implementation code.
 
