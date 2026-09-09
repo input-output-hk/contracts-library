@@ -7,7 +7,7 @@
  * the two layers cannot silently drift).
  *
  * Source: onchain/plutus.json
- * Compiler: Aiken v1.1.21+42babe5
+ * Compiler: Aiken v1.1.22+39d6b04
  * Plutus version: V3
  */
 

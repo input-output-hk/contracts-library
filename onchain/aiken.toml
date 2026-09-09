@@ -1,6 +1,6 @@
 name = "input-output-hk/contracts-library"
 version = "0.0.0"
-compiler = "v1.1.21"
+compiler = "v1.1.22"
 plutus = "v3"
 license = "Apache-2.0"
 description = "Standardized, reusable smart contracts for Cardano — on-chain validation layer."

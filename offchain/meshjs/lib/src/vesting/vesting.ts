@@ -12,6 +12,7 @@
 
 import {
   applyCborEncoding,
+  Network,
   serializePlutusScript,
   SLOT_CONFIG_NETWORK,
   unixTimeToEnclosingSlot,
@@ -22,7 +23,7 @@ import {
   type UTxO,
 } from "@meshsdk/core";
 
-import { applyAuthorization, type ScriptAuthorizer } from "./authorization";
+import { applyAuthorization, type ScriptAuthorizer } from "../authorization";
 import { compiledCode, plutusVersion } from "./blueprint";
 import {
   cancelRedeemer,
@@ -31,8 +32,6 @@ import {
   vestingDatumToData,
 } from "./datum";
 import type { VestedAsset, VestingDatum } from "./types";
-
-type Network = "mainnet" | "preprod" | "preview";
 
 function networkIdOf(network: Network): 0 | 1 {
   return network === "mainnet" ? 1 : 0;
@@ -109,8 +108,7 @@ export async function buildLockTx(p: LockParams): Promise<string> {
   const minLovelace = p.minUtxoLovelace ?? DEFAULT_MIN_UTXO_LOVELACE;
   const scriptAddr = vestingScriptAddress(p.networkId ?? 0);
   const assets =
-    p.lockAssets ??
-    remainderToAssets(p.datum.vesting, minLovelace); // full bundle, ada floored
+    p.lockAssets ?? remainderToAssets(p.datum.vesting, minLovelace); // full bundle, ada floored
 
   return await p.txBuilder
     .txOut(scriptAddr, assets)
@@ -243,7 +241,9 @@ export interface CancelParams {
  */
 export async function buildCancelTx(p: CancelParams): Promise<string> {
   const { datum, now } = p;
-  if (!(datum.startTime < datum.endTime && datum.endTime < datum.recoveryTime)) {
+  if (
+    !(datum.startTime < datum.endTime && datum.endTime < datum.recoveryTime)
+  ) {
     throw new Error(
       "Invalid schedule: require startTime < endTime < recoveryTime",
     );
