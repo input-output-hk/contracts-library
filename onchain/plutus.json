@@ -389,6 +389,95 @@
       "hash": "159c194c38c731f22357da05d3f7ddd1078e80067222340a55789bf1"
     },
     {
+      "title": "event_triggered_assets.issuance_logic.withdraw",
+      "redeemer": {
+        "title": "redeemer",
+        "schema": {
+          "$ref": "#/definitions/event_triggered~1types~1IssuanceAction"
+        }
+      },
+      "parameters": [
+        {
+          "title": "p",
+          "schema": {
+            "$ref": "#/definitions/event_triggered~1types~1IssuanceParams"
+          }
+        }
+      ],
+      "compiledCode": "5907be010100229800aba2aba1aba0aab9faab9eaab9dab9a488888896600264653001300800198041804800cdc3a400930080024888966002600460106ea800e33001300c30093754007370e90014dc3a4001300837540089111192cc004c00c00a2b3001300e37540130018b201e8acc004c01000a2b3001300e37540130018b201e8acc004c01c00a2b3001300e37540130018b201e8acc004cdc3a400c00515980098071baa009800c5900f45900c20184030806066002444b30013005300f375400713232330010010042259800800c528456600266e3cdd7180b000801c528c4cc008008c05c0050112028375c602660206ea800e2646600200200444b30010018a508acc004cdd78029808980a800c528c4cc008008c05800501020264039230113012301230123012301230123012301200191808980918091809180918091809000c8c044c048c0480064464b30013005001899192cc004c05800a00916404c6eb8c050004c040dd5001c566002600c0031323259800980b00140122c8098dd7180a00098081baa0038b201c4038601c6ea800a4464646600200200844b3001001801c4c8c96600266e440180062b30013371e00c0031375660280050054049133004004301800340486eb8c048004c0540050130a5eb7bdb1824b30010018a518a50403d230113012001911919800800801912cc00400629462b300130033014001899801001180a800c528201e40492259800800c52000899b8048008cc008008c04c00501048c044c048c048c048006460226024602460246024602400323011301230123012301200192cc0040062946294100f496600200314a314a0807a60186ea8021222222222222222298009803803c8c8cc004004008896600200314bd7044cc088c030c080dd51811800998010011812000a0429111919800800802112cc004006297ae089919912cc004c06cc090dd500144cc01401400626604e6050604a6ea8008cc01401400502319192cc004c068c090dd5000c4c96600266ebcc058c098dd5000803c4c9660026038604c6ea800626008660526e9ccc0a4c0a8c09cdd50009981480125eb812f5c114c103d87a800040946644b30010018014566002605800313259800980f9bad302900189803198159814000a5eb820068138c0ac00600481490290a60103d87a80003301437566024604c6ea80100222980103d87a800040906050604a6ea80062980103d87a8000408cb30013011330123756602060486ea800801a298103d87a80008992cc004c078c090dd5000c4c9660026036604a6ea8006264646464646465300137586060003375c606000f375c606000d30300049818001cdd718180012444444b30013037007899811181b00589981100189981100109919800800803912cc004006260246606e02097ae089919801801981d0011bae303800140d91640d03030001302f001302e001302d001302c001302b001302637540031640906050604a6ea8006298103d87a8000408c602860486ea80090221ba548000c09c008c0940050234896600266ebcc020c07cdd500119ba548008cc084c020c07cdd5000a5eb822b30013375e600c603e6ea8008cdd2a400466042600c603e6ea80052f5c115980099b8f48900375c600e603e6ea800a266ebd3010180003010301f375400514a080ea294101d4528203a48888c966002602e00d132598009813800c4c96600266008604e60500020551598009808998091bab300b302437540386eb8c09c006330013010302437540553758602c60486ea80726eacc054c090dd500e202e8a50408914a08110dd61813000c590244c004dd6180918111baa01a9bae302530223754051019400d159800980c00344c966002604e00313322598009814800c5660026600a605060526eb0c0a00040ae330013011302537540573758602e604a6ea80766eacc058c094dd500ea0308a50408d1640986eb0c09800660026eb0c04cc08cdd500dcdd7181318119baa02980d20088b2048980098021bac302530223754035375c604a60446ea80a2032801a2b3001301b0068992cc006600260100034a14a2810a2b30013300e00123371090001bad30240018acc004c0266002600a6eb0c098c08cdd500dcdd7181318119baa02980d20088cc004c03cc08cdd5014cdd6180a98119baa01b9bab30143023375403680b22941021452820428a504084660206eacc024c088dd500d4c004066035028400513259800cc004c02000694294502145660026601c002466e20dd69812000a40011598009804cc004c014dd6181318119baa01b9bae30263023375405301a4011159800994c0040066eb0c058c090dd500e4dd5980a98121baa01c405c602660466ea80a626644b3001301b3024375400314a31325980099b873009330140030013009004899808802119b8733223322330020020012259800800c00e26464b30013372200c00315980099b8f00600189bad302d002802a0568998020021818801a056375c6056002605c0028160cc05c018010dd718130008a400066e052000375a604e00314a08120dd7181418129baa001408c6eacc028c08cdd500d980598119baa0298a50408514a0810a294102145282042330103756601260446ea806a600203301a814200240808101020111192cc004c0a400626eb8c0a0dd61814000c590264c004c018dd6180818121baa0029bae302730243754003003401422c8038601000260066ea802229344d95900101",
+      "hash": "1d307edaa2d783dfc1e8824c3387aeb768ab80e80da68dddec38fc25"
+    },
+    {
+      "title": "event_triggered_assets.issuance_logic.else",
+      "redeemer": {
+        "schema": {}
+      },
+      "parameters": [
+        {
+          "title": "p",
+          "schema": {
+            "$ref": "#/definitions/event_triggered~1types~1IssuanceParams"
+          }
+        }
+      ],
+      "compiledCode": "5907be010100229800aba2aba1aba0aab9faab9eaab9dab9a488888896600264653001300800198041804800cdc3a400930080024888966002600460106ea800e33001300c30093754007370e90014dc3a4001300837540089111192cc004c00c00a2b3001300e37540130018b201e8acc004c01000a2b3001300e37540130018b201e8acc004c01c00a2b3001300e37540130018b201e8acc004cdc3a400c00515980098071baa009800c5900f45900c20184030806066002444b30013005300f375400713232330010010042259800800c528456600266e3cdd7180b000801c528c4cc008008c05c0050112028375c602660206ea800e2646600200200444b30010018a508acc004cdd78029808980a800c528c4cc008008c05800501020264039230113012301230123012301230123012301200191808980918091809180918091809000c8c044c048c0480064464b30013005001899192cc004c05800a00916404c6eb8c050004c040dd5001c566002600c0031323259800980b00140122c8098dd7180a00098081baa0038b201c4038601c6ea800a4464646600200200844b3001001801c4c8c96600266e440180062b30013371e00c0031375660280050054049133004004301800340486eb8c048004c0540050130a5eb7bdb1824b30010018a518a50403d230113012001911919800800801912cc00400629462b300130033014001899801001180a800c528201e40492259800800c52000899b8048008cc008008c04c00501048c044c048c048c048006460226024602460246024602400323011301230123012301200192cc0040062946294100f496600200314a314a0807a60186ea8021222222222222222298009803803c8c8cc004004008896600200314bd7044cc088c030c080dd51811800998010011812000a0429111919800800802112cc004006297ae089919912cc004c06cc090dd500144cc01401400626604e6050604a6ea8008cc01401400502319192cc004c068c090dd5000c4c96600266ebcc058c098dd5000803c4c9660026038604c6ea800626008660526e9ccc0a4c0a8c09cdd50009981480125eb812f5c114c103d87a800040946644b30010018014566002605800313259800980f9bad302900189803198159814000a5eb820068138c0ac00600481490290a60103d87a80003301437566024604c6ea80100222980103d87a800040906050604a6ea80062980103d87a8000408cb30013011330123756602060486ea800801a298103d87a80008992cc004c078c090dd5000c4c9660026036604a6ea8006264646464646465300137586060003375c606000f375c606000d30300049818001cdd718180012444444b30013037007899811181b00589981100189981100109919800800803912cc004006260246606e02097ae089919801801981d0011bae303800140d91640d03030001302f001302e001302d001302c001302b001302637540031640906050604a6ea8006298103d87a8000408c602860486ea80090221ba548000c09c008c0940050234896600266ebcc020c07cdd500119ba548008cc084c020c07cdd5000a5eb822b30013375e600c603e6ea8008cdd2a400466042600c603e6ea80052f5c115980099b8f48900375c600e603e6ea800a266ebd3010180003010301f375400514a080ea294101d4528203a48888c966002602e00d132598009813800c4c96600266008604e60500020551598009808998091bab300b302437540386eb8c09c006330013010302437540553758602c60486ea80726eacc054c090dd500e202e8a50408914a08110dd61813000c590244c004dd6180918111baa01a9bae302530223754051019400d159800980c00344c966002604e00313322598009814800c5660026600a605060526eb0c0a00040ae330013011302537540573758602e604a6ea80766eacc058c094dd500ea0308a50408d1640986eb0c09800660026eb0c04cc08cdd500dcdd7181318119baa02980d20088b2048980098021bac302530223754035375c604a60446ea80a2032801a2b3001301b0068992cc006600260100034a14a2810a2b30013300e00123371090001bad30240018acc004c0266002600a6eb0c098c08cdd500dcdd7181318119baa02980d20088cc004c03cc08cdd5014cdd6180a98119baa01b9bab30143023375403680b22941021452820428a504084660206eacc024c088dd500d4c004066035028400513259800cc004c02000694294502145660026601c002466e20dd69812000a40011598009804cc004c014dd6181318119baa01b9bae30263023375405301a4011159800994c0040066eb0c058c090dd500e4dd5980a98121baa01c405c602660466ea80a626644b3001301b3024375400314a31325980099b873009330140030013009004899808802119b8733223322330020020012259800800c00e26464b30013372200c00315980099b8f00600189bad302d002802a0568998020021818801a056375c6056002605c0028160cc05c018010dd718130008a400066e052000375a604e00314a08120dd7181418129baa001408c6eacc028c08cdd500d980598119baa0298a50408514a0810a294102145282042330103756601260446ea806a600203301a814200240808101020111192cc004c0a400626eb8c0a0dd61814000c590264c004c018dd6180818121baa0029bae302730243754003003401422c8038601000260066ea802229344d95900101",
+      "hash": "1d307edaa2d783dfc1e8824c3387aeb768ab80e80da68dddec38fc25"
+    },
+    {
+      "title": "event_triggered_assets.third_party_logic.withdraw",
+      "redeemer": {
+        "title": "_redeemer",
+        "schema": {
+          "$ref": "#/definitions/event_triggered~1types~1ThirdPartyAction"
+        }
+      },
+      "parameters": [
+        {
+          "title": "p",
+          "schema": {
+            "$ref": "#/definitions/event_triggered~1types~1ThirdPartyParams"
+          }
+        }
+      ],
+      "compiledCode": "590366010100229800aba2aba1aba0aab9faab9eaab9dab9a488888896600264653001300800198041804800cc0200092225980099b8748010c01cdd500144cc8966002600260126ea80162b3001300a375400b19800918071807800c88c8c8cc0040040108966002003003899192cc004cdc8803000c56600266e3c01800626eacc04400a00a807a266008008602a0068078dd718078009809000a02014bd6f7b63048c038c03cc03c00644646600200200644b30010018a5eb8226644b3001300500289980900119802002000c4cc01001000500e18088009809000a01e9bae300d300a37540209111119912cc004c966002601260226ea800626464660020026eb0c05cc060c060c060c060c060c060c060c060c050dd5006912cc00400629422b30013371e6eb8c06000400e2946266004004603200280990161bae301530123754003132330010013756602c602e602e602e602e602e602e60266ea8030896600200314a115980099baf003301330170018a51899801001180c000a02440548080c01cc044dd500bc56600264660020026600e6eacc054c058c058c058c058c048dd5005802112cc00400629422b3001337106eb4c04cc05800520008a51899801001180b800a02240511325980099b8748008c044dd5000c528c4c8cc88cc008008cc020dd61804980a9baa00e23300737566018602c6ea8004008896600200314a3159800992cc004c034c054dd5000c4c8c8cc004004018896600200314a115980099baf301c0010038a51899801001180e800a02e40686032602c6ea800629410141802980c180a9baa3018001899801001180c800c528202640586eb8c058c04cdd50011919800800998031bac30163013375401846600a6eacc028c050dd51805180a1baa0010062259800800c52f5c113233225980099b8748008c058dd500144cc0140140062660326034602e6ea8008cc0140140050151802980c180a9baa300b301537540026032004602e00280a9010180298089baa0178a50403d14a080788a6002b3001330060020018a518a5040494a14a280788cc8966002601260226ea800a264b3001300a3012375400313374a90001980a980b18099baa0014bd704009011180a98091baa002800a0203006301037540022980103d87a800045900b459008180598041baa002370e90004590060c020004c00cdd5004452689b2b200201",
+      "hash": "480eac9e3a8144b16e1713cccc93aa516ba35a612d92c091bfc88b0e"
+    },
+    {
+      "title": "event_triggered_assets.third_party_logic.else",
+      "redeemer": {
+        "schema": {}
+      },
+      "parameters": [
+        {
+          "title": "p",
+          "schema": {
+            "$ref": "#/definitions/event_triggered~1types~1ThirdPartyParams"
+          }
+        }
+      ],
+      "compiledCode": "590366010100229800aba2aba1aba0aab9faab9eaab9dab9a488888896600264653001300800198041804800cc0200092225980099b8748010c01cdd500144cc8966002600260126ea80162b3001300a375400b19800918071807800c88c8c8cc0040040108966002003003899192cc004cdc8803000c56600266e3c01800626eacc04400a00a807a266008008602a0068078dd718078009809000a02014bd6f7b63048c038c03cc03c00644646600200200644b30010018a5eb8226644b3001300500289980900119802002000c4cc01001000500e18088009809000a01e9bae300d300a37540209111119912cc004c966002601260226ea800626464660020026eb0c05cc060c060c060c060c060c060c060c060c050dd5006912cc00400629422b30013371e6eb8c06000400e2946266004004603200280990161bae301530123754003132330010013756602c602e602e602e602e602e602e60266ea8030896600200314a115980099baf003301330170018a51899801001180c000a02440548080c01cc044dd500bc56600264660020026600e6eacc054c058c058c058c058c048dd5005802112cc00400629422b3001337106eb4c04cc05800520008a51899801001180b800a02240511325980099b8748008c044dd5000c528c4c8cc88cc008008cc020dd61804980a9baa00e23300737566018602c6ea8004008896600200314a3159800992cc004c034c054dd5000c4c8c8cc004004018896600200314a115980099baf301c0010038a51899801001180e800a02e40686032602c6ea800629410141802980c180a9baa3018001899801001180c800c528202640586eb8c058c04cdd50011919800800998031bac30163013375401846600a6eacc028c050dd51805180a1baa0010062259800800c52f5c113233225980099b8748008c058dd500144cc0140140062660326034602e6ea8008cc0140140050151802980c180a9baa300b301537540026032004602e00280a9010180298089baa0178a50403d14a080788a6002b3001330060020018a518a5040494a14a280788cc8966002601260226ea800a264b3001300a3012375400313374a90001980a980b18099baa0014bd704009011180a98091baa002800a0203006301037540022980103d87a800045900b459008180598041baa002370e90004590060c020004c00cdd5004452689b2b200201",
+      "hash": "480eac9e3a8144b16e1713cccc93aa516ba35a612d92c091bfc88b0e"
+    },
+    {
+      "title": "event_triggered_assets.transfer_logic.withdraw",
+      "redeemer": {
+        "title": "_redeemer",
+        "schema": {
+          "$ref": "#/definitions/event_triggered~1types~1TransferAction"
+        }
+      },
+      "compiledCode": "587101010029800aba2aba1aab9faab9eaab9dab9a48888896600264653001300700198039804000cc01c0092225980099b8748010c01cdd500144c96600266e1d20003008375400915980098049baa0048a518b20148b200e300a3008375400516401830070013003375400f149a26cac8009",
+      "hash": "90c817416f0e02a4973f4beddc5b6bffa33c9b7fd57b24d7c1e2299d"
+    },
+    {
+      "title": "event_triggered_assets.transfer_logic.else",
+      "redeemer": {
+        "schema": {}
+      },
+      "compiledCode": "587101010029800aba2aba1aab9faab9eaab9dab9a48888896600264653001300700198039804000cc01c0092225980099b8748010c01cdd500144c96600266e1d20003008375400915980098049baa0048a518b20148b200e300a3008375400516401830070013003375400f149a26cac8009",
+      "hash": "90c817416f0e02a4973f4beddc5b6bffa33c9b7fd57b24d7c1e2299d"
+    },
+    {
       "title": "linear_vesting.linear_vesting.spend",
       "datum": {
         "title": "datum",
@@ -794,6 +883,29 @@
           "fields": [
             {
               "$ref": "#/definitions/cardano~1address~1Credential"
+            }
+          ]
+        },
+        {
+          "title": "None",
+          "description": "Nothing.",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        }
+      ]
+    },
+    "Option<cardano/assets/PolicyId>": {
+      "title": "Option",
+      "anyOf": [
+        {
+          "title": "Some",
+          "description": "An optional value.",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "$ref": "#/definitions/cardano~1assets~1PolicyId"
             }
           ]
         },
@@ -1290,6 +1402,135 @@
           "title": "BurnVotes",
           "dataType": "constructor",
           "index": 1,
+          "fields": []
+        }
+      ]
+    },
+    "event_triggered/types/IssuanceAction": {
+      "title": "IssuanceAction",
+      "description": "Mode redeemer on the issuance-logic withdraw-0. The issuance credential is\n also the registry-lifecycle authority, so it runs in four contexts and must\n be told why (09-DEVELOPING-SUBSTANDARDS.md, \"Your issuance logic must know\n why it is running\"). Each mode is cross-checked against the transaction\n shape in `issuance.validate`.",
+      "anyOf": [
+        {
+          "title": "Register",
+          "description": "A `RegistryNode` for this substandard instance is being created.",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "UpdateNode",
+          "description": "This token's `RegistryNode` is being updated in place (Q-RULE-3 gate).",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": []
+        },
+        {
+          "title": "Mint",
+          "description": "Mint of the programmable token.",
+          "dataType": "constructor",
+          "index": 2,
+          "fields": []
+        },
+        {
+          "title": "Burn",
+          "description": "Burn of the programmable token: graduation or retirement (P3, Q-GRAD-2).",
+          "dataType": "constructor",
+          "index": 3,
+          "fields": []
+        }
+      ]
+    },
+    "event_triggered/types/IssuanceParams": {
+      "title": "IssuanceParams",
+      "description": "Compile-time parameters of the issuance-logic validator. The issuance\n credential is frozen at registration and gates the registry lifecycle, so\n every stance here is designed in up front, not retrofitted (Q-GRAD-2).",
+      "anyOf": [
+        {
+          "title": "IssuanceParams",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "registry_node_cs",
+              "description": "Policy of the core registry's node NFTs; used to locate this token's\n `RegistryNode` and resolve the governed policy id at runtime.",
+              "$ref": "#/definitions/cardano~1assets~1PolicyId"
+            },
+            {
+              "title": "issuer",
+              "description": "Authority for minting and the registry lifecycle (single authority by\n design; `Burn` is deliberately exempt — settlement is event-gated,\n never an issuer lever, Q-GRAD-2).",
+              "$ref": "#/definitions/cardano~1address~1Credential"
+            },
+            {
+              "title": "rule",
+              "description": "The pluggable P2 event-rule authority (§4, Q-RULE-1), also gating\n graduation — the same event condition the rules enforce. Chosen by\n the contract user when parameterizing (or forking) the final\n validator; the default wiring is a Credential satisfied by signature\n (key) or withdraw-0 (script, e.g. an oracle reading event facts via\n reference inputs).",
+              "$ref": "#/definitions/cardano~1address~1Credential"
+            },
+            {
+              "title": "transfer_logic",
+              "description": "Frozen at registration: transfer logic must remain this permissive\n script. Both `Register` and `UpdateNode` enforce it (Q-RULE-3).",
+              "$ref": "#/definitions/aiken~1crypto~1ScriptHash"
+            },
+            {
+              "title": "third_party_logic",
+              "description": "Frozen at registration: third-party logic must remain this\n governed-extraction script — keeper actions are admitted only through\n the event rule, never at the issuer's discretion (Q-RULE-2).",
+              "$ref": "#/definitions/aiken~1crypto~1ScriptHash"
+            },
+            {
+              "title": "graduated_policy",
+              "description": "P3 successor policy: `Some(p)` graduates 1:1 into `p`, `None` makes\n the instrument retire-only (§3.1, Q-GRAD-1).",
+              "$ref": "#/definitions/Option<cardano~1assets~1PolicyId>"
+            }
+          ]
+        }
+      ]
+    },
+    "event_triggered/types/ThirdPartyAction": {
+      "title": "ThirdPartyAction",
+      "description": "Redeemer of the third-party-logic withdraw-0 — the keeper-driven\n graduation gate (§2 P3, §5). A keeper detects the settlement event and\n submits a `SpendViaThirdParty` dispatch; nothing self-executes, the\n predicate approves (§3.1). The negative mint itself is authorized by the\n issuance logic (`Burn` mode, Q-GRAD-2), which runs in the same\n transaction; retire-only instruments (`graduated_policy: None`) ride the\n same path. Deliberately the only action in this first version: a\n keeper-driven plain move is never approvable — extraction is admitted\n only as part of graduation (Q-RULE-2). The typed redeemer leaves room to\n add event-conditioned release/lockup actions back (§2 P2's transfer /\n lockup flavors) without a format change.",
+      "anyOf": [
+        {
+          "title": "Graduate",
+          "description": "Event-conditioned burn of governed tokens — graduation or retirement.",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        }
+      ]
+    },
+    "event_triggered/types/ThirdPartyParams": {
+      "title": "ThirdPartyParams",
+      "description": "Compile-time parameters of the third-party-logic validator. The token's\n policy id derives from the issuance credential (the `issuance_mint`\n template) before this validator compiles, so it is baked in — the cheapest\n option per 09-DEVELOPING-SUBSTANDARDS.md, \"Finding your own policy id\".",
+      "anyOf": [
+        {
+          "title": "ThirdPartyParams",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "own_policy",
+              "$ref": "#/definitions/cardano~1assets~1PolicyId"
+            },
+            {
+              "title": "rule",
+              "description": "The pluggable P2 event-rule authority (§4, Q-RULE-1) — the same\n credential the issuance logic's `Burn` mode is wired with.",
+              "$ref": "#/definitions/cardano~1address~1Credential"
+            },
+            {
+              "title": "graduated_policy",
+              "description": "P3 successor policy — **must mirror `IssuanceParams.graduated_policy`**\n (same source value): the two params live in separately compiled\n validators, so keeping them in sync is the deployer's convention, not\n an on-chain checkable fact. Used to pin keeper-driven graduation\n payouts back to the burned holders (Q-GRAD-2); `None` = retire-only,\n nothing to pin.",
+              "$ref": "#/definitions/Option<cardano~1assets~1PolicyId>"
+            }
+          ]
+        }
+      ]
+    },
+    "event_triggered/types/TransferAction": {
+      "title": "TransferAction",
+      "description": "Redeemer of the transfer-logic withdraw-0. P1 imposes no transfer rules —\n the predicate approves every owner transfer; the redeemer is typed for\n the builders' convenience.",
+      "anyOf": [
+        {
+          "title": "Move",
+          "dataType": "constructor",
+          "index": 0,
           "fields": []
         }
       ]
