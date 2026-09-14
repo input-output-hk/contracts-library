@@ -111,13 +111,6 @@ pub type ThirdPartyParams {
     /// The pluggable P2 event-rule authority (§4, Q-RULE-1) — the same
     /// credential the issuance logic's `Burn` mode is wired with.
     rule: Credential,
-    /// P3 successor policy — **must mirror `IssuanceParams.graduated_policy`**
-    /// (same source value): the two params live in separately compiled
-    /// validators, so keeping them in sync is the deployer's convention, not
-    /// an on-chain checkable fact. Used to pin keeper-driven graduation
-    /// payouts back to the burned holders (Q-GRAD-2); `None` = retire-only,
-    /// nothing to pin.
-    graduated_policy: Option<PolicyId>,
   }
 }
 

@@ -46,7 +46,10 @@ use event_triggered/types.{
 /// must authorize the transaction — a verification key by signature, a
 /// script by its withdraw-0. Both `third_party_logic` and the issuance
 /// logic's `Burn` mode are wired with it, so graduation fires under the same
-/// event condition the rules enforce (Q-GRAD-2).
+/// event condition the rules enforce **and** with the burned owners' consent
+/// (verified by the issuance `Burn` mode: inline verification-key stake
+/// credentials must sign, inline script stake credentials must run their
+/// withdraw-0 — Q-GRAD-2).
 fn rule_check(rule: Credential) -> fn(Transaction) -> Bool {
   fn(tx: Transaction) {
     is_authorized(rule, tx.extra_signatories, tx.withdrawals)
@@ -78,9 +81,9 @@ validator transfer_logic {
 }
 
 /// Third-party logic (withdraw-0): the keeper-driven graduation gate —
-/// event-conditioned burns only, gated by the deployment's event rule, with
-/// graduated payouts pinned back to the burned holders (§2 P3, §5, Q-RULE-2,
-/// Q-GRAD-2). Note `p.graduated_policy` must mirror the issuance params' one.
+/// event-conditioned burns only ("keeper assembles, owners co-sign": owner
+/// consent is enforced by the issuance `Burn` mode in the same tx; §2 P3, §5,
+/// Q-RULE-2, Q-GRAD-2).
 validator third_party_logic(p: ThirdPartyParams) {
   withdraw(_redeemer: ThirdPartyAction, _account: Credential, self: Transaction) {
     third_party.validate(self, p, rule_check(p.rule))

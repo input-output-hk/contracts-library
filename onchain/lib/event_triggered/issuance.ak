@@ -6,23 +6,28 @@
 //// UpdateNode / Mint / Burn) and cross-checks the claimed mode against the
 //// transaction shape (09-DEVELOPING-SUBSTANDARDS.md, "Your issuance logic
 //// must know why it is running"). Graduation (`Burn`) is deliberately
-//// *event-gated, not issuer-gated*: the final validator wires the same
-//// pluggable event rule here that the third-party logic uses (§4, Q-RULE-1),
-//// so graduation fires only once the event condition the rules enforce is
-//// on-chain true — settlement, never a discretionary lever (Q-GRAD-2).
+//// *event-gated AND owner-consented, not issuer-gated*: the final validator
+//// wires the same pluggable event rule here that the third-party logic uses
+//// (§4, Q-RULE-1), and every burned instrument's owner must authorize the
+//// transaction — so graduation fires only under the event condition the
+//// rules enforce and with the owners' consent, whether the burn is
+//// holder-signed or keeper-assembled. Settlement, never a discretionary
+//// lever (Q-GRAD-2, candidate stance 2).
 ////
 //// Stances baked in (triage inputs for §7):
 //// - Q-GRAD-1: per-holder migration — burn `k` instrument tokens, mint `k`
 ////   graduated tokens 1:1 per asset name when `graduated_policy` is set;
 ////   `None` is a retire-only instrument. Identity/fungibility across the
 ////   swap, DEX pools and price history stay open for triage.
-//// - Q-GRAD-2: burn is gated by the event rule (`rule_check` hook, wired by
-////   the final validator with the deployment's `rule` credential — the same
-////   gate the third-party logic applies on the PLB side of a keeper-driven
-////   burn), never by the issuer.
+//// - Q-GRAD-2: burn requires (a) the event rule (`rule_check` hook, wired
+////   by the final validator with the deployment's `rule` credential — the
+////   same gate the third-party logic applies) and (b) the burned owners'
+////   consent: an inline verification-key stake credential must sign, an
+////   inline script stake credential must run its withdraw-0; pointer or
+////   absent stake credentials fail closed.
 //// - Q-RULE-2: third-party logic pinned to the governed-extraction script
-////   (keeper actions admitted only through the event rule); no global
-////   state, no companion assets.
+////   (keeper actions admitted only through the event rule, with owner
+////   consent enforced here); no global state, no companion assets.
 //// - Q-RULE-3: transfer logic pinned to the permissive script — P1 can
 ////   never be silently replaced by a gate.
 //// - The per-holder datum is deployer-defined `Data`, never interpreted
@@ -34,10 +39,11 @@
 
 use aiken/collection/dict
 use aiken/collection/list
+use aiken/crypto.{VerificationKeyHash}
 use authorization.{is_authorized}
-use cardano/address.{Credential, Script}
-use cardano/assets.{AssetName, PolicyId, Value, quantity_of, tokens}
-use cardano/transaction.{Transaction}
+use cardano/address.{Credential, Inline, Script}
+use cardano/assets.{AssetName, Lovelace, PolicyId, Value, quantity_of, tokens}
+use cardano/transaction.{Output, Transaction}
 use event_triggered/registry
 use event_triggered/types.{
   Burn, IssuanceAction, IssuanceParams, Mint, Register, RegistryNode, UpdateNode,
@@ -127,14 +133,18 @@ fn validate_mint(
   }
 }
 
-/// Burn — graduation or retirement (P3). Event-gated (Q-GRAD-2): the pluggable
-/// event rule must hold for the transaction — the same condition the P2 rules
-/// enforce — whether the burn is keeper-driven (`SpendViaThirdParty`, also
-/// gated by the third-party logic, which additionally pins graduated payouts
-/// to the burned holders) or holder-signed (the permissive transfer path).
-/// Graduation conserves 1:1 into the graduated policy per asset name; a
-/// retire-only instrument simply burns. Nothing self-executes: a keeper or
-/// the holder submits, the predicate approves (§5).
+/// Burn — graduation or retirement (P3). Event-gated AND owner-consented
+/// (Q-GRAD-2, candidate stance 2): the pluggable event rule must hold for the
+/// transaction — the same condition the P2 rules enforce — and every burned
+/// instrument's owner must authorize it, whether the burn is keeper-driven
+/// (`SpendViaThirdParty`, where this check *is* the consent: the keeper
+/// assembles, the owners co-sign) or holder-signed (the permissive transfer
+/// path, where the core's `transfer` validator already requires the same
+/// signature — this re-check is uniform defense in depth, and it gives
+/// script-staked owners a consent route). Graduation conserves 1:1 into the
+/// graduated policy per asset name; a retire-only instrument simply burns.
+/// Nothing self-executes: a keeper or the holder submits, the predicate
+/// approves (§5).
 fn validate_burn(
   account: Credential,
   self: Transaction,
@@ -153,6 +163,21 @@ fn validate_burn(
         account,
       ),
     ),
+    // Owner consent (Q-GRAD-2): every burned instrument's owner authorizes.
+    list.all(
+      self.inputs,
+      fn(input) {
+        if holds(input.output.value, own_policy) {
+          owner_authorized(
+            input.output,
+            self.extra_signatories,
+            self.withdrawals,
+          )
+        } else {
+          True
+        }
+      },
+    ),
     // Event gate (Q-GRAD-2): the same event condition the P2 rules enforce.
     rule_check(self),
     graduated_conservation(self.mint, burned, params.graduated_policy),
@@ -160,6 +185,28 @@ fn validate_burn(
 }
 
 // ----------------------------------------------------------------- helpers
+
+/// Does this value carry any token under `policy`? Instrument tokens exist
+/// only at the programmable-logic base (the core enforces custody).
+fn holds(value: Value, policy: PolicyId) -> Bool {
+  !dict.is_empty(tokens(value, policy))
+}
+
+/// Owner consent for one burned instrument output: its inline stake
+/// credential must authorize the transaction — a verification key by
+/// signature, a script by its withdraw-0 (authorization.ak). Pointer-backed
+/// or absent stake credentials fail closed: PLB UTxOs stake to their
+/// holder's credential, so anything else is unexpected and rejected.
+fn owner_authorized(
+  output: Output,
+  extra_signatories: List<VerificationKeyHash>,
+  withdrawals: Pairs<Credential, Lovelace>,
+) -> Bool {
+  when output.address.stake_credential is {
+    Some(Inline(cred)) -> is_authorized(cred, extra_signatories, withdrawals)
+    _ -> False
+  }
+}
 
 /// Resolve the governed policy id from this token's `RegistryNode`,
 /// referenced by the transaction (the base layer needs it on any transaction
