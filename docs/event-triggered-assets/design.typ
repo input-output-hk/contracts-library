@@ -2,13 +2,16 @@
 
 #show: report
 
-= Register & Mint (P1 base + P2 hooks)
-_Registers the CIP-113 policy, plants a permissive `transfer_logic` (P1) and an
-event-rule `Credential` (P2) in the token's `RegistryNode`, and optionally mints
-the first batch in the same transaction._
+= Tokenized bond — issue (T0)
+_The minimal P2 (time constraint) + P3 instantiation (the use case at hand): the issuer
+mints CIP-113 tokens for a beneficiary. Before the deadline the owner transfers
+them freely (P1); after it, the tokens convert 1:1 into a plain native asset
+with the owner's consent (P3). One asset name, no per-holder state: the single
+event — the deadline — lives in the validity range of the graduating
+transaction._
 
-#let register_mint_tx = vanilla_transaction(
-  "Register & Mint",
+#let deadline_issue_tx = vanilla_transaction(
+  "Issue to beneficiary",
   inputs: (
     (
       name: "Issuer funds",
@@ -19,11 +22,11 @@ the first batch in the same transaction._
   ),
   mint: (
     "registry_node_cs": "1",
-    "programmable_policy": "N",
+    "cip_policy": "N",
   ),
   withdrawals: (
     "registry (0)",
-    "issuance_logic (0)",
+    "issuance_logic [Mint] (0)",
   ),
   signatures: (
     "issuer",
@@ -37,45 +40,39 @@ the first batch in the same transaction._
         key: "PolicyId",
         next: "PolicyId",
         minting_logic: "Credential",
-        transfer_logic: "Credential",
-        third_party_logic: "Credential",
-        global_state_cs: "PolicyId",
-        protected_prefixes: "List",
+        transfer_logic: "Credential (permissive)",
+        third_party_logic: "Credential (governed extraction)",
+        global_state_cs: "∅",
+        protected_prefixes: "[]",
       ),
     ),
     (
-      name: "Token",
-      address: "plb_addr [stake: holder]",
-      value: ("programmable_policy": "N"),
-      datum: (instrument_state: [Active]),
+      name: "Tokens",
+      address: "plb_addr [stake: beneficiary]",
+      value: ("cip_policy": "N"),
     ),
   ),
   notes: [
-    - `registry_mint` binds `minting_logic_script` to the `issuance_mint` policy (`expect_programmable_token_id_valid`); it is frozen for the node's life.
-    - RegistryNode fields are drawn short: `minting_logic` / `transfer_logic` / `third_party_logic` are the canonical `*_logic_script` `Credential`s. `protected_prefixes` is the CIP-67 label list (100 / 500) the third-party path may not seize.
-    - `transfer_logic` is the permissive P1 predicate; the attached event rule (P2) is a pluggable `Credential` (issue 11, `ARCHITECTURE.md` §3). `third_party_logic` is the admin/seizure path, not the P2 event hook.
-    - Register-only and atomic register + mint are both allowed. A mode-aware issuance validator (`Register` / `UpdateNode` / `Mint` / `Burn`) decides which is permitted (Q-GRAD-2).
-    - Tokens are minted to the PLB address with the recipient's stake credential (`[stake: holder]`); the global validator forbids moving them to non-programmable addresses.
+    - Registry registration pins the frozen stance (Q-RULE-2/3): permissive transfer logic, governed-extraction third-party logic, no global state, no protected prefixes. The substandard reference validators are used as-is.
   ],
 )
 
-#figure(register_mint_tx, caption: [Register and mint transaction]) <fig:register-mint>
+#figure(deadline_issue_tx, caption: [Issue CIP tokens to the beneficiary]) <fig:deadline-issue>
 
 #pagebreak()
 
-= Permissive transfer (P1)
-_The token moves as freely as a native asset. The `transfer` core validator checks
-ownership, value preservation and the registry, then dispatches to the
-substandard's `transfer_logic` predicate, which approves unconditionally._
+= Tokenized bond — free transfer (T1)
+_Before the deadline the owner transfers freely (P1) — the generic permissive
+transfer path applies verbatim. Conversion is never a freeze: past the
+deadline an unconverted token keeps moving the same way._
 
-#let transfer_tx = vanilla_transaction(
-  "Transfer",
+#let deadline_transfer_tx = vanilla_transaction(
+  "Free transfer",
   inputs: (
     (
-      name: "Holder token",
+      name: "Tokens",
       address: "plb_addr [stake: sender]",
-      value: ("programmable_policy": "N"),
-      datum: (instrument_state: [Active]),
+      value: ("cip_policy": "N"),
       redeemer: [SpendViaTransfer],
     ),
     (
@@ -94,119 +91,44 @@ substandard's `transfer_logic` predicate, which approves unconditionally._
     "transfer (0)",
     "transfer_logic (0)",
   ),
-  outputs: (
-    (
-      name: "Recipient token",
-      address: "plb_addr [stake: recipient]",
-      value: ("programmable_policy": "N"),
-      datum: (instrument_state: [Active]),
-    ),
-  ),
   signatures: (
     "sender",
   ),
-  notes: [
-    - The PLB address carries the holder's stake credential: `transfer` verifies the sender signed and the continuation output carries the recipient, so ownership moves with the token.
-    - No transfer gate: `transfer_logic` is permissive, so programmability never restricts who may hold or send the token (P1).
-    - The core `transfer` stake validator performs ownership verification, value preservation and registry lookup; the substandard only supplies custom rules.
-    - P2 event predicates read their event state as reference inputs and do not gate an ordinary transfer.
-  ],
-)
-
-#figure(transfer_tx, caption: [Permissive transfer transaction]) <fig:transfer>
-
-#pagebreak()
-
-= Event rule fires (P2)
-_On a discrete event (time cliff, market resolution, maturity, attestation) a
-keeper submits a transaction that references the event state. The P2 predicate
-approves the resulting state change if and only if the event condition holds.
-Nothing self-executes._
-
-#let event_rule_tx = vanilla_transaction(
-  "Event rule",
-  inputs: (
-    (
-      name: "Instrument",
-      address: "plb_addr [stake: holder]",
-      value: ("programmable_policy": "N"),
-      datum: (instrument_state: [Active]),
-      redeemer: [SpendViaTransfer],
-    ),
-    (
-      reference: true,
-      name: "Event fact",
-      address: "oracle_addr",
-      datum: (
-        fact: [resolved],
-        created_at: "PosixTime",
-      ),
-    ),
-    (
-      reference: true,
-      name: "RegistryNode",
-      address: "registry_addr",
-      value: ("registry_node_cs": "1"),
-    ),
-    (
-      reference: true,
-      name: "Protocol params",
-      address: "protocol_params",
-    ),
-  ),
-  withdrawals: (
-    "transfer (0)",
-    "event_rule (Credential) (0)",
-  ),
-  signatures: (
-    "keeper",
-  ),
-  validRange: (lower: "event_time"),
   outputs: (
     (
-      name: "Instrument",
-      address: "plb_addr [stake: holder]",
-      value: ("programmable_policy": "N"),
-      datum: (instrument_state: [*Released*]),
+      name: "Tokens",
+      address: "plb_addr [stake: recipient]",
+      value: ("cip_policy": "N"),
     ),
   ),
   notes: [
-    - Reactive, not autonomous: a keeper detects the event and submits; the predicate only approves or rejects. There is no scheduler.
-    - The event hook is a pluggable logic (`Credential`) dispatched by the transfer path, not the third-party/admin path: a key is satisfied by a signature, a script by a forwarded withdraw-0 (issue 11).
-    - Oracles are pull-based; the rule reads the fact as a reference input and must itself check freshness against `created_at`.
-    - A validity range enforces time-based conditions. Per-holder state is contention-free; shared-state UTxOs serialize (Q-CONTENTION-1).
-    - The continuation stays under the same holder stake credential; only the instrument state changes.
+    - P1 at every point of the lifecycle — before and after the deadline: the permissive `transfer_logic` (Q-RULE-3) never gates who may hold or send, so the token is DEX/venue-compatible.
   ],
 )
 
-#figure(event_rule_tx, caption: [Event-rule transaction]) <fig:event-rule>
+#figure(deadline_transfer_tx, caption: [Free transfer before (or after) the deadline]) <fig:deadline-transfer>
 
 #pagebreak()
 
-= Graduation / unwrap (P3)
-_End of life. An event-gated transaction, executed through the third-party path,
-force-burns the CIP-113 token (authorized by the substandard's issuance logic) and
-mints the equivalent plain native token under a separate policy, removing the
-contract dependency._
+= Tokenized bond — deadline graduation (T2)
+_After the deadline the issuer (as the assembling keeper) may convert the CIP
+tokens into the corresponding native asset — third-party path, owner-signed.
+The deadline rule approves the event condition; the issuance `Burn` mode
+enforces the owner's consent; the native policy mints 1:1 against the burn._
 
-#let graduation_tx = vanilla_transaction(
-  "Graduation",
+#let deadline_graduation_tx = vanilla_transaction(
+  "Deadline graduation",
   inputs: (
     (
-      name: "Programmable token",
+      name: "Tokens",
       address: "plb_addr [stake: holder]",
-      value: ("programmable_policy": "N"),
-      datum: (instrument_state: [*FullyVested*]),
+      value: ("cip_policy": "N"),
       redeemer: [SpendViaThirdParty],
     ),
     (
       reference: true,
-      name: "Event fact",
-      address: "oracle_addr",
-      datum: (
-        fact: [*fully_vested*],
-        created_at: "PosixTime",
-      ),
+      name: "Protocol params",
+      address: "protocol_params",
     ),
     (
       reference: true,
@@ -214,42 +136,47 @@ contract dependency._
       address: "registry_addr",
       value: ("registry_node_cs": "1"),
     ),
-    (
-      reference: true,
-      name: "Protocol params",
-      address: "protocol_params",
-    ),
   ),
   mint: (
-    "programmable_policy": "-N",
-    "native_policy": "N",
+    "cip_policy": "-N",
+    "native_policy": "+N",
   ),
   withdrawals: (
     "third_party (0)",
     "third_party_logic (0)",
+    "deadline_rule [Graduate] (0)",
     "issuance_mint (core)",
     "issuance_logic [Burn] (0)",
   ),
   signatures: (
-    "holder",
+    "keeper (assembles)",
+    "holder (consent)",
   ),
+  validRange: (lower: "deadline"),
   outputs: (
     (
-      name: "Native token",
+      name: "Ghost continuation",
+      address: "plb_addr [stake: holder]",
+      value: ("ADA": "min_ada"),
+    ),
+    (
+      name: "Native asset",
       wallet: true,
       address: "holder_addr",
       value: ("native_policy": "N"),
     ),
   ),
   notes: [
-    - Graduation is executed through the third-party path (`SpendViaThirdParty`) to force-burn holders' tokens. All programmable tokens are custodied at the PLB, so it must burn the CIP-113 token and mint a distinct native token.
-    - The holder must sign (Q-GRAD-2): the forced action is authorized only with the holder's consent, so graduation is settlement, not a discretionary seizure.
-    - Authorized by the substandard's issuance logic (`minting_logic_script`), frozen at registration, so the gating must be designed into the mode-aware validator up front (Q-GRAD-2). Event-gated by the same condition the P2 rules enforce.
-    - Base-layer guarantee: a transaction that spends a registry node can never mint or burn that node's own token, so graduation is always pure issuance, never mixed with a registry reconfiguration.
-    - Burn + mint is the established migration shape; Q-GRAD-1 tracks asset identity and fungibility across the flip.
+    - Deadline gate (Q-RULE-1): the rule withdraw-0 (`Graduate`) approves iff the validity range reaches the deadline (`now ≥ deadline`) — time-driven, no oracle; the event condition is the tx's own validity range.
+    - Owner consent is structural (Q-GRAD-2): every burned token's inline stake credential must sign (or run its withdraw-0). The issuer assembles and submits, but nothing burns without the owner's signature — "the issuer may convert, with the owner's consent", on-chain.
+    - No burn CIP, no mint: the native policy approves the mint only because it is backed by the governed burn of the same name and quantity; the issuance `Burn` mode mirrors it (`graduated_conservation`) — every burned CIP gets its native token, and only that one (Q-GRAD-1, per-holder migration).
+    - Third-party path mechanics: the PLB spend's paired continuation must preserve address, datum and reference script byte-for-byte — the *ghost* output (same stake credential, no CIP tokens; its datum is a byte-identical copy of the input's, empty here). Extraction is the only real effect. The holder-signed variant (`SpendViaTransfer` + the same `Burn` mode) skips the third-party dispatch and is the cheaper shape; the third-party form is chosen here to match the stated authority.
+    - Base-layer guarantee: a transaction that spends a registry node can never mint or burn that node's own token — graduation is pure issuance, never mixed with a registry reconfiguration.
+    - Asset identity (Q-GRAD-1): the native asset is a new policy — DEX pools / price history continuity across the flip remains an open global question.
   ],
 )
 
-#figure(graduation_tx, caption: [Graduation transaction]) <fig:graduation>
-
-
+#figure(
+  deadline_graduation_tx,
+  caption: [Deadline graduation (keeper-assembled, owner-signed)],
+) <fig:deadline-graduation>
