@@ -2,70 +2,14 @@
 
 #show: report
 
-= Tokenized bond — register (T0)
-_The issuer registers the CIP-113 instance. The implementation enforces
-*strict register-then-mint*: the registration transaction creates the node
-and nothing else — the first token mint is a separate transaction (the node
-cannot be resolved as a reference input in the transaction that creates it)._
+= Tokenized bond — register + issue (T0/T1)
+_One transaction registers the CIP-113 instance and mints the first tokens to
+the beneficiary, publishing the bond's terms as a CIP-68 reference datum.
+Registering and minting can share a transaction because the framework lets the
+first mint prove against the registry node as it is being created._
 
-#let bond_register_tx = vanilla_transaction(
-  "Register",
-  inputs: (
-    (
-      name: "Issuer funds",
-      wallet: true,
-      address: "issuer_addr",
-      value: ("ADA": "min_ada", "FeeAsset": "f"),
-    ),
-  ),
-  mint: (
-    "registry_node_cs": "1",
-  ),
-  withdrawals: (
-    "registry (mint handler — node NFT)",
-    "issuance_logic (ours) [Register] (0)",
-  ),
-  signatures: (
-    "issuer",
-  ),
-  outputs: (
-    (
-      name: "RegistryNode",
-      address: "registry_addr",
-      value: ("registry_node_cs": "1", "ADA": "min_ada"),
-      datum: (
-        key: "PolicyId",
-        next: "PolicyId",
-        minting_logic: "Credential (ours)",
-        transfer_logic: "Credential (permissive)",
-        third_party_logic: "Credential (governed extraction)",
-        unfracking_logic: "∅ (unfracking forbidden)",
-        global_state_cs: "∅",
-      ),
-    ),
-  ),
-  notes: [
-    - Strict register-then-mint (reference implementation, Q-GRAD-2): the framework supports an atomic register + first mint, and deliberately leaves the choice to the substandard ("you must enforce it yourself"). Ours enforces the strict lifecycle: the `Register` mode requires an empty governed mint, and the `Mint` mode requires the node as a reference input — one transaction cannot do both.
-    - Registry registration pins the frozen stance (Q-RULE-2/3): permissive transfer logic, governed-extraction third-party logic, unfracking hook unset (unfracking forbidden), no global state. The substandard reference validators are used as-is.
-    - Registration proof of instance: the registry's mint handler requires our issuance-logic withdraw-0 in the transaction, binding the node's `minting_logic` to the `issuance_mint` template whose hash must equal `key` — frozen for the node's life (09-DEVELOPING-SUBSTANDARDS §3, §7).
-    - Every substandard script must carry a `publish` handler accepting `RegisterCredential`, or it can never be registered (09-DEVELOPING-SUBSTANDARDS §4).
-    - Validator params fixed here: `rule` = the graduation rule script's hash (Q-RULE-1); `graduated_policy` = `None` — the final conversion mints the schedule's appreciated value, so the reference 1:1 quantity conservation does not apply (see T4).
-  ],
-)
-
-#figure(bond_register_tx, caption: [Register the CIP-113 instance]) <fig:bond-register>
-
-#pagebreak()
-
-= Tokenized bond — issue (T1)
-_The issuer mints the CIP-113 tokens for a beneficiary (single asset name, no
-per-holder state) and publishes the instrument's terms as a CIP-68-style
-reference datum: the value schedule (four annual deadlines, +4% each) lives in
-validator constants and is mirrored in the reference datum for wallets and
-indexers._
-
-#let bond_issue_tx = vanilla_transaction(
-  "Issue to beneficiary",
+#let bond_register_issue_tx = vanilla_transaction(
+  "Register + issue",
   inputs: (
     (
       name: "Issuer funds",
@@ -78,26 +22,36 @@ indexers._
       name: "Protocol params",
       address: "protocol_params",
     ),
-    (
-      reference: true,
-      name: "RegistryNode",
-      address: "registry_addr",
-      value: ("registry_node_cs": "1"),
-    ),
   ),
   mint: (
+    "registry_node_cs": "1",
     "cip_policy": "N",
     "terms_policy": "1 (reference token, CIP-68 style)",
   ),
   withdrawals: (
-    "issuance_logic (ours) [Mint] (0)",
-    "issuance_logic (core) [names policy + RefInput proof] (0)",
+    "registry (mint handler — node NFT)",
+    "issuance_logic (ours) [RegisterAndMint] (0)",
+    "issuance_logic (core) [names policy + OutputIndex proof] (0)",
     "issuance_mint (policy — params_idx)",
   ),
   signatures: (
     "issuer",
   ),
   outputs: (
+    (
+      name: "RegistryNode",
+      address: "registry_addr",
+      value: ("registry_node_cs": "1", "ADA": "min_ada"),
+      datum: (
+        key: "PolicyId",
+        next: "PolicyId",
+        minting_logic: "Credential",
+        transfer_logic: "Credential",
+        third_party_logic: "Credential",
+        unfracking_logic: "∅",
+        global_state_cs: "∅",
+      ),
+    ),
     (
       name: "Tokens",
       address: "plb_addr [stake: beneficiary]",
@@ -114,22 +68,25 @@ indexers._
     ),
   ),
   notes: [
-    - A mint carries *two* issuance withdraw-0s plus the policy: ours (the mode-aware validator) and the protocol's `issuance_logic` (its redeemer is a map naming this policy backed by a registry proof — a `RefInput` here, since the node already exists). Omitting the protocol-side withdraw-0 fails with an *uncovered-policy* error, not a missing-script one (09-DEVELOPING-SUBSTANDARDS §6).
-    - Minted tokens must land at a PLB output with an inline stake credential and a bounded inline datum — enforced by the protocol's `issuance_logic` (`no_escape`); the substandard does not need to re-check it.
-    - Supply is issuer-gated: any positive governed mint is the issuance `Mint` mode (issuer-signed). Single asset name — there is no per-holder state to mint against.
+    - The crux is the proof shape: the core `issuance_logic` carries an `OutputIndex { index }` proof pointing at the *RegistryNode output being created*, not a `RefInput`. In that branch no delegate covers the mint, so custody is enforced by `no_escape` right here — exactly the framework's "first mint" case. There is no RegistryNode reference input: it does not exist yet.
+    - Our issuance arm is a single `RegisterAndMint` that validates BOTH concerns together — registration authority (issuer signature) + node shape, and the first-batch mint. A single arm is fine "just make that a deliberate choice, not an accident" (09-DEVELOPING-SUBSTANDARDS §7); it must cross-check the tx shape (node NFT minted → node created; `cip_policy` entries present in `tx.mint`) so a caller cannot reuse it in the wrong context.
+    - Base-layer carve-out makes this safe: the guard "a tx that spends a registry node may not mint/burn that node's own token" is scoped to the node being *spent* (the covering predecessor — a different policy), never the node being *created*, so minting the new `key` alongside registration is allowed (09-DEVELOPING-SUBSTANDARDS §7).
+    - A mint carries *two* issuance withdraw-0s plus the policy: ours (the mode-aware validator) and the protocol's `issuance_logic` (redeemer is a map naming this policy, here backed by the `OutputIndex` proof). Registration proof of instance: the registry's mint handler requires our issuance-logic withdraw-0, binding the node's `minting_logic` to the `issuance_mint` template whose hash must equal `key` — frozen for the node's life (09-DEVELOPING-SUBSTANDARDS §3, §7). The same `RegisterAndMint` withdrawal satisfies it.
+    - Registry registration pins the frozen stance (Q-RULE-2/3): permissive transfer logic, governed-extraction third-party logic, unfracking hook unset (unfracking forbidden), no global state. The substandard reference validators are used as-is. Every substandard script must carry a `publish` handler accepting `RegisterCredential`, or it can never be registered (09-DEVELOPING-SUBSTANDARDS §4).
+    - Minted tokens must land at a PLB output with an inline stake credential and a bounded inline datum — enforced by the protocol's `issuance_logic` (`no_escape`); the substandard does not re-check it. Supply is issuer-gated: single asset name, no per-holder state to mint against.
     - The reference token is minted under the *terms policy* (the bond's own script), deliberately *not* under the governed policy: every governed token is PLB-custodied, and the third-party path preserves datums byte-for-byte — a reference datum under the governed policy could never be updated without the holder's signature. Companion-asset protection is a substandard decision (the framework has none): a distinct policy id is exactly that decision.
-    - The schedule is baked as validator constants — fixed 4% annual over four years, precomputed off-chain with a fixed-point scale: `[(d1, v1), (d2, v2), (d3, v3), (d4, v4)]` with `v4 ≈ 1.1699 × scale`. No on-chain compounding: the validator looks the current value up by time. The datum is the CIP-68 display mirror; the graduation math reads the baked `v4`.
-    - The CIP-113 tokens carry no datum: the substandard never reads one — the instrument's condition lives in time (the validity range) and in the terms constants, not in state.
+    - The schedule is baked as validator constants — fixed 4% annual over four years, precomputed off-chain with a fixed-point scale: `[(d1, v1), (d2, v2), (d3, v3), (d4, v4)]` with `v4 ≈ 1.1699 × scale`. No on-chain compounding: the validator looks the current value up by time. The datum is the CIP-68 display mirror; the graduation math reads the baked `v4`. The CIP-113 tokens themselves carry no datum — the instrument's condition lives in time (the validity range) and in the terms constants, not in state.
+    - Trade-off vs the strict split: saves a transaction, a node-creation round-trip, and the register→mint window, at the cost of one arm handling two contexts and the `OutputIndex` proof path. Register-only bootstrapping (global-state init before any token) is moot here — `global_state_cs: ∅`.
   ],
 )
 
-#figure(bond_issue_tx, caption: [Issue CIP tokens and publish the terms datum]) <fig:bond-issue>
+#figure(bond_register_issue_tx, caption: [Atomic register + first issue]) <fig:bond-register-issue>
 
 #pagebreak()
 
 = Tokenized bond — free transfer (T2)
-_Before and after the deadlines the owner transfers freely (P1). Conversion is
-never a freeze: an unconverted token keeps moving the same way._
+_The owner can transfer the token freely at any point in its life — before and
+after the deadlines. A transfer never gates who may hold or send it._
 
 #let bond_transfer_tx = vanilla_transaction(
   "Free transfer",
@@ -182,10 +139,9 @@ never a freeze: an unconverted token keeps moving the same way._
 #pagebreak()
 
 = Tokenized bond — scheduled transformation (T3)
-_At each deadline the instrument's value inflates 4%: a transaction updates the
-terms datum to the schedule's current value. The holder does nothing — the
-issuer normally submits it, and anyone (including the holder) can force it,
-because no signature is required._
+_At each deadline the bond's value steps up 4%. A transaction updates the terms
+datum to the schedule's current value. No signature is required, so anyone can
+submit it — usually the issuer, but the holder can force it too._
 
 #let bond_transform_tx = vanilla_transaction(
   "Scheduled transformation (k)",
@@ -195,7 +151,7 @@ because no signature is required._
       address: "terms_addr (bond terms script)",
       value: ("ADA": "min_ada", "terms_policy": "1"),
       datum: (
-        schedule: "[(d1, v1), (d2, v2), (d3, v3), (d4, v4)]",
+        schedule: "\n          [(d1, v1), (d2, v2), (d3, v3), (d4, v4)]",
         value: "v_{k-1} (stale is ok)",
       ),
       redeemer: [transform (k)],
@@ -209,7 +165,7 @@ because no signature is required._
       address: "terms_addr (bond terms script)",
       value: ("ADA": "min_ada", "terms_policy": "1"),
       datum: (
-        schedule: "[(d1, v1), (d2, v2), (d3, v3), (d4, v4)]",
+        schedule: "\n          [(d1, v1), (d2, v2), (d3, v3), (d4, v4)]",
         value: "v_k = lookup(schedule, now)",
       ),
     ),
@@ -226,7 +182,7 @@ because no signature is required._
 
 #pagebreak()
 
-= Tokenized bond — deadline graduation (T4)
+= Tokenized bond — deadline graduation (T4)graduated_policy
 _From `d4` on the tokens convert into the corresponding native asset at the
 schedule's final value. Two forms, one function: the issuer drives the
 *third-party path* (no owner action — a ghost continuation remains) and the
@@ -290,7 +246,7 @@ no attack or benefit in waiting._
     - Authorization (Q-GRAD-2, this instrument): the burn requires the authority of *either* the third-party logic (its withdraw-0 — the issuer-assembled path) *or* the owner's signature (the owner path); the event gate (`d4`) applies to both. The third-party path needs no owner action; the owner path needs nothing but the owner.
     - The conversion function (the Burn-mode validation) is shared by both paths: burn shape, full-burn per asset name (whole holdings burn — it makes the per-owner destination attribution exact), destination binding and the scaled native mirror. The native minting policy is signer-agnostic: it approves the mint only against the burn (`mint == burned × v4 / scale`), whichever credential signed it.
     - Destination binding: the natives must land in outputs whose address carries the burned token's inline stake credential — the owner's current credential, which moves with the token at every transfer. No owner registry and no extra transaction are needed. Delivery goes to the owner's staked wallet; a holder may stamp a payment address into their datum (owner-signed, self-trustworthy) for finer delivery.
-    - Native mint: exactly `burned × v4 / scale`, regardless of which credential signed the burn — the native policy approves the mint only because it is backed by the governed burn of the same name at the schedule's final value ("no burn CIP, no mint", scaled). `v4` is the baked constant (`≈ 1.1699 × scale`): the only on-chain arithmetic is this final multiply. `graduated_policy: None`: the reference 1:1 quantity conservation would forbid the scaled mint, so the mint is governed by the native policy and the rule script instead.
+    - Native mint: exactly `burned × v4 / scale`, regardless of which credential signed the burn — the native policy approves the mint only because it is backed by the governed burn of the same name at the schedule's final value ("no burn CIP, no mint", scaled). `v4` is the baked constant (`≈ 1.1699 × scale`): the only on-chain arithmetic is this final multiply. The mint is deliberately not 1:1 quantity-conserved — the scaled value rules that out — so it is governed by the native policy and the rule script instead.
     - Third-party path mechanics: the PLB spend's paired continuation must preserve address, datum and reference script byte-for-byte (lovelace is *ratcheted* — output ≥ input, not conserved) — the *ghost* output (one-time per spent UTxO, reclaimable by the owner via a transfer-path spend). In the issuer's case the ghost remains; on the owner path (transfer path + the same Burn mode) nothing remains — the cheaper shape.
     - Base-layer guarantee: a transaction that spends a registry node can never mint or burn that node's own token — graduation is pure issuance, never mixed with a registry reconfiguration.
     - Asset identity (Q-GRAD-1): the native asset is a new policy — DEX pools / price history continuity across the flip remains an open global question.
