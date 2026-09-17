@@ -131,6 +131,65 @@ after the deadlines. A transfer never gates who may hold or send it._
 
 #pagebreak()
 
+= Tokenized bond — register payout key (T2b)
+_A special case of the transfer: the owner spends the token to themselves and
+writes a payment credential into its datum. This is the opt-in that lets someone
+else (typically the issuer) graduate the token later without being able to
+redirect the payout — only the owner, by signing this transfer, can set it.
+An owner who intends to sign their own graduation (T4) never needs this._
+
+#let bond_register_payout_tx = vanilla_transaction(
+  "Register payout key (self-transfer)",
+  inputs: (
+    (
+      name: "Tokens",
+      address: "plb_addr [stake: owner]",
+      value: ("cip_policy": "N"),
+      redeemer: [BaseSpendRedeemer { params_idx, wdrl_idx }],
+    ),
+    (
+      reference: true,
+      name: "Protocol params",
+      address: "protocol_params",
+    ),
+    (
+      reference: true,
+      name: "RegistryNode",
+      address: "registry_addr",
+      value: ("registry_node_cs": "1"),
+    ),
+  ),
+  withdrawals: (
+    "programmable_logic_global [TransferAct] (0)",
+    "transfer [TransferRedeemer] (0)",
+    "transfer_logic (ours) (0)",
+  ),
+  signatures: (
+    "owner",
+  ),
+  outputs: (
+    (
+      name: "Tokens",
+      address: "plb_addr [stake: owner]",
+      value: ("cip_policy": "N"),
+      datum: (
+        payment_credential: "owner_payment_cred",
+      ),
+    ),
+  ),
+  notes: [
+    - Same path as an ordinary transfer (T2): `programmable_logic_global [TransferAct] → transfer → transfer_logic`, owner-signed. The *only* difference is the output datum — the token returns to the same `plb_addr [stake: owner]`.
+    - The datum commits the owner's payout `payment_credential`. Because the transfer is owner-signed (`authorised_stake_cred`), only the owner can set it — that is what makes it trustworthy at graduation.
+    - The transfer path bounds the output datum (`max_inline_datum_bytes`) and preserves the seizable output shape (inline stake credential, no reference script), so the commitment does not freeze the token.
+    - In the third-party graduation path (T4) this datum is preserved byte-for-byte, so a third party can complete the graduation but never redirect the payout.
+    - Optional and re-settable: the owner may skip it (and sign the graduation directly), or overwrite it with a later self-transfer.
+  ],
+)
+
+#figure(bond_register_payout_tx, caption: [Register payout key via owner-signed self-transfer]) <fig:bond-register-payout>
+
+#pagebreak()
+
 = Tokenized bond — scheduled transformation (T3)
 _At each deadline the bond's value steps up 4%. A transaction updates the terms
 datum to the schedule's current value. No signature is required, so anyone can
@@ -176,12 +235,14 @@ submit it — usually the issuer, but the holder can force it too._
 #pagebreak()
 
 = Tokenized bond — deadline graduation (T4)
-_From `d4` on the tokens convert into the corresponding native asset at the
-schedule's final value. Two forms, one function: the issuer drives the
-*third-party path* (no owner action — a ghost continuation remains) and the
-owner can drive the *transfer path* (owner-signed — nothing remains). Either
-way the burn is event-gated and the natives are destination-bound, so there is
-no attack or benefit in waiting._
+_From `d4` on the tokens *may* convert into the corresponding native asset at
+the schedule's final value — graduation is opt-in, never forced. It is allowed
+only when the payout destination is owner-authorized: the owner either signs the
+graduation and names the address, or has pre-committed a payment credential into
+the token's datum on an earlier owner-signed transfer (T2b). Without one the
+transaction is rejected — there is no fallback, because a native asset sent to
+the wrong spending key is unrecoverable. A holder who never opts in simply keeps
+the (now non-transforming) token._
 
 #let bond_graduation_tx = vanilla_transaction(
   "Deadline graduation",
@@ -226,16 +287,17 @@ no attack or benefit in waiting._
     (
       name: "Native asset",
       wallet: true,
-      address: "owner_staked_addr",
+      address: "owner_addr \n   [payment: owner-authorized, stake: owner]",
       value: ("native_policy": "N × v4 / scale"),
     ),
   ),
   notes: [
     - A burn fires `issuance_mint` with a negative quantity — the *same two* issuance withdraw-0s as a mint (protocol `issuance_logic` + ours) — plus the full spend chain of whichever action releases the tokens (09-DEVELOPING-SUBSTANDARDS §6).
     - Event gate (Q-RULE-1): there is no separate rule script — the deadline check lives inside the substandard logic that already runs (the `third_party_logic` / `transfer_logic` withdraw-0 on the spend side and the `minting_logic` withdraw-0 on the burn side). It approves iff the validity range reaches `d4` — time-driven, no oracle; the event condition is the tx's own validity range.
-    - Authorization (Q-GRAD-2, this instrument): the burn requires the authority of *either* the third-party logic (its withdraw-0 — the issuer-assembled path) *or* the owner's signature (the owner path); the event gate (`d4`) applies to both. The third-party path needs no owner action; the owner path needs nothing but the owner.
+    - Authorization (Q-GRAD-2, this instrument): the `d4` event gate is necessary but not sufficient — the burn also needs an *owner-authorized payout destination*. That is *either* the owner's signature (owner path, which names the destination in the tx) *or* a payment credential the owner pre-committed to the token datum (which a third party can then complete without redirecting). The permissionless third-party path therefore only works for tokens whose owners opted in beforehand; with no owner signature and no committed destination, the tx is rejected.
     - The conversion function (the Burn-mode validation) is shared by both paths: burn shape, full-burn per asset name (whole holdings burn — it makes the per-owner destination attribution exact), destination binding and the scaled native mirror. The native minting policy is signer-agnostic: it approves the mint only against the burn (`mint == burned × v4 / scale`), whichever credential signed it.
-    - Destination binding: the natives must land in outputs whose address carries the burned token's inline stake credential — the owner's current credential, which moves with the token at every transfer. No owner registry and no extra transaction are needed. Delivery goes to the owner's staked wallet; a holder may stamp a payment address into their datum (owner-signed, self-trustworthy) for finer delivery.
+    - Destination binding: the native asset is a plain token at a normal `(payment_credential, stake_credential)` address, but CIP-113 attributes ownership only by the *stake* credential — the payment (spending) key is not something the framework can tie to the owner. So the payment credential must come from the owner: named in an owner-signed graduation, or pre-committed to the token's inline datum on an owner-signed transfer (T2b, preserved byte-for-byte through the third-party path, so a third party can complete but never redirect it). The stake credential stays bound to the owner's current credential.
+    - No safe fallback, so no fallback: absent an owner signature *and* a committed payment credential, the transaction is rejected. Sending a native asset to an unverified spending key is unrecoverable, and graduation is optional — the owner may hold the final-value, non-transforming token indefinitely rather than convert it.
     - Native mint: exactly `burned × v4 / scale`, regardless of which credential signed the burn — the native policy approves the mint only because it is backed by the governed burn of the same name at the schedule's final value ("no burn CIP, no mint", scaled). `v4` is the baked constant (`≈ 1.1699 × scale`): the only on-chain arithmetic is this final multiply. The mint is deliberately not 1:1 quantity-conserved — the scaled value rules that out — so it is governed by the native policy and the substandard's `minting_logic` instead.
     - Third-party path mechanics: the PLB spend's paired continuation must preserve address, datum and reference script byte-for-byte (lovelace is *ratcheted* — output ≥ input, not conserved) — the *ghost* output (one-time per spent UTxO, reclaimable by the owner via a transfer-path spend). In the issuer's case the ghost remains; on the owner path (transfer path + the same Burn mode) nothing remains — the cheaper shape.
     - Base-layer guarantee: a transaction that spends a registry node can never mint or burn that node's own token — graduation is pure issuance, never mixed with a registry reconfiguration.
@@ -243,4 +305,4 @@ no attack or benefit in waiting._
   ],
 )
 
-#figure(bond_graduation_tx, caption: [Deadline graduation (permissionless, value-preserving)]) <fig:bond-graduation>
+#figure(bond_graduation_tx, caption: [Deadline graduation (opt-in, value-preserving)]) <fig:bond-graduation>
