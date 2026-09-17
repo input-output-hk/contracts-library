@@ -4,9 +4,7 @@
 
 = Tokenized bond — register + issue (T0/T1)
 _One transaction registers the CIP-113 instance and mints the first tokens to
-the beneficiary, publishing the bond's terms as a CIP-68 reference datum.
-Registering and minting can share a transaction because the framework lets the
-first mint prove against the registry node as it is being created._
+the beneficiary, publishing the bond's terms as a CIP-68 reference datum._
 
 #let bond_register_issue_tx = vanilla_transaction(
   "Register + issue",
@@ -66,11 +64,10 @@ first mint prove against the registry node as it is being created._
     ),
   ),
   notes: [
-    - Our `minting_logic` runs a single `RegisterAndMint` mode that validates BOTH concerns together — registration authority (issuer signature) + node shape, and the first-batch mint. A single arm is fine "just make that a deliberate choice, not an accident" (09-DEVELOPING-SUBSTANDARDS §7); it must cross-check the tx shape (node NFT minted → node created; `cip_policy` entries present in `tx.mint`) so a caller cannot reuse it in the wrong context.
+    - Our `minting_logic` runs a single `RegisterAndMint` mode that validates BOTH concerns together — registration authority (issuer signature) + node shape, and the first-batch mint. A single arm is fine (09-DEVELOPING-SUBSTANDARDS §7); it must cross-check the tx shape (node NFT minted → node created; `cip_policy` entries present in `tx.mint`) so a caller cannot reuse it in the wrong context.
     - Minted tokens must land at a PLB output with an inline stake credential and a bounded inline datum — enforced by the protocol's `issuance_logic` (`no_escape`); the substandard does not re-check it. Supply is issuer-gated: two asset names under one policy (the principal and its CIP-68 reference), no per-holder state to mint against.
     - The CIP-68 pair is minted under the *same governed policy* (compliant: user token + reference `222`). The reference token is PLB-custodied and staked to the *transformation script* — a smart-wallet stake credential whose withdraw-0 authorizes in-place metadata updates holder-passively (T3). Its datum must fit the deployment's `max_inline_datum_bytes`: a UTxO born over the bound is frozen and unseizable.
-    - The schedule is baked as validator constants — fixed 4% annual over four years, precomputed off-chain with a fixed-point scale: `[(d1, v1), (d2, v2), (d3, v3), (d4, v4)]` with `v4 ≈ 1.1699 × scale`. No on-chain compounding: the validator looks the current value up by time. The CIP-68 reference datum mirrors it for wallets and indexers; the graduation math reads the baked `v4`. The principal itself carries no datum — the instrument's condition lives in time (the validity range) and in the terms constants, not in state.
-    - Trade-off vs the strict split: saves a transaction, a node-creation round-trip, and the register→mint window, at the cost of one arm handling two contexts and the `OutputIndex` proof path. Register-only bootstrapping (global-state init before any token) is moot here — `global_state_cs: ∅`.
+    - The schedule is baked as validator constants — fixed 4% annual over four years, precomputed off-chain with a fixed-point scale: `[(d1, v1), (d2, v2), (d3, v3), (d4, v4)]` with `v4 ≈ 1.1699 × scale`. No on-chain compounding: the validator looks the current value up by time. The CIP-68 reference datum mirrors it for wallets and indexers; the graduation math reads the baked `v4`.
   ],
 )
 
@@ -245,7 +242,7 @@ issuer, no signature; anyone can submit it._
   ),
   notes: [
     - In-place datum change, on the *transfer path*: the reference token's stake credential is the transformation script, and `authorised_stake_cred` accepts a script owner via its withdraw-0 — which validates the schedule (`now ≥ d_k`; new value = a pure lookup of the baked constants, so a late submission jumps straight to the current step). The third-party path cannot do this: it preserves datums byte-for-byte.
-    - Holder-passive and permissionless: no signatures — the issuer normally submits and the holder can force it ("if it does not change by itself"). No ghost: the transfer path has no paired-continuation requirement.
+    - Holder-passive and permissionless: no signatures — the issuer normally submits and the holder can force it ("if it does not change by itself").
     - The principal tokens never move — only the instrument's recorded value changes. This is how CIP-68 metadata updates reconcile with CIP-113 custody: the reference token is owned by a script, not by a holder.
     - Last evolution: after `d4` the schedule is exhausted — the script rejects any further update and the value stops. The graduation window opens at `d4` (T4).
     - The reference datum must stay within the deployment's `max_inline_datum_bytes` — keep it to the schedule and value; heavy CIP-25-style blobs would freeze the UTxO.
@@ -292,11 +289,14 @@ the (now non-transforming) token._
     "native_policy": "N × v4 / scale (native mint policy)",
   ),
   withdrawals: (
-    "programmable_logic_global [ThirdPartyAct] (0)",
-    "third_party [ThirdPartyRedeemer] (0)",
-    "third_party_logic (ours) (0)",
-    "minting_logic (ours) [Burn] (0)",
-    "issuance_logic (core) [names policy] (0)",
+    "spend chain — third-party path: programmable_logic_global [ThirdPartyAct] (0)",
+    "spend chain — third-party path: third_party [ThirdPartyRedeemer] (0)",
+    "spend chain — third-party path: third_party_logic (ours) (0)",
+    "spend chain — owner path (instead): programmable_logic_global [TransferAct] (0)",
+    "spend chain — owner path (instead): transfer [TransferRedeemer] (0)",
+    "spend chain — owner path (instead): transfer_logic (ours) (0)",
+    "burn — both paths: minting_logic (ours) [Burn] (0)",
+    "burn — both paths: issuance_logic (core) [names policy] (0)",
   ),
   signatures: (),
   validRange: (lower: "d4"),
@@ -314,6 +314,7 @@ the (now non-transforming) token._
     ),
   ),
   notes: [
+    - Two spend chains, one burn: a graduation runs *exactly one* spend chain — either the permissionless third-party path (`programmable_logic_global [ThirdPartyAct] → third_party → third_party_logic`) or the owner-signed transfer path (`… [TransferAct] → transfer → transfer_logic`, with the owner's signature). Both then share the *same* burn withdraw-0s — the substandard's `minting_logic [Burn]` and the core `issuance_logic` — and the same Burn-mode validation. The withdrawals list above shows both chains for reference; a real transaction carries only one.
     - A burn fires `issuance_mint` with a negative quantity — the *same two* issuance withdraw-0s as a mint (protocol `issuance_logic` + ours) — plus the full spend chain of whichever action releases the tokens (09-DEVELOPING-SUBSTANDARDS §6).
     - Event gate (Q-RULE-1): there is no separate rule script — the deadline check lives inside the substandard logic that already runs (the `third_party_logic` / `transfer_logic` withdraw-0 on the spend side and the `minting_logic` withdraw-0 on the burn side). It approves iff the validity range reaches `d4` — time-driven, no oracle; the event condition is the tx's own validity range.
     - Authorization (Q-GRAD-2, this instrument): the `d4` event gate is necessary but not sufficient — the burn also needs an *owner-authorized payout destination*. That is *either* the owner's signature (owner path, which names the destination in the tx) *or* a payment credential the owner pre-committed to the token datum (which a third party can then complete without redirecting). The permissionless third-party path therefore only works for tokens whose owners opted in beforehand; with no owner signature and no committed destination, the tx is rejected.
