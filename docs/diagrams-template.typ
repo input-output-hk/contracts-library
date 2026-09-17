@@ -7,7 +7,7 @@
   // Set the document's basic properties.
   set text(font: "Libertinus Serif", lang: "en")
   set heading(numbering: "1.1.a -")
-  set page(numbering: "1", number-align: center, fill: none, paper: "a3")
+  set page(numbering: "1", number-align: center, fill: none, paper: "a2")
   show heading.where(level: 1): set block(below: 1em)
 
   // Table of contents.
@@ -41,17 +41,13 @@
     #if type(val) == str [ : #val ]  // type
     #if type(val) == int [ \= #val ]  // value
     #if type(val) == array [
-      #stack(dir: ttb, spacing: 0.4em,
-        for item in val [
-          #datum_field(indent + 1.2em, "", item) \
-        ]
-      )
+      #stack(dir: ttb, spacing: 0.4em, for item in val [
+        #datum_field(indent + 1.2em, "", item) \
+      ])
     ]
     #if type(val) == dictionary [
       #v(-0.7em)
-      #stack(dir: ttb, spacing: 0.4em,
-        ..val.pairs().map(((k, v)) => datum_field(indent + 1.2em, k, v))
-      )
+      #stack(dir: ttb, spacing: 0.4em, ..val.pairs().map(((k, v)) => datum_field(indent + 1.2em, k, v)))
     ]
   ]
 ]
@@ -64,23 +60,22 @@
   let value = if "value" in input [
     *Value:* #if ("ada" in input.value) [ *#input.value.ada* ADA ] \
     #v(-1.0em)
-    #stack(dir: ttb, spacing: 0.4em,
-      ..input.value.pairs().map(((k, v)) => [
+    #stack(dir: ttb, spacing: 0.4em, ..input
+      .value
+      .pairs()
+      .map(((k, v)) => [
         #if k != "ada" [
           #h(2.3em) \+
           #if type(v) == content { math.bold(v) }
           #if type(v) == str and v != "" [*#v*]
           #k
         ]
-      ])
-    )
+      ]))
   ] else []
   let datum = if "datum" in input [
     *Datum:* \
     #v(-0.8em)
-    #stack(dir: ttb, spacing: 0.4em,
-      ..input.datum.pairs().map(((k,val)) => datum_field(1.2em, k, val))
-    )
+    #stack(dir: ttb, spacing: 0.4em, ..input.datum.pairs().map(((k, val)) => datum_field(1.2em, k, val)))
   ] else []
   let addressHeight = measure(address).height + if "address" in input { 6pt } else { 0pt }
   let valueHeight = measure(value).height + if "value" in input { 6pt } else { 0pt }
@@ -89,42 +84,41 @@
 
   if "dots" in input {
     return (
-    content: place(dx: position.x, dy: position.y, [
-      #place(dx: 4em, dy: -1em)[*.*]
-      #place(dx: 4em, dy: 0em)[*.*]
-      #place(dx: 4em, dy: 1em)[*.*]
-    ]),
-    height: thisHeight,
-  )
+      content: place(dx: position.x, dy: position.y, [
+        #place(dx: 4em, dy: -1em)[*.*]
+        #place(dx: 4em, dy: 0em)[*.*]
+        #place(dx: 4em, dy: 1em)[*.*]
+      ]),
+      height: thisHeight,
+    )
   } else {
-
-  return (
-    content: place(dx: position.x, dy: position.y, [
-      *#input.name*
-      #if is_wallet {
-        line(start: (-4em, -1em), end: (10em, -1em), stroke: green)
-        place(dx: 10em, dy: -1.5em)[#circle(radius: 0.5em, fill: white, stroke: green)]
-        place(dx: 9.5em, dy: -2.4em)[
-          #set text(fill: green, size: 9pt)
-          wallet
-        ]
-      } else {
-        line(start: (-4em, -1em), end: (10em, -1em), stroke: red)
-        place(dx: 10em, dy: -1.5em)[#circle(radius: 0.5em, fill: white, stroke: red)]
-      }
-      #if "address" in input { place(dx: 0em, dy: -3pt)[#address] }
-      #place(dx: 0em, dy: addressHeight)[#value]
-      #if "datum" in input { place(dx: 0em, dy: addressHeight + valueHeight)[#datum] }
-    ]),
-    height: thisHeight,
-  )
+    return (
+      content: place(dx: position.x, dy: position.y, [
+        *#input.name*
+        #if is_wallet {
+          line(start: (-4em, -1em), end: (10em, -1em), stroke: green)
+          place(dx: 10em, dy: -1.5em)[#circle(radius: 0.5em, fill: white, stroke: green)]
+          place(dx: 9.5em, dy: -2.4em)[
+            #set text(fill: green, size: 9pt)
+            wallet
+          ]
+        } else {
+          line(start: (-4em, -1em), end: (10em, -1em), stroke: red)
+          place(dx: 10em, dy: -1.5em)[#circle(radius: 0.5em, fill: white, stroke: red)]
+        }
+        #if "address" in input { place(dx: 0em, dy: 0pt)[#address] }
+        #place(dx: 0em, dy: addressHeight)[#value]
+        #if "datum" in input { place(dx: 0em, dy: addressHeight + valueHeight)[#datum] }
+      ]),
+      height: thisHeight,
+    )
   }
 }
 
 #let collapse_values(existing, v, one) = {
   if type(v) == int {
     existing.qty += one * v
-  } else if type(v) != content{
+  } else if type(v) != content {
     let parts = v.matches(regex("([ ]*([+-]?)[ ]*([0-9]*)[ ]*([a-zA-Z]*)[ ]*)"))
     for part in parts {
       let sign = part.captures.at(1)
@@ -145,7 +139,17 @@
   existing
 }
 
-#let vanilla_transaction(name, inputs: (), outputs: (), signatures: (), certificates: (), withdrawals: (), mint: (:), validRange: none, notes: none) = context {
+#let vanilla_transaction(
+  name,
+  inputs: (),
+  outputs: (),
+  signatures: (),
+  certificates: (),
+  withdrawals: (),
+  mint: (:),
+  validRange: none,
+  notes: none,
+) = context {
   let inputHeightEstimate = inputs.fold(0pt, (sum, input) => sum + tx_out_height_estimate(input))
   let inputHeight = 0em
   let inputs = [
@@ -178,15 +182,14 @@
   let outputHeightEstimate = outputs.fold(0pt, (sum, output) => sum + tx_out_height_estimate(output))
   let outputHeight = 0em
   let outputs = [
-      #let start = (x: 4em, y: 1em)
-      #for output in outputs {
-
-        let tx_out = tx_out(output, start, outputHeight)
-        tx_out.content
-        start = (x: start.x, y: start.y + tx_out.height)
-        outputHeight += tx_out.height
-      }
-    ]
+    #let start = (x: 4em, y: 1em)
+    #for output in outputs {
+      let tx_out = tx_out(output, start, outputHeight)
+      tx_out.content
+      start = (x: start.x, y: start.y + tx_out.height)
+      outputHeight += tx_out.height
+    }
+  ]
 
   // Collapse down the `mint` array
   let display_mint = (:)
@@ -207,7 +210,7 @@
       if type(v) == str and v.starts-with("-") {
         display += [\- #v.slice(1)]
       } else {
-      display += [\+ #v]
+        display += [\+ #v]
       }
     }
     display += [ #raw(k)]
@@ -250,30 +253,20 @@
   }
 
   let transaction = [
-      #set align(center)
-      #rect(
-        radius: 4pt,
-        height: calc.max(boxHeight, inputHeight + 16pt, outputHeight + 16pt),
-        [
-          #pad(top: 1em, name)
-          #v(1em)
-          #set align(left)
-          #stack(dir: ttb, spacing: 1em,
-            mints,
-            sigs,
-            certs,
-            withs,
-            valid_range,
-          )
-        ]
-      )
-    ]
+    #set align(center)
+    #rect(
+      radius: 4pt,
+      height: calc.max(boxHeight, inputHeight + 16pt, outputHeight + 16pt),
+      [
+        #pad(top: 1em, name)
+        #v(1em)
+        #set align(left)
+        #stack(dir: ttb, spacing: 1em, mints, sigs, certs, withs, valid_range)
+      ],
+    )
+  ]
 
-  let diagram = stack(dir: ltr,
-    inputs,
-    transaction,
-    outputs
-  )
+  let diagram = stack(dir: ltr, inputs, transaction, outputs)
   let size = measure(diagram)
   block(width: 100%)[
     #set align(center)
