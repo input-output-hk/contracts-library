@@ -1,66 +1,25 @@
 //// Reference substandard wiring for the event-triggered assets CIP-113
-//// substandard (issue #28). Three withdraw-zero validators per
-//// 09-DEVELOPING-SUBSTANDARDS.md — issuance logic, transfer logic, and
-//// third-party logic — registered in the token's `RegistryNode` and invoked
-//// by the core infrastructure: `issuance_mint` / `registry_mint` /
-//// `registry_spend` for the issuance logic, and the core `transfer` /
-//// `third_party` stake validators for the other two. The shared
-//// programmable-logic base custodies all token UTxOs; there is deliberately
-//// no spend or mint endpoint here.
-////
-//// Split per the exploration (§2, docs/event-triggered-assets/exploration.md):
-//// - `transfer_logic` — pure P1, permissive (imposes no transfer rules);
-//// - `third_party_logic` — the keeper-driven graduation gate: event-
-////   conditioned burns only, gated by the deployment's pluggable event rule
-////   (Q-RULE-2: extraction admitted only as part of graduation);
-//// - `issuance_logic` — the burn's mint-side authority (mode-aware,
-////   Q-GRAD-2) plus the registry lifecycle gates.
-////
-//// **This file is the customization point** (ARCHITECTURE.md §2.1: use the
-//// reference validator as-is, or embed the lib predicates in your own): the
-//// P2 event rule is a validator-level parameter, wired below into the
-//// `rule_check` hook the lib predicates accept. The default demands the
-//// params' `rule` `Credential` to authorize — a verification key by
-//// signature, a script by its withdraw-0 (an oracle/attestation script can
-//// thus stand in as the event source). Fork the validator to plug any other
-//// rule semantics: a custom oracle predicate, per-holder decoding of the
-//// deployer-defined datum, a multisig quorum, ... The base library imposes
-//// only *that a check exists and returns one Bool per transaction*.
-////
-//// Parameterize, compile, and register each validator's credential in the
-//// node's matching field; the off-chain builders then include the matching
-//// withdraw-0 in every transaction.
+//// substandard — the tokenized bond.
 
-use authorization.{is_authorized}
+use aiken/crypto.{ScriptHash}
 use cardano/address.{Credential}
 use cardano/transaction.{Transaction}
-use event_triggered/issuance
-use event_triggered/third_party
-use event_triggered/transfer
+use event_triggered/issuance as issuance_logic
+use event_triggered/native_mint
+use event_triggered/third_party as third_party_logic
+use event_triggered/transfer as transfer_logic
+use event_triggered/transformation
 use event_triggered/types.{
-  IssuanceAction, IssuanceParams, ThirdPartyAction, ThirdPartyParams,
-  TransferAction,
+  MintingAction, MintingParams, NativeMintParams, ThirdPartyAction,
+  ThirdPartyParams, TransferAction, TransferParams, TransformationAction,
+  TransformationParams,
 }
 
-/// The default P2 event rule (Q-RULE-1): the deployment's `rule` credential
-/// must authorize the transaction — a verification key by signature, a
-/// script by its withdraw-0. Both `third_party_logic` and the issuance
-/// logic's `Burn` mode are wired with it, so graduation fires under the same
-/// event condition the rules enforce **and** with the burned owners' consent
-/// (verified by the issuance `Burn` mode: inline verification-key stake
-/// credentials must sign, inline script stake credentials must run their
-/// withdraw-0 — Q-GRAD-2).
-fn rule_check(rule: Credential) -> fn(Transaction) -> Bool {
-  fn(tx: Transaction) {
-    is_authorized(rule, tx.extra_signatories, tx.withdrawals)
-  }
-}
-
-/// Issuance logic (withdraw-0): mode-aware mint/burn authority and registry
-/// lifecycle — Register / UpdateNode / Mint / Burn (see `issuance.validate`).
-validator issuance_logic(p: IssuanceParams) {
-  withdraw(redeemer: IssuanceAction, account: Credential, self: Transaction) {
-    issuance.validate(redeemer, account, self, p, rule_check(p.rule))
+/// Issuance logic (withdraw-0): the atomic register + first issue and the
+/// deadline graduation's burn (see `issuance_logic.validate`).
+validator issuance(p: MintingParams) {
+  withdraw(redeemer: MintingAction, account: Credential, self: Transaction) {
+    issuance_logic.validate(redeemer, account, self, p)
   }
 
   else(_) {
@@ -69,10 +28,10 @@ validator issuance_logic(p: IssuanceParams) {
 }
 
 /// Transfer logic (withdraw-0): purely permissive — P1 imposes no transfer
-/// rules (§2 P1).
-validator transfer_logic {
+/// rules (§4.2), at every point of the lifecycle.
+validator transfer(p: TransferParams) {
   withdraw(_redeemer: TransferAction, _account: Credential, self: Transaction) {
-    transfer.validate(self)
+    transfer_logic.validate(self, p)
   }
 
   else(_) {
@@ -80,13 +39,44 @@ validator transfer_logic {
   }
 }
 
-/// Third-party logic (withdraw-0): the keeper-driven graduation gate —
-/// event-conditioned burns only ("keeper assembles, owners co-sign": owner
-/// consent is enforced by the issuance `Burn` mode in the same tx; §2 P3, §5,
-/// Q-RULE-2, Q-GRAD-2).
-validator third_party_logic(p: ThirdPartyParams) {
+/// Third-party logic (withdraw-0): the permissionless graduation gate —
+/// burn-shaped dispatches only, gated by the `d4` event gate; the burn's
+/// destination binding is enforced by the issuance logic's `Burn` mode in the
+/// same transaction (§4.5).
+validator third_party(p: ThirdPartyParams) {
   withdraw(_redeemer: ThirdPartyAction, _account: Credential, self: Transaction) {
-    third_party.validate(self, p, rule_check(p.rule))
+    third_party_logic.validate(self, p)
+  }
+
+  else(_) {
+    fail
+  }
+}
+
+/// The transformation script (withdraw-0): the smart-wallet stake credential
+/// owning the reference token — its withdraw-0 authorizes the in-place
+/// schedule update, holder-passively (§4.4).
+validator transformation_script(p: TransformationParams) {
+  withdraw(
+    _redeemer: TransformationAction,
+    account: Credential,
+    self: Transaction,
+  ) {
+    transformation.validate(account, self, p)
+  }
+
+  else(_) {
+    fail
+  }
+}
+
+/// The graduated asset's native mint policy (§4.5): a plain minting policy
+/// approving exactly `burned × v4 / scale`, burn-backed against the bond's
+/// governed `cip_policy` ("no burn CIP, no mint", scaled), signer-agnostic.
+/// See `event_triggered/native_mint.ak`.
+validator native_mint_policy(p: NativeMintParams) {
+  mint(_redeemer: Data, own_policy: ScriptHash, self: Transaction) {
+    native_mint.validate(self, own_policy, p)
   }
 
   else(_) {

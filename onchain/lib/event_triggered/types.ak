@@ -4,7 +4,7 @@
 //// `docs/event-triggered-assets/design.typ` for the transaction figures.
 ////
 //// The instrument ships four withdraw-zero validators — the substandard's
-//// `minting_logic`, `transfer_logic`, `third_party_logic` and a smart-wallet
+//// `issuance`, `transfer`, `third_party` and a smart-wallet
 //// `transformation_script` — invoked by the CIP-113 core infrastructure: the
 //// shared Programmable Logic Base custodies all token UTxOs and dispatches
 //// spends to the transfer / third-party logic, the parameterized
@@ -36,7 +36,7 @@ use cardano/assets.{AssetName, PolicyId}
 /// also the registration authority, so it runs in two contexts and must be
 /// told why (09-DEVELOPING-SUBSTANDARDS.md, "Your issuance logic must know
 /// why it is running"). Each mode is cross-checked against the transaction
-/// shape in `minting.validate` (§4.1, §4.5).
+/// shape in `issuance.validate` (§4.1, §4.5).
 pub type MintingAction {
   /// Atomic register + first issue: validates registration authority (issuer
   /// signature), node shape and the first-batch mint in one transaction.
