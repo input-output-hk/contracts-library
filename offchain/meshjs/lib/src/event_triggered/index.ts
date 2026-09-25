@@ -1,32 +1,42 @@
 /**
- * Event-triggered assets (CIP-113 substandard scaffold) — MeshJS off-chain
- * submodule. See docs/explorations/event-triggered-assets.md.
+ * Event-triggered assets (tokenized bond) — MeshJS off-chain submodule.
+ * See docs/event-triggered-assets/spec.md.
  */
 
 export * from "./types";
 export {
-  instrumentStateToData,
-  eventAssetDatumToData,
-  instrumentDatumToData,
-  applyEventRedeemer,
+  bondExtraToData,
   graduateRedeemer,
-  retireRedeemer,
+  mintingActionToData,
+  mintingParamsToData,
+  moveRedeemer,
+  nativeMintParamsToData,
+  nativeMintRedeemer,
+  principalDatumToData,
+  referenceDatumToData,
+  registryNodeToData,
+  thirdPartyParamsToData,
+  transferParamsToData,
+  transformationParamsToData,
+  updateRedeemer,
 } from "./datum";
 export {
-  eventTriggeredScript,
-  eventTriggeredScriptAddress,
-  eventTriggeredPolicyId,
-  buildIssueTx,
-  buildApplyEventTx,
-  buildGraduateTx,
-  buildRetireTx,
-  type IssueParams,
-  type ApplyEventParams,
-  type GraduateParams,
-  type RetireParams,
+  issuanceScript,
+  nativeMintPolicyScript,
+  buildGraduationTx,
+  buildRegisterAndIssueTx,
+  buildTransferTx,
+  buildTransformationTx,
+  plbScriptAddress,
+  policyIdOf,
+  referenceTokenAddress,
+  scriptHashOf,
+  stakeAddressOf,
+  thirdPartyScript,
+  transferScript,
+  transformationScript,
+  type GraduationTxParams,
+  type RegisterAndIssueTxParams,
+  type TransferTxParams,
+  type TransformationTxParams,
 } from "./event_triggered";
-export {
-  compiledCode as eventTriggeredCode,
-  validatorHash as eventTriggeredValidatorHash,
-  plutusVersion as eventTriggeredPlutusVersion,
-} from "./blueprint";
