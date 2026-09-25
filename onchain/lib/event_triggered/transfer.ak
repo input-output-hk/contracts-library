@@ -18,9 +18,9 @@
 
 use aiken/collection/dict
 use aiken/collection/list
+use aiken/interval.{is_entirely_after}
 use cardano/assets.{tokens}
 use cardano/transaction.{Transaction}
-use event_triggered/time
 use event_triggered/types.{TransferParams}
 
 /// Approve every owner transfer (P1, §4.2). The core `transfer` validator
@@ -28,7 +28,9 @@ use event_triggered/types.{TransferParams}
 /// substandard adds no rule — except the graduation deadline gate below.
 pub fn validate(self: Transaction, params: TransferParams) -> Bool {
   if is_graduation(self, params) {
-    time.now_at_least(self, params.final_deadline)
+    // Event gate (Q-RULE-1, §4.5): the validity range must reach `d4`.
+    // `is_entirely_after(range, d4 - 1)` ⟺ the lower bound is ≥ d4.
+    is_entirely_after(self.validity_range, params.final_deadline - 1)
   } else {
     True
   }
@@ -38,6 +40,6 @@ pub fn validate(self: Transaction, params: TransferParams) -> Bool {
 /// policy is a graduation attempt — whatever the spend path.
 fn is_graduation(self: Transaction, params: TransferParams) -> Bool {
   tokens(self.mint, params.own_policy)
-    |> dict.to_pairs()
-    |> list.any(fn(entry) { entry.2nd < 0 })
+    |> dict.values
+    |> list.any(fn(quantity) { quantity < 0 })
 }

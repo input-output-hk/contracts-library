@@ -23,9 +23,9 @@
 
 use aiken/collection/dict
 use aiken/collection/list
+use aiken/interval.{is_entirely_after}
 use cardano/assets.{tokens}
 use cardano/transaction.{Transaction}
-use event_triggered/time
 use event_triggered/types.{ThirdPartyParams}
 
 /// Validate the graduation dispatch — runs once per transaction, however
@@ -34,10 +34,11 @@ pub fn validate(self: Transaction, params: ThirdPartyParams) -> Bool {
   // The claimed graduation must actually burn governed tokens (the shape
   // cross-check keeps the mode honest: extraction is graduation-only).
   let burn_present = tokens(self.mint, params.own_policy)
-    |> dict.to_pairs()
-    |> list.any(fn(entry) { entry.2nd < 0 })
+    |> dict.values
+    |> list.any(fn(quantity) { quantity < 0 })
   and {
     burn_present,
-    time.now_at_least(self, params.final_deadline),
+    // Event gate (Q-RULE-1): the validity range must reach `d4`.
+    is_entirely_after(self.validity_range, params.final_deadline - 1),
   }
 }
