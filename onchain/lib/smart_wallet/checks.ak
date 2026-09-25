@@ -1,11 +1,13 @@
 //// Smart wallet — reusable check functions.
 
+use aiken/collection/dict
 use aiken/collection/list
 use aiken/collection/pairs
 use aiken/crypto.{VerificationKeyHash}
-use cardano/address.{Credential}
+use authorization
+use cardano/address.{Credential, Script}
 use cardano/assets.{AssetName, Lovelace, PolicyId, Value}
-use cardano/transaction.{Output, Transaction}
+use cardano/transaction.{Output, OutputReference, Transaction, find_input}
 use smart_wallet/utils
 
 /// Base M-of-N floor: reads the wallet config (members + threshold) from the
@@ -79,6 +81,32 @@ pub fn withdrawals_invoked(
   withdrawals: Pairs<Credential, Lovelace>,
 ) -> Bool {
   list.all(required, fn(credential) { pairs.has_key(withdrawals, credential) })
+}
+
+/// Close check: the wallet's `admin` authorizes, and the wallet NFT (under the
+/// spending script's own policy, read from the wallet UTxO at `own_ref`) is
+/// burned in this transaction. Closing spends the wallet UTxO and destroys its
+/// identifying NFT, releasing whatever funds remain.
+pub fn validate_close(
+  admin: Credential,
+  own_ref: OutputReference,
+  self: Transaction,
+) -> Bool {
+  let Transaction { inputs, mint, .. } = self
+  expect Some(own_input) = find_input(inputs, own_ref)
+  expect Script(own_hash) = own_input.output.address.payment_credential
+
+  let burned = {
+    expect [Pair(_, quantity)] = mint
+      |> assets.tokens(own_hash)
+      |> dict.to_pairs()
+    quantity == -1
+  }
+
+  and {
+    authorization.is_authorized(admin, self.extra_signatories, self.withdrawals),
+    burned,
+  }
 }
 
 /// Aggregate value across `outputs` whose payment credential is `credential`.

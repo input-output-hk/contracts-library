@@ -19,10 +19,20 @@ pub type WalletDatum {
   withdrawals: List<Credential>,
 }
 
-/// Actions on a wallet UTxO.
-pub type WalletRedeemer {
+/// Actions on a wallet UTxO (spend endpoint).
+pub type SpendRedeemer {
   /// Pay out: base M-of-N floor plus the delegated withdrawals.
   Spend
   /// Rewrite this UTxO's `withdrawals` list; `out_ix` locates the continuation.
   UpdateWithdrawals { out_ix: Int }
+  /// Close the wallet: the `admin` authorizes, and the wallet NFT is burned.
+  Close
+}
+
+/// Actions on the mint endpoint: create or close a wallet, one-shot.
+pub type MintRedeemer {
+  /// Mint the wallet NFT; `out_ix` locates the new wallet UTxO.
+  Mint { out_ix: Int }
+  /// Burn the wallet NFT, permanently closing the wallet.
+  Burn
 }
