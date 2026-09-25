@@ -82,7 +82,7 @@ pub fn final_value(schedule: List<ScheduleStep>) -> Option<Int> {
 }
 
 /// One owner's payout: `floor(Q × v4 / scale)` (§4.5).
-pub fn payout(burned: Int, final_value: Int, scale: Int) -> Int {
+fn payout(burned: Int, final_value: Int, scale: Int) -> Int {
   burned * final_value / scale
 }
 
@@ -159,7 +159,7 @@ pub fn total(entries: List<(Credential, Int)>) -> Int {
 
 /// An output's owner: its inline stake credential (§3.1). Pointer-backed or
 /// absent stake credentials are not owners — they fail closed.
-pub fn owner_of(output: Output) -> Option<Credential> {
+fn owner_of(output: Output) -> Option<Credential> {
   when output.address.stake_credential is {
     Some(Inline(cred)) -> Some(cred)
     _ -> None

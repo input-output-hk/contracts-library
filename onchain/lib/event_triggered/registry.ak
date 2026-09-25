@@ -28,7 +28,7 @@ pub fn outputs_of(inputs: List<Input>) -> List<Output> {
 /// Decode an output as a registry-node UTxO, if it is one. Node datums are
 /// assumed inline (the base layer reads them the same way); an output holding
 /// a registry NFT whose datum does not decode aborts the transaction.
-pub fn node(output: Output, registry_node_cs: PolicyId) -> Option<RegistryNode> {
+fn node(output: Output, registry_node_cs: PolicyId) -> Option<RegistryNode> {
   if dict.is_empty(tokens(output.value, registry_node_cs)) {
     None
   } else {
@@ -44,10 +44,7 @@ pub fn node(output: Output, registry_node_cs: PolicyId) -> Option<RegistryNode> 
 
 /// The policy id a node output governs: the asset name of its registry NFT
 /// (the node's `key`).
-pub fn node_policy(
-  output: Output,
-  registry_node_cs: PolicyId,
-) -> Option<PolicyId> {
+fn node_policy(output: Output, registry_node_cs: PolicyId) -> Option<PolicyId> {
   when tokens(output.value, registry_node_cs) |> dict.to_pairs() is {
     [Pair(name, 1)] -> {
       let policy: PolicyId = name
