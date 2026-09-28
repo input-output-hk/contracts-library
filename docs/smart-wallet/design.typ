@@ -89,12 +89,12 @@ wallet UTxO's datum; the single spend redeemer asserts their conjunction._
         "wallet_nft": "1",
       ),
       datum: (
-        withdrawals: "List(Credential)",
+        withdrawals: "Pairs<ScriptHash, Data>",
       ),
     ),
   ),
   withdrawals: (
-    "each credential in the wallet datum's withdrawals",
+    "each script in the wallet datum's withdrawals",
   ),
   outputs: (
     (
@@ -110,7 +110,7 @@ wallet UTxO's datum; the single spend redeemer asserts their conjunction._
         "wallet_nft": "1",
       ),
       datum: (
-        withdrawals: "List(Credential)",
+        withdrawals: "Pairs<ScriptHash, Data>",
       ),
     ),
   ),
@@ -133,12 +133,13 @@ wallet UTxO's datum; the single spend redeemer asserts their conjunction._
       present in `extra_signatories`. A member may itself be a script
       credential, so the floor can be another multisig, a DAO, and so on. This
       design is agnostic of how that configuration is sourced.
-    - delegated authorizations: every `Credential` in the wallet UTxO's
+    - delegated authorizations: every `ScriptHash` key in the wallet UTxO's
       `withdrawals` datum field is a withdraw-0 staking script that must run in
-      this transaction. The `Spend` redeemer asserts the conjunction — the
-      M-of-N floor *and* all delegated checks — so no restriction can be
-      silently omitted. The list is per-UTxO, so different wallet UTxOs may
-      carry different restriction sets.
+      this transaction; the `Data` value carries that script's own mutable
+      state. The `Spend` redeemer asserts the conjunction — the M-of-N floor
+      *and* all delegated checks — so no restriction can be silently omitted.
+      The map is per-UTxO, so different wallet UTxOs may carry different
+      restriction sets.
     - the delegated scripts are the extension point: spending limits, time
       locks, recipient allow-lists, oracle attestations, … each is an
       independent withdrawal script observed here, none known to the spending
@@ -171,7 +172,7 @@ same address, same value — only the restriction set changes._
         "wallet_nft": "1",
       ),
       datum: (
-        withdrawals: "List(Credential)",
+        withdrawals: "Pairs<ScriptHash, Data>",
       ),
     ),
   ),
@@ -226,7 +227,7 @@ the admin and the burn; the `Burn` mint redeemer permits it._
         "wallet_nft": "1",
       ),
       datum: (
-        withdrawals: "List(Credential)",
+        withdrawals: "Pairs<ScriptHash, Data>",
       ),
     ),
   ),

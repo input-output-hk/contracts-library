@@ -1,4 +1,4 @@
-use cardano/address.{Script, VerificationKey, from_script}
+use cardano/address.{VerificationKey, from_script}
 use cardano/assets
 use cardano/transaction.{
   DatumHash, InlineDatum, Input, NoDatum, Output, OutputReference, Transaction,
@@ -117,9 +117,10 @@ test rejects_missing_nft_in_output() fail {
 }
 
 test rejects_non_empty_withdrawals() fail {
+  let data: Data = 0
   let bad_output = Output {
     ..wallet_output(),
-    datum: InlineDatum(WalletDatum { withdrawals: [Script(other_policy)] }),
+    datum: InlineDatum(WalletDatum { withdrawals: [Pair(other_policy, data)] }),
   }
   mint(Transaction { ..mint_tx(), outputs: [bad_output] })
 }

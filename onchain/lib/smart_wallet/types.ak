@@ -1,7 +1,6 @@
 //// Smart wallet — on-chain types.
 
-use aiken/crypto.{VerificationKeyHash}
-use cardano/address.{Credential}
+use aiken/crypto.{ScriptHash, VerificationKeyHash}
 
 /// The wallet's self-governing config, stored in the `current` field of the
 /// settings UTxO datum so it is updatable without redeploying consumers.
@@ -15,8 +14,9 @@ pub type WalletConfig {
 /// Datum carried by each wallet UTxO: the delegated authorization list. The
 /// credential allowed to update it is a parameter of the spending script.
 pub type WalletDatum {
-  /// Delegated withdraw-0 scripts that must run on every spend of this UTxO.
-  withdrawals: List<Credential>,
+  /// Delegated withdraw-0 scripts that must run on every spend of this UTxO,
+  /// each carrying its own mutable data (if any) in `Data`.
+  withdrawals: Pairs<ScriptHash, Data>,
 }
 
 /// Actions on a wallet UTxO (spend endpoint).

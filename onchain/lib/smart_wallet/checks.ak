@@ -3,7 +3,7 @@
 use aiken/collection/dict
 use aiken/collection/list
 use aiken/collection/pairs
-use aiken/crypto.{VerificationKeyHash}
+use aiken/crypto.{ScriptHash, VerificationKeyHash}
 use authorization
 use cardano/address.{Credential, Script}
 use cardano/assets.{AssetName, Lovelace, PolicyId, Value}
@@ -73,14 +73,17 @@ pub fn within_spending_limit(
   value_delta_below_bound(input, output, bound)
 }
 
-/// Delegation check: every credential in `required` keys a reward withdrawal in
+/// Delegation check: every script in `required` keys a reward withdrawal in
 /// `withdrawals`, i.e. each delegated withdraw-0 script ran and approved. The
 /// spend asserts this conjunction so no configured restriction can be omitted.
 pub fn withdrawals_invoked(
-  required: List<Credential>,
+  required: Pairs<ScriptHash, Data>,
   withdrawals: Pairs<Credential, Lovelace>,
 ) -> Bool {
-  list.all(required, fn(credential) { pairs.has_key(withdrawals, credential) })
+  list.all(
+    pairs.keys(required),
+    fn(script_hash) { pairs.has_key(withdrawals, Script(script_hash)) },
+  )
 }
 
 /// Close check: the wallet's `admin` authorizes, and the wallet NFT (under the

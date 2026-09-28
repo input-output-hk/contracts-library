@@ -61,8 +61,9 @@ test delta_above_bound_rejected() fail {
 // --------------------------------------------------------- withdrawals_invoked
 
 test withdrawals_all_invoked() {
+  let data: Data = 0
   withdrawals_invoked(
-    [Script(a), Script(b)],
+    [Pair(a, data), Pair(b, data)],
     [Pair(Script(a), 0), Pair(Script(b), 0)],
   )
 }
@@ -72,5 +73,6 @@ test withdrawals_none_required() {
 }
 
 test withdrawals_missing_one() fail {
-  withdrawals_invoked([Script(a), Script(b)], [Pair(Script(a), 0)])
+  let data: Data = 0
+  withdrawals_invoked([Pair(a, data), Pair(b, data)], [Pair(Script(a), 0)])
 }
