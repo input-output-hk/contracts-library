@@ -9,7 +9,7 @@ use aiken/crypto.{ScriptHash}
 use aiken/interval.{Finite}
 use cardano/address.{Credential}
 use cardano/transaction.{Transaction}
-use smart_wallet/checks
+use smart_wallet/withdrawal
 
 /// Mutable state: the POSIX time (ms) of the last spend; `0` means never spent.
 pub type SpendingWindowState {
@@ -34,12 +34,12 @@ pub fn validate_withdraw(
   window: Int,
 ) -> Bool {
   expect Finite(now) = self.validity_range.lower_bound.bound_type
-  expect current: SpendingWindowState = checks.own_withdrawal_data_in(
+  expect current: SpendingWindowState = withdrawal.own_withdrawal_data_in(
     self,
     wallet,
     own_hash,
   )
-  expect next: SpendingWindowState = checks.own_withdrawal_data(
+  expect next: SpendingWindowState = withdrawal.own_withdrawal_data(
     self,
     wallet,
     own_hash,

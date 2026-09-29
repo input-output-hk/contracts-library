@@ -7,7 +7,7 @@ use cardano/address.{Credential, Script}
 use cardano/assets.{Lovelace}
 use cardano/certificate.{Certificate, RegisterCredential, UnregisterCredential}
 use cardano/transaction.{Transaction}
-use smart_wallet/checks
+use smart_wallet/withdrawal
 use smart_wallet/withdrawal_scripts/spending_limit_logic.{within_spending_limit}
 
 /// Delegated spending-limit script (withdraw-0). Requires the wallet's net
@@ -18,13 +18,13 @@ validator spending_limit(wallet: Credential, bound: Lovelace) {
       RegisterCredential { credential: Script(own_hash), .. } -> {
         // stateless: only confirm this script is listed in the wallet datum; a
         // stateful script would additionally validate its initial `Data` here.
-        expect _: Data = checks.own_withdrawal_data(self, wallet, own_hash)
+        expect _: Data = withdrawal.own_withdrawal_data(self, wallet, own_hash)
         True
       }
       UnregisterCredential { credential: Script(own_hash), .. } ->
         // only allow unregistration when this script is leaving a wallet, so it
         // cannot be unregistered out of band (which would brick the wallet).
-        checks.own_withdrawal_removed(self, wallet, own_hash)
+        withdrawal.own_withdrawal_removed(self, wallet, own_hash)
       _ -> fail
     }
   }

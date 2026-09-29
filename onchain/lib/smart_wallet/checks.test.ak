@@ -1,26 +1,17 @@
-use aiken/cbor
-use aiken/crypto.{ScriptHash}
-use cardano/address.{Script, from_script}
-use cardano/assets
+use cardano/address.{Script}
 use cardano/certificate.{RegisterCredential, UnregisterCredential}
-use cardano/transaction.{
-  InlineDatum, Input, Output, OutputReference, Transaction, placeholder,
-}
+use cardano/transaction.{Transaction, placeholder}
 use smart_wallet/checks.{
-  members_signed, own_withdrawal_data, own_withdrawal_removed,
-  withdrawals_added_published, withdrawals_invoked, withdrawals_kept_unchanged,
-  withdrawals_published, withdrawals_removed_unregistered,
+  members_signed, withdrawals_added_published, withdrawals_invoked,
+  withdrawals_kept_unchanged, withdrawals_published,
+  withdrawals_removed_unregistered,
 }
-use smart_wallet/types.{WalletDatum}
 
 const a = #"11111111111111111111111111111111111111111111111111111111"
 
 const b = #"22222222222222222222222222222222222222222222222222222222"
 
 const c = #"33333333333333333333333333333333333333333333333333333333"
-
-const tx_id =
-  #"0000000000000000000000000000000000000000000000000000000000000000"
 
 // ------------------------------------------------------------- members_signed
 
@@ -153,89 +144,4 @@ test kept_unchanged_rejects_changed_data() fail {
   let old: Data = 0
   let new: Data = 1
   withdrawals_kept_unchanged([Pair(a, old)], [Pair(a, new)])
-}
-
-// ------------------------------------------------------ own_withdrawal_data
-
-test own_data_read_from_wallet_output() {
-  let data: Data = 0
-  let output = Output {
-    address: from_script(a),
-    value: assets.zero,
-    datum: InlineDatum(
-      WalletDatum { withdrawals: [Pair(a, data)], depositor: Script(a) },
-    ),
-    reference_script: None,
-  }
-  let tx = Transaction { ..placeholder, outputs: [output] }
-  cbor.serialise(own_withdrawal_data(tx, Script(a), a)) == cbor.serialise(data)
-}
-
-test own_data_missing_script() fail {
-  let data: Data = 0
-  let output = Output {
-    address: from_script(a),
-    value: assets.zero,
-    datum: InlineDatum(
-      WalletDatum { withdrawals: [Pair(b, data)], depositor: Script(a) },
-    ),
-    reference_script: None,
-  }
-  let tx = Transaction { ..placeholder, outputs: [output] }
-  expect _: Data = own_withdrawal_data(tx, Script(a), a)
-}
-
-test own_data_missing_wallet_output() fail {
-  expect _: Data = own_withdrawal_data(placeholder, Script(a), a)
-}
-
-// ---------------------------------------------------- own_withdrawal_removed
-
-fn wallet_output_at(withdrawals: Pairs<ScriptHash, Data>) -> Output {
-  Output {
-    address: from_script(a),
-    value: assets.zero,
-    datum: InlineDatum(WalletDatum { withdrawals, depositor: Script(a) }),
-    reference_script: None,
-  }
-}
-
-fn wallet_input_at(withdrawals: Pairs<ScriptHash, Data>) -> Input {
-  Input {
-    output_reference: OutputReference { transaction_id: tx_id, output_index: 0 },
-    output: wallet_output_at(withdrawals),
-  }
-}
-
-test removed_with_input_and_no_output() {
-  let data: Data = 0
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [wallet_input_at([Pair(a, data)])],
-  }
-  own_withdrawal_removed(tx, Script(a), a)
-}
-
-test removed_with_input_and_empty_output() {
-  let data: Data = 0
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [wallet_input_at([Pair(a, data)])],
-    outputs: [wallet_output_at([])],
-  }
-  own_withdrawal_removed(tx, Script(a), a)
-}
-
-test removed_rejects_when_kept() fail {
-  let data: Data = 0
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [wallet_input_at([Pair(a, data)])],
-    outputs: [wallet_output_at([Pair(a, data)])],
-  }
-  own_withdrawal_removed(tx, Script(a), a)
-}
-
-test removed_rejects_without_wallet_input() fail {
-  own_withdrawal_removed(placeholder, Script(a), a)
 }
