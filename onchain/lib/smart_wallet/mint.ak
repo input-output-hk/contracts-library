@@ -6,6 +6,7 @@ use cardano/assets.{AssetName, PolicyId, has_nft, tokens}
 use cardano/transaction.{
   InlineDatum, Output, OutputReference, Transaction, find_input,
 }
+use smart_wallet/checks
 use smart_wallet/types.{WalletDatum}
 
 /// Validate minting the wallet NFT, which identifies a valid smart wallet.
@@ -13,8 +14,9 @@ use smart_wallet/types.{WalletDatum}
 /// One-shot: the policy requires `seed_utxo` to be spent, so a single
 /// policy id can mint at most once. Exactly one token with the expected
 /// name is minted, and the continuation output at `out_ix` must sit at this
-/// script's own address carrying that NFT with a fresh, empty `WalletDatum`.
-/// The wallet's `admin` must authorize the mint.
+/// script's own address carrying that NFT with a fresh `WalletDatum` whose
+/// delegated withdrawals are all published in this transaction. The wallet's
+/// `admin` must authorize the mint.
 pub fn validate_mint(
   seed_utxo: OutputReference,
   out_ix: Int,
@@ -52,7 +54,7 @@ pub fn validate_mint(
 
   let correct_datum = {
     expect WalletDatum { withdrawals } = datum
-    withdrawals == []
+    checks.withdrawals_published(withdrawals, self)
   }
 
   and {

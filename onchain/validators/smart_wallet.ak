@@ -10,6 +10,7 @@ use aiken/collection/list
 use authorization
 use cardano/address.{Credential, Script}
 use cardano/assets.{AssetName, Lovelace, PolicyId}
+use cardano/certificate.{Certificate, RegisterCredential, UnregisterCredential}
 use cardano/transaction.{InlineDatum, OutputReference, Transaction, find_input}
 use smart_wallet/checks
 use smart_wallet/mint.{validate_burn, validate_mint}
@@ -89,16 +90,48 @@ fn validate_withdrawals_update(
   expect Some(own_input) = find_input(self.inputs, own_ref)
   expect Some(continuation) = list.at(self.outputs, out_ix)
   expect InlineDatum(raw) = continuation.datum
-  expect _new_datum: WalletDatum = raw
+  expect new_datum: WalletDatum = raw
+  expect InlineDatum(old_raw) = own_input.output.datum
+  expect old_datum: WalletDatum = old_raw
   and {
     continuation.address == own_input.output.address,
     assets.match(continuation.value, own_input.output.value, >=),
+    checks.withdrawals_added_published(
+      old_datum.withdrawals,
+      new_datum.withdrawals,
+      self,
+    ),
+    checks.withdrawals_removed_unregistered(
+      old_datum.withdrawals,
+      new_datum.withdrawals,
+      self,
+    ),
+    checks.withdrawals_kept_unchanged(
+      old_datum.withdrawals,
+      new_datum.withdrawals,
+    ),
   }
 }
 
 /// Delegated spending-limit script (withdraw-0). Requires the wallet's net
 /// outflow `input - output` to stay below `bound` lovelace.
 validator spending_limit(wallet: Credential, bound: Lovelace) {
+  publish(_redeemer: Data, certificate: Certificate, self: Transaction) {
+    when certificate is {
+      RegisterCredential { credential: Script(own_hash), .. } -> {
+        // stateless: only confirm this script is listed in the wallet datum; a
+        // stateful script would additionally validate its initial `Data` here.
+        expect _: Data = checks.own_withdrawal_data(self, wallet, own_hash)
+        True
+      }
+      UnregisterCredential { credential, .. } -> {
+        expect Script(_) = credential
+        True
+      }
+      _ -> fail
+    }
+  }
+
   withdraw(_redeemer: Data, _account: Credential, self: Transaction) {
     checks.within_spending_limit(self, wallet, bound)
   }

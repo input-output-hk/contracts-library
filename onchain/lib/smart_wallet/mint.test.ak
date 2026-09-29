@@ -1,8 +1,9 @@
-use cardano/address.{VerificationKey, from_script}
+use cardano/address.{Script, VerificationKey, from_script}
 use cardano/assets
+use cardano/certificate.{Certificate, RegisterCredential}
 use cardano/transaction.{
-  DatumHash, InlineDatum, Input, NoDatum, Output, OutputReference, Transaction,
-  placeholder,
+  DatumHash, InlineDatum, Input, NoDatum, Output, OutputReference, Publish,
+  Transaction, placeholder,
 }
 use smart_wallet/mint.{validate_burn, validate_mint}
 use smart_wallet/types.{WalletDatum}
@@ -37,6 +38,15 @@ fn seed_input() -> Input {
 
 fn wallet_datum() -> WalletDatum {
   WalletDatum { withdrawals: [] }
+}
+
+fn withdrawal_certificate() -> Certificate {
+  RegisterCredential { credential: Script(other_policy), deposit: Never }
+}
+
+fn withdrawal_data() -> Data {
+  let data: Data = 0
+  data
 }
 
 fn wallet_output() -> Output {
@@ -123,6 +133,24 @@ test rejects_non_empty_withdrawals() fail {
     datum: InlineDatum(WalletDatum { withdrawals: [Pair(other_policy, data)] }),
   }
   mint(Transaction { ..mint_tx(), outputs: [bad_output] })
+}
+
+test mint_with_published_withdrawals() {
+  let data = withdrawal_data()
+  let output = Output {
+    ..wallet_output(),
+    datum: InlineDatum(WalletDatum { withdrawals: [Pair(other_policy, data)] }),
+  }
+  mint(
+    Transaction {
+      ..mint_tx(),
+      outputs: [output],
+      certificates: [withdrawal_certificate()],
+      redeemers: [
+        Pair(Publish { at: 0, certificate: withdrawal_certificate() }, data),
+      ],
+    },
+  )
 }
 
 test rejects_wrong_address() fail {
