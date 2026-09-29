@@ -24,7 +24,9 @@ fn wallet_output(withdrawals: Pairs<ScriptHash, Data>) -> Output {
   Output {
     address: from_script(b),
     value: assets.zero,
-    datum: InlineDatum(WalletDatum { withdrawals }),
+    datum: InlineDatum(
+      WalletDatum { withdrawals, depositor: VerificationKey(a) },
+    ),
     reference_script: None,
   }
 }

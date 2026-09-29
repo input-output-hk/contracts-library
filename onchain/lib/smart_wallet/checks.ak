@@ -273,6 +273,74 @@ pub fn validate_close(
   }
 }
 
+/// Deposit check: the wallet's `depositor` authorizes, and the continuation at
+/// `out_ix` sits at the same address carrying the wallet's unchanged datum with
+/// at least as much value (any asset, including lovelace and the wallet NFT).
+/// A deposit can only add funds, never spend them or alter the wallet's config.
+pub fn validate_deposit(
+  out_ix: Int,
+  own_ref: OutputReference,
+  self: Transaction,
+) -> Bool {
+  expect Some(own_input) = find_input(self.inputs, own_ref)
+  expect InlineDatum(raw) = own_input.output.datum
+  expect datum: WalletDatum = raw
+
+  expect
+    authorization.is_authorized(
+      datum.depositor,
+      self.extra_signatories,
+      self.withdrawals,
+    )
+
+  expect Some(continuation) = list.at(self.outputs, out_ix)
+  expect InlineDatum(cont_raw) = continuation.datum
+  expect cont_datum: WalletDatum = cont_raw
+
+  and {
+    continuation.address == own_input.output.address,
+    datum_unchanged(datum, cont_datum),
+    value_superset(continuation.value, own_input.output.value),
+  }
+}
+
+/// Two wallet datums carry the same config: identical `depositor` and identical
+/// `withdrawals` map (same keys, same `Data`).
+fn datum_unchanged(old: WalletDatum, new: WalletDatum) -> Bool {
+  old.depositor == new.depositor && withdrawals_equal(
+    old.withdrawals,
+    new.withdrawals,
+  )
+}
+
+/// Two `withdrawals` maps have the same keys with the same `Data`.
+fn withdrawals_equal(
+  old: Pairs<ScriptHash, Data>,
+  new: Pairs<ScriptHash, Data>,
+) -> Bool {
+  list.length(old) == list.length(new) && list.all(
+    old,
+    fn(pair) {
+      when pairs.get_first(new, pair.1st) is {
+        Some(new_data) -> cbor.serialise(pair.2nd) == cbor.serialise(new_data)
+        None -> False
+      }
+    },
+  )
+}
+
+/// `cont` holds at least as much of every asset (and lovelace) as `input`, i.e.
+/// a deposit may add value but never remove any.
+fn value_superset(cont: Value, input: Value) -> Bool {
+  list.all(
+    assets.flatten(input),
+    fn(triple) {
+      let (policy, asset, qty) = triple
+      assets.quantity_of(cont, policy, asset) >= qty
+    },
+  )
+}
+
 /// Aggregate value across `outputs` whose payment credential is `credential`.
 fn sum_at_credential(outputs: List<Output>, credential: Credential) -> Value {
   list.foldl(

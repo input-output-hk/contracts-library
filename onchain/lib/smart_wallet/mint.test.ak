@@ -37,7 +37,7 @@ fn seed_input() -> Input {
 }
 
 fn wallet_datum() -> WalletDatum {
-  WalletDatum { withdrawals: [] }
+  WalletDatum { withdrawals: [], depositor: VerificationKey(admin_vkh) }
 }
 
 fn withdrawal_certificate() -> Certificate {
@@ -130,7 +130,12 @@ test rejects_non_empty_withdrawals() fail {
   let data: Data = 0
   let bad_output = Output {
     ..wallet_output(),
-    datum: InlineDatum(WalletDatum { withdrawals: [Pair(other_policy, data)] }),
+    datum: InlineDatum(
+      WalletDatum {
+        withdrawals: [Pair(other_policy, data)],
+        depositor: VerificationKey(admin_vkh),
+      },
+    ),
   }
   mint(Transaction { ..mint_tx(), outputs: [bad_output] })
 }
@@ -139,7 +144,12 @@ test mint_with_published_withdrawals() {
   let data = withdrawal_data()
   let output = Output {
     ..wallet_output(),
-    datum: InlineDatum(WalletDatum { withdrawals: [Pair(other_policy, data)] }),
+    datum: InlineDatum(
+      WalletDatum {
+        withdrawals: [Pair(other_policy, data)],
+        depositor: VerificationKey(admin_vkh),
+      },
+    ),
   }
   mint(
     Transaction {

@@ -6,8 +6,9 @@
 // every other authorization to the withdraw-0 staking scripts listed in the
 // wallet UTxO's own datum. One spend redeemer asserts the conjunction of the
 // M-of-N floor and all delegated staking authorizations. An admin credential (a
-// parameter of the script) creates the wallet, rewrites that list in place, and
-// closes the wallet by burning the NFT.
+// parameter of the script) creates the wallet, rewrites the config in place, and
+// closes the wallet by burning the NFT; a depositor credential (stored in the
+// datum) can add funds without spending or changing the config.
 //
 // The M-of-N members and threshold are supplied as external configuration; this
 // design is agnostic of how they are sourced (a settings UTxO, script
@@ -45,6 +46,7 @@ script's own policy — into a fresh wallet UTxO at the wallet address. The
       ),
       datum: (
         withdrawals: "Pairs<ScriptHash, Data>",
+        depositor: "Credential",
       ),
     ),
   ),
@@ -65,12 +67,13 @@ script's own policy — into a fresh wallet UTxO at the wallet address. The
       resulting NFT is unforgeable and identifies the wallet.
     - the mint redeemer is `Mint { out_ix }`, locating the new wallet UTxO.
     - the new wallet UTxO carries the NFT, an inline datum with a `withdrawals`
-      map, and no reference script. Every script in that map must be registered
-      in this same transaction — a `RegisterCredential` certificate for its stake
-      credential, which runs the script's `publish` handler. The handler reads its
-      own initial `Data` from this output's datum and validates it, so a wallet
-      may be created already carrying delegated restrictions, but only ones that
-      self-validated their initial state.
+      map and a `depositor` credential, and no reference script. Every script in
+      the `withdrawals` map must be registered in this same transaction — a
+      `RegisterCredential` certificate for its stake credential, which runs the
+      script's `publish` handler. The handler reads its own initial `Data` from
+      this output's datum and validates it, so a wallet may be created already
+      carrying delegated restrictions, but only ones that self-validated their
+      initial state.
     - the `admin` credential (a script parameter) must be satisfied: a key admin
       signs; a script admin authorizes by a withdraw-0 invocation.
   ],
@@ -98,6 +101,7 @@ wallet UTxO's datum; the single spend redeemer asserts their conjunction._
       ),
       datum: (
         withdrawals: "Pairs<ScriptHash, Data>",
+        depositor: "Credential",
       ),
     ),
   ),
@@ -119,6 +123,7 @@ wallet UTxO's datum; the single spend redeemer asserts their conjunction._
       ),
       datum: (
         withdrawals: "Pairs<ScriptHash, Data>",
+        depositor: "Credential",
       ),
     ),
   ),
@@ -163,24 +168,25 @@ wallet UTxO's datum; the single spend redeemer asserts their conjunction._
 
 #pagebreak()
 
-= Update withdrawals (per-UTxO)
+= Update config (per-UTxO)
 _An authorized admin credential — a parameter of the spending script — rewrites
-a wallet UTxO's delegated `withdrawals` list in place. Funds are untouched:
-same address, same value — only the restriction set changes._
+a wallet UTxO's config (`withdrawals` and `depositor`) in place. Funds are
+untouched: same address, same value — only the config changes._
 
-#let update_withdrawals_tx = vanilla_transaction(
-  "Update withdrawals",
+#let update_config_tx = vanilla_transaction(
+  "Update config",
   inputs: (
     (
       name: "Wallet UTxO",
       address: "wallet_addr",
-      redeemer: [UpdateWithdrawals],
+      redeemer: [UpdateConfig],
       value: (
         "ada": "x",
         "wallet_nft": "1",
       ),
       datum: (
         withdrawals: "Pairs<ScriptHash, Data>",
+        depositor: "Credential",
       ),
     ),
   ),
@@ -194,6 +200,7 @@ same address, same value — only the restriction set changes._
       ),
       datum: (
         withdrawals: [*withdrawals'*],
+        depositor: [*depositor'*],
       ),
     ),
   ),
@@ -210,23 +217,83 @@ same address, same value — only the restriction set changes._
       pluggable mechanism used elsewhere).
     - the continuation must sit at the same `wallet_addr` and carry the *same
       value* — including the NFT — so an update cannot move funds, only swap the
-      delegated `withdrawals` set. The admin is fixed in the script parameter,
-      so control cannot be handed off.
-    - `withdrawals'`: the new list. It takes effect immediately for subsequent
-      spends of this UTxO; other wallet UTxOs are unaffected (the list is
-      per-UTxO).
+      config. The admin is fixed in the script parameter, so control cannot be
+      handed off.
+    - `withdrawals'` / `depositor'`: the new config. It takes effect immediately
+      for subsequent spends of this UTxO; other wallet UTxOs are unaffected (the
+      config is per-UTxO).
     - the update diffs the old and new maps: every script *added* must be
       registered here (`RegisterCredential`, running its `publish` handler, which
       reads the script's initial `Data` from the continuation datum and validates
       it); every script *removed* must be unregistered (`UnregisterCredential`,
       whose `publish` handler only accepts the unregister when it sees the script
-      leaving the wallet); every script *kept* must carry unchanged `Data`. This
-      ensures each entry's `Data` was self-validated at registration and stays
-      coherent across updates.
+      leaving the wallet); every script *kept* must carry unchanged `Data`. The
+      `depositor` is freely rewritten by the admin. This ensures each entry's
+      `Data` was self-validated at registration and stays coherent across
+      updates.
   ],
 )
 
-#figure(update_withdrawals_tx, caption: [Update withdrawals (per-UTxO)]) <fig:update-withdrawals>
+#figure(update_config_tx, caption: [Update config (per-UTxO)]) <fig:update-config>
+
+#pagebreak()
+
+= Deposit (depositor adds funds)
+_The wallet's `depositor` credential adds funds to the wallet UTxO — spending it
+and recreating it at the same address with the NFT, an unchanged datum, and no
+fund removed. It is the only non-admin, non-M-of-N way to touch the wallet, and
+it cannot spend funds or change the config._
+
+#let deposit_tx = vanilla_transaction(
+  "Deposit",
+  inputs: (
+    (
+      name: "Wallet UTxO",
+      address: "wallet_addr",
+      redeemer: [Deposit],
+      value: (
+        "ada": "x",
+        "wallet_nft": "1",
+      ),
+      datum: (
+        withdrawals: "Pairs<ScriptHash, Data>",
+        depositor: "Credential",
+      ),
+    ),
+  ),
+  outputs: (
+    (
+      name: "Wallet UTxO",
+      address: "wallet_addr",
+      value: (
+        "ada": "x + d",
+        "wallet_nft": "1",
+        "*deposit*": "*d'*",
+      ),
+      datum: (
+        withdrawals: "Pairs<ScriptHash, Data>",
+        depositor: "Credential",
+      ),
+    ),
+  ),
+  signatures: (
+    "depositor (if a key credential)",
+  ),
+  notes: [
+    - the `depositor` credential (read from the wallet datum) must be satisfied:
+      a key depositor signs; a script depositor authorizes by a withdraw-0
+      invocation.
+    - the continuation must sit at the same `wallet_addr` and carry the *same
+      datum* — a deposit cannot change `withdrawals` or `depositor`.
+    - the continuation's value must be a superset of the input's: every asset
+      (including lovelace and the NFT) is present in at least the same quantity,
+      so a deposit can only add funds, never spend or remove them.
+    - the delegated withdrawal scripts do not run on a deposit: there is no
+      outflow to restrict.
+  ],
+)
+
+#figure(deposit_tx, caption: [Deposit (depositor adds funds)]) <fig:deposit>
 
 #pagebreak()
 
@@ -249,6 +316,7 @@ so its stake deposit is refunded; the `Burn` mint redeemer permits the burn._
       ),
       datum: (
         withdrawals: "Pairs<ScriptHash, Data>",
+        depositor: "Credential",
       ),
     ),
   ),

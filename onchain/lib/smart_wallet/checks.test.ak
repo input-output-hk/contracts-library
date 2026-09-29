@@ -192,7 +192,9 @@ test own_data_read_from_wallet_output() {
   let output = Output {
     address: from_script(a),
     value: assets.zero,
-    datum: InlineDatum(WalletDatum { withdrawals: [Pair(a, data)] }),
+    datum: InlineDatum(
+      WalletDatum { withdrawals: [Pair(a, data)], depositor: Script(a) },
+    ),
     reference_script: None,
   }
   let tx = Transaction { ..placeholder, outputs: [output] }
@@ -204,7 +206,9 @@ test own_data_missing_script() fail {
   let output = Output {
     address: from_script(a),
     value: assets.zero,
-    datum: InlineDatum(WalletDatum { withdrawals: [Pair(b, data)] }),
+    datum: InlineDatum(
+      WalletDatum { withdrawals: [Pair(b, data)], depositor: Script(a) },
+    ),
     reference_script: None,
   }
   let tx = Transaction { ..placeholder, outputs: [output] }
@@ -221,7 +225,7 @@ fn wallet_output_at(withdrawals: Pairs<ScriptHash, Data>) -> Output {
   Output {
     address: from_script(a),
     value: assets.zero,
-    datum: InlineDatum(WalletDatum { withdrawals }),
+    datum: InlineDatum(WalletDatum { withdrawals, depositor: Script(a) }),
     reference_script: None,
   }
 }

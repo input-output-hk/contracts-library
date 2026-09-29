@@ -53,7 +53,7 @@ pub fn validate_mint(
   let correct_value = has_nft(value, own_policy, wallet_token_name)
 
   let correct_datum = {
-    expect WalletDatum { withdrawals } = datum
+    expect WalletDatum { withdrawals, depositor: _ } = datum
     checks.withdrawals_published(withdrawals, self)
   }
 
