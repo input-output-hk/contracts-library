@@ -195,20 +195,58 @@ pub fn own_withdrawal_data(
   wallet: Credential,
   own_hash: ScriptHash,
 ) -> Data {
-  let output = list.expect_find(
-    self.outputs,
-    fn(output) { output.address.payment_credential == wallet },
-  )
-  expect InlineDatum(raw) = output.datum
-  expect wallet_datum: WalletDatum = raw
-  expect Some(data) = pairs.get_first(wallet_datum.withdrawals, own_hash)
+  expect Some(datum) = wallet_datum(self.outputs, wallet)
+  expect Some(data) = pairs.get_first(datum.withdrawals, own_hash)
   data
+}
+
+/// Whether `own_hash` is being *removed* in this transaction: it is listed in
+/// the wallet's input datum but not in its output datum (or there is no wallet
+/// output at all, as on `Close`). Used by a withdrawal script's `publish`
+/// handler to accept unregistration only when the script is actually leaving a
+/// wallet, so it cannot be unregistered out of band.
+pub fn own_withdrawal_removed(
+  self: Transaction,
+  wallet: Credential,
+  own_hash: ScriptHash,
+) -> Bool {
+  expect Some(input_datum) = wallet_datum(
+    list.map(self.inputs, fn(input) { input.output }),
+    wallet,
+  )
+  let in_input = pairs.has_key(input_datum.withdrawals, own_hash)
+  let in_output = when wallet_datum(self.outputs, wallet) is {
+    Some(output_datum) -> pairs.has_key(output_datum.withdrawals, own_hash)
+    None -> False
+  }
+  in_input && !in_output
+}
+
+/// The wallet UTxO's datum at `wallet`, if present among `outputs`.
+fn wallet_datum(
+  outputs: List<Output>,
+  wallet: Credential,
+) -> Option<WalletDatum> {
+  when
+    list.find(
+      outputs,
+      fn(output) { output.address.payment_credential == wallet },
+    )
+  is {
+    Some(output) -> {
+      expect InlineDatum(raw) = output.datum
+      expect datum: WalletDatum = raw
+      Some(datum)
+    }
+    None -> None
+  }
 }
 
 /// Close check: the wallet's `admin` authorizes, and the wallet NFT (under the
 /// spending script's own policy, read from the wallet UTxO at `own_ref`) is
 /// burned in this transaction. Closing spends the wallet UTxO and destroys its
-/// identifying NFT, releasing whatever funds remain.
+/// identifying NFT, releasing whatever funds remain, and unregisters every
+/// delegated withdrawal script so their stake deposits are refunded.
 pub fn validate_close(
   admin: Credential,
   own_ref: OutputReference,
@@ -225,9 +263,13 @@ pub fn validate_close(
     quantity == -1
   }
 
+  expect InlineDatum(raw) = own_input.output.datum
+  expect datum: WalletDatum = raw
+
   and {
     authorization.is_authorized(admin, self.extra_signatories, self.withdrawals),
     burned,
+    withdrawals_removed_unregistered(datum.withdrawals, [], self),
   }
 }
 

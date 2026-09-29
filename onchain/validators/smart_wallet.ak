@@ -124,10 +124,10 @@ validator spending_limit(wallet: Credential, bound: Lovelace) {
         expect _: Data = checks.own_withdrawal_data(self, wallet, own_hash)
         True
       }
-      UnregisterCredential { credential, .. } -> {
-        expect Script(_) = credential
-        True
-      }
+      UnregisterCredential { credential: Script(own_hash), .. } ->
+        // only allow unregistration when this script is leaving a wallet, so it
+        // cannot be unregistered out of band (which would brick the wallet).
+        checks.own_withdrawal_removed(self, wallet, own_hash)
       _ -> fail
     }
   }

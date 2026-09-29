@@ -247,6 +247,11 @@ script unregisters its credential, so re-adding it re-runs that validation._
     - removing a script requires an `UnregisterCredential` certificate for its
       credential, which also runs the script's `publish` handler; the credential
       is freed so a later add can register it (and validate its data) again.
+    - the script's `publish` handler accepts an `UnregisterCredential` only when
+      it sees itself listed in the wallet *input* datum and not in the wallet
+      *output* datum (or there is no wallet output at all, as on `Close`). This
+      prevents anyone from unregistering a script out of band, which would brick
+      any wallet still delegating to it.
     - the reference `spending_limit` script is stateless (its `bound` is a
       compile-time parameter), so its `publish` handler only asserts the
       certificate registers or unregisters a script credential and that the
@@ -262,7 +267,8 @@ script unregisters its credential, so re-adding it re-runs that validation._
 = Close (admin burns the NFT)
 _The admin closes the wallet: the wallet UTxO is spent, releasing whatever funds
 remain, and the identifying NFT is burned. The `Close` spend redeemer requires
-the admin and the burn; the `Burn` mint redeemer permits it._
+the admin, the burn, and that every delegated withdrawal script is unregistered
+so its stake deposit is refunded; the `Burn` mint redeemer permits the burn._
 
 #let close_tx = vanilla_transaction(
   "Close",
@@ -302,6 +308,10 @@ the admin and the burn; the `Burn` mint redeemer permits it._
       quantity; authorization is enforced by the `Close` spend redeemer.
     - closing spends the wallet UTxO and releases any remaining funds. There is
       no continuation: once the NFT is gone, the wallet can no longer be spent.
+    - every script in the closing wallet's `withdrawals` map must be unregistered
+      here (`UnregisterCredential`), refunding its stake deposit. Each script's
+      `publish` handler accepts this because it sees itself in the wallet input
+      and no wallet output (see [Publishing withdrawal scripts]).
   ],
 )
 

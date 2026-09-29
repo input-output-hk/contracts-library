@@ -1,5 +1,7 @@
-use cardano/address.{VerificationKey, from_script}
+use aiken/crypto.{ScriptHash}
+use cardano/address.{Script, VerificationKey, from_script}
 use cardano/assets
+use cardano/certificate.{UnregisterCredential}
 use cardano/transaction.{
   InlineDatum, Input, Output, OutputReference, Transaction, placeholder,
 }
@@ -16,18 +18,25 @@ const admin_vkh = #"11111111111111111111111111111111111111111111111111111111"
 const tx_id =
   #"0000000000000000000000000000000000000000000000000000000000000000"
 
+const withdrawal_script =
+  #"dddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+
 fn wallet_ref() -> OutputReference {
   OutputReference { transaction_id: tx_id, output_index: 0 }
 }
 
 fn wallet_input() -> Input {
+  wallet_input_with([])
+}
+
+fn wallet_input_with(withdrawals: Pairs<ScriptHash, Data>) -> Input {
   Input {
     output_reference: wallet_ref(),
     output: Output {
       address: from_script(wallet_policy),
       value: assets.from_lovelace(1_000_000)
         |> assets.add(wallet_policy, wallet_token, 1),
-      datum: InlineDatum(WalletDatum { withdrawals: [] }),
+      datum: InlineDatum(WalletDatum { withdrawals }),
       reference_script: None,
     },
   }
@@ -71,4 +80,28 @@ test rejects_close_with_mint_instead_of_burn() fail {
 
 test rejects_close_missing_wallet_input() fail {
   close(Transaction { ..close_tx(), inputs: [] })
+}
+
+test close_ok_unregisters_withdrawals() {
+  let data: Data = 0
+  let tx = Transaction {
+    ..close_tx(),
+    inputs: [wallet_input_with([Pair(withdrawal_script, data)])],
+    certificates: [
+      UnregisterCredential {
+        credential: Script(withdrawal_script),
+        refund: Never,
+      },
+    ],
+  }
+  close(tx)
+}
+
+test rejects_close_without_unregistering() fail {
+  let data: Data = 0
+  let tx = Transaction {
+    ..close_tx(),
+    inputs: [wallet_input_with([Pair(withdrawal_script, data)])],
+  }
+  close(tx)
 }
