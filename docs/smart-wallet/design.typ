@@ -44,9 +44,12 @@ script's own policy — into a fresh wallet UTxO at the wallet address. The
         "wallet_nft": "1",
       ),
       datum: (
-        withdrawals: "[]",
+        withdrawals: "Pairs<ScriptHash, Data>",
       ),
     ),
+  ),
+  certificates: (
+    "RegisterCredential { credential: Script(s) } — each seeded script",
   ),
   signatures: (
     "admin (if a key credential)",
@@ -62,10 +65,12 @@ script's own policy — into a fresh wallet UTxO at the wallet address. The
       resulting NFT is unforgeable and identifies the wallet.
     - the mint redeemer is `Mint { out_ix }`, locating the new wallet UTxO.
     - the new wallet UTxO carries the NFT, an inline datum with a `withdrawals`
-      map, and no reference script. Every script in that map must be *published*
-      in this same transaction (see [Publishing withdrawal scripts]) — so a
-      wallet may be created already carrying delegated restrictions, but only
-      ones that self-validated their initial data.
+      map, and no reference script. Every script in that map must be registered
+      in this same transaction — a `RegisterCredential` certificate for its stake
+      credential, which runs the script's `publish` handler. The handler reads its
+      own initial `Data` from this output's datum and validates it, so a wallet
+      may be created already carrying delegated restrictions, but only ones that
+      self-validated their initial state.
     - the `admin` credential (a script parameter) must be satisfied: a key admin
       signs; a script admin authorizes by a withdraw-0 invocation.
   ],
@@ -192,6 +197,10 @@ same address, same value — only the restriction set changes._
       ),
     ),
   ),
+  certificates: (
+    "RegisterCredential { credential: Script(s) } — each added script",
+    "UnregisterCredential { credential: Script(s) } — each removed script",
+  ),
   signatures: (
     "admin (if a key credential)",
   ),
@@ -206,61 +215,18 @@ same address, same value — only the restriction set changes._
     - `withdrawals'`: the new list. It takes effect immediately for subsequent
       spends of this UTxO; other wallet UTxOs are unaffected (the list is
       per-UTxO).
-    - the update diffs the old and new maps (see [Publishing withdrawal
-      scripts]): every script *added* must be published here (a
-      `RegisterCredential` certificate whose `publish` handler runs with the
-      script's initial `Data` as its redeemer); every script *removed* must be
-      unregistered (`UnregisterCredential`); every script *kept* must carry
-      unchanged `Data`. This ensures each entry's `Data` was self-validated at
-      registration and stays coherent across updates.
+    - the update diffs the old and new maps: every script *added* must be
+      registered here (`RegisterCredential`, running its `publish` handler, which
+      reads the script's initial `Data` from the continuation datum and validates
+      it); every script *removed* must be unregistered (`UnregisterCredential`,
+      whose `publish` handler only accepts the unregister when it sees the script
+      leaving the wallet); every script *kept* must carry unchanged `Data`. This
+      ensures each entry's `Data` was self-validated at registration and stays
+      coherent across updates.
   ],
 )
 
 #figure(update_withdrawals_tx, caption: [Update withdrawals (per-UTxO)]) <fig:update-withdrawals>
-
-#pagebreak()
-
-= Publishing withdrawal scripts
-_A withdraw-0 script joins a wallet's `withdrawals` map only after it is
-_published_: its stake credential is registered via a `RegisterCredential`
-certificate, which runs the script's `publish` handler. The handler reads its
-own initial `Data` from the wallet output's datum and validates it, so no script
-is delegated without first self-validating its own starting state. Removing a
-script unregisters its credential, so re-adding it re-runs that validation._
-
-#let publish_tx = vanilla_transaction(
-  "Publish a withdrawal script",
-  certificates: (
-    "RegisterCredential { credential: Script(withdrawal_script_hash) }",
-  ),
-  notes: [
-    - the `RegisterCredential` certificate references the script's stake
-      credential, which triggers the script's `publish` handler (CIP-69
-      certifying purpose).
-    - the handler derives its own hash from the certificate and reads
-      `withdrawals[own_hash]` out of the wallet output's inline datum — the
-      single source of truth for the script's `Data` — and validates it.
-    - the wallet only enforces that every script *added* to the `withdrawals`
-      map has a matching `RegisterCredential` certificate (which implies its
-      `publish` handler ran); all data validation is delegated to the script.
-      `Mint` treats every script as added (there is no prior map).
-    - removing a script requires an `UnregisterCredential` certificate for its
-      credential, which also runs the script's `publish` handler; the credential
-      is freed so a later add can register it (and validate its data) again.
-    - the script's `publish` handler accepts an `UnregisterCredential` only when
-      it sees itself listed in the wallet *input* datum and not in the wallet
-      *output* datum (or there is no wallet output at all, as on `Close`). This
-      prevents anyone from unregistering a script out of band, which would brick
-      any wallet still delegating to it.
-    - the reference `spending_limit` script is stateless (its `bound` is a
-      compile-time parameter), so its `publish` handler only asserts the
-      certificate registers or unregisters a script credential and that the
-      script is listed in the wallet datum; a stateful script would additionally
-      validate its initial `Data` here.
-  ],
-)
-
-#figure(publish_tx, caption: [Publishing a withdrawal script]) <fig:publish>
 
 #pagebreak()
 
@@ -289,6 +255,9 @@ so its stake deposit is refunded; the `Burn` mint redeemer permits the burn._
   mint: (
     "wallet_nft": "-1",
   ),
+  certificates: (
+    "UnregisterCredential { credential: Script(s) } — each script",
+  ),
   outputs: (
     (
       name: "Payout (remaining funds)",
@@ -311,7 +280,7 @@ so its stake deposit is refunded; the `Burn` mint redeemer permits the burn._
     - every script in the closing wallet's `withdrawals` map must be unregistered
       here (`UnregisterCredential`), refunding its stake deposit. Each script's
       `publish` handler accepts this because it sees itself in the wallet input
-      and no wallet output (see [Publishing withdrawal scripts]).
+      and no wallet output.
   ],
 )
 
