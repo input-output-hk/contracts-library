@@ -200,6 +200,24 @@ pub fn own_withdrawal_data(
   data
 }
 
+/// Like [`own_withdrawal_data`](#own_withdrawal_data) but reads the wallet's
+/// *input* datum (the wallet UTxO being spent), i.e. a withdrawal script's own
+/// *current* mutable state before this transaction. Used by a stateful
+/// withdrawal script's `withdraw` handler to read the state it is transitioning
+/// from.
+pub fn own_withdrawal_data_in(
+  self: Transaction,
+  wallet: Credential,
+  own_hash: ScriptHash,
+) -> Data {
+  expect Some(datum) = wallet_datum(
+    list.map(self.inputs, fn(input) { input.output }),
+    wallet,
+  )
+  expect Some(data) = pairs.get_first(datum.withdrawals, own_hash)
+  data
+}
+
 /// Whether `own_hash` is being *removed* in this transaction: it is listed in
 /// the wallet's input datum but not in its output datum (or there is no wallet
 /// output at all, as on `Close`). Used by a withdrawal script's `publish`

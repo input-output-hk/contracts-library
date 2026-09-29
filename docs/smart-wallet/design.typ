@@ -353,3 +353,35 @@ so its stake deposit is refunded; the `Burn` mint redeemer permits the burn._
 )
 
 #figure(close_tx, caption: [Close (admin burns the NFT)]) <fig:close>
+
+#pagebreak()
+
+= Example: stateful spending window (withdrawal script)
+_A stateful delegated withdrawal script that limits the wallet to at most one
+`Spend` per window. Unlike `spending_limit` (whose `bound` is fixed at compile
+time), this script carries mutable state — the last spend time — in the wallet
+datum's `withdrawals` map, and enforces its own state transition on every
+spend._
+
+The script is parameterized by `wallet` and `window` (milliseconds), and its
+state is a single timestamp: `SpendingWindowState { last_spend: Int }` (POSIX ms;
+`0` means never spent).
+
+- *Publishing* (`RegisterCredential`): the `publish` handler reads its initial
+  `Data` from the wallet output datum and requires `last_spend == 0` — an
+  unspent wallet. Unregistering is only accepted while leaving the wallet (the
+  same input/output presence check as `spending_limit`).
+- *Withdraw* (runs on every `Spend`): the handler reads its current state from
+  the wallet *input* datum and the next state from the wallet *output* datum,
+  takes `now` from the validity range's lower bound, and requires that the
+  cooldown elapsed (`now - last_spend >= window`, or it is the first spend) and
+  that the output state records exactly this spend (`next.last_spend == now`).
+- Because the wallet's `Spend` branch doesn't constrain the continuation datum,
+  the script enforces its own transition end-to-end: the builder must produce a
+  continuation carrying the updated state, or the withdrawal fails and the
+  transaction is rejected.
+
+This is the template for any stateful restriction (spending budgets, time locks,
+allow-lists that mutate, …): the state lives in `withdrawals[own_hash]`, the
+`publish` handler validates the initial value, and the `withdraw` handler reads
+the input state, validates the transition, and checks the output state.
