@@ -6,9 +6,9 @@ use cardano/certificate.{Certificate, RegisterCredential, UnregisterCredential}
 use cardano/transaction.{
   InlineDatum, Input, Output, OutputReference, Transaction, placeholder,
 }
-use smart_wallet/spending_window
-use smart_wallet/spending_window_logic.{SpendingWindowState}
 use smart_wallet/types.{WalletDatum}
+use smart_wallet/withdrawal_scripts/spending_window
+use smart_wallet/withdrawal_scripts/spending_window_logic.{SpendingWindowState}
 
 const a = #"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 

@@ -8,9 +8,8 @@ use cardano/transaction.{
 }
 use smart_wallet/checks.{
   members_signed, own_withdrawal_data, own_withdrawal_removed,
-  value_delta_below_bound, withdrawals_added_published, withdrawals_invoked,
-  withdrawals_kept_unchanged, withdrawals_published,
-  withdrawals_removed_unregistered,
+  withdrawals_added_published, withdrawals_invoked, withdrawals_kept_unchanged,
+  withdrawals_published, withdrawals_removed_unregistered,
 }
 use smart_wallet/types.{WalletDatum}
 
@@ -40,35 +39,6 @@ test m_of_n_below_threshold() fail {
 test m_of_n_ignores_non_members() {
   // `c` is not a member, so only `a` counts — enough for a threshold of 1.
   members_signed([a, b], 1, [a, c])
-}
-
-// ------------------------------------------------------- value_delta_below_bound
-
-test delta_negative_below_bound() {
-  // 130 in - 100 out = 30 outflow < 50.
-  value_delta_below_bound(
-    assets.from_lovelace(130),
-    assets.from_lovelace(100),
-    50,
-  )
-}
-
-test delta_at_bound_rejected() fail {
-  // 150 in - 100 out = 50, not strictly < 50.
-  value_delta_below_bound(
-    assets.from_lovelace(150),
-    assets.from_lovelace(100),
-    50,
-  )
-}
-
-test delta_above_bound_rejected() fail {
-  // 200 in - 100 out = 100, not < 50.
-  value_delta_below_bound(
-    assets.from_lovelace(200),
-    assets.from_lovelace(100),
-    50,
-  )
 }
 
 // --------------------------------------------------------- withdrawals_invoked

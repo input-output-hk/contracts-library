@@ -5,10 +5,10 @@ use cardano/assets
 use cardano/transaction.{
   InlineDatum, Input, Output, OutputReference, Transaction, placeholder,
 }
-use smart_wallet/spending_window_logic.{
+use smart_wallet/types.{WalletDatum}
+use smart_wallet/withdrawal_scripts/spending_window_logic.{
   SpendingWindowState, initial_state_valid, validate_withdraw,
 }
-use smart_wallet/types.{WalletDatum}
 
 const own_hash = #"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 

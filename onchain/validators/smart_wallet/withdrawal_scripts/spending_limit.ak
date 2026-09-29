@@ -1,13 +1,14 @@
 //// Reference validator for the delegated `spending_limit` withdrawal script
 //// (see `docs/smart-wallet/design.typ`): bounds the wallet's net outflow to
 //// `bound` lovelace. Consumers may use it as-is or embed
-//// `checks.within_spending_limit` in their own validators.
+//// `within_spending_limit` in their own validators.
 
 use cardano/address.{Credential, Script}
 use cardano/assets.{Lovelace}
 use cardano/certificate.{Certificate, RegisterCredential, UnregisterCredential}
 use cardano/transaction.{Transaction}
 use smart_wallet/checks
+use smart_wallet/withdrawal_scripts/spending_limit_logic.{within_spending_limit}
 
 /// Delegated spending-limit script (withdraw-0). Requires the wallet's net
 /// outflow `input - output` to stay below `bound` lovelace.
@@ -29,7 +30,7 @@ validator spending_limit(wallet: Credential, bound: Lovelace) {
   }
 
   withdraw(_redeemer: Data, _account: Credential, self: Transaction) {
-    checks.within_spending_limit(self, wallet, bound)
+    within_spending_limit(self, wallet, bound)
   }
 
   else(_) {

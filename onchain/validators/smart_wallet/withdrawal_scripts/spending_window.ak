@@ -1,12 +1,15 @@
 //// Reference validator for a stateful `spending_window` withdrawal script:
 //// limits the wallet to at most one spend per `window` milliseconds. See
-//// `lib/smart_wallet/spending_window.ak` for the state type and logic.
+//// `lib/smart_wallet/withdrawal_scripts/spending_window_logic.ak` for the state
+//// type and logic.
 
 use cardano/address.{Credential, Script}
 use cardano/certificate.{Certificate, RegisterCredential, UnregisterCredential}
 use cardano/transaction.{Transaction}
 use smart_wallet/checks
-use smart_wallet/spending_window_logic.{initial_state_valid, validate_withdraw}
+use smart_wallet/withdrawal_scripts/spending_window_logic.{
+  initial_state_valid, validate_withdraw,
+}
 
 validator spending_window(wallet: Credential, window: Int) {
   publish(_redeemer: Data, certificate: Certificate, self: Transaction) {
