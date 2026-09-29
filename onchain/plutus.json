@@ -678,7 +678,7 @@
       "hash": "df77ce7f7d573025b2176af1efaa36ac27bfd324fd68be775c11c04a"
     },
     {
-      "title": "smart_wallet.smart_wallet.spend",
+      "title": "smart_wallet/smart_wallet.smart_wallet.spend",
       "datum": {
         "title": "datum",
         "schema": {
@@ -727,7 +727,7 @@
       "hash": "257e70084169d1a05681fedef86044d68af822509d7cce27de221b29"
     },
     {
-      "title": "smart_wallet.smart_wallet.mint",
+      "title": "smart_wallet/smart_wallet.smart_wallet.mint",
       "redeemer": {
         "title": "redeemer",
         "schema": {
@@ -770,7 +770,7 @@
       "hash": "257e70084169d1a05681fedef86044d68af822509d7cce27de221b29"
     },
     {
-      "title": "smart_wallet.smart_wallet.else",
+      "title": "smart_wallet/smart_wallet.smart_wallet.else",
       "redeemer": {
         "schema": {}
       },
@@ -810,7 +810,7 @@
       "hash": "257e70084169d1a05681fedef86044d68af822509d7cce27de221b29"
     },
     {
-      "title": "smart_wallet.spending_limit.publish",
+      "title": "smart_wallet/spending_limit.spending_limit.publish",
       "redeemer": {
         "title": "_redeemer",
         "schema": {
@@ -835,7 +835,7 @@
       "hash": "add28e0fad43d71cff8e5b980c5e6bc770ced6711bb7ef8724b71ea4"
     },
     {
-      "title": "smart_wallet.spending_limit.withdraw",
+      "title": "smart_wallet/spending_limit.spending_limit.withdraw",
       "redeemer": {
         "title": "_redeemer",
         "schema": {
@@ -860,7 +860,7 @@
       "hash": "add28e0fad43d71cff8e5b980c5e6bc770ced6711bb7ef8724b71ea4"
     },
     {
-      "title": "smart_wallet.spending_limit.else",
+      "title": "smart_wallet/spending_limit.spending_limit.else",
       "redeemer": {
         "schema": {}
       },
@@ -882,7 +882,7 @@
       "hash": "add28e0fad43d71cff8e5b980c5e6bc770ced6711bb7ef8724b71ea4"
     },
     {
-      "title": "spending_window.spending_window.publish",
+      "title": "smart_wallet/spending_window.spending_window.publish",
       "redeemer": {
         "title": "_redeemer",
         "schema": {
@@ -907,7 +907,7 @@
       "hash": "173a0953c1f4b626c673b52d260e4589f977a53bc3c39883e65979c5"
     },
     {
-      "title": "spending_window.spending_window.withdraw",
+      "title": "smart_wallet/spending_window.spending_window.withdraw",
       "redeemer": {
         "title": "_redeemer",
         "schema": {
@@ -932,7 +932,7 @@
       "hash": "173a0953c1f4b626c673b52d260e4589f977a53bc3c39883e65979c5"
     },
     {
-      "title": "spending_window.spending_window.else",
+      "title": "smart_wallet/spending_window.spending_window.else",
       "redeemer": {
         "schema": {}
       },

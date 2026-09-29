@@ -5,7 +5,7 @@ use cardano/certificate.{Certificate, RegisterCredential, UnregisterCredential}
 use cardano/transaction.{
   InlineDatum, Input, Output, OutputReference, Transaction, placeholder,
 }
-use smart_wallet
+use smart_wallet/spending_limit
 use smart_wallet/types.{WalletDatum}
 
 const a = #"11111111111111111111111111111111111111111111111111111111"
@@ -17,7 +17,13 @@ const tx_id =
 
 fn publish(certificate: Certificate, tx: Transaction) -> Bool {
   let redeemer: Data = 0
-  smart_wallet.spending_limit.publish(Script(b), 100, redeemer, certificate, tx)
+  spending_limit.spending_limit.publish(
+    Script(b),
+    100,
+    redeemer,
+    certificate,
+    tx,
+  )
 }
 
 fn wallet_output(withdrawals: Pairs<ScriptHash, Data>) -> Output {

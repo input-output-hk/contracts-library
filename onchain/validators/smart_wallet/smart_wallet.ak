@@ -1,16 +1,14 @@
-//// Reference validators for the smart wallet (see `docs/smart-wallet/design.typ`).
-//// Thin wrappers over the reusable predicates in `lib/smart_wallet`:
-//// `smart_wallet` is a multivalidator — a one-shot minting policy that creates
-//// the wallet's identifying NFT, plus the spending script with its base M-of-N
-//// floor — and `spending_limit` is an example delegated withdrawal script that
-//// bounds the wallet's net outflow. Consumers may use these as-is or embed the
-//// `checks` functions in their own validators.
+//// Reference validator for the smart wallet (see `docs/smart-wallet/design.typ`).
+//// Thin wrapper over the reusable predicates in `lib/smart_wallet`: a
+//// multivalidator — a one-shot minting policy that creates the wallet's
+//// identifying NFT, plus the spending script with its base M-of-N floor.
+//// Consumers may use this as-is or embed the `checks` functions in their own
+//// validators.
 
 use aiken/collection/list
 use authorization
 use cardano/address.{Credential, Script}
-use cardano/assets.{AssetName, Lovelace, PolicyId}
-use cardano/certificate.{Certificate, RegisterCredential, UnregisterCredential}
+use cardano/assets.{AssetName, PolicyId}
 use cardano/transaction.{InlineDatum, OutputReference, Transaction, find_input}
 use smart_wallet/checks
 use smart_wallet/mint.{validate_burn, validate_mint}
@@ -112,33 +110,5 @@ fn validate_config_update(
       old_datum.withdrawals,
       new_datum.withdrawals,
     ),
-  }
-}
-
-/// Delegated spending-limit script (withdraw-0). Requires the wallet's net
-/// outflow `input - output` to stay below `bound` lovelace.
-validator spending_limit(wallet: Credential, bound: Lovelace) {
-  publish(_redeemer: Data, certificate: Certificate, self: Transaction) {
-    when certificate is {
-      RegisterCredential { credential: Script(own_hash), .. } -> {
-        // stateless: only confirm this script is listed in the wallet datum; a
-        // stateful script would additionally validate its initial `Data` here.
-        expect _: Data = checks.own_withdrawal_data(self, wallet, own_hash)
-        True
-      }
-      UnregisterCredential { credential: Script(own_hash), .. } ->
-        // only allow unregistration when this script is leaving a wallet, so it
-        // cannot be unregistered out of band (which would brick the wallet).
-        checks.own_withdrawal_removed(self, wallet, own_hash)
-      _ -> fail
-    }
-  }
-
-  withdraw(_redeemer: Data, _account: Credential, self: Transaction) {
-    checks.within_spending_limit(self, wallet, bound)
-  }
-
-  else(_) {
-    fail
   }
 }
