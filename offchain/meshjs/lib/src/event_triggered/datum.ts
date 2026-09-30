@@ -15,7 +15,7 @@
 
 import { mConStr0, mConStr1, type Data } from "@meshsdk/core";
 
-import { credentialToData, type Credential } from "../common";
+import { credentialToData } from "../common";
 import type {
   BondExtra,
   MintingAction,
@@ -55,18 +55,12 @@ export function nativeMintRedeemer(): Data {
 
 // --------------------------------------------------------------- datums
 
-const noneCredential: Data = mConStr1([]);
-
-function someCredential(c: Credential): Data {
-  return mConStr0([credentialToData(c)]);
-}
-
 function scheduleToData(schedule: Schedule): Data[] {
   return schedule.map((s) => mConStr0([s.deadline, s.value]));
 }
 
 export function bondExtraToData(e: BondExtra): Data {
-  return mConStr0([scheduleToData(e.schedule), e.value]);
+  return mConStr0([scheduleToData(e.schedule), e.value, e.nativePolicy]);
 }
 
 export function referenceDatumToData(d: ReferenceDatum): Data {
@@ -74,11 +68,10 @@ export function referenceDatumToData(d: ReferenceDatum): Data {
 }
 
 export function principalDatumToData(d: PrincipalDatum): Data {
-  return mConStr0([
-    d.paymentCredential === null
-      ? noneCredential
-      : someCredential(d.paymentCredential),
-  ]);
+  const option = d.paymentCredential === null
+    ? mConStr1([])
+    : mConStr0([credentialToData(d.paymentCredential)]);
+  return mConStr0([option]);
 }
 
 export function registryNodeToData(n: RegistryNode): Data {
@@ -88,7 +81,7 @@ export function registryNodeToData(n: RegistryNode): Data {
     credentialToData(n.mintingLogic),
     credentialToData(n.transferLogic),
     credentialToData(n.thirdPartyLogic),
-    n.unfrackingLogic === null ? noneCredential : someCredential(n.unfrackingLogic),
+    credentialToData(n.unfrackingLogic),
     n.globalStateCs,
   ]);
 }
@@ -100,7 +93,6 @@ export function registryNodeToData(n: RegistryNode): Data {
 export function mintingParamsToData(p: MintingParams): Data[] {
   return [
     mConStr0([
-      p.ownPolicy,
       p.registryNodeCs,
       credentialToData(p.issuer),
       p.transferLogic,
@@ -108,7 +100,6 @@ export function mintingParamsToData(p: MintingParams): Data[] {
       p.transformationScript,
       p.principalName,
       p.referenceName,
-      p.nativePolicy,
       scheduleToData(p.schedule),
       p.scale,
     ]),
@@ -116,15 +107,15 @@ export function mintingParamsToData(p: MintingParams): Data[] {
 }
 
 export function transferParamsToData(p: TransferParams): Data[] {
-  return [mConStr0([p.ownPolicy, p.finalDeadline])];
+  return [mConStr0([p.registryNodeCs, p.finalDeadline])];
 }
 
 export function thirdPartyParamsToData(p: ThirdPartyParams): Data[] {
-  return [mConStr0([p.ownPolicy, p.finalDeadline])];
+  return [mConStr0([p.registryNodeCs, p.finalDeadline])];
 }
 
 export function transformationParamsToData(p: TransformationParams): Data[] {
-  return [mConStr0([p.ownPolicy, p.referenceName, scheduleToData(p.schedule)])];
+  return [mConStr0([p.referenceName, scheduleToData(p.schedule)])];
 }
 
 export function nativeMintParamsToData(p: NativeMintParams): Data[] {

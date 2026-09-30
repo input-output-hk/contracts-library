@@ -28,6 +28,7 @@
  */
 
 import {
+  applyCborEncoding,
   applyParamsToScript,
   mConStr0,
   pubKeyAddress,
@@ -83,9 +84,38 @@ function networkIdOf(network: Network): 0 | 1 {
   return network === "mainnet" ? 1 : 0;
 }
 
+/**
+ * Strip CBOR bytestring wrapper(s) (`58xx`/`59xxxx` length headers) from a
+ * script hex, yielding the flat program.
+ */
+export function stripCborWrappers(hex: string): string {
+  let h = hex;
+  for (;;) {
+    const tag = h.slice(0, 2);
+    if (tag === "59") {
+      h = h.slice(6, 6 + parseInt(h.slice(2, 6), 16) * 2);
+    } else if (tag === "58") {
+      h = h.slice(4, 4 + parseInt(h.slice(2, 4), 16) * 2);
+    } else {
+      break;
+    }
+  }
+  return h;
+}
+
+/**
+ * Apply parameters and return the single-CBOR-encoded script.
+ *
+ * `applyParamsToScript` double-CBOR-wraps its result; MeshJS's
+ * `resolveScriptHash` (and the script it attaches) expect the single-CBOR form
+ * whose ledger bytes are `0x03 || flat`. Without this normalisation the
+ * derived hash disagrees with the ledger (verified against the CIP-113
+ * registry's `apply_hashed_parameter`).
+ */
 function applyParams(code: string, params: Data[]): PlutusScript {
+  const applied = applyParamsToScript(code, params, "Mesh") as string;
   return {
-    code: applyParamsToScript(code, params, "Mesh"),
+    code: applyCborEncoding(stripCborWrappers(applied)),
     version: plutusVersion,
   };
 }
@@ -211,6 +241,8 @@ export interface RegisterAndIssueTxParams {
   transformationScript: PlutusScript;
   principalName: string;
   referenceName: string;
+  /** The graduated asset's policy id — part of the published terms (§3.3). */
+  nativePolicy: string;
   schedule: Schedule;
   scale: number;
   quantity: bigint;
@@ -247,14 +279,14 @@ export async function buildRegisterAndIssueTx(
     mintingLogic: { kind: "script", hash: scriptHashOf(p.issuance) },
     transferLogic: { kind: "script", hash: scriptHashOf(p.transferLogic) },
     thirdPartyLogic: { kind: "script", hash: scriptHashOf(p.thirdPartyLogic) },
-    unfrackingLogic: null,
+    unfrackingLogic: { kind: "key", hash: "" },
     globalStateCs: "",
   };
 
   const refDatum: ReferenceDatum = {
     metadata: "",
     version: 1,
-    extra: { schedule: p.schedule, value: p.scale },
+    extra: { schedule: p.schedule, value: p.scale, nativePolicy: p.nativePolicy },
   };
 
   const referenceAddress = referenceTokenAddress(
@@ -315,6 +347,8 @@ export interface TransferTxParams {
   transfer: PlutusScript;
   /** The PLB stand-in script custodies the principal (always-approving). */
   plbScript: PlutusScript;
+  /** The instrument's RegistryNode, referenced per the tx shape (§4.2). */
+  nodeUtxo: UTxO;
   principalUtxo: UTxO;
   /** The recipient's PLB-stand-in address (same for a T2b self-transfer). */
   recipientAddress: string;
@@ -335,6 +369,7 @@ export async function buildTransferTx(p: TransferTxParams): Promise<string> {
   const networkId = networkIdOf(p.network ?? "preprod");
   const { output } = p.principalUtxo;
 
+  p.txBuilder.readOnlyTxInReference(p.nodeUtxo.input.txHash, p.nodeUtxo.input.outputIndex);
   applyGate(p.txBuilder, p.transfer, moveRedeemer(), networkId);
   spendPlbInput(p.txBuilder, p.principalUtxo, p.plbScript);
 
@@ -361,9 +396,13 @@ export async function buildTransferTx(p: TransferTxParams): Promise<string> {
 export interface TransformationTxParams {
   txBuilder: MeshTxBuilder;
   transformation: PlutusScript;
+  /** The instrument's RegistryNode, referenced per the tx shape (§4.4). */
+  nodeUtxo: UTxO;
   referenceUtxo: UTxO;
   /** Preserved CIP-68 metadata (the datum is rewritten in place). */
   metadata: Data;
+  /** Preserved graduated-asset policy id (the datum is rewritten in place). */
+  nativePolicy: string;
   schedule: Schedule;
   /** The recorded value to write: `lookup(schedule, now)`. */
   nextValue: number;
@@ -391,9 +430,10 @@ export async function buildTransformationTx(
   const nextDatum: ReferenceDatum = {
     metadata: p.metadata,
     version: 1,
-    extra: { schedule: p.schedule, value: p.nextValue },
+    extra: { schedule: p.schedule, value: p.nextValue, nativePolicy: p.nativePolicy },
   };
 
+  p.txBuilder.readOnlyTxInReference(p.nodeUtxo.input.txHash, p.nodeUtxo.input.outputIndex);
   applyGate(p.txBuilder, p.transformation, updateRedeemer(), networkId);
 
   return await p.txBuilder
@@ -421,6 +461,10 @@ export interface GraduationTxParams {
   nativeMint: PlutusScript;
   /** The PLB stand-in script custodies the principal (always-approving). */
   plbScript: PlutusScript;
+  /** The instrument's RegistryNode and reference token, both referenced per
+   * the tx shape (§4.5): the burn resolves its policy ids from them. */
+  nodeUtxo: UTxO;
+  referenceUtxo: UTxO;
   /** Unit (policyId + assetName, hex) of the principal token to burn. */
   principalUnit: string;
   principalQuantity: bigint;
@@ -459,6 +503,11 @@ export async function buildGraduationTx(
     p.nativeUnit,
   );
 
+  p.txBuilder.readOnlyTxInReference(p.nodeUtxo.input.txHash, p.nodeUtxo.input.outputIndex);
+  p.txBuilder.readOnlyTxInReference(
+    p.referenceUtxo.input.txHash,
+    p.referenceUtxo.input.outputIndex,
+  );
   applyGate(p.txBuilder, p.issuance, mintingActionToData("Burn"), networkId);
 
   let builder = p.txBuilder
