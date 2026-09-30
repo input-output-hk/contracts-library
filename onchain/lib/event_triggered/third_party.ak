@@ -24,21 +24,35 @@
 use aiken/collection/dict
 use aiken/collection/list
 use aiken/interval.{is_entirely_after}
+use cardano/address.{Credential}
 use cardano/assets.{tokens}
 use cardano/transaction.{Transaction}
+use event_triggered/registry
 use event_triggered/types.{ThirdPartyParams}
 
 /// Validate the graduation dispatch — runs once per transaction, however
-/// many subject UTxOs the spend consumes.
-pub fn validate(self: Transaction, params: ThirdPartyParams) -> Bool {
+/// many subject UTxOs the spend consumes. The governed policy id resolves at
+/// runtime from the referenced registry node (09-DEVELOPING-MODULES, "Finding
+/// your own policy id": the policy id depends on the issuance credential, so
+/// this validator cannot bake it).
+pub fn validate(
+  account: Credential,
+  self: Transaction,
+  params: ThirdPartyParams,
+) -> Bool {
   // The claimed graduation must actually burn governed tokens (the shape
   // cross-check keeps the mode honest: extraction is graduation-only).
-  let burn_present = tokens(self.mint, params.own_policy)
+  let referenced = registry.outputs_of(self.reference_inputs)
+  expect [(policy, _)] = registry.governing_third_party(
+    referenced,
+    params.registry_node_cs,
+    account,
+  )
+  let burn_present = tokens(self.mint, policy)
     |> dict.values
     |> list.any(fn(quantity) { quantity < 0 })
   and {
     burn_present,
-    // Event gate (Q-RULE-1): the validity range must reach `d4`.
     is_entirely_after(self.validity_range, params.final_deadline - 1),
   }
 }

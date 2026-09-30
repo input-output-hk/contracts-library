@@ -7,8 +7,8 @@ use aiken/collection/list
 use aiken/crypto.{ScriptHash}
 use aiken/interval.{is_entirely_after}
 use authorization.{is_authorized}
-use cardano/address.{Credential, Inline, Script}
-use cardano/assets.{quantity_of, tokens}
+use cardano/address.{Credential, Inline, Script, VerificationKey}
+use cardano/assets.{PolicyId, quantity_of, tokens}
 use cardano/transaction.{InlineDatum, Output, Transaction}
 use event_triggered/registry
 use event_triggered/schedule
@@ -30,9 +30,12 @@ pub fn validate(
 }
 
 /// Registration (§4.1): exactly one node for this credential is created, its
-/// stance pinned to the frozen deployment, and the first batch minted in the same
-/// transaction, the reference output staked to the transformation script with
-/// the baked schedule at par (`v0 = scale`).
+/// stance pinned to the frozen deployment, and the first batch minted in the
+/// same transaction, the reference output staked to the transformation script
+/// with the baked schedule at par (`v0 = scale`). The governed policy id is
+/// resolved at runtime from the created node — its NFT's asset name is the
+/// policy id and its datum's `minting_logic_script` is this credential
+/// (09-DEVELOPING-MODULES, "Your issuance logic must know why it is running").
 fn validate_register_and_mint(
   account: Credential,
   self: Transaction,
@@ -44,39 +47,53 @@ fn validate_register_and_mint(
     account,
   )
   and {
-    policy == params.own_policy,
     quantity_of(self.mint, params.registry_node_cs, policy) == 1,
-    pinned_stance(node, params),
+    pinned_stance(node, policy, params),
     // Registration authority (§4.1): the issuer signature.
     is_authorized(params.issuer, self.extra_signatories, self.withdrawals),
     // First batch: principal × N (N ≥ 1) + reference `222` × 1 — the only
     // two names under the policy (§4.1).
-    first_batch(self, params),
+    first_batch(self, policy, params),
     // Principal outputs stake to holders, never to the transformation
     // script (§4.4, I4 — see module docs).
-    principals_not_script_staked(self, params),
+    principals_not_script_staked(self, policy, params),
     // The reference token lands at the transformation script's stake with
     // the baked schedule, mirrored at par (§4.1).
-    reference_output(self, params),
+    reference_output(self, policy, params),
   }
 }
 
-/// Graduation (§4.5) — event-gated, destination-bound, burn-backed.
+/// Graduation (§4.5) — event-gated, destination-bound, burn-backed. The
+/// governed policy id resolves at runtime from the **referenced** registry
+/// node, and the graduated asset's policy id from the referenced reference
+/// token's datum (`extra.native_policy`, §3.3): the graduation requires the
+/// reference token as a reference input.
 fn validate_burn(
   account: Credential,
   self: Transaction,
   params: MintingParams,
 ) -> Bool {
-  expect [Pair(name, quantity)] = tokens(self.mint, params.own_policy)
+  let referenced = registry.outputs_of(self.reference_inputs)
+  expect [(policy, _)] = registry.governing(
+    referenced,
+    params.registry_node_cs,
+    account,
+  )
+  expect Some(native_policy) = published_native_policy(
+    referenced,
+    policy,
+    params,
+  )
+  expect [Pair(name, quantity)] = tokens(self.mint, policy)
     |> dict.to_pairs()
-  expect Some(final_value) = schedule.final_value(params.schedule)
   expect Some(final_deadline) = schedule.final_deadline(params.schedule)
   expect Some(holdings) = schedule.burned_holdings(
     self.inputs,
-    params.own_policy,
+    policy,
     params.principal_name,
   )
   let burned = 0 - quantity
+  expect Some(final_value) = schedule.final_value(params.schedule)
   let shares = schedule.scaled_payouts(holdings, final_value, params.scale)
   and {
     // Burn shape: the principal name only, negative — any other governed
@@ -98,32 +115,66 @@ fn validate_burn(
     // range — no oracle (§5).
     is_entirely_after(self.validity_range, final_deadline - 1),
     // Destination binding + the scaled native mirror (Q-GRAD-2, I5).
-    settle(self, params, holdings, shares),
+    settle(self, params, policy, native_policy, holdings, shares),
+  }
+}
+
+/// The graduated asset's policy id, read from the reference token's inline
+/// datum (`extra.native_policy`, §3.3 — the instrument's published terms).
+/// Exactly one reference input must carry the reference token.
+fn published_native_policy(
+  referenced: List<Output>,
+  policy: PolicyId,
+  params: MintingParams,
+) -> Option<PolicyId> {
+  let references = list.filter(
+    referenced,
+    fn(output) { quantity_of(output.value, policy, params.reference_name) == 1 },
+  )
+  when references is {
+    [output] ->
+      when output.datum is {
+        InlineDatum(data) -> {
+          expect ReferenceDatum { extra, .. }: ReferenceDatum = data
+          Some(extra.native_policy)
+        }
+        _ -> None
+      }
+    _ -> None
   }
 }
 
 // ------------------------------------------------------ RegisterAndMint
 
 /// The registered node pins the frozen stance (§3.4): permissive transfer
-/// logic (Q-RULE-3), graduation-only third-party logic, empty unfracking
-/// logic and global state, and `key` equal to the governed policy id.
-fn pinned_stance(node: RegistryNode, params: MintingParams) -> Bool {
+/// logic (Q-RULE-3), graduation-only third-party logic, the `empty_vkey`
+/// unfracking hook (unfracking forbidden) and empty global state, and `key`
+/// equal to the governed policy id.
+fn pinned_stance(
+  node: RegistryNode,
+  policy: PolicyId,
+  params: MintingParams,
+) -> Bool {
   and {
-    node.key == params.own_policy,
+    node.key == policy,
     node.transfer_logic_script == Script(params.transfer_logic),
     node.third_party_logic_script == Script(params.third_party_logic),
-    node.unfracking_logic == None,
+    node.unfracking_logic_script == VerificationKey(#""),
     node.global_state_cs == #"",
   }
 }
 
 /// Exactly the two names under the governed policy: the principal (N ≥ 1)
 /// and the CIP-68 reference (exactly 1) (§4.1).
-fn first_batch(self: Transaction, params: MintingParams) -> Bool {
+fn first_batch(
+  self: Transaction,
+  policy: PolicyId,
+  params: MintingParams,
+) -> Bool {
   and {
-    dict.size(tokens(self.mint, params.own_policy)) == 2,
-    quantity_of(self.mint, params.own_policy, params.principal_name) >= 1,
-    quantity_of(self.mint, params.own_policy, params.reference_name) == 1,
+    dict.size(tokens(self.mint, policy)) == 2,
+    quantity_of(self.mint, policy, params.principal_name) >= 1,
+    quantity_of(self.mint, policy, params.reference_name) == 1,
   }
 }
 
@@ -133,12 +184,13 @@ fn first_batch(self: Transaction, params: MintingParams) -> Bool {
 /// reference datum in place, and graduation binds payouts to holder stakes.
 fn principals_not_script_staked(
   self: Transaction,
+  policy: PolicyId,
   params: MintingParams,
 ) -> Bool {
   list.all(
     self.outputs,
     fn(output: Output) {
-      if quantity_of(output.value, params.own_policy, params.principal_name) > 0 {
+      if quantity_of(output.value, policy, params.principal_name) > 0 {
         !staked_to(output, params.transformation_script)
       } else {
         True
@@ -150,11 +202,15 @@ fn principals_not_script_staked(
 /// Exactly one output carries the reference token (and nothing else under
 /// the policy), staked to the transformation script, with a datum that
 /// mirrors the baked schedule at the initial value `v0 = scale` (§4.1).
-fn reference_output(self: Transaction, params: MintingParams) -> Bool {
+fn reference_output(
+  self: Transaction,
+  policy: PolicyId,
+  params: MintingParams,
+) -> Bool {
   let candidates = list.filter(
     self.outputs,
     fn(output: Output) {
-      let minted = tokens(output.value, params.own_policy) |> dict.to_pairs()
+      let minted = tokens(output.value, policy) |> dict.to_pairs()
       minted == [Pair(params.reference_name, 1)]
     },
   )
@@ -211,31 +267,29 @@ fn staked_to(output: Output, script: ScriptHash) -> Bool {
 fn settle(
   self: Transaction,
   params: MintingParams,
+  policy: PolicyId,
+  native_policy: PolicyId,
   holdings: List<(Credential, Int)>,
   shares: List<(Credential, Int)>,
 ) -> Bool {
   and {
-    quantity_of(self.mint, params.native_policy, params.principal_name) == schedule.total(
+    quantity_of(self.mint, native_policy, params.principal_name) == schedule.total(
       shares,
     ),
     list.all(
       shares,
       fn(entry) {
-        native_at_stake(self.outputs, entry.1st, params) == entry.2nd
+        native_at_stake(self.outputs, entry.1st, native_policy, params) == entry.2nd
       },
     ),
     list.all(
       self.outputs,
       fn(output: Output) {
-        if quantity_of(
-          output.value,
-          params.native_policy,
-          params.principal_name,
-        ) > 0 {
+        if quantity_of(output.value, native_policy, params.principal_name) > 0 {
           when output.address.stake_credential is {
             Some(Inline(owner)) ->
               if list.any(holdings, fn(entry) { entry.1st == owner }) {
-                payout_authorized(self, params, owner, output)
+                payout_authorized(self, params, policy, owner, output)
               } else {
                 True
               }
@@ -254,6 +308,7 @@ fn settle(
 fn native_at_stake(
   outputs: List<Output>,
   owner: Credential,
+  native_policy: PolicyId,
   params: MintingParams,
 ) -> Int {
   list.reduce(
@@ -261,11 +316,7 @@ fn native_at_stake(
     0,
     fn(total: Int, output: Output) {
       if output.address.stake_credential == Some(Inline(owner)) {
-        total + quantity_of(
-          output.value,
-          params.native_policy,
-          params.principal_name,
-        )
+        total + quantity_of(output.value, native_policy, params.principal_name)
       } else {
         total
       }
@@ -282,13 +333,14 @@ fn native_at_stake(
 fn payout_authorized(
   self: Transaction,
   params: MintingParams,
+  policy: PolicyId,
   owner: Credential,
   output: Output,
 ) -> Bool {
   if is_authorized(owner, self.extra_signatories, self.withdrawals) {
     True
   } else {
-    when owner_payout(self, params, owner) is {
+    when owner_payout(self, params, policy, owner) is {
       Some(payment) -> output.address.payment_credential == payment
       None -> False
     }
@@ -301,12 +353,13 @@ fn payout_authorized(
 fn owner_payout(
   self: Transaction,
   params: MintingParams,
+  policy: PolicyId,
   owner: Credential,
 ) -> Option<Credential> {
   let inputs = list.filter(
     self.inputs,
     fn(input) {
-      quantity_of(input.output.value, params.own_policy, params.principal_name) > 0 && input.output.address.stake_credential == Some(
+      quantity_of(input.output.value, policy, params.principal_name) > 0 && input.output.address.stake_credential == Some(
         Inline(owner),
       )
     },

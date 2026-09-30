@@ -28,7 +28,7 @@
 use aiken/collection/list
 use aiken/interval.{Finite, IntervalBound}
 use cardano/address.{Credential, Inline}
-use cardano/assets.{quantity_of}
+use cardano/assets.{flatten, quantity_of}
 use cardano/transaction.{InlineDatum, Output, Transaction}
 use event_triggered/schedule
 use event_triggered/types.{ReferenceDatum, TransformationParams}
@@ -37,7 +37,11 @@ use event_triggered/types.{ReferenceDatum, TransformationParams}
 /// script — the reference token — is rewritten in place on the transfer
 /// path, its recorded value stepping to the current schedule step. (The
 /// withdraw-0's redeemer is an authorization signal; this predicate does not
-/// read it.)
+/// read it.) The governed policy id derives at runtime from the spent
+/// UTxO's value — the reference UTxO holds exactly one non-ada asset, the
+/// `reference_name` unit (09-DEVELOPING-MODULES, "Finding your own policy
+/// id": the policy id depends on the issuance credential, so this validator
+/// cannot bake it).
 pub fn validate(
   account: Credential,
   self: Transaction,
@@ -50,19 +54,22 @@ pub fn validate(
     self.inputs,
     fn(input) { input.output.address.stake_credential == Some(Inline(account)) },
   )
-  expect
-    quantity_of(spent.output.value, params.own_policy, params.reference_name) == 1
+  // The governed policy id and the reference name derive from the spent
+  // UTxO's value: it holds exactly one non-ada asset — the reference unit.
+  expect [(policy, name, 1)] = flatten(spent.output.value)
+    |> list.filter(fn(entry) { entry.1st != "" })
   // The paired continuation keeps the token in place (address and value
   // preservation are the core's; the reference unit is pinned here).
   expect [continuation] = list.filter(
     self.outputs,
     fn(output: Output) {
-      quantity_of(output.value, params.own_policy, params.reference_name) == 1
+      quantity_of(output.value, policy, params.reference_name) == 1
     },
   )
   expect Some(now) = lower_bound(self)
   expect Some(final) = schedule.final_deadline(params.schedule)
   and {
+    name == params.reference_name,
     continuation.address == spent.output.address,
     // §5: after `d4` the schedule is exhausted (the final v4 write is admitted
     // at exactly d4). Before `d1` no step applies — `pure_lookup` rejects the
@@ -91,8 +98,11 @@ fn pure_lookup(
           and {
             after.metadata == before.metadata,
             after.version == before.version,
+            // the published terms are frozen: schedule and the graduated
+            // asset's policy id are never rewritten (§3.3)
             before.extra.schedule == params.schedule,
             after.extra.schedule == params.schedule,
+            after.extra.native_policy == before.extra.native_policy,
             when schedule.lookup(params.schedule, now) is {
               Some(value) -> after.extra.value == value
               None -> False
