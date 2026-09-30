@@ -21,12 +21,15 @@
 //// from the same schedule (§4.4's transformation gate, §4.5's `d4` gate and
 //// scaled mirror all derive from it).
 ////
-//// Deployer-supplied constants (`own_policy`, asset names, authority
-//// credentials, the schedule) are frozen at parameterization, before
-//// registration. `own_policy` is the governed `cip_policy` — the hash of the
-//// core `issuance_mint` template applied to this instrument's minting-logic
-//// credential — computed off-chain and baked (09-DEVELOPING-SUBSTANDARDS,
-//// "Finding your own policy id": the cheapest option).
+//// Deployer-supplied constants (asset names, authority credentials, the
+//// schedule) are frozen at parameterization, before registration. Note the
+//// dependency order (09-DEVELOPING-MODULES, "Finding your own policy id"):
+//// the governed policy id is the hash of the core `issuance_mint` template
+//// applied to the minting-logic credential, so no validator may bake it into
+//// its own parameters — the issuance logic (and every script whose hash feeds
+//// the issuance parameters) resolves it at runtime from the registry node
+//// instead. Only scripts outside that dependency cone (here: the graduated
+//// asset's native policy) may bake `cip_policy`.
 
 use aiken/crypto.{ScriptHash}
 use cardano/address.{Credential}
@@ -75,9 +78,16 @@ pub type ScheduleStep {
 
 /// `extra` of the CIP-68 reference datum (§3.3): the baked schedule, mirrored
 /// for wallets and indexers, plus the currently recorded value (`v0 = scale`
-/// at issue; stale values are harmless).
+/// at issue; stale values are harmless) and the graduated asset's policy id —
+/// part of the published terms, written once at registration and preserved by
+/// every later update (the graduation's burn reads it from the referenced
+/// reference token).
 pub type BondExtra {
-  BondExtra { schedule: List<ScheduleStep>, value: Int }
+  BondExtra {
+    schedule: List<ScheduleStep>,
+    value: Int,
+    native_policy: PolicyId,
+  }
 }
 
 /// Inline datum of the reference token (CIP-68 `222`, §3.3). Heavy metadata
@@ -98,10 +108,12 @@ pub type PrincipalDatum {
 
 /// The core registry's node datum (§3.4), projected to the fields this
 /// instrument reads. Field order and arity MUST match the deployed core's
-/// `RegistryNode` (09-DEVELOPING-SUBSTANDARDS.md) — verify at integration
-/// time. The node's registry NFT asset name is `key`, the governed policy id.
-/// `unfracking_logic` and `global_state_cs` are unused by this instrument
-/// (registered empty) and are frozen at registration, like the logic fields.
+/// `RegistryNode` (09-DEVELOPING-MODULES.md) — seven fields; the node's
+/// registry NFT asset name is `key`, the governed policy id. An **empty
+/// unfracking hook** is the `empty_vkey` convention: `VerificationKey(#"")`,
+/// which forbids unfracking (no ledger transaction can carry a withdrawal
+/// keyed by an empty hash) — the instrument's frozen posture, like the logic
+/// fields.
 pub type RegistryNode {
   RegistryNode {
     key: ByteArray,
@@ -109,19 +121,21 @@ pub type RegistryNode {
     minting_logic_script: Credential,
     transfer_logic_script: Credential,
     third_party_logic_script: Credential,
-    unfracking_logic: Option<Credential>,
+    unfracking_logic_script: Credential,
     global_state_cs: ByteArray,
   }
 }
 
 /// Compile-time parameters of the minting-logic validator (§4.1, §4.5).
+/// Deliberately NO policy id here: the governed policy id is a hash *of* this
+/// script's applied form, so parameterizing it with the id would be circular
+/// (09-DEVELOPING-MODULES, "Finding your own policy id") — the validator
+/// resolves it at runtime from the registry node instead.
 pub type MintingParams {
   MintingParams {
-    /// The governed policy id — hash of the core `issuance_mint` template
-    /// applied to this credential. Every mode cross-checks against it.
-    own_policy: PolicyId,
     /// Policy of the core registry's node NFTs; locates the instrument's
-    /// `RegistryNode` and pins its shape at registration.
+    /// `RegistryNode` (created at registration, referenced on graduation)
+    /// and pins its shape.
     registry_node_cs: PolicyId,
     /// Registration authority: the issuer signs the T0/T1 registration.
     issuer: Credential,
@@ -141,12 +155,9 @@ pub type MintingParams {
     principal_name: AssetName,
     /// The CIP-68 reference asset name (a `222` label, §3.3).
     reference_name: AssetName,
-    /// The graduated asset's policy (§4.5): minted exactly
-    /// `burned × v4 / scale`, burn-backed ("no burn CIP, no mint", scaled).
-    native_policy: PolicyId,
     /// The baked schedule `[(d1,v1) … (d4,v4)]` (§3.5). The registration
-    /// cross-checks the reference datum against it; `v4` (the last step) and
-    /// `d4` (the last deadline) drive the graduation gate and math.
+    /// cross-checks the reference datum against it; the last deadline drives
+    /// the graduation gate.
     schedule: List<ScheduleStep>,
     /// The fixed-point scale of the schedule's values (`v0 = scale`).
     scale: Int,
@@ -154,22 +165,23 @@ pub type MintingParams {
 }
 
 /// Compile-time parameters of the transfer-logic validator. `final_deadline`
-/// is the baked `d4` (§3.5).
+/// is the baked `d4` (§3.5); the governed policy id is resolved at runtime
+/// from the referenced registry node (see the module's docs).
 pub type TransferParams {
-  TransferParams { own_policy: PolicyId, final_deadline: Int }
+  TransferParams { registry_node_cs: PolicyId, final_deadline: Int }
 }
 
 /// Compile-time parameters of the third-party-logic validator.
 pub type ThirdPartyParams {
-  ThirdPartyParams { own_policy: PolicyId, final_deadline: Int }
+  ThirdPartyParams { registry_node_cs: PolicyId, final_deadline: Int }
 }
 
 /// Compile-time parameters of the transformation-script validator. The
 /// schedule is baked in — the T3 update is a pure lookup of these constants
-/// (§4.4, I4).
+/// (§4.4, I4). The governed policy id is derived at runtime from the spent
+/// reference UTxO's value.
 pub type TransformationParams {
   TransformationParams {
-    own_policy: PolicyId,
     reference_name: AssetName,
     schedule: List<ScheduleStep>,
   }

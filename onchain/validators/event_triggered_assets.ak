@@ -1,8 +1,9 @@
-//// Reference substandard wiring for the event-triggered assets CIP-113
+//// Reference module wiring for the event-triggered assets CIP-113
 //// substandard — the tokenized bond.
 
 use aiken/crypto.{ScriptHash}
 use cardano/address.{Credential}
+use cardano/certificate.{Certificate, RegisterCredential}
 use cardano/transaction.{Transaction}
 use event_triggered/issuance as issuance_logic
 use event_triggered/native_mint
@@ -15,11 +16,27 @@ use event_triggered/types.{
   TransformationParams,
 }
 
+/// Every withdraw-0 stake credential must be registered before it can appear
+/// in a transaction's withdrawals, and after Conway registering a script
+/// credential requires that script's consent (09-DEVELOPING-MODULES, "Your
+/// credential must also carry a publish handler"). Each validator below
+/// accepts the registration certificate and refuses every other one.
+fn accept_registration(redeemer: Certificate) -> Bool {
+  when redeemer is {
+    RegisterCredential { .. } -> True
+    _ -> False
+  }
+}
+
 /// Issuance logic (withdraw-0): the atomic register + first issue and the
-/// deadline graduation's burn (see `issuance_logic.validate`).
+/// deadline graduation's burn (see `issuance.validate`).
 validator issuance(p: MintingParams) {
   withdraw(redeemer: MintingAction, account: Credential, self: Transaction) {
     issuance_logic.validate(redeemer, account, self, p)
+  }
+
+  publish(_redeemer: Data, certificate: Certificate, _self: Transaction) {
+    accept_registration(certificate)
   }
 
   else(_) {
@@ -30,8 +47,12 @@ validator issuance(p: MintingParams) {
 /// Transfer logic (withdraw-0): purely permissive — P1 imposes no transfer
 /// rules (§4.2), at every point of the lifecycle.
 validator transfer(p: TransferParams) {
-  withdraw(_redeemer: TransferAction, _account: Credential, self: Transaction) {
-    transfer_logic.validate(self, p)
+  withdraw(_redeemer: TransferAction, account: Credential, self: Transaction) {
+    transfer_logic.validate(account, self, p)
+  }
+
+  publish(_redeemer: Data, certificate: Certificate, _self: Transaction) {
+    accept_registration(certificate)
   }
 
   else(_) {
@@ -41,11 +62,15 @@ validator transfer(p: TransferParams) {
 
 /// Third-party logic (withdraw-0): the permissionless graduation gate —
 /// burn-shaped dispatches only, gated by the `d4` event gate; the burn's
-/// destination binding is enforced by the issuance logic's `Burn` mode in the
+/// destination binding is enforced by the minting logic's `Burn` mode in the
 /// same transaction (§4.5).
 validator third_party(p: ThirdPartyParams) {
-  withdraw(_redeemer: ThirdPartyAction, _account: Credential, self: Transaction) {
-    third_party_logic.validate(self, p)
+  withdraw(_redeemer: ThirdPartyAction, account: Credential, self: Transaction) {
+    third_party_logic.validate(account, self, p)
+  }
+
+  publish(_redeemer: Data, certificate: Certificate, _self: Transaction) {
+    accept_registration(certificate)
   }
 
   else(_) {
@@ -63,6 +88,10 @@ validator transformation_script(p: TransformationParams) {
     self: Transaction,
   ) {
     transformation.validate(account, self, p)
+  }
+
+  publish(_redeemer: Data, certificate: Certificate, _self: Transaction) {
+    accept_registration(certificate)
   }
 
   else(_) {

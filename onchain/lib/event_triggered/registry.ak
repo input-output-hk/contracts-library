@@ -2,13 +2,13 @@
 ////
 //// The CIP-113 core registry is a sorted linked list of `RegistryNode` UTxOs,
 //// each carrying an NFT under the registry's node policy whose asset name is
-//// the governed token's policy id. Substandard withdraw-0 validators receive
+//// the governed token's policy id. Module withdraw-0 validators receive
 //// their own credential as `account`, so "which policy do I govern?" resolves
-//// to "find the node whose issuance-logic field is me and read its NFT asset
-//// name" (09-DEVELOPING-SUBSTANDARDS.md, "Finding your own policy id").
+//// to "find the node whose relevant logic field is me and read its NFT asset
+//// name" (09-DEVELOPING-MODULES, "Finding your own policy id").
 ////
 //// Lookups scan inputs and outputs — no positional assumptions
-//// (ARCHITECTURE.md §1). One substandard credential can govern several
+//// (ARCHITECTURE.md §1). One module credential can govern several
 //// tokens; these helpers return every match, and the issuance logic expects
 //// exactly one — the strict choice for a single-instrument instance.
 
@@ -55,10 +55,55 @@ fn node_policy(output: Output, registry_node_cs: PolicyId) -> Option<PolicyId> {
 }
 
 /// All `(policy id, node)` pairs among these outputs whose node's
-/// issuance-logic field is `logic` — "find all nodes referencing me". Pass
-/// `outputs_of(self.inputs)` for spent nodes, `self.reference_inputs |>
-/// outputs_of` for referenced ones, or `self.outputs` for created ones.
+/// minting-logic field is `logic` — "find all nodes referencing me" as the
+/// *issuance* (minting) credential. Pass `outputs_of(self.inputs)` for spent
+/// nodes, `self.reference_inputs |> outputs_of` for referenced ones, or
+/// `self.outputs` for created ones.
 pub fn governing(
+  outputs: List<Output>,
+  registry_node_cs: PolicyId,
+  logic: Credential,
+) -> List<(PolicyId, RegistryNode)> {
+  governing_by(
+    fn(node) { node.minting_logic_script },
+    outputs,
+    registry_node_cs,
+    logic,
+  )
+}
+
+/// The same scan matching the node's **transfer**-logic field — how the
+/// transfer logic resolves the policy id it governs at runtime
+/// (09-DEVELOPING-MODULES, "Finding your own policy id").
+pub fn governing_transfer(
+  outputs: List<Output>,
+  registry_node_cs: PolicyId,
+  logic: Credential,
+) -> List<(PolicyId, RegistryNode)> {
+  governing_by(
+    fn(node) { node.transfer_logic_script },
+    outputs,
+    registry_node_cs,
+    logic,
+  )
+}
+
+/// The same scan matching the node's **third-party**-logic field.
+pub fn governing_third_party(
+  outputs: List<Output>,
+  registry_node_cs: PolicyId,
+  logic: Credential,
+) -> List<(PolicyId, RegistryNode)> {
+  governing_by(
+    fn(node) { node.third_party_logic_script },
+    outputs,
+    registry_node_cs,
+    logic,
+  )
+}
+
+fn governing_by(
+  field: fn(RegistryNode) -> Credential,
   outputs: List<Output>,
   registry_node_cs: PolicyId,
   logic: Credential,
@@ -68,7 +113,7 @@ pub fn governing(
     fn(output) {
       when node(output, registry_node_cs) is {
         Some(node) ->
-          if node.minting_logic_script == logic {
+          if field(node) == logic {
             when node_policy(output, registry_node_cs) is {
               Some(policy) -> Some((policy, node))
               None -> None

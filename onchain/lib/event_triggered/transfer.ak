@@ -19,27 +19,43 @@
 use aiken/collection/dict
 use aiken/collection/list
 use aiken/interval.{is_entirely_after}
-use cardano/assets.{tokens}
+use cardano/address.{Credential}
+use cardano/assets.{PolicyId, tokens}
 use cardano/transaction.{Transaction}
+use event_triggered/registry
 use event_triggered/types.{TransferParams}
 
 /// Approve every owner transfer (P1, §4.2). The core `transfer` validator
 /// already verified ownership, custody and value preservation; the
-/// substandard adds no rule — except the graduation deadline gate below.
-pub fn validate(self: Transaction, params: TransferParams) -> Bool {
-  if is_graduation(self, params) {
+/// substandard adds no rule — except the graduation deadline gate below. The
+/// governed policy id resolves at runtime from the referenced registry node
+/// (09-DEVELOPING-MODULES, "Finding your own policy id": the policy id
+/// depends on the issuance credential, so this validator cannot bake it).
+pub fn validate(
+  account: Credential,
+  self: Transaction,
+  params: TransferParams,
+) -> Bool {
+  let referenced = registry.outputs_of(self.reference_inputs)
+  expect [(policy, _)] = registry.governing_transfer(
+    referenced,
+    params.registry_node_cs,
+    account,
+  )
+  if is_graduation(self, policy) {
     // Event gate (Q-RULE-1, §4.5): the validity range must reach `d4`.
     // `is_entirely_after(range, d4 - 1)` ⟺ the lower bound is ≥ d4.
     is_entirely_after(self.validity_range, params.final_deadline - 1)
   } else {
+    // A plain transfer reads no time bound (§4.2, §5).
     True
   }
 }
 
 /// Is this transaction burning governed tokens? A negative mint under the
 /// policy is a graduation attempt — whatever the spend path.
-fn is_graduation(self: Transaction, params: TransferParams) -> Bool {
-  tokens(self.mint, params.own_policy)
+fn is_graduation(self: Transaction, policy: PolicyId) -> Bool {
+  tokens(self.mint, policy)
     |> dict.values
     |> list.any(fn(quantity) { quantity < 0 })
 }
