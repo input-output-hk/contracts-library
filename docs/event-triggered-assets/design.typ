@@ -43,8 +43,8 @@ the beneficiary, publishing the bond's terms as a CIP-68 reference datum._
         minting_logic: "Credential",
         transfer_logic: "Credential",
         third_party_logic: "Credential",
-        unfracking_logic: "∅",
-        global_state_cs: "∅",
+        unfracking_logic: "empty_vkey = VerificationKey(#\"\")",
+        global_state_cs: "#\"\" (empty)",
       ),
     ),
     (
@@ -59,12 +59,12 @@ the beneficiary, publishing the bond's terms as a CIP-68 reference datum._
       datum: (
         metadata: "{name, ticker, terms-url, …} (CBOR)",
         version: "1",
-        extra: "{schedule: [(d1,v1)…(d4,v4)], value: v0}",
+        extra: "{schedule: [(d1,v1)…(d4,v4)], value: v0, native_policy}",
       ),
     ),
   ),
   notes: [
-    - Our `minting_logic` runs a single `RegisterAndMint` mode that validates BOTH concerns together — registration authority (issuer signature) + node shape, and the first-batch mint. A single arm is fine (09-DEVELOPING-SUBSTANDARDS §7); it must cross-check the tx shape (node NFT minted → node created; `cip_policy` entries present in `tx.mint`) so a caller cannot reuse it in the wrong context.
+    - Our `minting_logic` runs a single `RegisterAndMint` mode that validates BOTH concerns together — registration authority (issuer signature) + node shape, and the first-batch mint. A single arm is fine (09-DEVELOPING-MODULES §7); it must cross-check the tx shape (node NFT minted → node created; `cip_policy` entries present in `tx.mint`) so a caller cannot reuse it in the wrong context.
     - Minted tokens must land at a PLB output with an inline stake credential and a bounded inline datum — enforced by the protocol's `issuance_logic` (`no_escape`); the substandard does not re-check it. Supply is issuer-gated: two asset names under one policy (the principal and its CIP-68 reference), no per-holder state to mint against.
     - The CIP-68 pair is minted under the *same governed policy* (compliant: user token + reference `222`). The reference token is PLB-custodied and staked to the *transformation script* — a smart-wallet stake credential whose withdraw-0 authorizes in-place metadata updates holder-passively (T3). Its datum must fit the deployment's `max_inline_datum_bytes`: a UTxO born over the bound is frozen and unseizable.
     - The schedule is baked as validator constants — fixed 4% annual over four years, precomputed off-chain with a fixed-point scale: `[(d1, v1), (d2, v2), (d3, v3), (d4, v4)]` with `v4 ≈ 1.1699 × scale`. No on-chain compounding: the validator looks the current value up by time. The CIP-68 reference datum mirrors it for wallets and indexers; the graduation math reads the baked `v4`.
@@ -116,9 +116,9 @@ after the deadlines. A transfer never gates who may hold or send it._
     ),
   ),
   notes: [
-    - Dispatch chain: `PLB requires the dispatcher → dispatcher (TransferAct) requires transfer → transfer resolves the registry node and requires our transfer logic` (09-DEVELOPING-SUBSTANDARDS §4, §6). A transfer needs *three* script withdrawals, not two — without the dispatcher the tx fails at `programmable_logic_base` before the transfer validator ever runs.
+    - Dispatch chain: `PLB requires the dispatcher → dispatcher (TransferAct) requires transfer → transfer resolves the registry node and requires our transfer logic` (09-DEVELOPING-MODULES §4, §6). A transfer needs *three* script withdrawals, not two — without the dispatcher the tx fails at `programmable_logic_base` before the transfer validator ever runs.
     - The PLB spend redeemer is `BaseSpendRedeemer { params_idx, wdrl_idx }` — one record for every PLB input in the tx; it carries *no action arm*. The path is selected by the dispatcher's redeemer (`TransferAct`), never by the base redeemer.
-    - Withdrawals are listed here by role; the ledger presents them in its canonical order (scripts before vkeys, ascending) — builders derive every `wdrl_idx` from the sorted set (09-DEVELOPING-SUBSTANDARDS §10).
+    - Withdrawals are listed here by role; the ledger presents them in its canonical order (scripts before vkeys, ascending) — builders derive every `wdrl_idx` from the sorted set (09-DEVELOPING-MODULES §10).
     - P1 at every point of the lifecycle — before and after the deadlines: the permissive `transfer_logic` (Q-RULE-3) never gates who may hold or send, so the token is DEX/venue-compatible.
     - Ownership rides the inline stake credential of the token UTxO — it moves with the token at every transfer, and it is what the graduation binds the payout to (T4).
   ],
@@ -204,7 +204,7 @@ issuer, no signature; anyone can submit it._
       datum: (
         metadata: "{…}",
         version: "1",
-        extra: "{schedule, value: v_{k-1} (stale is ok)}",
+        extra: "{schedule, value: v_{k-1} (stale is ok), native_policy}",
       ),
       redeemer: [BaseSpendRedeemer { params_idx, wdrl_idx }],
     ),
@@ -236,7 +236,7 @@ issuer, no signature; anyone can submit it._
       datum: (
         metadata: "{…}",
         version: "1",
-        extra: "{schedule, value: v_k = lookup(schedule, now)}",
+        extra: "{schedule, value: v_k = lookup(schedule, now), native_policy (preserved)}",
       ),
     ),
   ),
@@ -283,6 +283,13 @@ the (now non-transforming) token._
       address: "registry_addr",
       value: ("registry_node_cs": "1"),
     ),
+    (
+      reference: true,
+      name: "Reference token",
+      address: "plb_addr [stake: transformation_script]",
+      value: ("cip_policy": "1"),
+      datum: (metadata: "{…}", version: "1", extra: "{schedule, value, native_policy}"),
+    ),
   ),
   mint: (
     "cip_policy": "- N (issuance_mint policy, burn)",
@@ -315,7 +322,7 @@ the (now non-transforming) token._
   ),
   notes: [
     - Two spend chains, one burn: a graduation runs *exactly one* spend chain — either the permissionless third-party path (`programmable_logic_global [ThirdPartyAct] → third_party → third_party_logic`) or the owner-signed transfer path (`… [TransferAct] → transfer → transfer_logic`, with the owner's signature). Both then share the *same* burn withdraw-0s — the substandard's `minting_logic [Burn]` and the core `issuance_logic` — and the same Burn-mode validation. The withdrawals list above shows both chains for reference; a real transaction carries only one.
-    - A burn fires `issuance_mint` with a negative quantity — the *same two* issuance withdraw-0s as a mint (protocol `issuance_logic` + ours) — plus the full spend chain of whichever action releases the tokens (09-DEVELOPING-SUBSTANDARDS §6).
+    - A burn fires `issuance_mint` with a negative quantity — the *same two* issuance withdraw-0s as a mint (protocol `issuance_logic` + ours) — plus the full spend chain of whichever action releases the tokens (09-DEVELOPING-MODULES §6).
     - Event gate (Q-RULE-1): there is no separate rule script — the deadline check lives inside the substandard logic that already runs (the `third_party_logic` / `transfer_logic` withdraw-0 on the spend side and the `minting_logic` withdraw-0 on the burn side). It approves iff the validity range reaches `d4` — time-driven, no oracle; the event condition is the tx's own validity range.
     - Authorization (Q-GRAD-2, this instrument): the `d4` event gate is necessary but not sufficient — the burn also needs an *owner-authorized payout destination*. That is *either* the owner's signature (owner path, which names the destination in the tx) *or* a payment credential the owner pre-committed to the token datum (which a third party can then complete without redirecting). The permissionless third-party path therefore only works for tokens whose owners opted in beforehand; with no owner signature and no committed destination, the tx is rejected.
     - The conversion function (the Burn-mode validation) is shared by both paths: burn shape, full-burn per asset name (whole holdings burn — it makes the per-owner destination attribution exact), destination binding and the scaled native mirror. The native minting policy is signer-agnostic: it approves the mint only against the burn (`mint == burned × v4 / scale`), whichever credential signed it.

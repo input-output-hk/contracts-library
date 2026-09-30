@@ -59,7 +59,7 @@ One unit under the same `cip_policy`, custodied at the PLB with the **transforma
 | --- | --- |
 | `metadata` | `{ name, ticker, terms-url, … }` (CBOR) — CIP-68 publication for wallets and indexers. |
 | `version` | `1`. |
-| `extra` | `{ schedule: [(d1,v1) … (d4,v4)], value: v_k }` — the baked schedule and the current recorded value (`v0` at issue; stale values are harmless). |
+| `extra` | `{ schedule: [(d1,v1) … (d4,v4)], value: v_k, native_policy }` — the baked schedule, the current recorded value (`v0` at issue; stale values are harmless) and the graduated asset's policy id (the instrument's published terms, written at registration and preserved by every later update; the graduation's burn reads it from the referenced reference token). |
 
 The datum must stay within `max_inline_datum_bytes`: keep it to the schedule and value, heavy CIP-25-style blobs would freeze the UTxO.
 
@@ -73,9 +73,12 @@ One node at the registry address holds the instance configuration:
 | `minting_logic` | This substandard's mint/burn authority (the `RegisterAndMint` / `Burn` arm). |
 | `transfer_logic` | The permissive transfer predicate (P1). |
 | `third_party_logic` | The governed-extraction predicate (graduation-only in this instrument). |
-| `unfracking_logic`, `global_state_cs` | `∅` — unused by this instrument. |
+| `unfracking_logic` | `empty_vkey = VerificationKey(#"")` — unfracking forbidden (no withdrawal can be keyed by an empty hash); the instrument's frozen posture. |
+| `global_state_cs` | `#""` — unused by this instrument. |
 
-The node is **only ever referenced**, never spent, by instrument transactions (§6, I7).
+The node is **only ever referenced**, never spent, by instrument transactions (§6, I7). Its logic fields resolve at runtime: the governed policy id is a hash *of* the issuance script's applied form, so no validator parameter carries it — the issuance logic resolves it from the node (created at registration, referenced at graduation), and the transfer / third-party logics by matching their own node field; only scripts outside that dependency cone (the native mint policy) may bake `cip_policy` (09-DEVELOPING-MODULES, "Finding your own policy id").
+
+Every withdraw-zero stake credential must carry a `publish` handler accepting `RegisterCredential` and refusing every other certificate, or it can never be registered and therefore never invoked (09-DEVELOPING-MODULES, "Your credential must also carry a publish handler").
 
 ### 3.5 Schedule
 
@@ -83,7 +86,7 @@ The node is **only ever referenced**, never spent, by instrument transactions (�
 
 ## 4. Transactions
 
-Each section is one complete transaction; the normative diagrams are the `design.typ` figures of the same name. The withdraw-0s of a PLB spend are listed by role; the ledger presents withdrawals in its canonical order (scripts before vkeys, ascending), and builders derive every `wdrl_idx` of the `BaseSpendRedeemer { params_idx, wdrl_idx }` from the sorted set (09-DEVELOPING-SUBSTANDARDS §10).
+Each section is one complete transaction; the normative diagrams are the `design.typ` figures of the same name. The withdraw-0s of a PLB spend are listed by role; the ledger presents withdrawals in its canonical order (scripts before vkeys, ascending), and builders derive every `wdrl_idx` of the `BaseSpendRedeemer { params_idx, wdrl_idx }` from the sorted set (09-DEVELOPING-MODULES §10).
 
 ### 4.1 Register + issue (T0/T1)
 
@@ -146,13 +149,13 @@ From `d4` on, the tokens *may* convert into the corresponding native asset at th
 | | |
 | --- | --- |
 | **Inputs** | Principal tokens at the PLB [stake: holder], `cip_policy` × `N`, redeemer `BaseSpendRedeemer { params_idx, wdrl_idx }`. |
-| **Reference inputs** | Protocol params; RegistryNode. |
+| **Reference inputs** | Protocol params; RegistryNode; Reference token (its datum names the graduated asset's policy, §3.3). |
 | **Mint** | `cip_policy`: `−N` (burn, under the `issuance_mint` policy). `native_policy`: `N × v4 / scale` (the graduated asset). |
 | **Withdrawals** | Exactly **one** spend chain, plus the shared burn — *owner path*: `programmable_logic_global` [TransferAct] (0) → `transfer` [TransferRedeemer] (0) → `transfer_logic` (ours) (0); *third-party path*: `programmable_logic_global` [ThirdPartyAct] (0) → `third_party` [ThirdPartyRedeemer] (0) → `third_party_logic` (ours) (0); *both paths*: `minting_logic` (ours) [Burn] (0) → core `issuance_logic` [names policy] (0). |
 | **Signatures** | Owner path: the owner. Third-party path: none. |
 | **Outputs** | 1. **Native asset** (wallet) at `owner_addr` [payment: owner-authorized, stake: owner]: `native_policy` × `N × v4 / scale`. 2. *Third-party path only:* **ghost continuation** at the PLB [stake: holder]: `min_ada` — the paired continuation preserves address, datum and reference script byte-for-byte, with lovelace ratcheted (`output ≥ input`). |
 | **Validity range** | Lower bound finite, `≥ d4`. |
-| **Constraints** | The Burn-mode validation is shared by both paths: burn shape; **full burn per asset name** (whole holdings burn, which makes per-owner destination attribution exact); destination binding; the scaled native mirror. Graduation burns the principal name only — any other governed name fails closed and survives. The native policy is signer-agnostic: it approves the mint only against the governed burn (`mint == burned × v4 / scale`), whichever credential signed. A burn fires `issuance_mint` with a negative quantity — the same two issuance withdraw-0s as a mint — plus the full spend chain of whichever action releases the tokens (09-DEVELOPING-SUBSTANDARDS §6). |
+| **Constraints** | The Burn-mode validation is shared by both paths: burn shape; **full burn per asset name** (whole holdings burn, which makes per-owner destination attribution exact); destination binding; the scaled native mirror. Graduation burns the principal name only — any other governed name fails closed and survives. The native policy is signer-agnostic: it approves the mint only against the governed burn (`mint == burned × v4 / scale`), whichever credential signed. A burn fires `issuance_mint` with a negative quantity — the same two issuance withdraw-0s as a mint — plus the full spend chain of whichever action releases the tokens (09-DEVELOPING-MODULES §6). |
 
 **Event gate (Q-RULE-1).** There is no separate rule script: the deadline check lives inside the substandard logic that already runs — the spend-side withdraw-0 (`third_party_logic` / `transfer_logic`) and the burn-side `minting_logic [Burn]` withdraw-0 — and approves iff the validity range reaches `d4` (time-driven, no oracle; the event condition is the transaction's own validity range).
 
