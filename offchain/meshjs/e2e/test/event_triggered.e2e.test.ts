@@ -1,36 +1,42 @@
 /**
- * End-to-end tests for the event-triggered assets scaffold against a Yaci
- * DevKit devnet (CIP-113 substandard, docs/explorations/event-triggered-assets.md).
+ * Real-world happy path for the tokenized bond over the actual CIP-113 core
+ * validators (vendored from cardano-foundation/cip113-programmable-tokens):
+ * deploy the core, register + issue the bond through the registry, then
+ * transfer → transform → graduate, all against a Yaci devnet.
  *
- * Happy paths: issue → apply event → graduate / retire.
- * The on-chain predicates are permissive stubs pending triage (§7, TODO(#28)),
- * so instead of settings-style rejection paths this suite carries
- * "permissiveness controls": tests that assert the current permissive
- * behavior on-chain (and flip to rejections once the predicates are
- * hardened), plus builder-level guard tests for the off-chain checks.
+ * Single-signer discipline: the tx funder must be the wallet that authorizes,
+ * because MeshJS's `signAndSubmit` signs with one wallet. `account` funds and
+ * authorizes register/transfer/transform; `recipient` (the post-transfer
+ * holder) funds and authorizes the graduation.
+ *
+ * Skips when no devnet is reachable (`npm run test:devnet`).
  */
 
 import {
-  applyEventRedeemer,
-  buildApplyEventTx,
-  buildGraduateTx,
-  buildIssueTx,
-  buildRetireTx,
-  eventTriggeredPolicyId,
-  eventTriggeredScript,
-  eventTriggeredScriptAddress,
-  instrumentDatumToData,
-  type EventAssetDatum,
-} from "@contracts-library/meshjs";
-import {
   mConStr0,
+  resolveStakeKeyHash,
   unixTimeToEnclosingSlot,
-  type PlutusScript,
   type SlotConfig,
   type UTxO,
 } from "@meshsdk/core";
 import { beforeAll, describe, expect, it } from "vitest";
-import { ALWAYS_TRUE } from "../src/fixtures";
+
+import {
+  applyBond,
+  buildGraduateOwner,
+  buildRegisterAndIssue,
+  buildTransfer,
+  buildTransform,
+  plbAddress,
+  type Bond,
+} from "../src/cip113/bond";
+import {
+  rewardAddressOf,
+  scriptAddressOf,
+  scriptHashOf,
+} from "../src/cip113/core";
+import { deployCore, type Deployment } from "../src/cip113/deploy";
+import type { RegistryNode } from "../src/cip113/data";
 import {
   chainNowMs,
   collateralOf,
@@ -38,389 +44,263 @@ import {
   devnetSlotConfig,
   fundedAccount,
   makeProvider,
-  NETWORK_ID,
   newTxBuilder,
-  scriptOutputOf,
   signAndSubmit,
   STORE_URL,
   waitForTx,
+  waitUntilChainTimeMs,
   type Account,
 } from "../src/devnet";
 
 const reachable = await devnetReachable();
 if (!reachable) {
   console.warn(
-    `[e2e] Skipping all e2e tests: no Yaci devnet at ${STORE_URL}. ` +
-      `Run \`npm run test:devnet\` (or start one and set INDEXER_URL / YACI_STORE_URL).`,
+    `[e2e] Skipping event_triggered real-core e2e: no Yaci devnet at ${STORE_URL}.`,
   );
 }
 
-const PROGRAMMATIC_ASSET_NAME = "6576656e74"; // hex-encoded "event"
-const GRADUATED_ASSET_NAME = "677261647561746564"; // hex-encoded "graduated"
+const PRINCIPAL = "424f4e44"; // "BOND"
+const REFERENCE = "524546323232"; // "REF222"
+const SCALE = 1000;
+const QUANTITY = 1000n;
+const ORIGIN_NODE: RegistryNode = {
+  key: "",
+  next: "ff".repeat(30),
+  mintingLogic: { kind: "key", hash: "" },
+  transferLogic: { kind: "key", hash: "" },
+  thirdPartyLogic: { kind: "key", hash: "" },
+  unfrackingLogic: { kind: "key", hash: "" },
+  globalStateCs: "",
+};
 
-describe.skipIf(!reachable)("event_triggered e2e (Yaci devnet)", () => {
-  let provider: ReturnType<typeof makeProvider>;
-  let slotConfig: SlotConfig;
-  let script: ReturnType<typeof eventTriggeredScript>;
-  let scriptAddr: string;
-  let policyId: string;
-  let unit: string;
+describe.skipIf(!reachable)(
+  "event_triggered real-core e2e (Yaci devnet)",
+  () => {
+    let provider: ReturnType<typeof makeProvider>;
+    let slotConfig: SlotConfig;
 
-  beforeAll(async () => {
-    provider = makeProvider();
-    slotConfig = await devnetSlotConfig();
-    script = eventTriggeredScript();
-    scriptAddr = eventTriggeredScriptAddress(NETWORK_ID);
-    policyId = eventTriggeredPolicyId();
-    unit = policyId + PROGRAMMATIC_ASSET_NAME;
-  });
-
-  async function setup(): Promise<{
-    ruleKeeper: Account;
-    graduationKeeper: Account;
-    datum: EventAssetDatum;
-  }> {
-    const ruleKeeper = await fundedAccount(provider);
-    const graduationKeeper = await fundedAccount(provider);
-
-    return {
-      ruleKeeper,
-      graduationKeeper,
-      datum: {
-        rule: { kind: "key", hash: ruleKeeper.keyHash },
-        graduationAuth: { kind: "key", hash: graduationKeeper.keyHash },
-        state: "Active",
-      },
-    };
-  }
-
-  /** A permissive Plutus policy for the graduated token. A Plutus policy
-   * (not a native script) is required for an atomic graduate: see
-   * `buildGraduateTx`. */
-  function graduatedScriptOf(_ctx: Awaited<ReturnType<typeof setup>>): {
-    script: PlutusScript;
-    redeemer: ReturnType<typeof mConStr0>;
-    unit: string;
-  } {
-    return {
-      script: { code: ALWAYS_TRUE.cbor, version: "V3" },
-      redeemer: mConStr0([]),
-      unit: ALWAYS_TRUE.hash + GRADUATED_ASSET_NAME,
-    };
-  }
-
-  /** Mint the programmable token into programmable custody (rule keeper signs). */
-  async function issueInstrument(
-    ctx: Awaited<ReturnType<typeof setup>>,
-    quantity = 1n,
-  ): Promise<UTxO> {
-    const issueTx = await buildIssueTx({
-      txBuilder: newTxBuilder(provider),
-      datum: ctx.datum,
-      assetName: PROGRAMMATIC_ASSET_NAME,
-      quantity,
-      utxos: await ctx.ruleKeeper.wallet.getUtxos(),
-      changeAddress: ctx.ruleKeeper.address,
-      collateralUtxo: await collateralOf(ctx.ruleKeeper),
-      network: "preprod",
+    beforeAll(async () => {
+      provider = makeProvider();
+      slotConfig = await devnetSlotConfig();
     });
 
-    const issueHash = await signAndSubmit(ctx.ruleKeeper, issueTx);
-    await waitForTx(provider, issueHash);
-    return await scriptOutputOf(provider, issueHash, scriptAddr);
-  }
-
-  /** Apply an event: Active → Settled (rule keeper signs). */
-  async function applySettleEvent(
-    ctx: Awaited<ReturnType<typeof setup>>,
-    instrumentUtxo: UTxO,
-  ): Promise<UTxO> {
-    const applyTx = await buildApplyEventTx({
-      txBuilder: newTxBuilder(provider),
-      instrumentUtxo,
-      datum: ctx.datum,
-      nextDatum: { ...ctx.datum, state: "Settled" },
-      now: await chainNowMs(),
-      utxos: await ctx.ruleKeeper.wallet.getUtxos(),
-      changeAddress: ctx.ruleKeeper.address,
-      collateralUtxo: await collateralOf(ctx.ruleKeeper),
-      network: "preprod",
-      customSlotConfig: slotConfig,
-    });
-
-    const applyHash = await signAndSubmit(ctx.ruleKeeper, applyTx);
-    await waitForTx(provider, applyHash);
-    return await scriptOutputOf(provider, applyHash, scriptAddr);
-  }
-
-  /**
-   * A raw, possibly-malicious spend of an instrument UTxO with the ApplyEvent
-   * redeemer (an attacker would not use our honest builder). Without a
-   * `continuation` the UTxO is swept to the signer's wallet.
-   */
-  async function rawApply(p: {
-    signer: Account;
-    instrumentUtxo: UTxO;
-    continuation?: EventAssetDatum;
-    requiredSigner?: string;
-  }): Promise<string> {
-    const tb = newTxBuilder(provider);
-
-    tb.spendingPlutusScriptV3()
-      .txIn(
-        p.instrumentUtxo.input.txHash,
-        p.instrumentUtxo.input.outputIndex,
-        p.instrumentUtxo.output.amount,
-        p.instrumentUtxo.output.address,
-      )
-      .txInInlineDatumPresent()
-      .txInRedeemerValue(applyEventRedeemer())
-      .txInScript(script.code);
-
-    if (p.continuation) {
-      tb.txOut(
-        scriptAddr,
-        p.instrumentUtxo.output.amount,
-      ).txOutInlineDatumValue(instrumentDatumToData(p.continuation));
+    async function stakeHashOf(account: Account): Promise<string> {
+      return resolveStakeKeyHash(
+        (await account.wallet.getRewardAddresses())[0],
+      );
     }
 
-    if (p.requiredSigner) tb.requiredSignerHash(p.requiredSigner);
+    /** Register a module script's stake credential with publish consent. */
+    async function registerScriptStake(
+      payer: Account,
+      script: { code: string },
+      hash: string,
+    ): Promise<void> {
+      const collateral = await collateralOf(payer);
+      const tx = await newTxBuilder(provider)
+        .registerStakeCertificate(rewardAddressOf(hash, 0))
+        .certificateScript(script.code, "V3")
+        .certificateRedeemerValue(mConStr0([]))
+        .txInCollateral(
+          collateral.input.txHash,
+          collateral.input.outputIndex,
+          collateral.output.amount,
+          collateral.output.address,
+        )
+        .changeAddress(payer.address)
+        .selectUtxosFrom(await payer.wallet.getUtxos())
+        .complete();
+      await waitForTx(provider, await signAndSubmit(payer, tx));
+    }
 
-    const col = await collateralOf(p.signer);
-    const unsigned = await tb
-      .txInCollateral(
-        col.input.txHash,
-        col.input.outputIndex,
-        col.output.amount,
-        col.output.address,
-      )
-      .changeAddress(p.signer.address)
-      .selectUtxosFrom(await p.signer.wallet.getUtxos())
-      .complete();
+    async function fundingOf(payer: Account) {
+      const collateral = await collateralOf(payer);
+      return {
+        collateral,
+        funding: (await payer.wallet.getUtxos()).filter(
+          (u) =>
+            !(
+              u.input.txHash === collateral.input.txHash &&
+              u.input.outputIndex === collateral.input.outputIndex
+            ),
+        ),
+      };
+    }
 
-    return provider.submitTx(await p.signer.wallet.signTx(unsigned, true));
-  }
+    async function outputHolding(txHash: string, unit: string): Promise<UTxO> {
+      const outs = await provider.fetchUTxOs(txHash);
+      const found = outs.find((u) =>
+        u.output.amount.some((a) => a.unit === unit),
+      );
+      if (!found) throw new Error(`no output holding ${unit} in ${txHash}`);
+      return found;
+    }
 
-  /** Total quantity of `unit` across an account's wallet. */
-  async function walletHolds(account: Account, unit: string): Promise<bigint> {
-    const utxos = await account.wallet.getUtxos();
-    return utxos.reduce((sum, u) => {
-      const a = u.output.amount.find((x) => x.unit === unit);
-      return sum + (a ? BigInt(a.quantity) : 0n);
-    }, 0n);
-  }
+    async function holds(account: Account, unit: string): Promise<bigint> {
+      const utxos = await account.wallet.getUtxos();
+      return utxos.reduce((sum, u) => {
+        const a = u.output.amount.find((x) => x.unit === unit);
+        return sum + (a ? BigInt(a.quantity) : 0n);
+      }, 0n);
+    }
 
-  /** Issue, then sweep the programmable token into the graduation keeper's
-   * wallet (permissive stub permits it), so P3 can burn from there. */
-  async function issueAndSweep(
-    ctx: Awaited<ReturnType<typeof setup>>,
-  ): Promise<void> {
-    const instrumentUtxo = await issueInstrument(ctx);
-    const sweepHash = await rawApply({
-      signer: ctx.graduationKeeper,
-      instrumentUtxo,
-      requiredSigner: ctx.graduationKeeper.keyHash,
-    });
-    await waitForTx(provider, sweepHash);
-  }
+    it("deploys the core, registers + issues the bond, transfers, transforms and graduates", async () => {
+      // `account` funds and signs register/transfer/transform; `recipient` becomes
+      // the holder after the transfer and funds/signs the graduation.
+      const account = await fundedAccount(
+        provider,
+        [20_000, 20_000, 20_000, 20_000, 20_000, 20_000, 20_000, 20_000],
+      );
+      const recipient = await fundedAccount(provider);
+      const accountStakeHash = await stakeHashOf(account);
+      const recipientStakeHash = await stakeHashOf(recipient);
 
-  // ----------------------------------------------------------- happy paths
+      // ---- deploy the core -------------------------------------------------
+      const deployment: Deployment = await deployCore(provider, account);
 
-  it("issues an instrument UTxO in programmable custody", async () => {
-    const ctx = await setup();
-    const instrumentUtxo = await issueInstrument(ctx);
+      const start = await chainNowMs();
+      const schedule = [
+        { deadline: start, value: 1040 },
+        { deadline: start + 10_000, value: 1081 },
+        { deadline: start + 20_000, value: 1124 },
+        { deadline: start + 30_000, value: 1169 },
+      ];
+      const finalDeadline = schedule[schedule.length - 1].deadline;
+      const finalValue = BigInt(schedule[schedule.length - 1].value);
 
-    expect(instrumentUtxo.output.address).toBe(scriptAddr);
-    const asset = instrumentUtxo.output.amount.find((a) => a.unit === unit);
-    expect(asset).toBeDefined();
-    expect(asset?.quantity).toBe("1");
-  });
+      // ---- apply the bond + register its module credentials (publish) ------
+      const bond: Bond = applyBond(deployment, {
+        principalName: PRINCIPAL,
+        referenceName: REFERENCE,
+        schedule,
+        scale: SCALE,
+        issuer: { kind: "key", hash: account.keyHash },
+      });
+      for (const script of bond.withdrawCredentials) {
+        await registerScriptStake(account, script, scriptHashOf(script));
+      }
 
-  it("issues, applies an event (Active → Settled), and continues", async () => {
-    const ctx = await setup();
-    const instrumentUtxo = await issueInstrument(ctx);
+      const nodeAddress = scriptAddressOf(deployment.core.registryNodeCs, 0);
+      const beneficiaryAddress = plbAddress(
+        deployment,
+        accountStakeHash,
+        false,
+      );
+      const referenceAddress = plbAddress(
+        deployment,
+        scriptHashOf(bond.transformation),
+        true,
+      );
 
-    const settledUtxo = await applySettleEvent(ctx, instrumentUtxo);
-
-    expect(settledUtxo).toBeDefined();
-    expect(settledUtxo.output.address).toBe(scriptAddr);
-    const asset = settledUtxo.output.amount.find((a) => a.unit === unit);
-    expect(asset?.quantity).toBe("1");
-  });
-
-  it("issues, applies an event, and graduates via burn + remint", async () => {
-    const ctx = await setup();
-    await issueAndSweep(ctx);
-
-    const graduated = graduatedScriptOf(ctx);
-    const graduateTx = await buildGraduateTx({
-      txBuilder: newTxBuilder(provider),
-      programmaticUnit: unit,
-      programmaticQuantity: 1n,
-      graduatedUnit: graduated.unit,
-      graduatedQuantity: 1n,
-      graduatedScript: graduated.script,
-      graduatedRedeemer: graduated.redeemer,
-      utxos: await ctx.graduationKeeper.wallet.getUtxos(),
-      changeAddress: ctx.graduationKeeper.address,
-      collateralUtxo: await collateralOf(ctx.graduationKeeper),
-      graduationAuth: ctx.datum.graduationAuth,
-      network: "preprod",
-    });
-    const graduateHash = await signAndSubmit(ctx.graduationKeeper, graduateTx);
-    await waitForTx(provider, graduateHash);
-
-    expect(await walletHolds(ctx.graduationKeeper, graduated.unit)).toBe(1n);
-    expect(await walletHolds(ctx.graduationKeeper, unit)).toBe(0n);
-  });
-
-  it("issues, applies an event, and retires via burn only", async () => {
-    const ctx = await setup();
-    await issueAndSweep(ctx);
-
-    const retireTx = await buildRetireTx({
-      txBuilder: newTxBuilder(provider),
-      programmaticUnit: unit,
-      programmaticQuantity: 1n,
-      utxos: await ctx.graduationKeeper.wallet.getUtxos(),
-      changeAddress: ctx.graduationKeeper.address,
-      collateralUtxo: await collateralOf(ctx.graduationKeeper),
-      graduationAuth: ctx.datum.graduationAuth,
-      network: "preprod",
-    });
-    const retireHash = await signAndSubmit(ctx.graduationKeeper, retireTx);
-    await waitForTx(provider, retireHash);
-
-    expect(await walletHolds(ctx.graduationKeeper, unit)).toBe(0n);
-  });
-
-  // ------------------------------------------------- permissiveness controls
-  //
-  // These document the CURRENT permissive on-chain behavior (§7 stubs,
-  // TODO(#28)). Once the predicates are triaged into real checks, flip these
-  // assertions to `rejects.toThrow()` — they mark exactly the hole that
-  // triage closes.
-
-  it("accepts a raw apply whose rule authority never signed (permissive stub)", async () => {
-    const ctx = await setup();
-    const instrumentUtxo = await issueInstrument(ctx);
-
-    // No required signer for the rule credential, forged Settled continuation.
-    const hash = await rawApply({
-      signer: ctx.graduationKeeper,
-      instrumentUtxo,
-      continuation: { ...ctx.datum, state: "Settled" },
-    });
-    await waitForTx(provider, hash);
-    expect(hash).toBeDefined();
-  });
-
-  it("accepts a raw apply that sweeps custody to a wallet (permissive stub)", async () => {
-    const ctx = await setup();
-    const instrumentUtxo = await issueInstrument(ctx);
-
-    // CIP-113 forbids programmable tokens outside programmable custody; the
-    // scaffold does not model the shared base validator, so this sweep flies.
-    const hash = await rawApply({
-      signer: ctx.graduationKeeper,
-      instrumentUtxo,
-      requiredSigner: ctx.graduationKeeper.keyHash,
-    });
-    await waitForTx(provider, hash);
-    expect(await walletHolds(ctx.graduationKeeper, unit)).toBe(1n);
-  });
-
-  it("accepts a raw apply with a forged continuation datum (permissive stub)", async () => {
-    const ctx = await setup();
-    const instrumentUtxo = await issueInstrument(ctx);
-
-    // Forged authorities: the continuation swaps the rule credential.
-    const forged: EventAssetDatum = {
-      rule: { kind: "key", hash: "00".repeat(28) },
-      graduationAuth: { kind: "key", hash: "11".repeat(28) },
-      state: "Settled",
-    };
-    const hash = await rawApply({
-      signer: ctx.graduationKeeper,
-      instrumentUtxo,
-      continuation: forged,
-      requiredSigner: ctx.graduationKeeper.keyHash,
-    });
-    await waitForTx(provider, hash);
-    expect(hash).toBeDefined();
-  });
-
-  // ------------------------------------------------- off-chain guard checks
-  //
-  // The builders enforce more than the on-chain stubs do; these assert the
-  // builder guards fire before any transaction is submitted.
-
-  it("rejects graduation when the inputs do not hold the programmable token", async () => {
-    const ctx = await setup();
-    const graduated = graduatedScriptOf(ctx);
-
-    await expect(
-      buildGraduateTx({
+      // ---- register + issue (T0/T1) ---------------------------------------
+      const funding1 = await fundingOf(account);
+      const registerTx = await buildRegisterAndIssue({
         txBuilder: newTxBuilder(provider),
-        programmaticUnit: unit,
-        programmaticQuantity: 1n,
-        graduatedUnit: graduated.unit,
-        graduatedQuantity: 1n,
-        graduatedScript: graduated.script,
-        graduatedRedeemer: graduated.redeemer,
-        utxos: await ctx.graduationKeeper.wallet.getUtxos(),
-        changeAddress: ctx.graduationKeeper.address,
-        collateralUtxo: await collateralOf(ctx.graduationKeeper),
-        graduationAuth: ctx.datum.graduationAuth,
-        network: "preprod",
-      }),
-    ).rejects.toThrow(/need 1 to burn/i);
-  });
+        deployment,
+        bond,
+        covering: deployment.refs.originNode,
+        coveringNode: ORIGIN_NODE,
+        quantity: QUANTITY,
+        beneficiaryAddress,
+        referenceAddress,
+        nodeAddress,
+        funding: funding1.funding,
+        collateral: funding1.collateral,
+        changeAddress: account.address,
+      });
+      const registerHash = await signAndSubmit(account, registerTx);
+      await waitForTx(provider, registerHash);
 
-  it("rejects graduation into the event-triggered policy itself", async () => {
-    const ctx = await setup();
-    const graduated = graduatedScriptOf(ctx);
+      const principalUtxo = await outputHolding(
+        registerHash,
+        bond.policyId + PRINCIPAL,
+      );
+      const referenceUtxo = await outputHolding(
+        registerHash,
+        bond.policyId + REFERENCE,
+      );
+      const bondNode = await outputHolding(
+        registerHash,
+        deployment.core.registryNodeCs + bond.policyId,
+      );
 
-    await expect(
-      buildGraduateTx({
+      // ---- transfer (T2, owner path) --------------------------------------
+      const funding2 = await fundingOf(account);
+      const transferTx = await buildTransfer({
         txBuilder: newTxBuilder(provider),
-        programmaticUnit: unit,
-        programmaticQuantity: 1n,
-        graduatedUnit: policyId + GRADUATED_ASSET_NAME,
-        graduatedQuantity: 1n,
-        graduatedScript: graduated.script,
-        graduatedRedeemer: graduated.redeemer,
-        utxos: await ctx.graduationKeeper.wallet.getUtxos(),
-        changeAddress: ctx.graduationKeeper.address,
-        collateralUtxo: await collateralOf(ctx.graduationKeeper),
-        graduationAuth: ctx.datum.graduationAuth,
-        network: "preprod",
-      }),
-    ).rejects.toThrow(/distinct/i);
-  });
+        deployment,
+        bond,
+        node: bondNode,
+        principalInputs: [principalUtxo],
+        recipientAddress: plbAddress(deployment, recipientStakeHash, false),
+        senderStakeHash: accountStakeHash,
+        funding: funding2.funding,
+        collateral: funding2.collateral,
+        changeAddress: account.address,
+      });
+      const transferHash = await signAndSubmit(account, transferTx);
+      await waitForTx(provider, transferHash);
 
-  it("rejects retirement when the inputs do not hold the programmable token", async () => {
-    const ctx = await setup();
+      // The holder is now `recipient`.
+      const recipientPrincipal = await outputHolding(
+        transferHash,
+        bond.policyId + PRINCIPAL,
+      );
+      expect(
+        recipientPrincipal.output.amount.some(
+          (a) => a.unit === bond.policyId + PRINCIPAL,
+        ),
+      ).toBe(true);
 
-    await expect(
-      buildRetireTx({
+      // ---- transform (T3) --------------------------------------------------
+      await waitUntilChainTimeMs(schedule[0].deadline);
+      const now = await chainNowMs();
+      const nextValue = schedule.reduce(
+        (v, s) => (s.deadline <= now ? s.value : v),
+        schedule[0].value,
+      );
+      const funding3 = await fundingOf(account);
+      const transformTx = await buildTransform({
         txBuilder: newTxBuilder(provider),
-        programmaticUnit: unit,
-        programmaticQuantity: 2n,
-        utxos: await ctx.graduationKeeper.wallet.getUtxos(),
-        changeAddress: ctx.graduationKeeper.address,
-        collateralUtxo: await collateralOf(ctx.graduationKeeper),
-        graduationAuth: ctx.datum.graduationAuth,
-        network: "preprod",
-      }),
-    ).rejects.toThrow(/need 2 to burn/i);
-  });
+        deployment,
+        bond,
+        node: bondNode,
+        referenceUtxo,
+        nextValue,
+        validFromSlot: unixTimeToEnclosingSlot(now, slotConfig),
+        funding: funding3.funding,
+        collateral: funding3.collateral,
+        changeAddress: account.address,
+      });
+      await waitForTx(provider, await signAndSubmit(account, transformTx));
 
-  // Sanity: the lower-bound slot conversion the builders use stays consistent
-  // with the devnet slot config the suite fetched.
-  it("validity lower bound converts time to a slot on this chain", async () => {
-    const now = await chainNowMs();
-    const slot = unixTimeToEnclosingSlot(now, slotConfig);
-    expect(slot).toBeGreaterThan(0);
-  });
-});
+      // ---- graduate (T4, owner path) --------------------------------------
+      await waitUntilChainTimeMs(finalDeadline);
+      const now4 = await chainNowMs();
+      const nativeQuantity = (QUANTITY * finalValue) / BigInt(SCALE);
+      const funding4 = await fundingOf(recipient);
+      const graduateTx = await buildGraduateOwner({
+        txBuilder: newTxBuilder(provider),
+        deployment,
+        bond,
+        node: bondNode,
+        referenceUtxo,
+        principalInputs: [recipientPrincipal],
+        principalQuantity: QUANTITY,
+        nativeQuantity,
+        nativeOutputAddress: recipient.address,
+        ownerStakeHash: recipientStakeHash,
+        validFromSlot: unixTimeToEnclosingSlot(now4, slotConfig),
+        funding: funding4.funding,
+        collateral: funding4.collateral,
+        changeAddress: recipient.address,
+      });
+      await waitForTx(provider, await signAndSubmit(recipient, graduateTx));
+
+      expect(await holds(recipient, bond.nativePolicyId + PRINCIPAL)).toBe(
+        nativeQuantity,
+      );
+      expect(await holds(recipient, bond.policyId + PRINCIPAL)).toBe(0n);
+    });
+  },
+);

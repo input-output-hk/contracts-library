@@ -4,6 +4,12 @@
  *
  * Hashes and asset names are hex strings (28-byte hashes = 56 hex chars);
  * asset names here are the hex encoding of the token name bytes.
+ *
+ * Dependency order (09-DEVELOPING-MODULES, "Finding your own policy id"): the
+ * governed policy id is a hash *of* the issuance script's applied form, so no
+ * validator parameter carries it — the issuance/transfer/third-party/
+ * transformation validators resolve it at runtime, and only the native mint
+ * policy (outside that dependency cone) bakes `cipPolicy`.
  */
 
 import type { Data } from "@meshsdk/core";
@@ -23,8 +29,6 @@ export type Schedule = ScheduleStep[];
 
 /** Compile-time parameters of the issuance (minting) logic (§4.1, §4.5). */
 export interface MintingParams {
-  /** The governed policy id (`cip_policy`). */
-  ownPolicy: string;
   /** Policy of the core registry's node NFTs. */
   registryNodeCs: string;
   /** Registration authority (issuer). */
@@ -39,24 +43,21 @@ export interface MintingParams {
   principalName: string;
   /** The CIP-68 reference asset name (hex). */
   referenceName: string;
-  /** The graduated asset's policy id. */
-  nativePolicy: string;
   schedule: Schedule;
   scale: number;
 }
 
 export interface TransferParams {
-  ownPolicy: string;
+  registryNodeCs: string;
   finalDeadline: number;
 }
 
 export interface ThirdPartyParams {
-  ownPolicy: string;
+  registryNodeCs: string;
   finalDeadline: number;
 }
 
 export interface TransformationParams {
-  ownPolicy: string;
   referenceName: string;
   schedule: Schedule;
 }
@@ -68,10 +69,12 @@ export interface NativeMintParams {
   schedule: Schedule;
 }
 
-/** `extra` of the CIP-68 reference datum (§3.3). */
+/** `extra` of the CIP-68 reference datum (§3.3): the schedule, the recorded
+ * value, and the graduated asset's policy id (published terms). */
 export interface BondExtra {
   schedule: Schedule;
   value: number;
+  nativePolicy: string;
 }
 
 /** Inline datum of the CIP-68 reference token (§3.3). */
@@ -86,14 +89,16 @@ export interface PrincipalDatum {
   paymentCredential: Credential | null;
 }
 
-/** The core registry's node datum (§3.4). */
+/** The core registry's node datum (§3.4) — seven fields, CBOR layout order.
+ * An `empty_vkey` unfracking hook is `VerificationKey(#"")` (unfracking
+ * forbidden). */
 export interface RegistryNode {
   key: string;
   next: string;
   mintingLogic: Credential;
   transferLogic: Credential;
   thirdPartyLogic: Credential;
-  unfrackingLogic: Credential | null;
+  unfrackingLogic: Credential;
   globalStateCs: string;
 }
 
