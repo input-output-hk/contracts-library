@@ -26,27 +26,27 @@ import {
 import { spendingLimitParamsToData, spendingWindowParamsToData } from "./datum";
 import type { SpendingLimitParams, SpendingWindowParams } from "./types";
 
-/** Stake-address deposit charged/refunded for `reg_cert` / `unreg_cert`. */
+/**
+ * Stake-address deposit written into `reg_cert` / refund written into
+ * `unreg_cert`. Hardcoded to 2 ADA, matching the `keyDeposit` (a.k.a.
+ * `stakeAddressDeposit`) protocol parameter that MeshJS charges/refunds for the
+ * legacy cert types.
+ */
 const STAKE_ADDRESS_DEPOSIT = 2_000_000n;
 
 /**
- * MeshJS only exposes legacy stake certificates (`stake_registration` /
- * `stake_deregistration`). Those do not trigger the CIP-69 `publish` script
- * purpose, so a withdrawal script's cert redeemer would be left extraneous and
- * the ledger rejects the transaction.
+ * Rewrite the withdrawal-script certificates in a serialized transaction from
+ * the legacy forms MeshJS emits (`stake_registration` / `stake_deregistration`)
+ * to the Conway certifying forms:
  *
- * There is no public API for the Conway certifying forms, so we post-process
- * every serialized transaction right where the builder produces it: we wrap the
- * builder's serializer and rewrite the legacy certificates to their Conway
- * equivalents in the serialized bytes.
+ *   `stake_registration`   -> `reg_cert`    ([7, credential, deposit])
+ *   `stake_deregistration` -> `unreg_cert`  ([8, credential, refund])
  *
- *   `stake_registration`  ->  `reg_cert`   ([7, credential, deposit])
- *   `stake_deregistration` -> `unreg_cert` ([8, credential, refund])
- *
- * The rewrite is applied both to the mock serialization used for fee estimation
- * and to the final serialization, so the fee accounts for the deposit field. The
- * balance is unaffected: MeshJS still charges/refunds `keyDeposit` for the legacy
- * cert types, which is exactly the deposit the Conway forms carry.
+ * Only the Conway forms trigger the CIP-69 `publish` script purpose; a legacy
+ * cert would leave the attached certificate redeemer extraneous and the ledger
+ * rejects the transaction. The deposit/refund written into the cert is
+ * `STAKE_ADDRESS_DEPOSIT`, matching the `keyDeposit` MeshJS already balances.
+ * Transactions without certificates are returned unchanged.
  */
 function swapCertificates(txHex: string): string {
   const tx = Serialization.Transaction.fromCbor(txHex);
@@ -92,6 +92,15 @@ function swapCertificates(txHex: string): string {
 
 const patchedSerializers = new WeakSet<object>();
 
+/**
+ * Wrap a builder's serializer so both of its serialization paths run through
+ * `swapCertificates`: the mock serialization used for fee estimation and the
+ * final serialization. MeshJS has no public API for the Conway certifying cert
+ * forms, so the swap happens right where the builder emits bytes. Applying it
+ * to the fee-estimation path as well means the fee accounts for the deposit
+ * field; the balance is unaffected because MeshJS already charges/refunds
+ * `keyDeposit` for the legacy cert types.
+ */
 function patchTxBuilderSerializer(txBuilder: MeshTxBuilder): void {
   const serializer = txBuilder.serializer;
   if (patchedSerializers.has(serializer)) return;
