@@ -15,3 +15,4 @@ export { applyAuthorization, type ScriptAuthorizer } from "./authorization";
 export * from "./vesting";
 export * from "./settings";
 export * from "./dao";
+export * from "./smart_wallet";

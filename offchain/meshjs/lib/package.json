@@ -16,10 +16,12 @@
     "test": "vitest run"
   },
   "peerDependencies": {
-    "@meshsdk/core": "^1.8.0"
+    "@meshsdk/core": "^1.8.0",
+    "@meshsdk/core-cst": "^1.8.0"
   },
   "devDependencies": {
     "@meshsdk/core": "^1.8.0",
+    "@meshsdk/core-cst": "^1.8.0",
     "typescript": "^5.5.0",
     "vitest": "^4.1.10"
   },
@@ -30,6 +32,9 @@
     "dao.vote": "159c194c38c731f22357da05d3f7ddd1078e80067222340a55789bf1",
     "settings": "2404b296676c4ab96a657c873a5bf58d01c77c6021f380a481a9a0bd",
     "settings_typed": "df77ce7f7d573025b2176af1efaa36ac27bfd324fd68be775c11c04a",
+    "smart_wallet": "257e70084169d1a05681fedef86044d68af822509d7cce27de221b29",
+    "smart_wallet.spending_limit": "add28e0fad43d71cff8e5b980c5e6bc770ced6711bb7ef8724b71ea4",
+    "smart_wallet.spending_window": "173a0953c1f4b626c673b52d260e4589f977a53bc3c39883e65979c5",
     "compiler": "aiken-v1.1.22"
   }
 }
