@@ -43,7 +43,9 @@
 //     lower bound in `d1 <= now <= d4` (§4.4, §5);
 //   - graduation: `native_quantity = Σ floor(Q × v4 / scale)` over the burned
 //     owners' whole holdings, with the validity lower bound at `d4` or later
-//     (§4.5); `quantity` must cover the holder's whole holding per name.
+//     (§4.5); `quantity` must cover the holder's whole holding per name. Both
+//     paths carry the reference token as a reference input: the burn reads the
+//     graduated asset's policy (`extra.native_policy`) from its datum (§3.3).
 //
 // Authorization (key-authorized paths only — Tx3 has no runtime key-vs-script
 // branch): the issuer signs the registration (§4.1); the sender signs the
@@ -228,10 +230,14 @@ type ScheduleStep {
 }
 
 // `extra` of the CIP-68 reference datum (§3.3): the baked schedule, mirrored
-// for wallets and indexers, plus the currently recorded value.
+// for wallets and indexers, the currently recorded value, and the graduated
+// asset's policy id. The published terms are frozen at registration and
+// preserved by every later update; the graduation's burn reads `native_policy`
+// from the referenced reference token (`issuance.ak`, `published_native_policy`).
 type BondExtra {
     schedule: List<ScheduleStep>,
     value: Int,
+    native_policy: Bytes,
 }
 
 // Inline datum of the reference token (CIP-68 `222`, §3.3). `metadata` is the
@@ -249,14 +255,16 @@ type PrincipalDatum {
 }
 
 // The core registry's node datum (§3.4), field order per
-// `onchain/lib/event_triggered/types.ak` (positional CBOR encoding).
+// `onchain/lib/event_triggered/types.ak` (positional CBOR encoding). The
+// unfracking hook uses the `empty_vkey` convention — `VerificationKey(#"")`,
+// which forbids unfracking — so its type is `Credential`, not an optional.
 type RegistryNode {
     key: Bytes,
     next: Bytes,
     minting_logic_script: Credential,
     transfer_logic_script: Credential,
     third_party_logic_script: Credential,
-    unfracking_logic: OptionalCredential,
+    unfracking_logic_script: Credential,
     global_state_cs: Bytes,
 }
 
@@ -301,8 +309,10 @@ type TransformationAction {
 // token × 1, the only two names under the governed policy. The principal
 // lands at the beneficiary's PLB-custodied address; the reference token at
 // the transformation script's stake. The initial reference datum must mirror
-// the baked schedule at par (`version: 1`, `value: scale`) — the on-chain
-// registration checks it. Withdraw-0s: ours (`RegisterAndMint`) plus the
+// the baked schedule at par (`version: 1`, `value: scale`) and publish the
+// graduated asset's policy (`extra.native_policy` = `native_policy`) — the
+// on-chain registration checks the former and every later update preserves
+// the latter. Withdraw-0s: ours (`RegisterAndMint`) plus the
 // core issuance proof. The issuer signs.
 tx register_issue(
     /// Quantity of principal tokens to mint (N >= 1; the on-chain first-batch
@@ -312,7 +322,8 @@ tx register_issue(
     /// to the frozen deployment's stance (§3.4).
     node_datum: RegistryNode,
     /// The initial reference-token datum (§3.3): the baked schedule mirrored
-    /// at par (`version: 1`, `extra.value = scale`).
+    /// at par (`version: 1`, `extra.value = scale`), with `extra.native_policy`
+    /// set to the graduated asset's policy.
     reference_datum: ReferenceDatum,
     /// The beneficiary's PLB-custodied address (PLB payment + holder stake).
     beneficiary_address: Address,
@@ -576,9 +587,11 @@ tx register_payout_key(
 // rewritten in place on the transfer path — the full dispatch chain plus the
 // transformation script's withdraw-0 time gate. The update is a pure lookup
 // of the baked constants, so a late submission jumps straight to the current
-// step. Holder-passive and permissionless: no signatures — the Signer only
-// pays fees; the reference token's stake credential (the transformation
-// script) authorizes via its withdraw-0.
+// step. The output keeps the input's `metadata`, `version` and
+// `extra.native_policy` (the published terms are frozen, §3.3) and records
+// `extra.value = lookup(schedule, now)`. Holder-passive and permissionless:
+// no signatures — the Signer only pays fees; the reference token's stake
+// credential (the transformation script) authorizes via its withdraw-0.
 tx transform(
     /// The reference token UTxO (CIP-68 `222` × 1).
     reference_ref: UtxoRef,
@@ -653,6 +666,7 @@ tx transform(
             extra: BondExtra {
                 schedule: reference_in.extra.schedule,
                 value: next_value,
+                native_policy: reference_in.extra.native_policy,
             },
         },
     }
@@ -682,7 +696,9 @@ tx transform(
 // Deadline graduation, owner path (T4, §4.5): the transfer-path spend chain
 // (PLB global `TransferAct` -> core `transfer` -> our transfer logic) plus
 // the shared burn withdraw-0s (our minting logic `Burn` + the core issuance
-// proof). Burn the principal — whole holdings per name, `quantity` covering
+// proof). The reference token rides along as a reference input — the burn
+// reads the graduated asset's policy (`extra.native_policy`) from its datum
+// (§3.3). Burn the principal — whole holdings per name, `quantity` covering
 // the holder's full holding — and mint the graduated asset under the native
 // policy at the schedule's final value (`native_quantity =
 // Σ floor(Q × v4 / scale)`, computed off-chain). The owner signs, which names
@@ -700,6 +716,9 @@ tx graduate_owner(
     wdrl_idx: Int,
     /// The instrument's RegistryNode UTxO (reference input).
     node_ref: UtxoRef,
+    /// The reference token UTxO (CIP-68 `222` × 1) — a reference input whose
+    /// datum names the graduated asset's policy (§4.5, §3.3).
+    reference_ref: UtxoRef,
     /// The burned principal quantity (the holder's whole holding, §4.5).
     quantity: Int,
     /// The graduated quantity: `Σ floor(Q × v4 / scale)` (§4.5).
@@ -715,6 +734,10 @@ tx graduate_owner(
 
     reference registry_node {
         ref: node_ref,
+    }
+
+    reference reference_token {
+        ref: reference_ref,
     }
 
     input token_in {
@@ -814,7 +837,9 @@ tx graduate_owner(
 
 // Deadline graduation, third-party path (T4, §4.5): the permissionless arm —
 // the third-party dispatch chain (PLB global `ThirdPartyAct` -> core
-// `third_party` -> our third-party logic) plus the same burn withdraw-0s. No
+// `third_party` -> our third-party logic) plus the same burn withdraw-0s. The
+// reference token rides along as a reference input — the burn reads the
+// graduated asset's policy (`extra.native_policy`) from its datum (§3.3). No
 // signature: it only works for tokens whose owner pre-committed a payout
 // payment credential to the token datum (§4.3) — the template enforces that
 // by typing the spent input's datum, and the paired ghost continuation
@@ -834,6 +859,9 @@ tx graduate_third_party(
     wdrl_idx: Int,
     /// The instrument's RegistryNode UTxO (reference input).
     node_ref: UtxoRef,
+    /// The reference token UTxO (CIP-68 `222` × 1) — a reference input whose
+    /// datum names the graduated asset's policy (§4.5, §3.3).
+    reference_ref: UtxoRef,
     /// The burned principal quantity (the holder's whole holding, §4.5).
     quantity: Int,
     /// The graduated quantity: `Σ floor(Q × v4 / scale)` (§4.5).
@@ -849,6 +877,10 @@ tx graduate_third_party(
 
     reference registry_node {
         ref: node_ref,
+    }
+
+    reference reference_token {
+        ref: reference_ref,
     }
 
     input token_in {
