@@ -281,7 +281,11 @@ export async function buildRegisterAndIssueTx(
   const refDatum: ReferenceDatum = {
     metadata: "",
     version: 1,
-    extra: { schedule: p.schedule, value: p.scale, nativePolicy: p.nativePolicy },
+    extra: {
+      schedule: p.schedule,
+      value: p.scale,
+      nativePolicy: p.nativePolicy,
+    },
   };
 
   const referenceAddress = referenceTokenAddress(
@@ -364,7 +368,10 @@ export async function buildTransferTx(p: TransferTxParams): Promise<string> {
   const networkId = networkIdOf(p.network ?? "preprod");
   const { output } = p.principalUtxo;
 
-  p.txBuilder.readOnlyTxInReference(p.nodeUtxo.input.txHash, p.nodeUtxo.input.outputIndex);
+  p.txBuilder.readOnlyTxInReference(
+    p.nodeUtxo.input.txHash,
+    p.nodeUtxo.input.outputIndex,
+  );
   applyGate(p.txBuilder, p.transfer, moveRedeemer(), networkId);
   spendPlbInput(p.txBuilder, p.principalUtxo, p.plbScript);
 
@@ -425,10 +432,17 @@ export async function buildTransformationTx(
   const nextDatum: ReferenceDatum = {
     metadata: p.metadata,
     version: 1,
-    extra: { schedule: p.schedule, value: p.nextValue, nativePolicy: p.nativePolicy },
+    extra: {
+      schedule: p.schedule,
+      value: p.nextValue,
+      nativePolicy: p.nativePolicy,
+    },
   };
 
-  p.txBuilder.readOnlyTxInReference(p.nodeUtxo.input.txHash, p.nodeUtxo.input.outputIndex);
+  p.txBuilder.readOnlyTxInReference(
+    p.nodeUtxo.input.txHash,
+    p.nodeUtxo.input.outputIndex,
+  );
   applyGate(p.txBuilder, p.transformation, updateRedeemer(), networkId);
 
   return await p.txBuilder
@@ -498,7 +512,10 @@ export async function buildGraduationTx(
     p.nativeUnit,
   );
 
-  p.txBuilder.readOnlyTxInReference(p.nodeUtxo.input.txHash, p.nodeUtxo.input.outputIndex);
+  p.txBuilder.readOnlyTxInReference(
+    p.nodeUtxo.input.txHash,
+    p.nodeUtxo.input.outputIndex,
+  );
   p.txBuilder.readOnlyTxInReference(
     p.referenceUtxo.input.txHash,
     p.referenceUtxo.input.outputIndex,

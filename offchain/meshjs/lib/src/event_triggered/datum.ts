@@ -68,9 +68,10 @@ export function referenceDatumToData(d: ReferenceDatum): Data {
 }
 
 export function principalDatumToData(d: PrincipalDatum): Data {
-  const option = d.paymentCredential === null
-    ? mConStr1([])
-    : mConStr0([credentialToData(d.paymentCredential)]);
+  const option =
+    d.paymentCredential === null
+      ? mConStr1([])
+      : mConStr0([credentialToData(d.paymentCredential)]);
   return mConStr0([option]);
 }
 
@@ -120,6 +121,11 @@ export function transformationParamsToData(p: TransformationParams): Data[] {
 
 export function nativeMintParamsToData(p: NativeMintParams): Data[] {
   return [
-    mConStr0([p.cipPolicy, p.principalName, p.scale, scheduleToData(p.schedule)]),
+    mConStr0([
+      p.cipPolicy,
+      p.principalName,
+      p.scale,
+      scheduleToData(p.schedule),
+    ]),
   ];
 }
