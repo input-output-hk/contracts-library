@@ -92,8 +92,8 @@ export type DevnetKitFactory = (trpUrl: string, faucet: Party) => DevnetKit;
 export interface DevnetStartOptions {
   /** Directory (relative to this file's dir) holding `trix.toml` + `devnet.toml`. */
   protocolRoot: string;
-  /** Builds the protocol's test-kit transactions. */
-  kit: DevnetKitFactory;
+  /** Builds the protocol's test-kit transactions; defaults to the settings kit. */
+  kit?: DevnetKitFactory;
 }
 
 /** Default kit: the settings protocol's `devnet_pay` + `devnet_deploy_authorizer`. */

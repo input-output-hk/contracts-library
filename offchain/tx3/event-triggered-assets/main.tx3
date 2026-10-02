@@ -19,22 +19,29 @@
 //     -> transfer | third_party [TransferRedeemer | ThirdPartyRedeemer]
 //     -> transfer_logic | third_party_logic (ours)
 //
-// exactly as the design figures show. Every chain leg is carried here: the
-// PLB-global, core-transfer, core-third-party and core-issuance-logic
-// withdraw-0s are declared as ref-backed policies alongside the
-// substandard's own. What remains a stand-in is only the script *material*:
-// the always-approving `plb_script` for the PLB base spend, the
-// `issuance_mint` / node-policy mint scripts, and `()` redeemer stand-ins
-// for the core-defined redeemers (the dispatcher acts, the core dispatch
-// redeemers, the core issuance proof) whose exact encoding is not pinned in
-// this repository.
+// exactly as the design figures show. Every chain leg carries the vendored
+// core's redeemer encoding: `ProgrammableLogicGlobalRedeemer` selects the
+// dispatcher arm, the core `transfer` / `third_party` redeemers carry the
+// registry-node indices, the registry mint carries `RegistryInsert`, the core
+// issuance logic carries the per-policy `MintingRegistryProof` map, and
+// `issuance_mint` the protocol-params index. The applied core scripts and the
+// bond's module scripts travel through the environment (tx3 cannot apply
+// parameters); the TEST KIT section at the bottom deploys the core with the
+// same scripts.
+//
+// Script-material convention: tx3 hashes the exact bytes it is handed as a
+// witness (`blake2b224(0x03 || bytes)`) and the Plutus evaluator CBOR-decodes
+// those bytes, so every `*_script` value is the script's single-CBOR
+// "payload" form. The off-chain helpers that compute them (the vendored e2e
+// core helpers and the library's `applyParamsToScript`) are normalized to
+// that form — see `tests/cip113.ts`.
 //
 // Every PLB input carries `BaseSpendRedeemer { params_idx, wdrl_idx }` — one
 // record per PLB input, no action arm; the path is selected by the
 // dispatcher's redeemer, never by the base redeemer (design T2 notes).
 // `params_idx` locates the protocol-params reference input; `wdrl_idx` is
 // derived from the canonical sorted withdrawal set (scripts before vkeys,
-// ascending — 09-DEVELOPING-SUBSTANDARDS §10). Both are caller-supplied.
+// ascending — 09-DEVELOPING-MODULES §10). Both are caller-supplied.
 //
 // The schedule is baked as validator constants (spec §3.5); values derived
 // from it are computed off-chain and passed as parameters:
@@ -70,19 +77,19 @@ env {
     /// The governed policy id — hash of the `issuance_mint` script
     /// parameterized by this instrument's minting-logic credential.
     cip_policy: Bytes,
-    /// The `issuance_mint` minting policy (single-CBOR flat script).
+    /// The applied `issuance_mint` minting policy (single-CBOR payload).
     cip_policy_script: Bytes,
     /// Policy id of the core registry's node-NFT policy (the registry mint
     /// handler).
     node_policy: Bytes,
-    /// The registry node-NFT minting policy (single-CBOR flat script).
+    /// The applied registry node-NFT minting policy (single-CBOR payload).
     node_policy_script: Bytes,
     /// Policy id of the graduated asset's native mint policy (§4.5).
     native_policy: Bytes,
-    /// The graduated asset's native mint policy (single-CBOR flat script).
+    /// The applied native mint policy (single-CBOR payload).
     native_mint_script: Bytes,
-    /// The PLB base spend script guarding the token UTxOs (single-CBOR flat
-    /// script); the spend redeemer is the `BaseSpendRedeemer`.
+    /// The applied PLB base spend script guarding the token UTxOs
+    /// (single-CBOR payload); the spend redeemer is the `BaseSpendRedeemer`.
     plb_script: Bytes,
     /// The protocol-params reference input every transaction carries (the
     /// design's "Protocol params").
@@ -130,6 +137,32 @@ env {
     transformation_script_ref: UtxoRef,
     /// Stake (reward) address bytes of the transformation script's withdraw-0.
     transformation_script_address: Bytes,
+    /// Script hash of the issuance (minting) logic — the credential the
+    /// registry node pins as `minting_logic_script` and the `RegistryInsert`
+    /// redeemer carries.
+    issuance_hash: Bytes,
+    /// Policy id of the core `issuance_cbor_hex_mint` (the template reference
+    /// NFT policy); TEST KIT bootstrap only.
+    cbor_hex_policy: Bytes,
+    /// The applied `issuance_cbor_hex_mint` policy script; TEST KIT only.
+    cbor_hex_script: Bytes,
+    /// UTxO holding the `IssuanceCborHex` template reference NFT (the always-
+    /// fail lock). The registry's insert proof derives the governed policy
+    /// from it, so every `register_issue` carries it as a reference input.
+    cbor_hex_ref: UtxoRef,
+    /// Policy id of the core `upgrade_multisig` config policy; TEST KIT only.
+    upgrade_multisig_policy: Bytes,
+    /// The applied `upgrade_multisig` script; TEST KIT only.
+    upgrade_multisig_script: Bytes,
+    /// UTxO carrying the applied `upgrade_multisig` script as a reference
+    /// script (its withdraw-0 runs from here); TEST KIT only.
+    upgrade_multisig_script_ref: UtxoRef,
+    /// Stake (reward) address bytes of the upgrade multisig's withdraw-0.
+    upgrade_multisig_stake_address: Bytes,
+    /// Policy id of the core `protocol_params` NFT policy; TEST KIT only.
+    params_policy: Bytes,
+    /// The applied `protocol_params` script; TEST KIT only.
+    params_script: Bytes,
 }
 
 /// The transacting key holder: the issuer (registration), the sender / token
@@ -137,36 +170,35 @@ env {
 /// submitter (transformation, third-party graduation — no signature).
 party Signer;
 
-/// The registry script address (holds the RegistryNode UTxO).
-party Registry;
-
 // ------------------------------------------------------------------- policies
 
 // The PLB global (dispatcher) withdraw-0 — the first leg of every PLB spend
-// chain; its redeemer (`TransferAct` / `ThirdPartyAct`) selects the path.
-// The core's redeemer encoding is not pinned here: stand-in unit.
+// chain; its `ProgrammableLogicGlobalRedeemer` (`TransferAct` /
+// `ThirdPartyAct`) selects the path.
 policy PlbGlobal {
     ref: plb_global_script_ref,
     hash: plb_global_script_address,
 }
 
 // The core `transfer` stake validator withdraw-0 — the dispatch's second leg
-// on the transfer path. Core-defined redeemer: stand-in unit.
+// on the transfer path. Its `CoreTransferRedeemer` carries one
+// `TokenExists { node_idx }` proof per distinct spent policy.
 policy CoreTransfer {
     ref: core_transfer_script_ref,
     hash: core_transfer_script_address,
 }
 
 // The core `third_party` stake validator withdraw-0 — the dispatch's second
-// leg on the third-party path. Core-defined redeemer: stand-in unit.
+// leg on the third-party path. Its `CoreThirdPartyRedeemer` names the
+// subject policy's registry node and the first paired continuation output.
 policy CoreThirdParty {
     ref: core_third_party_script_ref,
     hash: core_third_party_script_address,
 }
 
-// The core issuance logic withdraw-0 — proves the names policy + OutputIndex
-// on every mint/burn under the governed policy (design T0/T1, T4). Core-
-// defined redeemer: stand-in unit.
+// The core issuance logic withdraw-0 — proves the names policy and its
+// registry proof on every mint/burn under the governed policy (design T0/T1,
+// T4). Its redeemer is the `IssuanceLogicRedeemer` map (see the types below).
 policy CoreIssuanceLogic {
     ref: core_issuance_script_ref,
     hash: core_issuance_script_address,
@@ -198,6 +230,14 @@ policy ThirdPartyLogic {
 policy TransformationScript {
     ref: transformation_script_ref,
     hash: transformation_script_address,
+}
+
+// TEST KIT bootstrap only: the upgrade authority's withdraw-0. The script
+// travels as a reference script (the resolver has no ref for it before the
+// core is up, so the test publishes it between the config and params genesis).
+policy UpgradeMultisig {
+    ref: upgrade_multisig_script_ref,
+    hash: upgrade_multisig_stake_address,
 }
 
 // ---------------------------------------------------------------------- types
@@ -302,18 +342,115 @@ type TransformationAction {
     Update,
 }
 
+// ----------------------------------------------------------------- core types
+
+// `RegistryProof` (core `lib/types.ak`): a direct index into `reference_inputs`
+// proving membership (`TokenExists`) or, via a covering node,
+// non-membership (`TokenDoesNotExist`). Constructor order matters.
+type RegistryProof {
+    TokenExists {
+        node_idx: Int,
+    },
+    TokenDoesNotExist {
+        node_idx: Int,
+    },
+}
+
+// The core `registry` redeemer: `RegistryInit` mints the origin node;
+// `RegistryInsert` mints a token's node and pins the issuance credential.
+type RegistryRedeemer {
+    RegistryInit,
+    RegistryInsert {
+        key: Bytes,
+        minting_logic_script: Credential,
+    },
+}
+
+// Redeemer of the core `transfer` withdraw-0: one registry proof per distinct
+// spent policy, in ascending policy order.
+type CoreTransferRedeemer {
+    proofs: List<RegistryProof>,
+}
+
+// Redeemer of the core `programmable_logic_global` dispatcher: only the arms
+// this instrument uses (the core also has `UnfrackingAct`).
+type ProgrammableLogicGlobalRedeemer {
+    TransferAct,
+    ThirdPartyAct,
+}
+
+// Redeemer of the core `third_party` withdraw-0: the subject policy's registry
+// node index in the reference inputs, and the first output paired with the
+// processed PLB inputs.
+type CoreThirdPartyRedeemer {
+    registry_node_idx: Int,
+    outputs_start_idx: Int,
+}
+
+// Redeemer of the core `issuance_mint` policy: the protocol-params index in
+// the reference inputs.
+type IssuanceMintRedeemer {
+    params_idx: Int,
+}
+
+// `MintingRegistryProof` (core `lib/types.ak`): `OutputIndex` points at a
+// registry node created in this transaction (first mint); `RefInput` points at
+// a referenced node (already registered). Constructor order matters.
+type MintingRegistryProof {
+    RefInput {
+        index: Int,
+    },
+    OutputIndex {
+        index: Int,
+    },
+}
+
+// The core `issuance_logic` withdraw-0 redeemer: a Plutus MAP keyed by the
+// governed policy, one proof per policy issued (minted or burned) in this
+// transaction.
+type IssuanceLogicRedeemer = Map<Bytes, MintingRegistryProof>;
+
+// --------------------------------------------------------- bootstrap types
+
+// `IssuanceCborHex` reference datum (core `lib/types.ak`): the `issuance_mint`
+// template split around the minting-logic script hash.
+type IssuanceCborHex {
+    prefix_cbor_hex: Bytes,
+    postfix_cbor_hex: Bytes,
+}
+
+// The upgrade authority's approval tree (core `lib/multisig.ak`). The test
+// bootstrap only ever deploys a single-signature tree, so the recursive cases
+// are not carried here.
+type UpgradeMultisigDatum {
+    Signature {
+        key_hash: Bytes,
+    },
+}
+
+// The core `ProtocolParams` datum (field order per `programmable_logic/params`).
+type ProtocolParamsDatum {
+    programmable_logic_global_cred: Credential,
+    issuance_logic_cred: Credential,
+    transfer_cred: Credential,
+    third_party_cred: Credential,
+    upgrade_cred: Credential,
+    pending_upgrade_cred: OptionalCredential,
+}
+
 // ------------------------------------------------------------------- register
 
 // Atomic register + first issue (T0/T1, §4.1): create the RegistryNode and
 // mint the first batch — principal × `quantity` plus the CIP-68 reference
 // token × 1, the only two names under the governed policy. The principal
 // lands at the beneficiary's PLB-custodied address; the reference token at
-// the transformation script's stake. The initial reference datum must mirror
-// the baked schedule at par (`version: 1`, `value: scale`) and publish the
-// graduated asset's policy (`extra.native_policy` = `native_policy`) — the
-// on-chain registration checks the former and every later update preserves
-// the latter. Withdraw-0s: ours (`RegisterAndMint`) plus the
-// core issuance proof. The issuer signs.
+// the transformation script's stake. The covering registry node is spent and
+// re-emitted with `next` pointing at the new node (core registry linked
+// list). The initial reference datum must mirror the baked schedule at par
+// (`version: 1`, `value: scale`) and publish the graduated asset's policy
+// (`extra.native_policy` = `native_policy`) — the on-chain registration checks
+// the former and every later update preserves the latter. Withdraw-0s: ours
+// (`RegisterAndMint`) plus the core issuance proof. The issuer signs.
 tx register_issue(
     /// Quantity of principal tokens to mint (N >= 1; the on-chain first-batch
     /// check requires exactly two names, the reference exactly 1).
@@ -329,9 +466,34 @@ tx register_issue(
     beneficiary_address: Address,
     /// The reference token's address (PLB payment + transformation stake).
     reference_address: Address,
+    /// The registry node being covered by this insert (the origin node for the
+    /// first instrument). It is spent and re-emitted with `next` = `cip_policy`.
+    covering_ref: UtxoRef,
+    /// The covering node's address (the registry script address).
+    covering_address: Address,
+    /// The covering node's continuation datum: the input's fields with
+    /// `next` = `cip_policy`.
+    covering_datum: RegistryNode,
+    /// Index of the protocol-params reference input (`issuance_mint` redeemer).
+    params_idx: Int,
+    /// Index of the new node output (`issuance_logic` `OutputIndex` proof).
+    /// The template's output layout puts the covering node first and the new
+    /// node second, so this is 1.
+    new_node_ix: Int,
 ) {
     reference protocol_params {
         ref: protocol_params_ref,
+    }
+
+    reference cbor_hex {
+        ref: cbor_hex_ref,
+    }
+
+    input covering {
+        from: covering_address,
+        ref: covering_ref,
+        datum_is: RegistryNode,
+        redeemer: RegistryRedeemer::RegistryInit {},
     }
 
     input funding {
@@ -342,12 +504,19 @@ tx register_issue(
     mint {
         amount: AnyAsset(cip_policy, principal_name, quantity) +
             AnyAsset(cip_policy, reference_name, 1),
-        redeemer: (),
+        redeemer: IssuanceMintRedeemer {
+            params_idx: params_idx,
+        },
     }
 
     mint {
         amount: AnyAsset(node_policy, cip_policy, 1),
-        redeemer: (),
+        redeemer: RegistryRedeemer::RegistryInsert {
+            key: cip_policy,
+            minting_logic_script: Credential::Script {
+                hash: issuance_hash,
+            },
+        },
     }
 
     cardano::withdrawal {
@@ -359,11 +528,21 @@ tx register_issue(
     cardano::withdrawal {
         from: CoreIssuanceLogic,
         amount: 0,
-        redeemer: (),
+        redeemer: {
+            cip_policy: MintingRegistryProof::OutputIndex {
+                index: new_node_ix,
+            },
+        },
+    }
+
+    output covering_out {
+        to: covering_address,
+        amount: covering,
+        datum: covering_datum,
     }
 
     output node_out {
-        to: Registry,
+        to: covering_address,
         amount: AnyAsset(node_policy, cip_policy, 1) + Ada(2000000),
         datum: node_datum,
     }
@@ -421,6 +600,9 @@ tx transfer(
     params_idx: Int,
     /// The chain's index in the canonical sorted withdrawal set (09 §10).
     wdrl_idx: Int,
+    /// The instrument's RegistryNode among the reference inputs (core
+    /// registry-proof index).
+    node_idx: Int,
     /// The instrument's RegistryNode UTxO (reference input).
     node_ref: UtxoRef,
     /// The recipient's PLB-custodied address.
@@ -451,13 +633,19 @@ tx transfer(
     cardano::withdrawal {
         from: PlbGlobal,
         amount: 0,
-        redeemer: (),
+        redeemer: ProgrammableLogicGlobalRedeemer::TransferAct {},
     }
 
     cardano::withdrawal {
         from: CoreTransfer,
         amount: 0,
-        redeemer: (),
+        redeemer: CoreTransferRedeemer {
+            proofs: [
+                RegistryProof::TokenExists {
+                    node_idx: node_idx,
+                },
+            ],
+        },
     }
 
     cardano::withdrawal {
@@ -506,6 +694,9 @@ tx register_payout_key(
     params_idx: Int,
     /// The chain's index in the canonical sorted withdrawal set (09 §10).
     wdrl_idx: Int,
+    /// The instrument's RegistryNode among the reference inputs (core
+    /// registry-proof index).
+    node_idx: Int,
     /// The instrument's RegistryNode UTxO (reference input).
     node_ref: UtxoRef,
     /// The owner's payout payment credential to commit (§3.2).
@@ -536,13 +727,19 @@ tx register_payout_key(
     cardano::withdrawal {
         from: PlbGlobal,
         amount: 0,
-        redeemer: (),
+        redeemer: ProgrammableLogicGlobalRedeemer::TransferAct {},
     }
 
     cardano::withdrawal {
         from: CoreTransfer,
         amount: 0,
-        redeemer: (),
+        redeemer: CoreTransferRedeemer {
+            proofs: [
+                RegistryProof::TokenExists {
+                    node_idx: node_idx,
+                },
+            ],
+        },
     }
 
     cardano::withdrawal {
@@ -602,11 +799,16 @@ tx transform(
     params_idx: Int,
     /// The chain's index in the canonical sorted withdrawal set (09 §10).
     wdrl_idx: Int,
+    /// The instrument's RegistryNode among the reference inputs (core
+    /// registry-proof index).
+    node_idx: Int,
     /// The instrument's RegistryNode UTxO (reference input).
     node_ref: UtxoRef,
-    /// The value to record: `lookup(schedule, now)`, computed off-chain from
+    /// The continuation datum: keeps the input's `metadata` and `version`,
+    /// mirrors the baked schedule and the published `native_policy`, and
+    /// records `extra.value = lookup(schedule, now)`, computed off-chain from
     /// the same validity lower bound passed as `since_slot` (§4.4).
-    next_value: Int,
+    reference_datum: ReferenceDatum,
     /// Slot of the validity lower bound; `d1 <= now <= d4` (§5).
     since_slot: Int,
 ) {
@@ -636,13 +838,19 @@ tx transform(
     cardano::withdrawal {
         from: PlbGlobal,
         amount: 0,
-        redeemer: (),
+        redeemer: ProgrammableLogicGlobalRedeemer::TransferAct {},
     }
 
     cardano::withdrawal {
         from: CoreTransfer,
         amount: 0,
-        redeemer: (),
+        redeemer: CoreTransferRedeemer {
+            proofs: [
+                RegistryProof::TokenExists {
+                    node_idx: node_idx,
+                },
+            ],
+        },
     }
 
     cardano::withdrawal {
@@ -660,15 +868,7 @@ tx transform(
     output reference_out {
         to: reference_address,
         amount: reference_in,
-        datum: ReferenceDatum {
-            metadata: reference_in.metadata,
-            version: reference_in.version,
-            extra: BondExtra {
-                schedule: reference_in.extra.schedule,
-                value: next_value,
-                native_policy: reference_in.extra.native_policy,
-            },
-        },
+        datum: reference_datum,
     }
 
     output {
@@ -714,6 +914,9 @@ tx graduate_owner(
     params_idx: Int,
     /// The chain's index in the canonical sorted withdrawal set (09 §10).
     wdrl_idx: Int,
+    /// The instrument's RegistryNode among the reference inputs (core
+    /// registry-proof index).
+    node_idx: Int,
     /// The instrument's RegistryNode UTxO (reference input).
     node_ref: UtxoRef,
     /// The reference token UTxO (CIP-68 `222` × 1) — a reference input whose
@@ -756,7 +959,9 @@ tx graduate_owner(
 
     burn {
         amount: AnyAsset(cip_policy, principal_name, quantity),
-        redeemer: (),
+        redeemer: IssuanceMintRedeemer {
+            params_idx: params_idx,
+        },
     }
 
     mint {
@@ -767,13 +972,19 @@ tx graduate_owner(
     cardano::withdrawal {
         from: PlbGlobal,
         amount: 0,
-        redeemer: (),
+        redeemer: ProgrammableLogicGlobalRedeemer::TransferAct {},
     }
 
     cardano::withdrawal {
         from: CoreTransfer,
         amount: 0,
-        redeemer: (),
+        redeemer: CoreTransferRedeemer {
+            proofs: [
+                RegistryProof::TokenExists {
+                    node_idx: node_idx,
+                },
+            ],
+        },
     }
 
     cardano::withdrawal {
@@ -791,7 +1002,11 @@ tx graduate_owner(
     cardano::withdrawal {
         from: CoreIssuanceLogic,
         amount: 0,
-        redeemer: (),
+        redeemer: {
+            cip_policy: MintingRegistryProof::RefInput {
+                index: node_idx,
+            },
+        },
     }
 
     output native_out {
@@ -857,8 +1072,15 @@ tx graduate_third_party(
     params_idx: Int,
     /// The chain's index in the canonical sorted withdrawal set (09 §10).
     wdrl_idx: Int,
+    /// The instrument's RegistryNode among the reference inputs (core
+    /// registry-proof index).
+    node_idx: Int,
     /// The instrument's RegistryNode UTxO (reference input).
     node_ref: UtxoRef,
+    /// First output paired with the processed PLB inputs (core
+    /// `ThirdPartyRedeemer`). The template emits the native payout first and
+    /// the ghost continuation second, so this is 1.
+    outputs_start_idx: Int,
     /// The reference token UTxO (CIP-68 `222` × 1) — a reference input whose
     /// datum names the graduated asset's policy (§4.5, §3.3).
     reference_ref: UtxoRef,
@@ -900,7 +1122,9 @@ tx graduate_third_party(
 
     burn {
         amount: AnyAsset(cip_policy, principal_name, quantity),
-        redeemer: (),
+        redeemer: IssuanceMintRedeemer {
+            params_idx: params_idx,
+        },
     }
 
     mint {
@@ -911,13 +1135,16 @@ tx graduate_third_party(
     cardano::withdrawal {
         from: PlbGlobal,
         amount: 0,
-        redeemer: (),
+        redeemer: ProgrammableLogicGlobalRedeemer::ThirdPartyAct {},
     }
 
     cardano::withdrawal {
         from: CoreThirdParty,
         amount: 0,
-        redeemer: (),
+        redeemer: CoreThirdPartyRedeemer {
+            registry_node_idx: node_idx,
+            outputs_start_idx: outputs_start_idx,
+        },
     }
 
     cardano::withdrawal {
@@ -935,7 +1162,11 @@ tx graduate_third_party(
     cardano::withdrawal {
         from: CoreIssuanceLogic,
         amount: 0,
-        redeemer: (),
+        redeemer: {
+            cip_policy: MintingRegistryProof::RefInput {
+                index: node_idx,
+            },
+        },
     }
 
     output native_out {
@@ -979,5 +1210,214 @@ tx graduate_third_party(
     cardano::plutus_witness {
         version: 3,
         script: plb_script,
+    }
+}
+
+// ============================================================
+// TEST KIT — CIP-113 core bootstrap only.
+//
+// Consumed exclusively by `tests/devnet.test.ts` to deploy the vendored
+// CIP-113 core on a fresh trix devnet: the one-shot registry, issuance
+// template, upgrade-config and protocol-params mints. Never used by the bond
+// lifecycle builders. Safe to delete wholesale.
+// ============================================================
+
+/// Initialize the core registry with its origin node (one-shot).
+tx core_init_registry(
+    /// The one-shot UTxO the applied registry policy is parameterized with.
+    registry_ref: UtxoRef,
+    /// The registry script address (payment = registry node policy).
+    node_address: Address,
+    /// The origin node datum: empty key, sentinel next, empty logic fields.
+    node_datum: RegistryNode,
+) {
+    input registry_seed {
+        from: Signer,
+        ref: registry_ref,
+        min_amount: Ada(2000000) + fees,
+    }
+
+    mint {
+        amount: AnyAsset(node_policy, "", 1),
+        redeemer: RegistryRedeemer::RegistryInit {},
+    }
+
+    output origin_node {
+        to: node_address,
+        amount: AnyAsset(node_policy, "", 1) + Ada(2000000),
+        datum: node_datum,
+    }
+
+    output {
+        to: Signer,
+        amount: registry_seed - Ada(2000000) - fees,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    signers {
+        Signer,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: node_policy_script,
+    }
+}
+
+/// Mint the one-shot issuance-template reference NFT, locked at the
+/// always-fail address with the `IssuanceCborHex` datum.
+tx core_init_cbor_hex(
+    /// The one-shot UTxO the applied `issuance_cbor_hex_mint` is
+    /// parameterized with.
+    cbor_ref: UtxoRef,
+    /// The always-fail script address the template NFT is locked at.
+    lock_address: Address,
+    /// The template split: prefix and postfix around the minting-logic hash.
+    cbor_datum: IssuanceCborHex,
+) {
+    input cbor_seed {
+        from: Signer,
+        ref: cbor_ref,
+        min_amount: Ada(2000000) + fees,
+    }
+
+    mint {
+        amount: AnyAsset(cbor_hex_policy, "IssuanceCborHex", 1),
+        redeemer: (),
+    }
+
+    output cbor_out {
+        to: lock_address,
+        amount: AnyAsset(cbor_hex_policy, "IssuanceCborHex", 1) + Ada(2000000),
+        datum: cbor_datum,
+    }
+
+    output {
+        to: Signer,
+        amount: cbor_seed - Ada(2000000) - fees,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    signers {
+        Signer,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: cbor_hex_script,
+    }
+}
+
+/// Mint the one-shot upgrade-multisig config NFT holding the approval tree.
+tx core_init_upgrade_config(
+    /// The one-shot UTxO the applied `upgrade_multisig` is parameterized with.
+    config_ref: UtxoRef,
+    /// The upgrade-multisig script address the config UTxO is locked at.
+    config_address: Address,
+    /// The approval tree (a single-signature tree in the test bootstrap).
+    config_datum: UpgradeMultisigDatum,
+) {
+    input config_seed {
+        from: Signer,
+        ref: config_ref,
+        min_amount: Ada(2000000) + fees,
+    }
+
+    mint {
+        amount: AnyAsset(upgrade_multisig_policy, "UpgradeMultisig", 1),
+        redeemer: (),
+    }
+
+    output config_out {
+        to: config_address,
+        amount: AnyAsset(upgrade_multisig_policy, "UpgradeMultisig", 1) +
+            Ada(2000000),
+        datum: config_datum,
+    }
+
+    output {
+        to: Signer,
+        amount: config_seed - Ada(2000000) - fees,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    signers {
+        Signer,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: upgrade_multisig_script,
+    }
+}
+
+/// Mint the one-shot protocol-params NFT with the live wiring datum. The
+/// sitting upgrade authority's withdraw-0 authorises the genesis.
+tx core_init_protocol_params(
+    /// The one-shot UTxO the applied `protocol_params` is parameterized with.
+    params_ref: UtxoRef,
+    /// The upgrade-multisig config UTxO (reference input for its withdraw-0).
+    config_ref: UtxoRef,
+    /// The protocol-params script address the NFT is locked at.
+    params_address: Address,
+    /// The live wiring: the five credentials and an empty nomination.
+    params_datum: ProtocolParamsDatum,
+) {
+    input params_seed {
+        from: Signer,
+        ref: params_ref,
+        min_amount: Ada(2000000) + fees,
+    }
+
+    reference upgrade_config {
+        ref: config_ref,
+    }
+
+    mint {
+        amount: AnyAsset(params_policy, "ProtocolParams", 1),
+        redeemer: (),
+    }
+
+    cardano::withdrawal {
+        from: UpgradeMultisig,
+        amount: 0,
+        redeemer: (),
+    }
+
+    output params_out {
+        to: params_address,
+        amount: AnyAsset(params_policy, "ProtocolParams", 1) + Ada(2000000),
+        datum: params_datum,
+    }
+
+    output {
+        to: Signer,
+        amount: params_seed - Ada(2000000) - fees,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    signers {
+        Signer,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: params_script,
     }
 }

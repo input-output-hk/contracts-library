@@ -42,15 +42,22 @@ vitest by the harness in [`devnet/utils.ts`](devnet/utils.ts).
 
 ## Running the tests
 
-**Before the tests:** build the MeshJS library the suites import, then generate
-the TypeScript client (gitignored) from each protocol directory where
-`trix.toml` lives:
+**Before the tests:** build the MeshJS library the suites import, install the
+MeshJS e2e dependencies (the event-triggered suite imports the vendored CIP-113
+core blueprint/helpers from there), then generate the TypeScript client
+(gitignored) from each protocol directory where `trix.toml` lives:
 
 ```bash
 (cd ../meshjs/lib && npm install && npm run build)
+(cd ../meshjs/e2e && npm install)
 cd offchain/tx3/<protocol-name>
 trix codegen --plugin ts-client
 ```
+
+The event-triggered suite deploys the vendored CIP-113 core itself through the
+protocol's `core_init_*` TEST KIT transactions (registry, issuance template,
+upgrade config and protocol params), then drives the real module validators:
+register + issue, transfer, transformation and both graduation paths.
 
 Then run the suite (from `offchain/tx3`):
 
