@@ -28,7 +28,6 @@
  */
 
 import {
-  applyCborEncoding,
   applyParamsToScript,
   mConStr0,
   pubKeyAddress,
@@ -104,20 +103,16 @@ export function stripCborWrappers(hex: string): string {
 }
 
 /**
- * Apply parameters and return the single-CBOR-encoded script.
- *
- * `applyParamsToScript` double-CBOR-wraps its result; MeshJS's
- * `resolveScriptHash` (and the script it attaches) expect the single-CBOR form
- * whose ledger bytes are `0x03 || flat`. Without this normalisation the
- * derived hash disagrees with the ledger (verified against the CIP-113
- * registry's `apply_hashed_parameter`).
+ * Apply parameters and return the script in `applyParamsToScript`'s
+ * (double-CBOR) form — the form MeshJS's `resolveScriptHash` expects and the
+ * one whose single-CBOR unwrap (`unwrapCborBytes`) is the ledger's script
+ * witness/reference content. This matches the settings submodule: a ledger
+ * script hash is `blake2b224(0x03 || content)`, where `content` is the
+ * CBOR-wrapped compiled code.
  */
 function applyParams(code: string, params: Data[]): PlutusScript {
   const applied = applyParamsToScript(code, params, "Mesh") as string;
-  return {
-    code: applyCborEncoding(stripCborWrappers(applied)),
-    version: plutusVersion,
-  };
+  return { code: applied, version: plutusVersion };
 }
 
 // -------------------------------------------------------------- script setup
