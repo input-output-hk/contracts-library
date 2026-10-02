@@ -452,6 +452,25 @@ export class TrixDevnet {
     return { lovelace };
   }
 
+  /**
+   * Asset quantities held at an address, keyed by unit (`"lovelace"` for ada,
+   * otherwise `policyId + assetName` hex). Empty if the address has no UTxOs.
+   */
+  async assetsOf(address: string): Promise<Record<string, bigint>> {
+    const res = await fetch(`${this.minibfUrl}/addresses/${address}`);
+    if (res.status === 404) return {};
+    if (!res.ok)
+      throw new Error(`asset query failed for ${address}: HTTP ${res.status}`);
+    const body = (await res.json()) as {
+      amount?: Array<{ unit: string; quantity: string }>;
+    };
+    const totals: Record<string, bigint> = {};
+    for (const a of body.amount ?? []) {
+      totals[a.unit] = (totals[a.unit] ?? 0n) + BigInt(a.quantity);
+    }
+    return totals;
+  }
+
   /** UTxOs currently held at an address (empty if it has none). */
   async utxosOf(address: string): Promise<DevnetUtxo[]> {
     const res = await fetch(`${this.minibfUrl}/addresses/${address}/utxos`);
