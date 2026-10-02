@@ -14,7 +14,8 @@
 
 import {
   mConStr0,
-  resolveStakeKeyHash,
+  pubKeyAddress,
+  serializeAddressObj,
   unixTimeToEnclosingSlot,
   type SlotConfig,
   type UTxO,
@@ -44,7 +45,7 @@ import {
   devnetSlotConfig,
   fundedAccount,
   makeProvider,
-  newTxBuilder,
+  newTxBuilderManualExUnits,
   signAndSubmit,
   STORE_URL,
   waitForTx,
@@ -84,23 +85,19 @@ describe.skipIf(!reachable)(
       slotConfig = await devnetSlotConfig();
     });
 
-    async function stakeHashOf(account: Account): Promise<string> {
-      return resolveStakeKeyHash(
-        (await account.wallet.getRewardAddresses())[0],
-      );
-    }
-
-    /** Register a module script's stake credential with publish consent. */
+    /**
+     * Register a module script's stake credential so its withdraw-0 reward
+     * account exists. The legacy no-deposit registration (certificate tag 0)
+     * is exempt from script consent during the Conway transitional period, so
+     * no `publish` script/redeemer is attached.
+     */
     async function registerScriptStake(
       payer: Account,
-      script: { code: string },
-      hash: string,
+      scriptHash: string,
     ): Promise<void> {
       const collateral = await collateralOf(payer);
-      const tx = await newTxBuilder(provider)
-        .registerStakeCertificate(rewardAddressOf(hash, 0))
-        .certificateScript(script.code, "V3")
-        .certificateRedeemerValue(mConStr0([]))
+      const tx = await newTxBuilderManualExUnits(provider)
+        .registerStakeCertificate(rewardAddressOf(scriptHash, 0))
         .txInCollateral(
           collateral.input.txHash,
           collateral.input.outputIndex,
@@ -136,6 +133,14 @@ describe.skipIf(!reachable)(
       return found;
     }
 
+    async function holdsAt(address: string, unit: string): Promise<bigint> {
+      const utxos = await provider.fetchAddressUTxOs(address);
+      return utxos.reduce((sum, u) => {
+        const a = u.output.amount.find((x) => x.unit === unit);
+        return sum + (a ? BigInt(a.quantity) : 0n);
+      }, 0n);
+    }
+
     async function holds(account: Account, unit: string): Promise<bigint> {
       const utxos = await account.wallet.getUtxos();
       return utxos.reduce((sum, u) => {
@@ -152,8 +157,12 @@ describe.skipIf(!reachable)(
         [20_000, 20_000, 20_000, 20_000, 20_000, 20_000, 20_000, 20_000],
       );
       const recipient = await fundedAccount(provider);
-      const accountStakeHash = await stakeHashOf(account);
-      const recipientStakeHash = await stakeHashOf(recipient);
+      // Ownership rides the PLB address's stake credential. Use the wallet's
+      // payment key hash (which `MeshWallet` always signs) rather than the
+      // separately-derived stake key, so the on-chain `extra_signatories`
+      // checks are satisfied by the same signature that funds the tx.
+      const accountStakeHash = account.keyHash;
+      const recipientStakeHash = recipient.keyHash;
 
       // ---- deploy the core -------------------------------------------------
       const deployment: Deployment = await deployCore(provider, account);
@@ -177,7 +186,7 @@ describe.skipIf(!reachable)(
         issuer: { kind: "key", hash: account.keyHash },
       });
       for (const script of bond.withdrawCredentials) {
-        await registerScriptStake(account, script, scriptHashOf(script));
+        await registerScriptStake(account, scriptHashOf(script));
       }
 
       const nodeAddress = scriptAddressOf(deployment.core.registryNodeCs, 0);
@@ -195,7 +204,7 @@ describe.skipIf(!reachable)(
       // ---- register + issue (T0/T1) ---------------------------------------
       const funding1 = await fundingOf(account);
       const registerTx = await buildRegisterAndIssue({
-        txBuilder: newTxBuilder(provider),
+        txBuilder: newTxBuilderManualExUnits(provider),
         deployment,
         bond,
         covering: deployment.refs.originNode,
@@ -227,7 +236,7 @@ describe.skipIf(!reachable)(
       // ---- transfer (T2, owner path) --------------------------------------
       const funding2 = await fundingOf(account);
       const transferTx = await buildTransfer({
-        txBuilder: newTxBuilder(provider),
+        txBuilder: newTxBuilderManualExUnits(provider),
         deployment,
         bond,
         node: bondNode,
@@ -261,7 +270,7 @@ describe.skipIf(!reachable)(
       );
       const funding3 = await fundingOf(account);
       const transformTx = await buildTransform({
-        txBuilder: newTxBuilder(provider),
+        txBuilder: newTxBuilderManualExUnits(provider),
         deployment,
         bond,
         node: bondNode,
@@ -272,23 +281,38 @@ describe.skipIf(!reachable)(
         collateral: funding3.collateral,
         changeAddress: account.address,
       });
-      await waitForTx(provider, await signAndSubmit(account, transformTx));
+      const transformHash = await signAndSubmit(account, transformTx);
+      await waitForTx(provider, transformHash);
+
+      // The transformation rewrites the reference token in place: graduation
+      // must reference the continuation, not the spent original.
+      const transformedReference = await outputHolding(
+        transformHash,
+        bond.policyId + REFERENCE,
+      );
 
       // ---- graduate (T4, owner path) --------------------------------------
       await waitUntilChainTimeMs(finalDeadline);
       const now4 = await chainNowMs();
       const nativeQuantity = (QUANTITY * finalValue) / BigInt(SCALE);
+      // `settle` binds the payout to the burned owner's *stake* credential,
+      // so the destination must be a base address staked to it (the wallet's
+      // enterprise address has no stake credential).
+      const nativeOutputAddress = serializeAddressObj(
+        pubKeyAddress(recipient.keyHash, recipient.keyHash),
+        0,
+      );
       const funding4 = await fundingOf(recipient);
       const graduateTx = await buildGraduateOwner({
-        txBuilder: newTxBuilder(provider),
+        txBuilder: newTxBuilderManualExUnits(provider),
         deployment,
         bond,
         node: bondNode,
-        referenceUtxo,
+        referenceUtxo: transformedReference,
         principalInputs: [recipientPrincipal],
         principalQuantity: QUANTITY,
         nativeQuantity,
-        nativeOutputAddress: recipient.address,
+        nativeOutputAddress,
         ownerStakeHash: recipientStakeHash,
         validFromSlot: unixTimeToEnclosingSlot(now4, slotConfig),
         funding: funding4.funding,
@@ -297,9 +321,9 @@ describe.skipIf(!reachable)(
       });
       await waitForTx(provider, await signAndSubmit(recipient, graduateTx));
 
-      expect(await holds(recipient, bond.nativePolicyId + PRINCIPAL)).toBe(
-        nativeQuantity,
-      );
+      expect(
+        await holdsAt(nativeOutputAddress, bond.nativePolicyId + PRINCIPAL),
+      ).toBe(nativeQuantity);
       expect(await holds(recipient, bond.policyId + PRINCIPAL)).toBe(0n);
     });
   },

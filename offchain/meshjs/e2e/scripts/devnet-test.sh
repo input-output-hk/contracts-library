@@ -21,6 +21,7 @@ TEST_FILES=(
   "test/vesting.e2e.test.ts"
   "test/settings.e2e.test.ts"
   "test/dao.e2e.test.ts"
+  "test/event_triggered.e2e.test.ts"
 )
 
 # Genesis overrides for the ephemeral devnet.

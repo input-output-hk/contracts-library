@@ -17,6 +17,7 @@ import {
 } from "@meshsdk/core";
 
 import {
+  applyAuthorization,
   credentialToData,
   issuanceScript,
   mintingActionToData,
@@ -35,9 +36,11 @@ import {
   type ReferenceDatum,
   type RegistryNode,
   type Schedule,
+  type ScriptAuthorizer,
 } from "@contracts-library/meshjs";
 
 import {
+  EX_UNITS,
   applyScript,
   referenceIndexOf,
   rewardAddressOf,
@@ -89,8 +92,14 @@ export function applyBond(deployment: Deployment, config: BondConfig): Bond {
   const { core } = deployment;
   const finalDeadline = config.schedule[config.schedule.length - 1].deadline;
 
-  const transfer = transferScript({ registryNodeCs: core.registryNodeCs, finalDeadline });
-  const thirdParty = thirdPartyScript({ registryNodeCs: core.registryNodeCs, finalDeadline });
+  const transfer = transferScript({
+    registryNodeCs: core.registryNodeCs,
+    finalDeadline,
+  });
+  const thirdParty = thirdPartyScript({
+    registryNodeCs: core.registryNodeCs,
+    finalDeadline,
+  });
   const transformation = transformationScript({
     referenceName: config.referenceName,
     schedule: config.schedule,
@@ -163,13 +172,10 @@ function w0(
   tb.withdrawalPlutusScriptV3()
     .withdrawal(rewardAddressOf(scriptHashOf(script), d.config.networkId), "0")
     .withdrawalScript(script.code)
-    .withdrawalRedeemerValue(redeemer as never);
+    .withdrawalRedeemerValue(redeemer as never, "Mesh", EX_UNITS);
 }
 
-function wdrlIdxOf(
-  d: Deployment,
-  scripts: PlutusScript[],
-): number {
+function wdrlIdxOf(d: Deployment, scripts: PlutusScript[]): number {
   const all: WithdrawalKey[] = scripts.map((s) => ({
     hash: scriptHashOf(s),
     isScript: true,
@@ -190,9 +196,12 @@ interface Base {
 
 async function complete(base: Base, extraRefs: UTxO[] = []): Promise<string> {
   for (const ref of extraRefs) {
-    base.txBuilder.readOnlyTxInReference(ref.input.txHash, ref.input.outputIndex);
+    base.txBuilder.readOnlyTxInReference(
+      ref.input.txHash,
+      ref.input.outputIndex,
+    );
   }
-  return await base.txBuilder
+  const tx = await base.txBuilder
     .txInCollateral(
       base.collateral.input.txHash,
       base.collateral.input.outputIndex,
@@ -202,6 +211,7 @@ async function complete(base: Base, extraRefs: UTxO[] = []): Promise<string> {
     .changeAddress(base.changeAddress)
     .selectUtxosFrom(base.funding)
     .complete();
+  return tx;
 }
 
 // ---------------------------------------------------------- register + issue
@@ -214,6 +224,8 @@ export interface RegisterAndIssueParams extends Base {
   beneficiaryAddress: string;
   referenceAddress: string;
   nodeAddress: string;
+  /** How to satisfy a script `issuer` credential (ignored for a key). */
+  authorizer?: ScriptAuthorizer;
 }
 
 export async function buildRegisterAndIssue(
@@ -221,6 +233,10 @@ export async function buildRegisterAndIssue(
 ): Promise<string> {
   const { deployment: d, bond: b } = p;
   const tb = p.txBuilder;
+
+  // Registration authority: a key issuer is declared (and signed at submit),
+  // a script issuer is invoked via withdraw-0.
+  applyAuthorization(tb, b.config.issuer, p.authorizer, d.config.networkId);
 
   const refs = sortReferenceInputs([d.refs.protocolParams, d.refs.cborHex]);
   const paramsIdx = referenceIndexOf(refs, d.refs.protocolParams);
@@ -230,6 +246,7 @@ export async function buildRegisterAndIssue(
   const newNodeIdx = 1;
 
   // Spend the covering registry node (registry spend handler, void redeemer).
+  tb.inputForEvaluation(p.covering);
   tb.spendingPlutusScriptV3()
     .txIn(
       p.covering.input.txHash,
@@ -238,18 +255,28 @@ export async function buildRegisterAndIssue(
       p.covering.output.address,
     )
     .txInInlineDatumPresent()
-    .txInRedeemerValue(mConStr0([]))
+    .txInRedeemerValue(mConStr0([]), "Mesh", EX_UNITS)
     .txInScript(d.core.registry.code);
 
   // Registry node NFT mint (RegistryInsert), then the bond's first batch.
   tb.mintPlutusScriptV3()
     .mint("1", d.core.registryNodeCs, b.policyId)
-    .mintRedeemerValue(registryInsertRedeemer(b.policyId, { kind: "script", hash: scriptHashOf(b.issuance) }))
+    .mintRedeemerValue(
+      registryInsertRedeemer(b.policyId, {
+        kind: "script",
+        hash: scriptHashOf(b.issuance),
+      }),
+      "Mesh",
+      EX_UNITS,
+    )
     .mintingScript(d.core.registry.code)
     .mintPlutusScriptV3()
     .mint(p.quantity.toString(), b.policyId, b.config.principalName)
+    .mintRedeemerValue(issuanceMintRedeemer(paramsIdx), "Mesh", EX_UNITS)
+    .mintingScript(b.issuanceMint.code)
+    .mintPlutusScriptV3()
     .mint("1", b.policyId, b.config.referenceName)
-    .mintRedeemerValue(issuanceMintRedeemer(paramsIdx))
+    .mintRedeemerValue(issuanceMintRedeemer(paramsIdx), "Mesh", EX_UNITS)
     .mintingScript(b.issuanceMint.code);
 
   // Withdraw-0s: our issuance logic (RegisterAndMint) + protocol issuance_logic
@@ -298,7 +325,10 @@ export async function buildRegisterAndIssue(
 
   tb.txOut(p.beneficiaryAddress, [
     { unit: "lovelace", quantity: MIN_ADA.toString() },
-    { unit: b.policyId + b.config.principalName, quantity: p.quantity.toString() },
+    {
+      unit: b.policyId + b.config.principalName,
+      quantity: p.quantity.toString(),
+    },
   ]);
 
   tb.txOut(p.referenceAddress, [
@@ -330,26 +360,29 @@ export async function buildTransfer(p: TransferParams): Promise<string> {
   const nodeIdx = referenceIndexOf(refs, p.node);
 
   const chain = [d.core.programmableLogicGlobal, d.core.transfer, b.transfer];
+  // The transfer's withdrawals are exactly this chain.
   const wdrlIdx = wdrlIdxOf(d, chain);
 
   for (const input of p.principalInputs) {
-    const s = tb.spendingPlutusScriptV3().txIn(
-      input.input.txHash,
-      input.input.outputIndex,
-      input.output.amount,
-      input.output.address,
-    );
-    if (input.output.plutusData !== undefined) s.txInInlineDatumPresent();
-    s.txInRedeemerValue(baseSpendRedeemer(paramsIdx, wdrlIdx)).txInScript(d.core.programmableLogicBase.code);
+    tb.inputForEvaluation(input);
+    const s = tb
+      .spendingPlutusScriptV3()
+      .txIn(
+        input.input.txHash,
+        input.input.outputIndex,
+        input.output.amount,
+        input.output.address,
+      );
+    s.txInInlineDatumPresent();
+    s.txInRedeemerValue(
+      baseSpendRedeemer(paramsIdx, wdrlIdx),
+      "Mesh",
+      EX_UNITS,
+    ).txInScript(d.core.programmableLogicBase.code);
   }
 
   w0(tb, d, d.core.programmableLogicGlobal, transferAct());
-  w0(
-    tb,
-    d,
-    d.core.transfer,
-    transferRedeemer([{ nodeIdx }]),
-  );
+  w0(tb, d, d.core.transfer, transferRedeemer([{ nodeIdx }]));
   w0(tb, d, b.transfer, moveRedeemer());
   tb.requiredSignerHash(p.senderStakeHash);
 
@@ -386,8 +419,11 @@ export async function buildTransform(p: TransformParams): Promise<string> {
     b.transfer,
     b.transformation,
   ];
+  // The PLB redeemer's `wdrl_idx` names PLG's position in the transaction's
+  // FULL withdrawal set, not just the transfer chain.
   const wdrlIdx = wdrlIdxOf(d, chain);
 
+  tb.inputForEvaluation(p.referenceUtxo);
   tb.spendingPlutusScriptV3()
     .txIn(
       p.referenceUtxo.input.txHash,
@@ -396,7 +432,7 @@ export async function buildTransform(p: TransformParams): Promise<string> {
       p.referenceUtxo.output.address,
     )
     .txInInlineDatumPresent()
-    .txInRedeemerValue(baseSpendRedeemer(paramsIdx, wdrlIdx))
+    .txInRedeemerValue(baseSpendRedeemer(paramsIdx, wdrlIdx), "Mesh", EX_UNITS)
     .txInScript(d.core.programmableLogicBase.code);
 
   w0(tb, d, d.core.programmableLogicGlobal, transferAct());
@@ -448,27 +484,41 @@ export async function buildGraduateOwner(p: GraduateParams): Promise<string> {
   const nodeIdx = referenceIndexOf(refs, p.node);
 
   const chain = [d.core.programmableLogicGlobal, d.core.transfer, b.transfer];
-  const wdrlIdx = wdrlIdxOf(d, chain);
+  // The burn's two withdraw-0s (module issuance + core issuance logic) join
+  // the transfer chain, and the PLB redeemer's `wdrl_idx` must index the
+  // full, canonically ordered withdrawal set.
+  const wdrlIdx = wdrlIdxOf(d, [...chain, b.issuance, d.core.issuanceLogic]);
 
   for (const input of p.principalInputs) {
-    const s = tb.spendingPlutusScriptV3().txIn(
-      input.input.txHash,
-      input.input.outputIndex,
-      input.output.amount,
-      input.output.address,
-    );
-    if (input.output.plutusData !== undefined) s.txInInlineDatumPresent();
-    s.txInRedeemerValue(baseSpendRedeemer(paramsIdx, wdrlIdx)).txInScript(d.core.programmableLogicBase.code);
+    tb.inputForEvaluation(input);
+    const s = tb
+      .spendingPlutusScriptV3()
+      .txIn(
+        input.input.txHash,
+        input.input.outputIndex,
+        input.output.amount,
+        input.output.address,
+      );
+    s.txInInlineDatumPresent();
+    s.txInRedeemerValue(
+      baseSpendRedeemer(paramsIdx, wdrlIdx),
+      "Mesh",
+      EX_UNITS,
+    ).txInScript(d.core.programmableLogicBase.code);
   }
 
   // Burn the principal under issuance_mint, mint the native asset.
   tb.mintPlutusScriptV3()
-    .mint("-" + p.principalQuantity.toString(), b.policyId, b.config.principalName)
-    .mintRedeemerValue(issuanceMintRedeemer(paramsIdx))
+    .mint(
+      "-" + p.principalQuantity.toString(),
+      b.policyId,
+      b.config.principalName,
+    )
+    .mintRedeemerValue(issuanceMintRedeemer(paramsIdx), "Mesh", EX_UNITS)
     .mintingScript(b.issuanceMint.code)
     .mintPlutusScriptV3()
     .mint(p.nativeQuantity.toString(), b.nativePolicyId, b.config.principalName)
-    .mintRedeemerValue(mConStr0([]))
+    .mintRedeemerValue(mConStr0([]), "Mesh", EX_UNITS)
     .mintingScript(b.nativeMint.code);
 
   w0(tb, d, d.core.programmableLogicGlobal, transferAct());
@@ -479,12 +529,17 @@ export async function buildGraduateOwner(p: GraduateParams): Promise<string> {
     tb,
     d,
     d.core.issuanceLogic,
-    issuanceLogicRedeemer([{ policy: b.policyId, index: nodeIdx }]),
+    issuanceLogicRedeemer([
+      { policy: b.policyId, index: nodeIdx, proof: "ref" },
+    ]),
   );
 
   tb.txOut(p.nativeOutputAddress, [
     { unit: "lovelace", quantity: MIN_ADA.toString() },
-    { unit: b.nativePolicyId + b.config.principalName, quantity: p.nativeQuantity.toString() },
+    {
+      unit: b.nativePolicyId + b.config.principalName,
+      quantity: p.nativeQuantity.toString(),
+    },
   ]);
   tb.requiredSignerHash(p.ownerStakeHash);
   tb.invalidBefore(p.validFromSlot);

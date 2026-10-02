@@ -2,14 +2,15 @@
  * CIP-113 core offchain helpers: parameter application, hashes, addresses and
  * the ledger's index-ordering rules.
  *
- * Framing note (verified against the registry's `apply_hashed_parameter`):
- * `applyParamsToScript` double-CBOR-wraps; MeshJS's `resolveScriptHash` and the
- * script it attaches expect the single-CBOR form whose ledger bytes are
- * `0x03 || flat`. We normalise to that so every hash/address matches the ledger.
+ * Framing note: `applyParamsToScript` double-CBOR-wraps. MeshJS takes
+ * `script.code` verbatim as the script witness/reference content, so the
+ * double-CBOR form is the one that puts the single-CBOR payload (what the
+ * Plutus evaluator decodes and the ledger hashes) on chain; `resolveScriptHash`
+ * unwraps the same way. Keep this aligned with the library's `event_triggered`
+ * builders.
  */
 
 import {
-  applyCborEncoding,
   applyParamsToScript,
   resolveScriptHash,
   scriptAddress,
@@ -38,12 +39,22 @@ export function stripCborWrappers(hex: string): string {
   return h;
 }
 
-/** Apply parameters, returning the single-CBOR (ledger-correct) script. */
-export function applyScript(code: string, params: Data[]): PlutusScript {
-  const applied = applyParamsToScript(code, params, "Mesh") as string;
-  return { code: applyCborEncoding(stripCborWrappers(applied)), version: plutusVersion };
+/** Strip a single CBOR bytestring wrapper (the double-CBOR -> single-CBOR step). */
+export function unwrapCborBytes(hex: string): string {
+  const tag = Number.parseInt(hex.slice(0, 2), 16);
+  const headerHexLen =
+    tag === 0x58 ? 4 : tag === 0x59 ? 6 : tag === 0x5a ? 10 : 0;
+  return hex.slice(headerHexLen);
 }
 
+/**
+ * Apply parameters, returning `applyParamsToScript`'s double-CBOR form —
+ * the form MeshJS expects for `script.code`.
+ */
+export function applyScript(code: string, params: Data[]): PlutusScript {
+  const applied = applyParamsToScript(code, params, "Mesh") as string;
+  return { code: applied, version: plutusVersion };
+}
 
 /** Ledger script hash (policy id / stake credential) of an applied script. */
 export function scriptHashOf(script: PlutusScript): string {
@@ -86,7 +97,10 @@ export function referenceIndexOf(sorted: UTxO[], target: UTxO): number {
       u.input.txHash === target.input.txHash &&
       u.input.outputIndex === target.input.outputIndex,
   );
-  if (i === -1) throw new Error(`reference input ${target.input.txHash}#${target.input.outputIndex} not in set`);
+  if (i === -1)
+    throw new Error(
+      `reference input ${target.input.txHash}#${target.input.outputIndex} not in set`,
+    );
   return i;
 }
 
@@ -99,7 +113,10 @@ export interface WithdrawalKey {
  * Ledger withdrawal order: every `Script` credential before every
  * `VerificationKey` credential, bytewise within each group.
  */
-export function compareWithdrawalKeys(a: WithdrawalKey, b: WithdrawalKey): number {
+export function compareWithdrawalKeys(
+  a: WithdrawalKey,
+  b: WithdrawalKey,
+): number {
   if (a.isScript !== b.isScript) return a.isScript ? -1 : 1;
   const ha = a.hash.toLowerCase();
   const hb = b.hash.toLowerCase();
@@ -107,7 +124,10 @@ export function compareWithdrawalKeys(a: WithdrawalKey, b: WithdrawalKey): numbe
 }
 
 /** Index of a withdrawal in the ledger-ordered complete withdrawal set. */
-export function withdrawalIndexOf(all: WithdrawalKey[], target: WithdrawalKey): number {
+export function withdrawalIndexOf(
+  all: WithdrawalKey[],
+  target: WithdrawalKey,
+): number {
   const sorted = [...all].sort(compareWithdrawalKeys);
   const i = sorted.findIndex(
     (w) =>
@@ -117,3 +137,11 @@ export function withdrawalIndexOf(all: WithdrawalKey[], target: WithdrawalKey): 
   if (i === -1) throw new Error(`withdrawal ${target.hash} not in the set`);
   return i;
 }
+
+/**
+ * Explicit per-redeemer execution budget for the e2e builders. Every CIP-113
+ * script here evaluates far below this (the heaviest observed is ~0.6M mem),
+ * and keeping each budget bounded keeps multi-script transactions under the
+ * 14M per-tx limit.
+ */
+export const EX_UNITS = { mem: 1_500_000, steps: 700_000_000 };

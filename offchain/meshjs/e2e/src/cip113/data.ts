@@ -3,7 +3,13 @@
  * `cip113-programmable-tokens/lib/types.ak` (constructor order matters).
  */
 
-import { mConStr, mConStr0, mConStr1, mConStr2, type Data } from "@meshsdk/core";
+import {
+  mConStr,
+  mConStr0,
+  mConStr1,
+  mConStr2,
+  type Data,
+} from "@meshsdk/core";
 
 import {
   credentialToData,
@@ -139,11 +145,21 @@ export function issuanceMintRedeemer(paramsIdx: number): Data {
 /**
  * `IssuanceLogicRedeemer = Pairs<PolicyId, MintingRegistryProof>` — a Plutus
  * MAP. `MintingRegistryProof`: RefInput { index } = 0, OutputIndex { index } = 1.
+ *
+ * `proof` selects the variant: a fresh mint's node is an OUTPUT of the same
+ * transaction (`"output"`, the default), while a burn's node is only
+ * REFERENCED (`"ref"`).
  */
 export function issuanceLogicRedeemer(
-  entries: { policy: string; index: number }[],
+  entries: { policy: string; index: number; proof?: "output" | "ref" }[],
 ): Data {
   return new Map(
-    entries.map((e) => [e.policy, mConStr1([e.index])] as [string, Data]),
+    entries.map(
+      (e) =>
+        [
+          e.policy,
+          e.proof === "ref" ? mConStr0([e.index]) : mConStr1([e.index]),
+        ] as [string, Data],
+    ),
   );
 }

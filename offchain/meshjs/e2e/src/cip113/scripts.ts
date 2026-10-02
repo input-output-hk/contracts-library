@@ -92,14 +92,20 @@ export function applyCoreScripts(cfg: CoreConfig): CoreScripts {
   ]);
   const cborHexCs = scriptHashOf(issuanceCborHexMint);
 
-  const registry = applyScript(registryCompiledCode, [outputRef(cfg.registryRef), cborHexCs]);
+  const registry = applyScript(registryCompiledCode, [
+    outputRef(cfg.registryRef),
+    cborHexCs,
+  ]);
   const registryNodeCs = scriptHashOf(registry);
 
   const programmableLogicBase = applyScript(programmableLogicBaseCompiledCode, [
     paramsPolicy,
   ]);
   const plbHash = scriptHashOf(programmableLogicBase);
-  const programmableLogicBaseCred: Credential = { kind: "script", hash: plbHash };
+  const programmableLogicBaseCred: Credential = {
+    kind: "script",
+    hash: plbHash,
+  };
 
   const delegateParams = [
     credentialToData(programmableLogicBaseCred),
@@ -121,11 +127,10 @@ export function applyCoreScripts(cfg: CoreConfig): CoreScripts {
   ]);
   const issuanceLogicHash = scriptHashOf(issuanceLogic);
 
-  const programmableLogicGlobal = applyScript(programmableLogicGlobalCompiledCode, [
-    transferHash,
-    thirdPartyHash,
-    unfrackingHash,
-  ]);
+  const programmableLogicGlobal = applyScript(
+    programmableLogicGlobalCompiledCode,
+    [transferHash, thirdPartyHash, unfrackingHash],
+  );
 
   const upgradeMultisig = applyScript(upgradeMultisigCompiledCode, [
     outputRef(cfg.upgradeConfigRef),

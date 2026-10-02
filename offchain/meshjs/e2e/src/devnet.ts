@@ -78,17 +78,40 @@ export function newTxBuilder(provider: YaciProvider): MeshTxBuilder {
     submitter: provider,
     evaluator: provider,
   });
-  // Pin the Plutus cost models the script-data hash is computed from. These are
-  // the current protocol-era constants (what every Cardano network uses), so tx
-  // building is deterministic and does not depend on the provider implementing
-  // `fetchCostModels` — YaciProvider does not, and its default-model fallback
-  // produces a script-data hash the devnet rejects.
+  pinCostModels(builder);
+  return builder;
+}
+
+/**
+ * A builder without an evaluator, for the CIP-113 real-core suite: the Yaci
+ * evaluate endpoint cannot resolve freshly-created inline-datum inputs (and
+ * the provider's additional-UTxO mapping drops datums), so those builders
+ * declare explicit per-redeemer budgets instead (`cip113/core.ts EX_UNITS`).
+ */
+export function newTxBuilderManualExUnits(
+  provider: YaciProvider,
+): MeshTxBuilder {
+  const builder = new MeshTxBuilder({
+    fetcher: provider,
+    submitter: provider,
+  });
+  pinCostModels(builder);
+  return builder;
+}
+
+/**
+ * Pin the Plutus cost models the script-data hash is computed from. These are
+ * the current protocol-era constants (what every Cardano network uses), so tx
+ * building is deterministic and does not depend on the provider implementing
+ * `fetchCostModels` — YaciProvider does not, and its default-model fallback
+ * produces a script-data hash the devnet rejects.
+ */
+function pinCostModels(builder: MeshTxBuilder): void {
   builder.setNetwork([
     DEFAULT_V1_COST_MODEL_LIST,
     DEFAULT_V2_COST_MODEL_LIST,
     DEFAULT_V3_COST_MODEL_LIST,
   ]);
-  return builder;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));

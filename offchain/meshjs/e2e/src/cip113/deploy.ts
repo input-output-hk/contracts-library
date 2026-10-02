@@ -12,13 +12,18 @@ import { registryNodeToData } from "@contracts-library/meshjs";
 import {
   collateralOf,
   makeProvider,
-  newTxBuilder,
+  newTxBuilderManualExUnits,
   signAndSubmit,
   waitForTx,
   type Account,
 } from "../devnet";
 import { issuanceMintCompiledCode } from "./blueprint";
-import { rewardAddressOf, scriptAddressOf, scriptHashOf } from "./core";
+import {
+  EX_UNITS,
+  rewardAddressOf,
+  scriptAddressOf,
+  scriptHashOf,
+} from "./core";
 import {
   issuanceCborHexToData,
   multisigSignature,
@@ -32,6 +37,13 @@ type Provider = ReturnType<typeof makeProvider>;
 
 const NETWORK_ID: 0 | 1 = 0;
 const MIN_ADA = 2_000_000n;
+/**
+ * The `IssuanceCborHex` template datum is the near-whole applied
+ * `issuance_mint` program (~2.6 KB), so its lock output must cover the
+ * ledger's coins-per-byte min-UTxO — well above `MIN_ADA`, otherwise the
+ * genesis tx is rejected with `BabbageOutputTooSmallUTxO`.
+ */
+const TEMPLATE_LOCK_ADA = 15_000_000n;
 const SENTINEL_NEXT = "ff".repeat(30);
 const EMPTY_VKEY = { kind: "key" as const, hash: "" };
 
@@ -55,7 +67,12 @@ function outRefKey(utxo: UTxO): string {
 export interface Deployment {
   config: CoreConfig;
   core: CoreScripts;
-  refs: { protocolParams: UTxO; cborHex: UTxO; originNode: UTxO; upgradeConfig: UTxO };
+  refs: {
+    protocolParams: UTxO;
+    cborHex: UTxO;
+    originNode: UTxO;
+    upgradeConfig: UTxO;
+  };
   /** Funding UTxOs left to the payer after reserving the one-shot refs. */
   funding: UTxO[];
 }
@@ -86,14 +103,34 @@ export async function deployCore(
     networkId: NETWORK_ID,
     maxInlineDatumBytes: 1024,
     alwaysFailNonce: "ab".repeat(32),
-    protocolParamsRef: { txHash: paramsRef.input.txHash, outputIndex: paramsRef.input.outputIndex },
-    registryRef: { txHash: registryRef.input.txHash, outputIndex: registryRef.input.outputIndex },
-    cborHexRef: { txHash: cborRef.input.txHash, outputIndex: cborRef.input.outputIndex },
-    upgradeConfigRef: { txHash: configRef.input.txHash, outputIndex: configRef.input.outputIndex },
+    protocolParamsRef: {
+      txHash: paramsRef.input.txHash,
+      outputIndex: paramsRef.input.outputIndex,
+    },
+    registryRef: {
+      txHash: registryRef.input.txHash,
+      outputIndex: registryRef.input.outputIndex,
+    },
+    cborHexRef: {
+      txHash: cborRef.input.txHash,
+      outputIndex: cborRef.input.outputIndex,
+    },
+    upgradeConfigRef: {
+      txHash: configRef.input.txHash,
+      outputIndex: configRef.input.outputIndex,
+    },
   };
   const core = applyCoreScripts(config);
 
-  async function complete(builder: ReturnType<typeof newTxBuilder>): Promise<string> {
+  async function complete(
+    builder: ReturnType<typeof newTxBuilderManualExUnits>,
+  ): Promise<string> {
+    // Refresh the payer's UTxOs per transaction: sequential genesis txs spend
+    // each other's change, so a list captured once would offer already-spent
+    // inputs to later transactions.
+    const selectable = (await payer.wallet.getUtxos()).filter(
+      (u) => !reserved.has(outRefKey(u)),
+    );
     const tx = await builder
       .txInCollateral(
         collateral.input.txHash,
@@ -102,24 +139,27 @@ export async function deployCore(
         collateral.output.address,
       )
       .changeAddress(payer.address)
-      .selectUtxosFrom(funding)
+      .selectUtxosFrom(selectable)
       .complete();
     const hash = await signAndSubmit(payer, tx);
     await waitForTx(provider, hash);
     return hash;
   }
 
-  async function registerScriptStake(code: string, hash: string): Promise<void> {
+  // The legacy no-deposit registration (certificate tag 0) is explicitly
+  // exempt from script consent during the Conway transitional period, so
+  // attaching the script and a `publish` redeemer would leave an extraneous
+  // redeemer. The withdraw-0 paths only need the reward account to exist.
+  async function registerScriptStake(hash: string): Promise<void> {
     await complete(
-      newTxBuilder(provider)
-        .registerStakeCertificate(rewardAddressOf(hash, NETWORK_ID))
-        .certificateScript(code, "V3")
-        .certificateRedeemerValue(mConStr0([])),
+      newTxBuilderManualExUnits(provider).registerStakeCertificate(
+        rewardAddressOf(hash, NETWORK_ID),
+      ),
     );
   }
 
-  // 1. Register every withdraw-0 credential (publish consent). The upgrade
-  //    authority must be registered before protocol-params genesis uses it.
+  // 1. Register every withdraw-0 credential. The upgrade authority must be
+  //    registered before protocol-params genesis uses it.
   for (const script of [
     core.programmableLogicGlobal,
     core.transfer,
@@ -128,16 +168,21 @@ export async function deployCore(
     core.issuanceLogic,
     core.upgradeMultisig,
   ]) {
-    await registerScriptStake(script.code, scriptHashOf(script));
+    await registerScriptStake(scriptHashOf(script));
   }
 
   // 2. Registry origin node.
   await complete(
-    newTxBuilder(provider)
-      .txIn(registryRef.input.txHash, registryRef.input.outputIndex, registryRef.output.amount, registryRef.output.address)
+    newTxBuilderManualExUnits(provider)
+      .txIn(
+        registryRef.input.txHash,
+        registryRef.input.outputIndex,
+        registryRef.output.amount,
+        registryRef.output.address,
+      )
       .mintPlutusScriptV3()
       .mint("1", core.registryNodeCs, "")
-      .mintRedeemerValue(mConStr0([]))
+      .mintRedeemerValue(mConStr0([]), "Mesh", EX_UNITS)
       .mintingScript(core.registry.code)
       .txOut(scriptAddressOf(core.registryNodeCs, NETWORK_ID), [
         lovelace(),
@@ -159,62 +204,91 @@ export async function deployCore(
   // 3. IssuanceCborHex template genesis (locked at the always-fail address).
   //    The template is invariant to the minting-logic hash value, so a
   //    placeholder split is valid for every bond under this deployment.
-  const template = issuanceTemplate(issuanceMintCompiledCode, "00".repeat(28), core.paramsPolicy);
+  const template = issuanceTemplate(
+    issuanceMintCompiledCode,
+    "00".repeat(28),
+    core.paramsPolicy,
+  );
   await complete(
-    newTxBuilder(provider)
-      .txIn(cborRef.input.txHash, cborRef.input.outputIndex, cborRef.output.amount, cborRef.output.address)
+    newTxBuilderManualExUnits(provider)
+      .txIn(
+        cborRef.input.txHash,
+        cborRef.input.outputIndex,
+        cborRef.output.amount,
+        cborRef.output.address,
+      )
       .mintPlutusScriptV3()
       .mint("1", core.cborHexCs, ISSUANCE_CBOR_HEX_NAME)
-      .mintRedeemerValue(mConStr0([]))
+      .mintRedeemerValue(mConStr0([]), "Mesh", EX_UNITS)
       .mintingScript(core.issuanceCborHexMint.code)
       .txOut(scriptAddressOf(core.alwaysFailHash, NETWORK_ID), [
-        lovelace(),
+        lovelace(TEMPLATE_LOCK_ADA),
         asset(core.cborHexCs + ISSUANCE_CBOR_HEX_NAME, "1"),
       ])
-      .txOutInlineDatumValue(issuanceCborHexToData(template.prefix, template.postfix)),
+      .txOutInlineDatumValue(
+        issuanceCborHexToData(template.prefix, template.postfix),
+      ),
   );
 
   // 4. Upgrade-multisig config genesis: one-shot config NFT + approval tree
   //    held in a config UTxO at the upgrade authority's own address.
   await complete(
-    newTxBuilder(provider)
-      .txIn(configRef.input.txHash, configRef.input.outputIndex, configRef.output.amount, configRef.output.address)
+    newTxBuilderManualExUnits(provider)
+      .txIn(
+        configRef.input.txHash,
+        configRef.input.outputIndex,
+        configRef.output.amount,
+        configRef.output.address,
+      )
       .mintPlutusScriptV3()
       .mint("1", core.upgradeMultisigHash, UPGRADE_MULTISIG_NAME)
-      .mintRedeemerValue(mConStr0([]))
+      .mintRedeemerValue(mConStr0([]), "Mesh", EX_UNITS)
       .mintingScript(core.upgradeMultisig.code)
       .txOut(scriptAddressOf(core.upgradeMultisigHash, NETWORK_ID), [
         lovelace(),
         asset(core.upgradeMultisigHash + UPGRADE_MULTISIG_NAME, "1"),
       ])
-      .txOutInlineDatumValue(
-        multisigToData(multisigSignature(payer.keyHash)),
-      ),
+      .txOutInlineDatumValue(multisigToData(multisigSignature(payer.keyHash))),
   );
 
   const upgradeConfig = await firstUtxoAt(provider, core.upgradeMultisigHash);
 
   // 5. Protocol-params genesis: the upgrade authority's withdraw-0 (satisfying
   //    its config tree) authorises the genesis; the config UTxO is referenced.
+  //    The tree is a single `Signature(payer)` leaf, so the payer is declared
+  //    as a required signer — without it the withdraw-0 sees an empty
+  //    signatory set (and the evaluated tx is rejected before submission).
   await complete(
-    newTxBuilder(provider)
-      .txIn(paramsRef.input.txHash, paramsRef.input.outputIndex, paramsRef.output.amount, paramsRef.output.address)
-      .readOnlyTxInReference(upgradeConfig.input.txHash, upgradeConfig.input.outputIndex)
+    newTxBuilderManualExUnits(provider)
+      .txIn(
+        paramsRef.input.txHash,
+        paramsRef.input.outputIndex,
+        paramsRef.output.amount,
+        paramsRef.output.address,
+      )
+      .readOnlyTxInReference(
+        upgradeConfig.input.txHash,
+        upgradeConfig.input.outputIndex,
+      )
       .mintPlutusScriptV3()
       .mint("1", core.paramsPolicy, PROTOCOL_PARAMS_NAME)
-      .mintRedeemerValue(mConStr0([]))
+      .mintRedeemerValue(mConStr0([]), "Mesh", EX_UNITS)
       .mintingScript(core.protocolParams.code)
       .withdrawalPlutusScriptV3()
       .withdrawal(rewardAddressOf(core.upgradeMultisigHash, NETWORK_ID), "0")
       .withdrawalScript(core.upgradeMultisig.code)
-      .withdrawalRedeemerValue(mConStr0([]))
+      .withdrawalRedeemerValue(mConStr0([]), "Mesh", EX_UNITS)
+      .requiredSignerHash(payer.keyHash)
       .txOut(scriptAddressOf(core.paramsPolicy, NETWORK_ID), [
         lovelace(),
         asset(core.paramsPolicy + PROTOCOL_PARAMS_NAME, "1"),
       ])
       .txOutInlineDatumValue(
         protocolParamsToData({
-          programmableLogicGlobalCred: { kind: "script", hash: core.programmableLogicGlobalHash },
+          programmableLogicGlobalCred: {
+            kind: "script",
+            hash: core.programmableLogicGlobalHash,
+          },
           issuanceLogicCred: { kind: "script", hash: core.issuanceLogicHash },
           transferCred: { kind: "script", hash: core.transferHash },
           thirdPartyCred: { kind: "script", hash: core.thirdPartyHash },
@@ -238,7 +312,10 @@ export async function deployCore(
   };
 }
 
-async function firstUtxoAt(provider: Provider, paymentHash: string): Promise<UTxO> {
+async function firstUtxoAt(
+  provider: Provider,
+  paymentHash: string,
+): Promise<UTxO> {
   const address = scriptAddressOf(paymentHash, NETWORK_ID);
   for (let i = 0; i < 30; i++) {
     const utxos = await provider.fetchAddressUTxOs(address);
