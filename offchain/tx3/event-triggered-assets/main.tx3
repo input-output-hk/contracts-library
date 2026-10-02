@@ -802,8 +802,8 @@ tx graduate_owner(
 
     output {
         to: Signer,
-        amount: token_in - AnyAsset(cip_policy, principal_name, quantity) +
-            gas - fees,
+        amount: token_in - AnyAsset(cip_policy, principal_name, quantity) -
+            Ada(2000000) + gas - fees,
     }
 
     validity {
@@ -895,7 +895,7 @@ tx graduate_third_party(
 
     input gas {
         from: Signer,
-        min_amount: fees,
+        min_amount: Ada(2000000) + fees,
     }
 
     burn {
@@ -954,7 +954,7 @@ tx graduate_third_party(
 
     output {
         to: Signer,
-        amount: gas - fees,
+        amount: gas - Ada(2000000) - fees,
     }
 
     validity {

@@ -42,10 +42,12 @@ vitest by the harness in [`devnet/utils.ts`](devnet/utils.ts).
 
 ## Running the tests
 
-**Before the tests:** generate the TypeScript client (gitignored) from the
-protocol directory where `trix.toml` lives:
+**Before the tests:** build the MeshJS library the suites import, then generate
+the TypeScript client (gitignored) from each protocol directory where
+`trix.toml` lives:
 
 ```bash
+(cd ../meshjs/lib && npm install && npm run build)
 cd offchain/tx3/<protocol-name>
 trix codegen --plugin ts-client
 ```
@@ -53,7 +55,7 @@ trix codegen --plugin ts-client
 Then run the suite (from `offchain/tx3`):
 
 ```bash
-npm run test:devnet      # or: npx vitest run settings/tests/devnet.test.ts
+npm run test:devnet      # or: npx vitest run <protocol-name>/tests/devnet.test.ts
 ```
 
 A single test by name:
