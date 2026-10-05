@@ -11,7 +11,8 @@ under the script's own policy. Its inline datum carries the delegated
 `withdrawals` map (each script's hash → that script's own mutable state) and a
 `depositor` credential. The `admin` that creates, reconfigures, and closes the
 wallet is a **compile-time parameter**; the M-of-N `members`/`threshold` are
-read at runtime from a [settings](#prerequisite-a-settings-instance) UTxO, so
+read at runtime from a settings UTxO (the reference's config source — see
+[Prerequisite: a settings instance](#prerequisite-a-settings-instance)), so
 they can change without redeploying the wallet.
 
 > **Source of truth.** Behavior, threat model, and invariants are specified in
@@ -88,9 +89,9 @@ and ARCHITECTURE.md §3. Members are **verification key hashes** today (see
 
 ## Prerequisite: a settings instance
 
-The wallet reads its base M-of-N config from the settings protocol's opaque
-`current` datum — the settings contract governs the wallet's parameters. You
-need a live settings instance (see the
+The reference validator reads its base M-of-N config from the settings
+protocol's opaque `current` datum. Deploying it as-is therefore needs a live
+settings instance (see the
 [settings usage guide](../settings/usage.md)) whose `current` is:
 
 ```ts
@@ -120,6 +121,17 @@ Launch the settings instance with `buildLaunchTx` (see the
 require the settings UTxO. Changing members/threshold through the settings
 protocol takes effect for the next spend immediately (no snapshot). A
 malformed or missing `current` halts spending until fixed.
+
+The settings instance is the **reference configuration source, not a fixed
+part of the mechanism**. The floor itself is a pure predicate
+(`members_signed` in
+[`onchain/lib/smart_wallet/checks.ak`](../../onchain/lib/smart_wallet/checks.ak))
+over `(members, threshold, extra_signatories)`; the reference `Spend` branch
+just happens to read the first two from a settings UTxO. If you embed the
+predicates in your own validator (or fork the reference), source the config
+however you need — compile-time parameters, another on-chain config, an
+oracle — and the rest of the wallet semantics stay unchanged (see
+[`design.typ`](design.typ)).
 
 ## Deploying a wallet
 
