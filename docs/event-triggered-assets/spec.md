@@ -2,7 +2,7 @@
 
 ## 1. Summary
 
-A **tokenized bond** is a CIP-113 programmable token that records a fixed schedule of value and settles into a plain native token at maturity. One transaction **registers** the CIP-113 instance and **issues** the first tokens to the beneficiary, publishing the bond's terms as a CIP-68 reference datum (§4.1). The principal then moves **freely** — no transfer rule gates who may hold or send it at any point of its life (§4.2). At each deadline the bond's value steps up 4%: the **reference token's** datum is rewritten *in place*, holder-passively, with no signatures (§4.4). From the final deadline on, the owner **may** — never must — **graduate**: the programmable token burns and the plain native token is minted at the schedule's final value (§4.5).
+A **tokenized bond** is a CIP-113 programmable token that records a fixed schedule of value and settles into a plain native token at maturity. One transaction **registers** the CIP-113 instance and **issues** the first tokens to the beneficiary, publishing the bond's terms as a CIP-68 reference datum (§4.1). The principal then moves **freely** — no transfer rule gates who may hold or send it at any point of its life (§4.2). At each deadline the bond's recorded value steps to the schedule's next value (4% in this document's example): the **reference token's** datum is rewritten *in place*, holder-passively, with no signatures (§4.4). From the final deadline on, the owner **may** — never must — **graduate**: the programmable token burns and the plain native token is minted at the schedule's final value (§4.5).
 
 Two postures make the instrument trustworthy:
 
@@ -16,7 +16,7 @@ Two postures make the instrument trustworthy:
 | Custody | **CIP-113 programmable-logic base (PLB)** | All token UTxOs are custodied at the shared base; ownership is the token UTxO's inline stake credential, which rides the token and is what graduation binds the payout to. |
 | Transfer | **Permissive `transfer_logic`, forever** | The transfer path never gates who may hold or send; the token is DEX/venue-compatible before and after every deadline (P1, Q-RULE-3). |
 | Instrument state | **CIP-68 reference token under the same policy** | The mutable state (schedule, current value) lives in a CIP-68 `222` reference token custodied at the PLB and staked to the *transformation script*, so it can be updated in place without touching any holder's tokens (§4.4). |
-| Schedule | **Baked validator constants, fixed-point** | Fixed 4% annual over four years, precomputed off-chain: `[(d1,v1) … (d4,v4)]` with `v4 ≈ 1.1699 × scale`. No on-chain compounding: the validator only looks the current value up by time. |
+| Schedule | **Baked validator constants, fixed-point** | Deployment-supplied: any non-empty sequence of `(deadline, value)` steps, precomputed off-chain. This document's running example is a fixed 4% annual step over four years (`v4 ≈ 1.1699 × scale`). No on-chain compounding: the validator only looks the current value up by time. |
 | Registration | **Atomic register + issue** | A single `RegisterAndMint` arm validates registration authority (issuer signature), node shape and the first-batch mint in one transaction (§4.1); no window between registering and holding tokens. |
 | Transformation | **Holder-passive, permissionless** | No signatures: anyone may submit; the transformation script's withdraw-0 is the time gate. A late submission jumps straight to the current step (the new value is a pure lookup). |
 | Payout key | **Opt-in, owner-signed self-transfer** | Only the owner can write a `payment_credential` into the token's datum; optional and re-settable (§4.3). |
@@ -82,7 +82,19 @@ Every withdraw-zero stake credential must carry a `publish` handler accepting `R
 
 ### 3.5 Schedule
 
-`d1 < d2 < d3 < d4` are the four annual deadlines; `v1 … v4` the corresponding values in fixed-point `scale` units (`v4 ≈ 1.1699 × scale`, 4% compounded). The values are baked as validator constants, precomputed off-chain; the CIP-68 reference datum mirrors them for wallets and indexers, and the graduation math reads the baked `v4`.
+The schedule is a **deployment parameter**, not a fixed shape: a non-empty,
+ascending sequence of `(deadline, value)` steps, precomputed off-chain in
+fixed-point `scale` units and baked as validator constants. The step count,
+spacing and implied rate are the deployer's choice; registration only requires
+the initial recorded value `v0` to equal `scale` and the CIP-68 reference datum
+to mirror the baked sequence exactly (§4.1).
+
+Throughout this document the running example is a four-step, 4% annual schedule
+— `d1 < d2 < d3 < d4`, with values `v1 … v4` and `v4 ≈ 1.1699 × scale` (4%
+compounded) — so `d1`/`d4` below denote the first/last steps of whatever
+sequence is deployed. The CIP-68 reference datum mirrors the values for wallets
+and indexers, and the graduation math reads the baked final value (the value at
+the latest deadline).
 
 ## 4. Transactions
 

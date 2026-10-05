@@ -1,13 +1,14 @@
 //// Schedule helpers for the event-triggered assets substandard — the
 //// tokenized bond's baked-value arithmetic (spec §3.5, §4.4, §4.5).
 ////
-//// The schedule `[(d1,v1) … (d4,v4)]` is baked as validator constants,
-//// precomputed off-chain in fixed-point `scale` units. There is no on-chain
-//// compounding: the transformation is a pure time lookup
+//// The deployment-supplied schedule `[(d1,v1) … (dn,vn)]` is baked as
+//// validator constants, precomputed off-chain in fixed-point `scale` units.
+//// There is no on-chain compounding: the transformation is a pure time lookup
 //// (`lookup(schedule, now)`) and the graduation mints exactly
-//// `burned × v4 / scale` per owner. `v4`, `d4` and `d1` are derived from the
-//// baked list, so every validator that carries the schedule derives the same
-//// constants.
+//// `burned × v_final / scale` per owner. The first deadline, last deadline and
+//// final value are derived from the baked list, so every validator that
+//// carries the schedule derives the same constants. The four-step, 4% annual
+//// schedule in the docs is one example of the parameter, not a constraint.
 ////
 //// The payout is **per-owner**: whole holdings burn (§4.5), so each owner's
 //// burned quantity is exact and their share is `floor(Q_owner × v4 / scale)`.
@@ -59,9 +60,10 @@ pub fn final_deadline(schedule: List<ScheduleStep>) -> Option<Int> {
   )
 }
 
-/// The schedule's final value — `v4`, the value of the latest deadline
-/// (§3.5: `v4 ≈ 1.1699 × scale`). The graduation math reads the baked `v4`,
-/// never the reference datum's (possibly stale) recorded value.
+/// The schedule's final value — the value of the latest deadline (§3.5;
+/// `≈ 1.1699 × scale` in the example schedule). The graduation math reads the
+/// baked final value, never the reference datum's (possibly stale) recorded
+/// value.
 pub fn final_value(schedule: List<ScheduleStep>) -> Option<Int> {
   schedule
     |> list.reduce(

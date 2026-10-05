@@ -12,14 +12,17 @@
 //// registry mint/spend handlers carry the registration (§2). There is
 //// deliberately no spend or mint endpoint of our own.
 ////
-//// The schedule is **baked as validator constants** (§3.5): fixed 4% annual
-//// over four years, precomputed off-chain in fixed-point `scale` units, with
-//// `v4 ≈ 1.1699 × scale`. No on-chain compounding — the transformation script
-//// looks the current value up by time and the graduation math reads the
-//// baked `v4` (§4.4, §4.5). Because the constants must agree across the
-//// validators that bake them, each deployment parameterizes every validator
-//// from the same schedule (§4.4's transformation gate, §4.5's `d4` gate and
-//// scaled mirror all derive from it).
+//// The schedule is a **deployment parameter baked as validator constants**
+//// (§3.5): any non-empty, ascending sequence of steps in fixed-point `scale`
+//// units, precomputed off-chain. The four-step, 4% annual schedule used
+//// throughout this module's docs and the reference figures
+//// (`v4 ≈ 1.1699 × scale`) is an illustrative instance, not a constraint. No
+//// on-chain compounding — the transformation script looks the current value
+//// up by time and the graduation math reads the baked final value
+//// (§4.4, §4.5). Because the constants must agree across the validators that
+//// bake them, each deployment parameterizes every validator from the same
+//// schedule (§4.4's transformation gate, §4.5's `d4` gate and scaled mirror
+//// all derive from it).
 ////
 //// Deployer-supplied constants (asset names, authority credentials, the
 //// schedule) are frozen at parameterization, before registration. Note the
@@ -70,8 +73,9 @@ pub type TransformationAction {
   Update
 }
 
-/// One step of the baked schedule (§3.5): at `deadline`, the value steps to
-/// `value` (fixed-point `scale` units). `d1 < d2 < d3 < d4`, annual 4%.
+/// One step of the deployment-supplied schedule (§3.5): at `deadline`, the
+/// value steps to `value` (fixed-point `scale` units). The example schedule
+/// uses `d1 < d2 < d3 < d4` at 4% annual.
 pub type ScheduleStep {
   ScheduleStep { deadline: Int, value: Int }
 }
@@ -155,7 +159,7 @@ pub type MintingParams {
     principal_name: AssetName,
     /// The CIP-68 reference asset name (a `222` label, §3.3).
     reference_name: AssetName,
-    /// The baked schedule `[(d1,v1) … (d4,v4)]` (§3.5). The registration
+    /// The deployment-supplied schedule (§3.5). The registration
     /// cross-checks the reference datum against it; the last deadline drives
     /// the graduation gate.
     schedule: List<ScheduleStep>,
@@ -199,9 +203,10 @@ pub type NativeMintParams {
     /// The mirrored asset name: the native asset is minted under the same
     /// name the burn consumed, scaled by the schedule's final value.
     principal_name: AssetName,
-    /// The fixed-point scale (`v4 ≈ 1.1699 × scale`, §3.5).
+    /// The fixed-point scale (`v4 ≈ 1.1699 × scale` in the example schedule,
+    /// §3.5).
     scale: Int,
-    /// The baked schedule — only its final step's value is read.
+    /// The deployment-supplied schedule — only its final step's value is read.
     schedule: List<ScheduleStep>,
   }
 }
