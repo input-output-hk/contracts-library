@@ -18,9 +18,9 @@ pub type WalletConfig {
 pub type WalletDatum {
   /// Delegated withdraw-0 scripts that must run on every spend of this UTxO,
   /// each carrying its own mutable data (if any) in `Data`.
-  withdrawals: Pairs<ScriptHash, Data>,
+  spenders: Pairs<ScriptHash, Data>,
   /// Credential allowed to deposit funds into this UTxO (see `Deposit`).
-  depositor: Credential,
+  depositors: Pairs<ScriptHash, Data>,
 }
 
 /// Actions on a wallet UTxO (spend endpoint).

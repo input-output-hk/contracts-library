@@ -48,7 +48,7 @@ validator smart_wallet(
           wallet_datum.withdrawals,
           self.withdrawals,
         )
-      UpdateConfig { out_ix } ->
+      UpdatePermissions { out_ix } ->
         validate_config_update(admin, out_ix, own_ref, self)
       Deposit { out_ix } -> checks.validate_deposit(out_ix, own_ref, self)
       Close -> checks.validate_close(admin, own_ref, self)
