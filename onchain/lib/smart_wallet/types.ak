@@ -25,9 +25,9 @@ pub type WalletDatum {
 
 /// Actions on a wallet UTxO (spend endpoint).
 pub type SpendRedeemer {
-  /// Pay out: base M-of-N floor plus the delegated withdrawals.
+  /// Pay out: base M-of-N floor plus the delegated spenders.
   Spend
-  /// Rewrite this UTxO's config (`withdrawals` and `depositor`); `out_ix`
+  /// Rewrite this UTxO's config (`spenders` and `depositor`); `out_ix`
   /// locates the continuation.
   UpdatePermissions { out_ix: Int }
   /// Deposit funds: the `depositor` authorizes, funds are added and the datum

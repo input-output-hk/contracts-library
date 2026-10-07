@@ -23,7 +23,7 @@ test own_data_read_from_wallet_output() {
     address: from_script(a),
     value: assets.zero,
     datum: InlineDatum(
-      WalletDatum { withdrawals: [Pair(a, data)], depositor: Script(a) },
+      WalletDatum { spenders: [Pair(a, data)], depositor: Script(a) },
     ),
     reference_script: None,
   }
@@ -37,7 +37,7 @@ test own_data_missing_script() fail {
     address: from_script(a),
     value: assets.zero,
     datum: InlineDatum(
-      WalletDatum { withdrawals: [Pair(b, data)], depositor: Script(a) },
+      WalletDatum { spenders: [Pair(b, data)], depositor: Script(a) },
     ),
     reference_script: None,
   }
@@ -51,19 +51,19 @@ test own_data_missing_wallet_output() fail {
 
 // ---------------------------------------------------- own_withdrawal_removed
 
-fn wallet_output_at(withdrawals: Pairs<ScriptHash, Data>) -> Output {
+fn wallet_output_at(spenders: Pairs<ScriptHash, Data>) -> Output {
   Output {
     address: from_script(a),
     value: assets.zero,
-    datum: InlineDatum(WalletDatum { withdrawals, depositor: Script(a) }),
+    datum: InlineDatum(WalletDatum { spenders, depositor: Script(a) }),
     reference_script: None,
   }
 }
 
-fn wallet_input_at(withdrawals: Pairs<ScriptHash, Data>) -> Input {
+fn wallet_input_at(spenders: Pairs<ScriptHash, Data>) -> Input {
   Input {
     output_reference: OutputReference { transaction_id: tx_id, output_index: 0 },
-    output: wallet_output_at(withdrawals),
+    output: wallet_output_at(spenders),
   }
 }
 

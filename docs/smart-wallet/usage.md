@@ -8,7 +8,7 @@ list of **delegated withdrawal scripts** that run on every spend.
 
 The wallet UTxO is uniquely identified by a one-shot **wallet NFT** minted
 under the script's own policy. Its inline datum carries the delegated
-`withdrawals` map (each script's hash → that script's own mutable state) and a
+`spenders` map (each script's hash → that script's own mutable state) and a
 `depositor` credential. The `admin` that creates, reconfigures, and closes the
 wallet is a **compile-time parameter**; the M-of-N `members`/`threshold` are
 read at runtime from a settings UTxO (the reference's config source — see
@@ -49,21 +49,21 @@ stateDiagram-v2
     [*] --> Active: mint (admin)<br/>mints the wallet NFT
     Active --> Active: deposit (depositor)<br/>adds funds, datum preserved
     Active --> Active: spend (M-of-N + delegated scripts)<br/>pays out, keeps the NFT
-    Active --> Active: updateConfig (admin)<br/>rewrites withdrawals / depositor
+    Active --> Active: updateConfig (admin)<br/>rewrites spenders / depositor
     Active --> [*]: close (admin)<br/>burns the NFT
 ```
 
 - **mint** — the admin spends the parameterized `seed_utxo` and mints exactly
   one wallet NFT under the script's own policy, into a fresh wallet UTxO. Every
-  script in the initial `withdrawals` map must be *registered* in the same
+  script in the initial `spenders` map must be *registered* in the same
   transaction (see [withdrawal scripts](#delegated-withdrawal-scripts)).
 - **deposit** — the `depositor` adds funds. The datum is preserved and the
   continuation's value must be a superset of the input's: a deposit can never
   spend or reconfigure. Delegated scripts do **not** run.
 - **spend** — pays out. At least `threshold` of `members` must sign **and**
-  every script in `withdrawals` must be invoked as a withdraw-0 and approve.
+  every script in `spenders` must be invoked as a withdraw-0 and approve.
   A partial spend keeps the NFT in a change output at the wallet address.
-- **updateConfig** — the admin rewrites `withdrawals` and/or `depositor` in
+- **updateConfig** — the admin rewrites `spenders` and/or `depositor` in
   place: same address, a continuation value no smaller than the input's (no
   asset may decrease), inline datum with the new config.
 - **close** — the admin spends the wallet UTxO, releases the remaining funds,
@@ -78,7 +78,7 @@ stateDiagram-v2
 | **Admin** | `admin` (script parameter) | Mint, `UpdatePermissions`, `Close` |
 | **Depositor** | `depositor` (datum field) | Deposit funds only |
 | **Members** | `members`/`threshold` (settings UTxO) | Sign a `Spend` |
-| **Delegated scripts** | keys of `withdrawals` (datum field) | Run and approve on every `Spend` |
+| **Delegated scripts** | keys of `spenders` (datum field) | Run and approve on every `Spend` |
 
 `admin` and `depositor` are pluggable `Credential`s: a key (required signer) or
 a script (invoked via a withdraw-0 reward withdrawal). A multisig, DAO, or
@@ -187,7 +187,7 @@ npm install @contracts-library/meshjs @meshsdk/core
 
 Mints the NFT, spends the seed, and writes the initial datum. The builder adds
 the admin as a required signer (key credential) and registers every script in
-the initial `withdrawals` map:
+the initial `spenders` map:
 
 ```ts
 import {
@@ -196,7 +196,7 @@ import {
 } from "@contracts-library/meshjs";
 
 const datum: WalletDatum = {
-  withdrawals: [],                            // or initial delegated scripts
+  spenders: [],                            // or initial delegated scripts
   depositor: { kind: "key", hash: depositorKeyHash },
 };
 
@@ -211,7 +211,7 @@ await buildWalletMintTx({
   changeAddress: adminAddress,
   collateralUtxo,
   admin: { kind: "key", hash: adminKeyHash },
-  registerScripts: [],                        // one per script in `withdrawals`
+  registerScripts: [],                        // one per script in `spenders`
   network: "preprod",
 });
 ```
@@ -279,7 +279,7 @@ address is unrecoverable).
 
 ### 4. Update config
 
-The admin rewrites `withdrawals` and/or `depositor`. Funds cannot move: the
+The admin rewrites `spenders` and/or `depositor`. Funds cannot move: the
 builder reuses the input's value and address:
 
 ```ts
@@ -289,7 +289,7 @@ await buildWalletUpdateConfigTx({
   txBuilder,
   script,
   walletUtxo,
-  newDatum,                                   // new withdrawals and/or depositor
+  newDatum,                                   // new spenders and/or depositor
   outputIndex: 0,
   utxos: adminUtxos,
   changeAddress: adminAddress,
@@ -308,7 +308,7 @@ a script's state by removing and re-adding it).
 ### 5. Close
 
 Burns the NFT and releases the remaining funds. Every script in the wallet's
-`withdrawals` map must be unregistered so its stake deposit is refunded:
+`spenders` map must be unregistered so its stake deposit is refunded:
 
 ```ts
 import { buildWalletCloseTx } from "@contracts-library/meshjs";
@@ -346,7 +346,7 @@ Key credentials need no `authorizer` — the builder adds the required signer.
 ## Delegated withdrawal scripts
 
 A delegated script is a **withdraw-0 staking script** pinned to one wallet. Its
-entry in the datum's `withdrawals` map (`withdrawals[scriptHash]`) is that
+entry in the datum's `spenders` map (`spenders[scriptHash]`) is that
 script's own mutable state, and it participates through two handlers:
 
 - **`publish`** — runs on `RegisterCredential` / `UnregisterCredential`
@@ -384,7 +384,7 @@ const limit = spendingLimitScript({
 const limitHash = resolveScriptHash(limit.code, limit.version);
 
 const datum: WalletDatum = {
-  withdrawals: [{ scriptHash: limitHash, data: 0 }],
+  spenders: [{ scriptHash: limitHash, data: 0 }],
   depositor: { kind: "key", hash: adminKeyHash },
 };
 ```
@@ -415,7 +415,7 @@ const windowHash = resolveScriptHash(window.code, window.version);
 
 // Initial state, at mint:
 const initialDatum = {
-  withdrawals: [{ scriptHash: windowHash, data: spendingWindowStateToData({ lastSpend: 0 }) }],
+  spenders: [{ scriptHash: windowHash, data: spendingWindowStateToData({ lastSpend: 0 }) }],
   depositor: { kind: "key", hash: adminKeyHash },
 };
 
@@ -425,7 +425,7 @@ const startMs = (slot: number) =>
 const slot = unixTimeToEnclosingSlot(nowMs, slotConfig);
 const nextDatum = {
   ...initialDatum,
-  withdrawals: [{
+  spenders: [{
     scriptHash: windowHash,
     data: spendingWindowStateToData({ lastSpend: startMs(slot) }),
   }],
@@ -494,7 +494,7 @@ await client
   .launchSettings({ seed: settingsSeedRef, wallet_config: walletConfig, out_ix: 0 })
   .env(env).resolve().then((r) => r.sign()).then((s) => s.submit());
 
-// Create the wallet: spend the one-shot seed, mint the NFT (empty withdrawals)
+// Create the wallet: spend the one-shot seed, mint the NFT (empty spenders)
 await client
   .mintWallet({ seed: walletSeedRef, depositor: keyCred(depositorKeyHash), out_ix: 0 })
   .env(env).resolve().then((r) => r.sign()).then((s) => s.submit());
@@ -531,7 +531,7 @@ call site, as the reference suite does
 Tx3 v1beta0 has no block for Cardano registration/unregistration certificates,
 which the on-chain `Mint` / `UpdatePermissions` / `Close` endpoints require (CIP-69
 `publish` handlers). Consequently **every wallet produced by this reference
-carries an empty `withdrawals` map**, where the on-chain publication and
+carries an empty `spenders` map**, where the on-chain publication and
 unregistration checks are vacuously true. Spending a wallet that already
 delegates to scripts remains valid on-chain, but such a wallet cannot be
 produced or torn down through Tx3 until upstream certificate support lands
@@ -572,7 +572,7 @@ and its tests use a 1-of-1 wallet.
   `current` (or `threshold > members` count) makes every spend fail.
 - **Deposits skip the delegated scripts.** No restriction runs on a `Deposit`
   — there is no outflow to check — and the datum must be preserved *exactly*
-  (same `withdrawals` map including each script's `Data`, same `depositor`).
+  (same `spenders` map including each script's `Data`, same `depositor`).
 - **Kept scripts must be byte-identical.** `UpdatePermissions` compares each kept
   script's `Data` by CBOR serialization; changing state means removing
   (unregistering) and re-adding (re-registering) the script in the same
@@ -591,7 +591,7 @@ and its tests use a 1-of-1 wallet.
   [`offchain/meshjs/lib/src/authorization.ts`](../../offchain/meshjs/lib/src/authorization.ts)
   and ARCHITECTURE.md §3).
 - **Tx3 carries no withdrawal scripts.** Until upstream certificate support,
-  Tx3 wallets are empty-`withdrawals`, key-authorized, and their attack-path /
+  Tx3 wallets are empty-`spenders`, key-authorized, and their attack-path /
   devnet-kit transactions (`spendWithoutMemberSignatureAttack`, `devnetPay`, …)
   are test-only — never use them in production.
 

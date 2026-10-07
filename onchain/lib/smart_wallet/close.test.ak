@@ -29,7 +29,7 @@ fn wallet_input() -> Input {
   wallet_input_with([])
 }
 
-fn wallet_input_with(withdrawals: Pairs<ScriptHash, Data>) -> Input {
+fn wallet_input_with(spenders: Pairs<ScriptHash, Data>) -> Input {
   Input {
     output_reference: wallet_ref(),
     output: Output {
@@ -37,7 +37,7 @@ fn wallet_input_with(withdrawals: Pairs<ScriptHash, Data>) -> Input {
       value: assets.from_lovelace(1_000_000)
         |> assets.add(wallet_policy, wallet_token, 1),
       datum: InlineDatum(
-        WalletDatum { withdrawals, depositor: VerificationKey(admin_vkh) },
+        WalletDatum { spenders, depositor: VerificationKey(admin_vkh) },
       ),
       reference_script: None,
     },

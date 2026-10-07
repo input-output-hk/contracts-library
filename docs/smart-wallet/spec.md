@@ -35,12 +35,12 @@ envisioned for a future version:
    parameter of the spending/minting script, which makes it immutable without a
    redeployment. The intent is to express admin authorization as an *ordinary
    delegated withdrawal script* — just another entry in the wallet's
-   `withdrawals` map — so "who may reconfigure/close the wallet" is itself a
+   `spenders` map — so "who may reconfigure/close the wallet" is itself a
    pluggable, updatable restriction rather than a hardcoded special case.
 
 2. **Make withdrawal scripts shared.** Today a withdrawal script is parameterized
    by a specific `wallet` credential (its hash differs per wallet), and `Mint`
-   treats every script in the initial `withdrawals` map as newly registered. That
+   treats every script in the initial `spenders` map as newly registered. That
    prevents one script instance — and the mutable state it carries — from being
    delegated by more than one wallet. The intent is to remove the per-wallet
    parameter (scripts observe the wallet they are invoked for from the
@@ -64,7 +64,7 @@ withdraw-0 scripts, and per-script mutable state) before generalizing it.
 - **Members** (from the external settings config). The base M-of-N floor: at
   least `threshold` of `members` must sign a `Spend`. A member may itself be a
   script credential, so the floor can be a multisig, a DAO, etc.
-- **Delegated withdrawal scripts** (the `withdrawals` map). Each must run and
+- **Delegated withdrawal scripts** (the `spenders` map). Each must run and
   approve on every `Spend`; they carry the restrictions that specialize a wallet
   beyond its floor.
 
@@ -78,10 +78,10 @@ at the wallet address (payment credential `Script(wallet_hash)`), where
 
 | Field | Type | Meaning |
 |---|---|---|
-| `withdrawals` | `Pairs<ScriptHash, Data>` | The delegated withdraw-0 scripts that must run on every `Spend`, keyed by script hash. The `Data` value is that script's own mutable state. |
+| `spenders` | `Pairs<ScriptHash, Data>` | The delegated withdraw-0 scripts that must run on every `Spend`, keyed by script hash. The `Data` value is that script's own mutable state. |
 | `depositor` | `Credential` | Who may `Deposit`. |
 
-The datum is **inline** (datum hashes are rejected). The `withdrawals` map is
+The datum is **inline** (datum hashes are rejected). The `spenders` map is
 per-UTxO: different wallet UTxOs may carry different restriction sets.
 
 ### 4.2 Identity & one-shot mint
@@ -100,7 +100,7 @@ burned.
 | Redeemer | Action |
 |---|---|
 | `Spend` | Pay out: base M-of-N floor **and** every delegated script runs. |
-| `UpdatePermissions { out_ix }` | Admin rewrites `withdrawals` and/or `depositor`. |
+| `UpdatePermissions { out_ix }` | Admin rewrites `spenders` and/or `depositor`. |
 | `Deposit { out_ix }` | Depositor adds funds; config and value are otherwise preserved. |
 | `Close` | Admin closes: burn the NFT, release funds, unregister every script. |
 
@@ -128,7 +128,7 @@ via a **reward withdrawal** in the same transaction (withdraw-0 pattern).
 | **Mint** | Exactly one token under `wallet_hash` with the parameterized name, quantity `1`. |
 | **Redeemer** | `Mint { out_ix }`. |
 | **Authorization** | `admin`. |
-| **Constraints** | Every script in the initial `withdrawals` map must be **published** in this same transaction (see §6): a `RegisterCredential` certificate for its stake credential, whose `publish` handler validates the script's initial `Data`. |
+| **Constraints** | Every script in the initial `spenders` map must be **published** in this same transaction (see §6): a `RegisterCredential` certificate for its stake credential, whose `publish` handler validates the script's initial `Data`. |
 
 ### 5.2 Spend
 
@@ -137,11 +137,11 @@ via a **reward withdrawal** in the same transaction (withdraw-0 pattern).
 | **Inputs** | One wallet UTxO carrying the NFT. |
 | **Outputs** | Unconstrained by the spend branch; a partial spend keeps the NFT in a change output (the builder's responsibility; §6 scripts may require a continuation). |
 | **Redeemer** | `Spend`. |
-| **Authorization** | At least `threshold` of `members` sign (read from the settings UTxO), **and** every script in `withdrawals` is invoked as a reward withdrawal and approves. |
+| **Authorization** | At least `threshold` of `members` sign (read from the settings UTxO), **and** every script in `spenders` is invoked as a reward withdrawal and approves. |
 | **Constraints** | The wallet UTxO carries its NFT; the delegated scripts' `withdraw` handlers run and each enforces its own restriction. |
 
 The `Spend` branch asserts only its own input, the M-of-N floor, and that the
-required withdrawals ran — never total input/output counts or unrelated value.
+required spenders ran — never total input/output counts or unrelated value.
 
 ### 5.3 UpdatePermissions
 
@@ -151,7 +151,7 @@ required withdrawals ran — never total input/output counts or unrelated value.
 | **Outputs** | One continuation at `out_ix`: same address, same value (NFT preserved), inline datum with the new config. |
 | **Redeemer** | `UpdatePermissions { out_ix }`. |
 | **Authorization** | `admin`. |
-| **Constraints** | The old and new `withdrawals` maps are diffed: every script *added* must be **published** here (`RegisterCredential`); every script *removed* must be **unregistered** (`UnregisterCredential`); every script *kept* must carry unchanged `Data`. `depositor` is freely rewritten. |
+| **Constraints** | The old and new `spenders` maps are diffed: every script *added* must be **published** here (`RegisterCredential`); every script *removed* must be **unregistered** (`UnregisterCredential`); every script *kept* must carry unchanged `Data`. `depositor` is freely rewritten. |
 
 Funds cannot move: the continuation sits at the same address with value `>=` the
 input (in fact, only ADA may change, to cover fees).
@@ -164,7 +164,7 @@ input (in fact, only ADA may change, to cover fees).
 | **Outputs** | One continuation at `out_ix`: same address, same datum, value a **superset** of the input's (every asset, including lovelace and the NFT, present in `>=` quantity). |
 | **Redeemer** | `Deposit { out_ix }`. |
 | **Authorization** | `depositor` (read from the datum). |
-| **Constraints** | The datum is unchanged (`withdrawals` and `depositor` identical); the delegated scripts do **not** run (there is no outflow to restrict). |
+| **Constraints** | The datum is unchanged (`spenders` and `depositor` identical); the delegated scripts do **not** run (there is no outflow to restrict). |
 
 ### 5.5 Close
 
@@ -175,7 +175,7 @@ input (in fact, only ADA may change, to cover fees).
 | **Mint** | The NFT is burned: exactly one token under `wallet_hash`, quantity `-1`. |
 | **Redeemer** | `Close` (spend) **and** `Burn` (mint). |
 | **Authorization** | `admin`. |
-| **Constraints** | Every script in the wallet's `withdrawals` map must be **unregistered** here (`UnregisterCredential`), refunding its stake deposit. |
+| **Constraints** | Every script in the wallet's `spenders` map must be **unregistered** here (`UnregisterCredential`), refunding its stake deposit. |
 
 Closing is irreversible: the NFT is gone and the seed nonce is spent, so the
 wallet can never be relaunched at this script address.
@@ -183,7 +183,7 @@ wallet can never be relaunched at this script address.
 ## 6. Withdrawal scripts
 
 A delegated script is a **withdraw-0 staking script**. It is not known to the
-spending script beyond its hash and its entry in the `withdrawals` map; it
+spending script beyond its hash and its entry in the `spenders` map; it
 participates through two script purposes:
 
 - **`publish`** (triggered by a delegation certificate referencing the script's
@@ -200,7 +200,7 @@ participates through two script purposes:
   from the wallet *input* datum, computes the transition, and requires the wallet
   *output* datum to record the new state.
 
-The `Data` value in `withdrawals[script_hash]` is that script's mutable state:
+The `Data` value in `spenders[script_hash]` is that script's mutable state:
 stateless scripts store a trivial marker (e.g. `spending_limit`, whose `bound` is
 a compile-time parameter); stateful scripts store and advance real state (e.g.
 `spending_window`, which tracks the last spend time to limit spends per window).
@@ -211,13 +211,13 @@ a compile-time parameter); stateful scripts store and advance real state (e.g.
   wallet address; the NFT is minted once (one-shot seed) and burned only on
   `Close`.
 - **I2 — Spend authorization.** A `Spend` is valid only if the M-of-N floor is
-  met and every script in `withdrawals` is invoked and approves.
+  met and every script in `spenders` is invoked and approves.
 - **I3 — Config-only updates.** `UpdatePermissions` preserves address and value; only
-  `withdrawals` and `depositor` may change, and only by the `admin`.
-- **I4 — Published additions.** A script may appear in `withdrawals` only if it
+  `spenders` and `depositor` may change, and only by the `admin`.
+- **I4 — Published additions.** A script may appear in `spenders` only if it
   was registered (its `publish` handler validated its initial `Data`) in the same
   transaction — at `Mint` or on `UpdatePermissions`.
-- **I5 — Unregistered removals.** A script leaving `withdrawals` (on
+- **I5 — Unregistered removals.** A script leaving `spenders` (on
   `UpdatePermissions` or `Close`) must be unregistered in the same transaction.
 - **I6 — Deposit adds, never removes.** `Deposit` preserves the datum and only
   increases value; the depositor cannot spend or reconfigure.
@@ -243,7 +243,7 @@ a compile-time parameter); stateful scripts store and advance real state (e.g.
   `UnregisterCredential` unless the script is leaving a wallet (I5), so an
   attacker cannot unregister a delegated script and thereby stop the wallet from
   spending.
-- **Unvalidated script state.** A script enters `withdrawals` only after its own
+- **Unvalidated script state.** A script enters `spenders` only after its own
   `publish` handler validates its initial `Data` (I4); stateful transitions are
   enforced by the script on every spend (I7).
 

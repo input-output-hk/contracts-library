@@ -1,7 +1,7 @@
 //// Smart wallet — the withdrawal-script framework.
 ////
 //// These helpers let a delegated withdraw-0 script read its own mutable state
-//// (stored in the wallet datum's `withdrawals` map, keyed by the script's own
+//// (stored in the wallet datum's `spenders` map, keyed by the script's own
 //// hash) and decide whether it is being removed. They are used by withdrawal
 //// scripts' `publish` and `withdraw` handlers, never by the core wallet.
 
@@ -22,7 +22,7 @@ pub fn own_withdrawal_data(
   own_hash: ScriptHash,
 ) -> Data {
   expect Some(datum) = wallet_datum(self.outputs, wallet)
-  expect Some(data) = pairs.get_first(datum.withdrawals, own_hash)
+  expect Some(data) = pairs.get_first(datum.spenders, own_hash)
   data
 }
 
@@ -40,7 +40,7 @@ pub fn own_withdrawal_data_in(
     list.map(self.inputs, fn(input) { input.output }),
     wallet,
   )
-  expect Some(data) = pairs.get_first(datum.withdrawals, own_hash)
+  expect Some(data) = pairs.get_first(datum.spenders, own_hash)
   data
 }
 
@@ -58,9 +58,9 @@ pub fn own_withdrawal_removed(
     list.map(self.inputs, fn(input) { input.output }),
     wallet,
   )
-  let in_input = pairs.has_key(input_datum.withdrawals, own_hash)
+  let in_input = pairs.has_key(input_datum.spenders, own_hash)
   let in_output = when wallet_datum(self.outputs, wallet) is {
-    Some(output_datum) -> pairs.has_key(output_datum.withdrawals, own_hash)
+    Some(output_datum) -> pairs.has_key(output_datum.spenders, own_hash)
     None -> False
   }
   in_input && !in_output

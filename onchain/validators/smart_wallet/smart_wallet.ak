@@ -19,7 +19,7 @@ use smart_wallet/types.{
 
 /// Multivalidator for a smart wallet. A wallet UTxO is identified by the NFT
 /// minted under this script's own policy (one-shot, via `seed_utxo`). Its datum
-/// carries the delegated `withdrawals` map and the `depositor` credential; the
+/// carries the delegated `spenders` map and the `depositor` credential; the
 /// `admin` credential allowed to change them is a script parameter. `Spend`
 /// releases funds when at least `threshold` of `members` (read from the wallet
 /// configuration) sign **and** every delegated withdrawal script in the datum is
@@ -45,7 +45,7 @@ validator smart_wallet(
     when redeemer is {
       Spend ->
         checks.signed_m_of_n(self, settings_policy, settings_token_name) && checks.withdrawals_invoked(
-          wallet_datum.withdrawals,
+          wallet_datum.spenders,
           self.withdrawals,
         )
       UpdatePermissions { out_ix } ->
@@ -75,7 +75,7 @@ validator smart_wallet(
   }
 }
 
-/// Authorized rewrite of a wallet UTxO's config (`withdrawals` and `depositor`):
+/// Authorized rewrite of a wallet UTxO's config (`spenders` and `depositor`):
 /// the script's `admin` parameter must approve, and the continuation at `out_ix`
 /// must sit at the same address with the same value — only the config may
 /// change, so an update cannot move funds.
@@ -97,18 +97,15 @@ fn validate_config_update(
     continuation.address == own_input.output.address,
     assets.match(continuation.value, own_input.output.value, >=),
     checks.withdrawals_added_published(
-      old_datum.withdrawals,
-      new_datum.withdrawals,
+      old_datum.spenders,
+      new_datum.spenders,
       self,
     ),
     checks.withdrawals_removed_unregistered(
-      old_datum.withdrawals,
-      new_datum.withdrawals,
+      old_datum.spenders,
+      new_datum.spenders,
       self,
     ),
-    checks.withdrawals_kept_unchanged(
-      old_datum.withdrawals,
-      new_datum.withdrawals,
-    ),
+    checks.withdrawals_kept_unchanged(old_datum.spenders, new_datum.spenders),
   }
 }

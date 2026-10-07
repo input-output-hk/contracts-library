@@ -3,7 +3,7 @@
 //// A delegated withdraw-0 script that limits how often the wallet can spend: at
 //// most one spend per `window` milliseconds. Unlike `spending_limit`, whose
 //// `bound` is a fixed compile-time parameter, this script carries mutable state
-//// (the last spend time) in the wallet datum's `withdrawals` map.
+//// (the last spend time) in the wallet datum's `spenders` map.
 
 use aiken/crypto.{ScriptHash}
 use aiken/interval.{Finite}

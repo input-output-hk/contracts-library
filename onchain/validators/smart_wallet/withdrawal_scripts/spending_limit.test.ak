@@ -26,41 +26,39 @@ fn publish(certificate: Certificate, tx: Transaction) -> Bool {
   )
 }
 
-fn wallet_output(withdrawals: Pairs<ScriptHash, Data>) -> Output {
+fn wallet_output(spenders: Pairs<ScriptHash, Data>) -> Output {
   Output {
     address: from_script(b),
     value: assets.zero,
-    datum: InlineDatum(
-      WalletDatum { withdrawals, depositor: VerificationKey(a) },
-    ),
+    datum: InlineDatum(WalletDatum { spenders, depositor: VerificationKey(a) }),
     reference_script: None,
   }
 }
 
-fn wallet_input(withdrawals: Pairs<ScriptHash, Data>) -> Input {
+fn wallet_input(spenders: Pairs<ScriptHash, Data>) -> Input {
   Input {
     output_reference: OutputReference { transaction_id: tx_id, output_index: 0 },
-    output: wallet_output(withdrawals),
+    output: wallet_output(spenders),
   }
 }
 
-fn wallet_tx(withdrawals: Pairs<ScriptHash, Data>) -> Transaction {
-  Transaction { ..placeholder, outputs: [wallet_output(withdrawals)] }
+fn wallet_tx(spenders: Pairs<ScriptHash, Data>) -> Transaction {
+  Transaction { ..placeholder, outputs: [wallet_output(spenders)] }
 }
 
-fn removal_tx(withdrawals: Pairs<ScriptHash, Data>) -> Transaction {
+fn removal_tx(spenders: Pairs<ScriptHash, Data>) -> Transaction {
   Transaction {
     ..placeholder,
-    inputs: [wallet_input(withdrawals)],
+    inputs: [wallet_input(spenders)],
     outputs: [wallet_output([])],
   }
 }
 
-fn kept_tx(withdrawals: Pairs<ScriptHash, Data>) -> Transaction {
+fn kept_tx(spenders: Pairs<ScriptHash, Data>) -> Transaction {
   Transaction {
     ..placeholder,
-    inputs: [wallet_input(withdrawals)],
-    outputs: [wallet_output(withdrawals)],
+    inputs: [wallet_input(spenders)],
+    outputs: [wallet_output(spenders)],
   }
 }
 

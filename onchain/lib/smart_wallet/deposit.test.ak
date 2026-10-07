@@ -26,7 +26,7 @@ fn wallet_ref() -> OutputReference {
 }
 
 fn wallet_datum() -> WalletDatum {
-  WalletDatum { withdrawals: [], depositor: VerificationKey(depositor_vkh) }
+  WalletDatum { spenders: [], depositor: VerificationKey(depositor_vkh) }
 }
 
 fn wallet_input() -> Input {
@@ -114,7 +114,7 @@ test rejects_deposit_changing_datum() fail {
     address: from_script(wallet_policy),
     value: cont_value,
     datum: InlineDatum(
-      WalletDatum { withdrawals: [], depositor: VerificationKey(other_vkh) },
+      WalletDatum { spenders: [], depositor: VerificationKey(other_vkh) },
     ),
     reference_script: None,
   }

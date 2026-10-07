@@ -20,19 +20,19 @@ const tx_id =
 
 const window = 3_600_000
 
-fn wallet_output(withdrawals: Pairs<ScriptHash, Data>) -> Output {
+fn wallet_output(spenders: Pairs<ScriptHash, Data>) -> Output {
   Output {
     address: from_script(wallet_policy),
     value: assets.zero,
-    datum: InlineDatum(WalletDatum { withdrawals, depositor: Script(a) }),
+    datum: InlineDatum(WalletDatum { spenders, depositor: Script(a) }),
     reference_script: None,
   }
 }
 
-fn wallet_input(withdrawals: Pairs<ScriptHash, Data>) -> Input {
+fn wallet_input(spenders: Pairs<ScriptHash, Data>) -> Input {
   Input {
     output_reference: OutputReference { transaction_id: tx_id, output_index: 0 },
-    output: wallet_output(withdrawals),
+    output: wallet_output(spenders),
   }
 }
 

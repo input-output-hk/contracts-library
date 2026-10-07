@@ -46,29 +46,29 @@ pub fn members_signed(
   signed >= threshold
 }
 
-/// Delegation check: every script in `required` keys a reward withdrawal in
+/// Delegation check: every script in `spenders` keys a reward withdrawal in
 /// `withdrawals`, i.e. each delegated withdraw-0 script ran and approved. The
 /// spend asserts this conjunction so no configured restriction can be omitted.
 pub fn withdrawals_invoked(
-  required: Pairs<ScriptHash, Data>,
+  spenders: Pairs<ScriptHash, Data>,
   withdrawals: Pairs<Credential, Lovelace>,
 ) -> Bool {
   list.all(
-    pairs.keys(required),
+    pairs.keys(spenders),
     fn(script_hash) { pairs.has_key(withdrawals, Script(script_hash)) },
   )
 }
 
-/// Publication check: every script in `withdrawals` was published in this
+/// Publication check: every script in `spenders` was published in this
 /// transaction, i.e. its stake credential was registered via a
 /// `RegisterCredential` certificate, which runs the script's `publish` handler.
 /// The handler itself reads and validates its initial `Data` from the wallet
 /// output's datum, so the wallet only asserts the registration here.
 pub fn withdrawals_published(
-  withdrawals: Pairs<ScriptHash, Data>,
+  spenders: Pairs<ScriptHash, Data>,
   self: Transaction,
 ) -> Bool {
-  list.all(withdrawals, fn(pair) { registered_in_tx(pair.1st, self) })
+  list.all(spenders, fn(pair) { registered_in_tx(pair.1st, self) })
 }
 
 /// Update check: every script *added* by `new` (a hash absent from `old`) was
@@ -181,7 +181,7 @@ pub fn validate_close(
   and {
     authorization.is_authorized(admin, self.extra_signatories, self.withdrawals),
     burned,
-    withdrawals_removed_unregistered(datum.withdrawals, [], self),
+    withdrawals_removed_unregistered(datum.spenders, [], self),
   }
 }
 
@@ -217,15 +217,15 @@ pub fn validate_deposit(
 }
 
 /// Two wallet datums carry the same config: identical `depositor` and identical
-/// `withdrawals` map (same keys, same `Data`).
+/// `spenders` map (same keys, same `Data`).
 fn datum_unchanged(old: WalletDatum, new: WalletDatum) -> Bool {
   old.depositor == new.depositor && withdrawals_equal(
-    old.withdrawals,
-    new.withdrawals,
+    old.spenders,
+    new.spenders,
   )
 }
 
-/// Two `withdrawals` maps have the same keys with the same `Data`.
+/// Two `spenders` maps have the same keys with the same `Data`.
 fn withdrawals_equal(
   old: Pairs<ScriptHash, Data>,
   new: Pairs<ScriptHash, Data>,

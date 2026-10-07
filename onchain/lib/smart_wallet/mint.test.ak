@@ -37,7 +37,7 @@ fn seed_input() -> Input {
 }
 
 fn wallet_datum() -> WalletDatum {
-  WalletDatum { withdrawals: [], depositor: VerificationKey(admin_vkh) }
+  WalletDatum { spenders: [], depositor: VerificationKey(admin_vkh) }
 }
 
 fn withdrawal_certificate() -> Certificate {
@@ -132,7 +132,7 @@ test rejects_non_empty_withdrawals() fail {
     ..wallet_output(),
     datum: InlineDatum(
       WalletDatum {
-        withdrawals: [Pair(other_policy, data)],
+        spenders: [Pair(other_policy, data)],
         depositor: VerificationKey(admin_vkh),
       },
     ),
@@ -146,7 +146,7 @@ test mint_with_published_withdrawals() {
     ..wallet_output(),
     datum: InlineDatum(
       WalletDatum {
-        withdrawals: [Pair(other_policy, data)],
+        spenders: [Pair(other_policy, data)],
         depositor: VerificationKey(admin_vkh),
       },
     ),
