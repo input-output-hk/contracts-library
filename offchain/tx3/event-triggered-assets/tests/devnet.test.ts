@@ -43,7 +43,7 @@ import {
 const ADA = 1_000_000n;
 
 const PRINCIPAL = "424f4e44"; // "BOND"
-const REFERENCE = "524546323232"; // "REF222"
+const REFERENCE = "524546"; // "REF"
 const SCALE = 1000;
 const QUANTITY = 1000n;
 const SENTINEL_NEXT = "ff".repeat(30);

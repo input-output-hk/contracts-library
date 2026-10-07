@@ -51,7 +51,7 @@ fn validate_register_and_mint(
     pinned_stance(node, policy, params),
     // Registration authority (§4.1): the issuer signature.
     is_authorized(params.issuer, self.extra_signatories, self.withdrawals),
-    // First batch: principal × N (N ≥ 1) + reference `222` × 1 — the only
+    // First batch: principal × N (N ≥ 1) + reference × 1 — the only
     // two names under the policy (§4.1).
     first_batch(self, policy, params),
     // Principal outputs stake to holders, never to the transformation
@@ -165,7 +165,7 @@ fn pinned_stance(
 }
 
 /// Exactly the two names under the governed policy: the principal (N ≥ 1)
-/// and the CIP-68 reference (exactly 1) (§4.1).
+/// and the reference (exactly 1) (§4.1).
 fn first_batch(
   self: Transaction,
   policy: PolicyId,

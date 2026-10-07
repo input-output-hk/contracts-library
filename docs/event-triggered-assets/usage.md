@@ -44,7 +44,7 @@ deliberately no spend or mint endpoint of our own.
 ```mermaid
 stateDiagram-v2
     direction LR
-    [*] --> Active: register_issue (issuer)<br/>mints principal + CIP-68 reference,<br/>inserts the RegistryNode
+    [*] --> Active: register_issue (issuer)<br/>mints principal + reference,<br/>inserts the RegistryNode
     Active --> Active: transfer (anyone)<br/>ungated — no rules, no deadlines
     Active --> Active: register_payout_key (owner)<br/>pre-commits a payout credential
     Active --> Active: transform (anyone)<br/>reference value = lookup(schedule, now)
@@ -138,7 +138,7 @@ const issuance = issuanceScript({
   thirdPartyLogic: scriptHashOf(thirdParty),
   transformationScript: scriptHashOf(transformation),
   principalName: "424f4e44",            // "BOND", hex
-  referenceName: "524546323232",        // "REF222", hex
+  referenceName: "524546",        // "REF", hex
   schedule, scale: 1000,
 } satisfies MintingParams);
 
@@ -169,7 +169,7 @@ withdraw-0 stake credentials (`issuance`, `transfer`, `third_party`,
 ## Register + first issue (MeshJS)
 
 One transaction: inserts the bond's `RegistryNode` into the core registry and
-mints the first batch — principal × N plus the CIP-68 reference token × 1.
+mints the first batch — principal × N plus the reference token × 1.
 The principal lands at the beneficiary's PLB-custodied address; the reference
 token at the transformation script's stake:
 
@@ -190,7 +190,7 @@ await buildRegisterAndIssueTx({
                                         // the governed policy id
   transferLogic: transfer, thirdPartyLogic: thirdParty,
   transformationScript: transformation,
-  principalName: "424f4e44", referenceName: "524546323232",
+  principalName: "424f4e44", referenceName: "524546",
   nativePolicy, schedule, scale: 1000,
   quantity: 1000n,
   nodeAddress,
@@ -335,7 +335,7 @@ const env = {
   cbor_hex_ref: cborHexUtxoRef,
   // asset names (hex)
   principal_name: "424f4e44",
-  reference_name: "524546323232",
+  reference_name: "524546",
   // withdraw-0s: reference-script UTxO + CIP-19 reward-address BYTES (`f0`+hash)
   plb_global_script_ref, plb_global_script_address: `f0${plbGlobalHash}`,
   core_transfer_script_ref, core_transfer_script_address: `f0${transferHash}`,
@@ -478,7 +478,7 @@ Notes:
   third-party path. Absent both, the transaction is rejected — graduation is
   opt-in.
 - **Companion assets survive.** Graduation burns the principal name only;
-  the CIP-68 reference token and any unknown governed names fail closed and
+  the reference token and any unknown governed names fail closed and
   are never destroyed.
 - **Transformation is pure lookup.** The recorded value always mirrors the
   baked schedule; a late submission lands on the current step. The principal

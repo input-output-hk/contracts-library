@@ -41,7 +41,7 @@ export interface MintingParams {
   transformationScript: string;
   /** The principal asset name (hex). */
   principalName: string;
-  /** The CIP-68 reference asset name (hex). */
+  /** The reference asset name (hex). */
   referenceName: string;
   schedule: Schedule;
   scale: number;
@@ -69,7 +69,7 @@ export interface NativeMintParams {
   schedule: Schedule;
 }
 
-/** `extra` of the CIP-68 reference datum (§3.3): the schedule, the recorded
+/** `extra` of the reference datum (§3.3): the schedule, the recorded
  * value, and the graduated asset's policy id (published terms). */
 export interface BondExtra {
   schedule: Schedule;
@@ -77,7 +77,7 @@ export interface BondExtra {
   nativePolicy: string;
 }
 
-/** Inline datum of the CIP-68 reference token (§3.3). */
+/** Inline datum of the reference token (§3.3). */
 export interface ReferenceDatum {
   metadata: Data;
   version: number;

@@ -1,7 +1,7 @@
 //// Transformation script (withdraw-0) — the scheduled transformation's time
 //// gate (spec §4.4, T3).
 ////
-//// The reference token (CIP-68 `222`) is custodied at the Programmable Logic
+//// The reference token is custodied at the Programmable Logic
 //// Base with this script as its inline stake credential. When it is spent on
 //// the transfer path, `authorised_stake_cred` is this script credential and
 //// the core `transfer` validator requires this withdraw-0 — which validates

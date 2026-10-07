@@ -1612,7 +1612,7 @@
             },
             {
               "title": "reference_name",
-              "description": "The CIP-68 reference asset name (a `222` label, §3.3).",
+              "description": "The reference asset name (§3.3).",
               "$ref": "#/definitions/cardano~1assets~1AssetName"
             },
             {

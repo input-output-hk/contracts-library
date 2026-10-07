@@ -2,7 +2,7 @@
 
 ## 1. Summary
 
-A **tokenized bond** is a CIP-113 programmable token that records a fixed schedule of value and settles into a plain native token at maturity. One transaction **registers** the CIP-113 instance and **issues** the first tokens to the beneficiary, publishing the bond's terms as a CIP-68 reference datum (§4.1). The principal then moves **freely** — no transfer rule gates who may hold or send it at any point of its life (§4.2). At each deadline the bond's recorded value steps to the schedule's next value (4% in this document's example): the **reference token's** datum is rewritten *in place*, holder-passively, with no signatures (§4.4). From the final deadline on, the owner **may** — never must — **graduate**: the programmable token burns and the plain native token is minted at the schedule's final value (§4.5).
+A **tokenized bond** is a CIP-113 programmable token that records a fixed schedule of value and settles into a plain native token at maturity. One transaction **registers** the CIP-113 instance and **issues** the first tokens to the beneficiary, publishing the bond's terms in the reference token's datum (§4.1). The principal then moves **freely** — no transfer rule gates who may hold or send it at any point of its life (§4.2). At each deadline the bond's recorded value steps to the schedule's next value (4% in this document's example): the **reference token's** datum is rewritten *in place*, holder-passively, with no signatures (§4.4). From the final deadline on, the owner **may** — never must — **graduate**: the programmable token burns and the plain native token is minted at the schedule's final value (§4.5).
 
 Two postures make the instrument trustworthy:
 
@@ -15,14 +15,14 @@ Two postures make the instrument trustworthy:
 | --- | --- | --- |
 | Custody | **CIP-113 programmable-logic base (PLB)** | All token UTxOs are custodied at the shared base; ownership is the token UTxO's inline stake credential, which rides the token and is what graduation binds the payout to. |
 | Transfer | **Permissive `transfer_logic`, forever** | The transfer path never gates who may hold or send; the token is DEX/venue-compatible before and after every deadline (P1, Q-RULE-3). |
-| Instrument state | **CIP-68 reference token under the same policy** | The mutable state (schedule, current value) lives in a CIP-68 `222` reference token custodied at the PLB and staked to the *transformation script*, so it can be updated in place without touching any holder's tokens (§4.4). |
+| Instrument state | **Reference token under the same policy** | The mutable state (schedule, current value) lives in a reference token custodied at the PLB and staked to the *transformation script*, so it can be updated in place without touching any holder's tokens (§4.4). |
 | Schedule | **Baked validator constants, fixed-point** | Deployment-supplied: any non-empty sequence of `(deadline, value)` steps, precomputed off-chain. This document's running example is a fixed 4% annual step over four years (`v4 ≈ 1.1699 × scale`). No on-chain compounding: the validator only looks the current value up by time. |
 | Registration | **Atomic register + issue** | A single `RegisterAndMint` arm validates registration authority (issuer signature), node shape and the first-batch mint in one transaction (§4.1); no window between registering and holding tokens. |
 | Transformation | **Holder-passive, permissionless** | No signatures: anyone may submit; the transformation script's withdraw-0 is the time gate. A late submission jumps straight to the current step (the new value is a pure lookup). |
 | Payout key | **Opt-in, owner-signed self-transfer** | Only the owner can write a `payment_credential` into the token's datum; optional and re-settable (§4.3). |
 | Graduation | **Opt-in, owner-authorized destination, no fallback** | Two spend paths (owner-signed; permissionless third-party for opted-in tokens), one shared burn (§4.5). Absent an owner signature and a committed destination the tx is rejected (Q-GRAD-2). |
 | Graduated asset | **New native policy, burn-backed scaled mirror** | The native policy mints exactly `burned × v4 / scale`, approving only against the governed burn of the same name ("no burn CIP, no mint", scaled). Deliberately not 1:1 quantity-conserved (Q-GRAD-1). |
-| Companion assets | **Fail closed** | Graduation burns the principal asset name only; any other governed name (the CIP-68 reference token or an unknown one) survives a conversion. |
+| Companion assets | **Fail closed** | Graduation burns the principal asset name only; any other governed name (the reference token or an unknown one) survives a conversion. |
 | Third-party mechanics | **Ghost continuation, ratcheted** | The paired continuation preserves address, datum and reference script byte-for-byte; lovelace is ratcheted (`output ≥ input`). The ghost UTxO is one-time per spent UTxO and reclaimable by the owner via a transfer-path spend. |
 
 ## 2. Roles
@@ -49,15 +49,15 @@ Two postures make the instrument trustworthy:
 | --- | --- |
 | value | `cip_policy` × `N` — the principal supply, issuer-gated; two asset names under one policy (principal + reference), no per-holder state to mint against. |
 | stake credential | Inline — the owner. Moves with the token at every transfer. |
-| datum | Inline, optional — normally empty; after §4.3 optionally `{ payment_credential }`, the owner's pre-committed payout credential. Free for this purpose because the CIP-68 metadata lives on the reference token. |
+| datum | Inline, optional — normally empty; after §4.3 optionally `{ payment_credential }`, the owner's pre-committed payout credential. Free for this purpose because the metadata lives on the reference token. |
 
-### 3.3 Reference token (CIP-68 `222`)
+### 3.3 Reference token
 
 One unit under the same `cip_policy`, custodied at the PLB with the **transformation script** as inline stake credential. Inline datum:
 
 | Field | Meaning |
 | --- | --- |
-| `metadata` | `{ name, ticker, terms-url, … }` (CBOR) — CIP-68 publication for wallets and indexers. |
+| `metadata` | `{ name, ticker, terms-url, … }` (CBOR) — publication for wallets and indexers. |
 | `version` | `1`. |
 | `extra` | `{ schedule: [(d1,v1) … (d4,v4)], value: v_k, native_policy }` — the baked schedule, the current recorded value (`v0` at issue; stale values are harmless) and the graduated asset's policy id (the instrument's published terms, written at registration and preserved by every later update; the graduation's burn reads it from the referenced reference token). |
 
@@ -86,13 +86,13 @@ The schedule is a **deployment parameter**, not a fixed shape: a non-empty,
 ascending sequence of `(deadline, value)` steps, precomputed off-chain in
 fixed-point `scale` units and baked as validator constants. The step count,
 spacing and implied rate are the deployer's choice; registration only requires
-the initial recorded value `v0` to equal `scale` and the CIP-68 reference datum
+the initial recorded value `v0` to equal `scale` and the reference datum
 to mirror the baked sequence exactly (§4.1).
 
 Throughout this document the running example is a four-step, 4% annual schedule
 — `d1 < d2 < d3 < d4`, with values `v1 … v4` and `v4 ≈ 1.1699 × scale` (4%
 compounded) — so `d1`/`d4` below denote the first/last steps of whatever
-sequence is deployed. The CIP-68 reference datum mirrors the values for wallets
+sequence is deployed. The reference datum mirrors the values for wallets
 and indexers, and the graduation math reads the baked final value (the value at
 the latest deadline).
 
@@ -106,7 +106,7 @@ Each section is one complete transaction; the normative diagrams are the `design
 | --- | --- |
 | **Inputs** | Issuer funds (wallet): `min_ada` + a fee asset `f`. |
 | **Reference inputs** | Protocol params. |
-| **Mint** | `registry_node_cs`: `1` (registry mint handler). `cip_policy`: `N` (principal) `+ 1` (reference `222`) — under the `issuance_mint` policy. |
+| **Mint** | `registry_node_cs`: `1` (registry mint handler). `cip_policy`: `N` (principal) `+ 1` (reference) — under the `issuance_mint` policy. |
 | **Withdrawals** | `minting_logic` [RegisterAndMint] (0); core `issuance_logic` [names policy + OutputIndex proof] (0). |
 | **Signatures** | Issuer. |
 | **Outputs** | 1. **RegistryNode** at the registry address: `registry_node_cs` × 1 + `min_ada`, datum per §3.4. 2. **Principal tokens** at the PLB [stake: beneficiary]: `cip_policy` × `N`. 3. **Reference token** at the PLB [stake: transformation script]: `cip_policy` × 1, datum per §3.3 with `value: v0`. |
@@ -192,7 +192,7 @@ Scripts read the transaction's validity range; `now` is the **lower bound** (the
 - **I5 — Graduation integrity.** Graduation burns the principal name only (whole holdings per name), requires `now ≥ d4` **and** an owner-authorized payout destination, and mints exactly `burned × v4 / scale` under the native policy — backed by the governed burn ("no burn CIP, no mint"), regardless of which credential signed.
 - **I6 — Ghost fidelity.** The third-party path's paired continuation preserves address, datum and reference script byte-for-byte, ratcheting lovelace (`output ≥ input`); the ghost is one-time per spent UTxO and reclaimable by the owner via a transfer-path spend. The owner path leaves nothing behind (the cheaper shape).
 - **I7 — Pure issuance.** A transaction that spends a registry node can never mint or burn that node's own token: graduation is pure issuance, never mixed with a registry reconfiguration (base-layer guarantee; instrument transactions only *reference* the node).
-- **I8 — Companion survival.** Other governed names under the policy (the CIP-68 reference token, or unknown ones) fail closed under a graduation burn and are never destroyed by a conversion.
+- **I8 — Companion survival.** Other governed names under the policy (the reference token, or unknown ones) fail closed under a graduation burn and are never destroyed by a conversion.
 
 ## 7. Threat model & assumptions
 

@@ -4,7 +4,7 @@
 
 = Tokenized bond — register + issue (T0/T1)
 _One transaction registers the CIP-113 instance and mints the first tokens to
-the beneficiary, publishing the bond's terms as a CIP-68 reference datum._
+the beneficiary, publishing the bond's terms in the reference token's datum._
 
 #let bond_register_issue_tx = vanilla_transaction(
   "Register + issue",
@@ -53,7 +53,7 @@ the beneficiary, publishing the bond's terms as a CIP-68 reference datum._
       value: ("cip_policy": "N"),
     ),
     (
-      name: "Reference token (CIP-68 222)",
+      name: "Reference token",
       address: "plb_addr [stake: transformation_script]",
       value: ("cip_policy": "1"),
       datum: (
@@ -65,9 +65,9 @@ the beneficiary, publishing the bond's terms as a CIP-68 reference datum._
   ),
   notes: [
     - Our `minting_logic` runs a single `RegisterAndMint` mode that validates BOTH concerns together — registration authority (issuer signature) + node shape, and the first-batch mint. A single arm is fine (09-DEVELOPING-MODULES §7); it must cross-check the tx shape (node NFT minted → node created; `cip_policy` entries present in `tx.mint`) so a caller cannot reuse it in the wrong context.
-    - Minted tokens must land at a PLB output with an inline stake credential and a bounded inline datum — enforced by the protocol's `issuance_logic` (`no_escape`); the substandard does not re-check it. Supply is issuer-gated: two asset names under one policy (the principal and its CIP-68 reference), no per-holder state to mint against.
-    - The CIP-68 pair is minted under the *same governed policy* (compliant: user token + reference `222`). The reference token is PLB-custodied and staked to the *transformation script* — a smart-wallet stake credential whose withdraw-0 authorizes in-place metadata updates holder-passively (T3). Its datum must fit the deployment's `max_inline_datum_bytes`: a UTxO born over the bound is frozen and unseizable.
-    - The schedule is a deployment parameter, baked as validator constants — any non-empty sequence of `(deadline, value)` steps, precomputed off-chain with a fixed-point scale. The running example used throughout this design is a fixed 4% annual step over four years: `[(d1, v1), (d2, v2), (d3, v3), (d4, v4)]` with `v4 ≈ 1.1699 × scale`. No on-chain compounding: the validator looks the current value up by time. The CIP-68 reference datum mirrors it for wallets and indexers; the graduation math reads the baked `v4`.
+    - Minted tokens must land at a PLB output with an inline stake credential and a bounded inline datum — enforced by the protocol's `issuance_logic` (`no_escape`); the substandard does not re-check it. Supply is issuer-gated: two asset names under one policy (the principal and its reference), no per-holder state to mint against.
+    - The reference token is minted under the *same governed policy* as the principal. It is PLB-custodied and staked to the *transformation script* — a smart-wallet stake credential whose withdraw-0 authorizes in-place metadata updates holder-passively (T3). Its datum must fit the deployment's `max_inline_datum_bytes`: a UTxO born over the bound is frozen and unseizable.
+    - The schedule is a deployment parameter, baked as validator constants — any non-empty sequence of `(deadline, value)` steps, precomputed off-chain with a fixed-point scale. The running example used throughout this design is a fixed 4% annual step over four years: `[(d1, v1), (d2, v2), (d3, v3), (d4, v4)]` with `v4 ≈ 1.1699 × scale`. No on-chain compounding: the validator looks the current value up by time. The reference datum mirrors it for wallets and indexers; the graduation math reads the baked `v4`.
   ],
 )
 
@@ -180,7 +180,7 @@ An owner who intends to sign their own graduation (T4) never needs this._
     - The transfer path bounds the output datum (`max_inline_datum_bytes`) and preserves the seizable output shape (inline stake credential, no reference script), so the commitment does not freeze the token.
     - In the third-party graduation path (T4) this datum is preserved byte-for-byte, so a third party can complete the graduation but never redirect the payout.
     - Optional and re-settable: the owner may skip it (and sign the graduation directly), or overwrite it with a later self-transfer.
-    - The CIP-68 metadata lives in the *reference* token, so the user token's datum is free for this commitment — the two datums never collide.
+    - The metadata lives in the *reference* token, so the principal token's datum is free for this commitment — the two datums never collide.
   ],
 )
 
@@ -190,7 +190,7 @@ An owner who intends to sign their own graduation (T4) never needs this._
 
 = Tokenized bond — scheduled transformation (T3)
 _At each deadline the bond's recorded value steps to the schedule's next value
-(4% in the example schedule): the CIP-68 reference token's
+(4% in the example schedule): the reference token's
 datum is rewritten *in place*. The reference token is staked to the
 *transformation script*, so its withdraw-0 authorizes the spend — no holder, no
 issuer, no signature; anyone can submit it._
@@ -199,7 +199,7 @@ issuer, no signature; anyone can submit it._
   "Scheduled transformation (k)",
   inputs: (
     (
-      name: "Reference token (CIP-68 222)",
+      name: "Reference token",
       address: "plb_addr [stake: transformation_script]",
       value: ("cip_policy": "1"),
       datum: (
@@ -231,7 +231,7 @@ issuer, no signature; anyone can submit it._
   validRange: (lower: "d_k"),
   outputs: (
     (
-      name: "Reference token (CIP-68 222)",
+      name: "Reference token",
       address: "plb_addr [stake: transformation_script]",
       value: ("cip_policy": "1"),
       datum: (
@@ -244,7 +244,7 @@ issuer, no signature; anyone can submit it._
   notes: [
     - In-place datum change, on the *transfer path*: the reference token's stake credential is the transformation script, and `authorised_stake_cred` accepts a script owner via its withdraw-0 — which validates the schedule (`now ≥ d_k`; new value = a pure lookup of the baked constants, so a late submission jumps straight to the current step). The third-party path cannot do this: it preserves datums byte-for-byte.
     - Holder-passive and permissionless: no signatures — the issuer normally submits and the holder can force it ("if it does not change by itself").
-    - The principal tokens never move — only the instrument's recorded value changes. This is how CIP-68 metadata updates reconcile with CIP-113 custody: the reference token is owned by a script, not by a holder.
+    - The principal tokens never move — only the instrument's recorded value changes. This is how metadata updates reconcile with CIP-113 custody: the reference token is owned by a script, not by a holder.
     - Last evolution: after `d4` the schedule is exhausted — the script rejects any further update and the value stops. The graduation window opens at `d4` (T4).
     - The reference datum must stay within the deployment's `max_inline_datum_bytes` — keep it to the schedule and value; heavy CIP-25-style blobs would freeze the UTxO.
   ],
@@ -327,7 +327,7 @@ the (now non-transforming) token._
     - Event gate (Q-RULE-1): there is no separate rule script — the deadline check lives inside the substandard logic that already runs (the `third_party_logic` / `transfer_logic` withdraw-0 on the spend side and the `minting_logic` withdraw-0 on the burn side). It approves iff the validity range reaches `d4` — time-driven, no oracle; the event condition is the tx's own validity range.
     - Authorization (Q-GRAD-2, this instrument): the `d4` event gate is necessary but not sufficient — the burn also needs an *owner-authorized payout destination*. That is *either* the owner's signature (owner path, which names the destination in the tx) *or* a payment credential the owner pre-committed to the token datum (which a third party can then complete without redirecting). The permissionless third-party path therefore only works for tokens whose owners opted in beforehand; with no owner signature and no committed destination, the tx is rejected.
     - The conversion function (the Burn-mode validation) is shared by both paths: burn shape, full-burn per asset name (whole holdings burn — it makes the per-owner destination attribution exact), destination binding and the scaled native mirror. The native minting policy is signer-agnostic: it approves the mint only against the burn (`mint == burned × v4 / scale`), whichever credential signed it.
-    - Companion assets are accommodated inside the PLB, under the same policy, by a CIP-68/102-aware substandard: graduation burns the principal name only, and any other governed name (the CIP-68 reference token, or an unknown one) fails closed — the companion survives a conversion and is never destroyed by it.
+    - Companion assets are accommodated inside the PLB, under the same policy, by a companion-aware substandard: graduation burns the principal name only, and any other governed name (the reference token, or an unknown one) fails closed — the companion survives a conversion and is never destroyed by it.
     - Destination binding: the native asset is a plain token at a normal `(payment_credential, stake_credential)` address, but CIP-113 attributes ownership only by the *stake* credential — the payment (spending) key is not something the framework can tie to the owner. So the payment credential must come from the owner: named in an owner-signed graduation, or pre-committed to the token's inline datum on an owner-signed transfer (T2b, preserved byte-for-byte through the third-party path, so a third party can complete but never redirect it). The stake credential stays bound to the owner's current credential.
     - No safe fallback, so no fallback: absent an owner signature *and* a committed payment credential, the transaction is rejected. Sending a native asset to an unverified spending key is unrecoverable, and graduation is optional — the owner may hold the final-value, non-transforming token indefinitely rather than convert it.
     - Native mint: exactly `burned × v4 / scale`, regardless of which credential signed the burn — the native policy approves the mint only because it is backed by the governed burn of the same name at the schedule's final value ("no burn CIP, no mint", scaled). `v4` is the baked final value (`≈ 1.1699 × scale` in the example schedule): the only on-chain arithmetic is this final multiply. The mint is deliberately not 1:1 quantity-conserved — the scaled value rules that out — so it is governed by the native policy and the substandard's `minting_logic` instead.

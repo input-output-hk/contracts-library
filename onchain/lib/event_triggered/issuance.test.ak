@@ -48,7 +48,7 @@ const payment1_key = #"77777777777777777777777777777777777777777777777777777777"
 
 const principal_name = "BOND"
 
-const ref_name = "REF222"
+const ref_name = "REF"
 
 const tx_id =
   #"0000000000000000000000000000000000000000000000000000000000000000"
@@ -364,7 +364,7 @@ test rejects_third_party_unopted_token() {
 }
 
 test rejects_companion_burn() fail {
-  // burning the CIP-68 reference name alongside the principal fails closed (I8)
+  // burning the reference name alongside the principal fails closed (I8)
   check(
     Burn,
     Transaction {

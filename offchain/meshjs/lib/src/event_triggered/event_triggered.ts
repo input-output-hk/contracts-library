@@ -8,7 +8,7 @@
  * builders wire the substandard's own scripts directly, with stand-ins:
  *
  *   - `cipPolicy`      stand-in for the core `issuance_mint` policy (mints the
- *                      principal and the CIP-68 reference);
+ *                      principal and the reference);
  *   - `nodePolicy`     stand-in for the core registry node-NFT policy;
  *   - `plbScript`      stand-in for the programmable-logic base's custody
  *                      validator: the principal is custodied at an address whose
@@ -257,7 +257,7 @@ export interface RegisterAndIssueTxParams {
 
 /**
  * Build the atomic register + first-issue transaction (§4.1): create the
- * RegistryNode, mint the first batch (principal + CIP-68 reference), place the
+ * RegistryNode, mint the first batch (principal + reference), place the
  * principal at the beneficiary's PLB stand-in, and the reference token at the
  * transformation script's stake credential.
  */
@@ -401,7 +401,7 @@ export interface TransformationTxParams {
   /** The instrument's RegistryNode, referenced per the tx shape (§4.4). */
   nodeUtxo: UTxO;
   referenceUtxo: UTxO;
-  /** Preserved CIP-68 metadata (the datum is rewritten in place). */
+  /** Preserved metadata (the datum is rewritten in place). */
   metadata: Data;
   /** Preserved graduated-asset policy id (the datum is rewritten in place). */
   nativePolicy: string;

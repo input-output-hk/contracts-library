@@ -80,7 +80,7 @@ pub type ScheduleStep {
   ScheduleStep { deadline: Int, value: Int }
 }
 
-/// `extra` of the CIP-68 reference datum (§3.3): the baked schedule, mirrored
+/// `extra` of the reference datum (§3.3): the baked schedule, mirrored
 /// for wallets and indexers, plus the currently recorded value (`v0 = scale`
 /// at issue; stale values are harmless) and the graduated asset's policy id —
 /// part of the published terms, written once at registration and preserved by
@@ -94,7 +94,7 @@ pub type BondExtra {
   }
 }
 
-/// Inline datum of the reference token (CIP-68 `222`, §3.3). Heavy metadata
+/// Inline datum of the reference token (§3.3). Heavy metadata
 /// blobs would freeze the UTxO over the deployment's `max_inline_datum_bytes`
 /// — keep it to the schedule and value.
 pub type ReferenceDatum {
@@ -157,7 +157,7 @@ pub type MintingParams {
     transformation_script: ScriptHash,
     /// The principal asset name — the only name a graduation may burn.
     principal_name: AssetName,
-    /// The CIP-68 reference asset name (a `222` label, §3.3).
+    /// The reference asset name (§3.3).
     reference_name: AssetName,
     /// The deployment-supplied schedule (§3.5). The registration
     /// cross-checks the reference datum against it; the last deadline drives

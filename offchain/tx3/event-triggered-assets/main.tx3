@@ -96,7 +96,7 @@ env {
     protocol_params_ref: UtxoRef,
     /// The principal asset name (hex) — the only name a graduation may burn.
     principal_name: Bytes,
-    /// The CIP-68 reference asset name (hex; a `222` label, §3.3).
+    /// The reference asset name (hex, §3.3).
     reference_name: Bytes,
     /// UTxO carrying the PLB global (dispatcher) stake script as a reference
     /// script; its withdraw-0 carries the `TransferAct` / `ThirdPartyAct`.
@@ -269,7 +269,7 @@ type ScheduleStep {
     value: Int,
 }
 
-// `extra` of the CIP-68 reference datum (§3.3): the baked schedule, mirrored
+// `extra` of the reference datum (§3.3): the baked schedule, mirrored
 // for wallets and indexers, the currently recorded value, and the graduated
 // asset's policy id. The published terms are frozen at registration and
 // preserved by every later update; the graduation's burn reads `native_policy`
@@ -280,7 +280,7 @@ type BondExtra {
     native_policy: Bytes,
 }
 
-// Inline datum of the reference token (CIP-68 `222`, §3.3). `metadata` is the
+// Inline datum of the reference token (§3.3). `metadata` is the
 // opaque `Bytes` mirror of the on-chain `Data`.
 type ReferenceDatum {
     metadata: Bytes,
@@ -441,7 +441,7 @@ type ProtocolParamsDatum {
 // ------------------------------------------------------------------- register
 
 // Atomic register + first issue (T0/T1, §4.1): create the RegistryNode and
-// mint the first batch — principal × `quantity` plus the CIP-68 reference
+// mint the first batch — principal × `quantity` plus the reference
 // token × 1, the only two names under the governed policy. The principal
 // lands at the beneficiary's PLB-custodied address; the reference token at
 // the transformation script's stake. The covering registry node is spent and
@@ -790,7 +790,7 @@ tx register_payout_key(
 // no signatures — the Signer only pays fees; the reference token's stake
 // credential (the transformation script) authorizes via its withdraw-0.
 tx transform(
-    /// The reference token UTxO (CIP-68 `222` × 1).
+    /// The reference token UTxO (× 1).
     reference_ref: UtxoRef,
     /// The reference token's PLB-custodied address (PLB payment +
     /// transformation-script stake).
@@ -919,7 +919,7 @@ tx graduate_owner(
     node_idx: Int,
     /// The instrument's RegistryNode UTxO (reference input).
     node_ref: UtxoRef,
-    /// The reference token UTxO (CIP-68 `222` × 1) — a reference input whose
+    /// The reference token UTxO (× 1) — a reference input whose
     /// datum names the graduated asset's policy (§4.5, §3.3).
     reference_ref: UtxoRef,
     /// The burned principal quantity (the holder's whole holding, §4.5).
@@ -1081,7 +1081,7 @@ tx graduate_third_party(
     /// `ThirdPartyRedeemer`). The template emits the native payout first and
     /// the ghost continuation second, so this is 1.
     outputs_start_idx: Int,
-    /// The reference token UTxO (CIP-68 `222` × 1) — a reference input whose
+    /// The reference token UTxO (× 1) — a reference input whose
     /// datum names the graduated asset's policy (§4.5, §3.3).
     reference_ref: UtxoRef,
     /// The burned principal quantity (the holder's whole holding, §4.5).
