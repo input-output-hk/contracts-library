@@ -26,8 +26,8 @@ minted here — the same register serves every later deposit._
     "registry_node_cs": "1 (registry mint handler)",
   ),
   withdrawals: (
-    "minting_logic (ours) [Register] (0)",
-    "issuance_logic (core) [names policy + OutputIndex proof] (0)",
+    "minting_logic (ours) [Register]",
+    "issuance_logic (core) [names policy + OutputIndex proof]",
   ),
   signatures: (
     "issuer",
@@ -89,8 +89,8 @@ published terms and an initial `step: 0`._
     "cip_policy": "1 (reference NFT) — issuance_mint [Deposit]",
   ),
   withdrawals: (
-    "minting_logic (ours) [Deposit] (0)",
-    "issuance_logic (core) [names policy + RegistryNode] (0)",
+    "minting_logic (ours) [Deposit]",
+    "issuance_logic (core) [names policy + RegistryNode]",
   ),
   signatures: (
     "depositor",
@@ -163,9 +163,9 @@ twice._
     "cNt_policy": "1 unit, asset name = amount_k (decimal lovelace)",
   ),
   withdrawals: (
-    "programmable_logic_global [TransferAct] (0)",
-    "transfer [TransferRedeemer] (0)",
-    "transfer_logic (ours) (0)",
+    "programmable_logic_global [TransferAct]",
+    "transfer [TransferRedeemer]",
+    "transfer_logic (ours)",
   ),
   signatures: (
     "holder",
@@ -291,9 +291,9 @@ reference NFT. The principal is read from the certificate's datum._
     "cNt_policy": "1 unit, asset name = principal (decimal lovelace)",
   ),
   withdrawals: (
-    "programmable_logic_global [TransferAct] (0)",
-    "transfer [TransferRedeemer] (0)",
-    "transfer_logic (ours) (0)",
+    "programmable_logic_global [TransferAct]",
+    "transfer [TransferRedeemer]",
+    "transfer_logic (ours)",
   ),
   signatures: (
     "holder",
