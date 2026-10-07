@@ -125,6 +125,63 @@ published terms and an initial `step: 0`._
 
 #pagebreak()
 
+= Tokenized bond — transfer (T1)
+_The holder moves the certificate freely; the transfer logic only enforces that
+the claim state never rewinds — its `step` stays the same._
+
+#let bond_transfer_tx = vanilla_transaction(
+  "Transfer",
+  inputs: (
+    (
+      name: "Reference NFT",
+      address: "plb_addr [stake: sender]",
+      value: ("cip_policy": "1"),
+      datum: (
+        step: "k",
+      ),
+      redeemer: [BaseSpendRedeemer { params_idx, wdrl_idx }],
+    ),
+    (
+      reference: true,
+      name: "Protocol params",
+      address: "protocol_params",
+    ),
+    (
+      reference: true,
+      name: "RegistryNode",
+      address: "registry_addr",
+      value: ("registry_node_cs": "1"),
+    ),
+  ),
+  withdrawals: (
+    "programmable_logic_global [TransferAct]",
+    "transfer [TransferRedeemer]",
+    "transfer_logic (ours)",
+  ),
+  signatures: (
+    "sender",
+  ),
+  outputs: (
+    (
+      name: "Reference NFT",
+      address: "plb_addr [stake: recipient]",
+      value: ("cip_policy": "1"),
+      datum: (
+        step: "k",
+      ),
+    ),
+  ),
+  notes: [
+    - Ownership rides the certificate's inline stake credential: moving the token moves the claim on that unit's remaining coupons and principal, and the datum (just `step`) is carried across unchanged.
+    - The transfer logic resolves the governed `cip_policy` from the RegistryNode and enforces step monotonicity (I7): with a continuation, `step` must stay or advance by exactly one — never decrease. A plain transfer preserves it, so a claimed step cannot be rewound and re-claimed.
+    - At most one certificate per transaction. The coupon claim page (next) is the admitted advance (`step: k - 1 → k`); retirement is a `cip_policy` burn on the graduation page.
+  ],
+)
+
+#figure(bond_transfer_tx, caption: [Transfer: the certificate moves, the claim state never rewinds]) <fig:bond-transfer>
+
+#pagebreak()
+
 = Tokenized bond — coupon claim (step k)
 _At each deadline the holder claims the step's coupon. The claim spends and
 re-outputs the reference NFT, advancing its `step` so no step can be claimed
@@ -182,7 +239,7 @@ twice._
   ),
   validRange: (lower: "d_k"),
   notes: [
-    - The coupon policy admits the mint only when the validity range reaches `d_k` *and* the spent reference NFT records `step: k - 1`; the continuation records `step: k`. That anchor makes each step claimable exactly once per certificate.
+    - The coupon policy admits the mint only when the validity range reaches `d_k` *and* the spent reference NFT records `step: k - 1`; the continuation records `step: k`, the only advance the transfer logic admits. That anchor makes each step claimable exactly once per certificate.
     - The coupon is a native asset whose *name is its value*: name `"1124"` is worth 1124 lovelace. Two steps of equal amount share a name and are fungible on purpose.
     - The claim is an owner-signed PLB spend of the reference NFT; it never touches the vault.
   ],
@@ -279,12 +336,15 @@ reference NFT. The principal is the deployment's baked unit amount._
     ),
   ),
   mint: (
+    "cip_policy": "- 1 (certificate retired) — issuance_mint [Retire]",
     "cNt_policy": "1 unit, asset name = principal (decimal lovelace)",
   ),
   withdrawals: (
     "programmable_logic_global [TransferAct]",
     "transfer [TransferRedeemer]",
     "transfer_logic (ours)",
+    "minting_logic (ours) [Retire]",
+    "issuance_logic (core) [names policy + RegistryNode]",
   ),
   signatures: (
     "holder",
@@ -299,7 +359,7 @@ reference NFT. The principal is the deployment's baked unit amount._
   validRange: (lower: "d4"),
   notes: [
     - The principal is the deployment's baked unit amount, so the graduation cannot over- or under-claim.
-    - The reference NFT is *retired* here (burned or spent with no continuation) — it is the instrument's certificate and its life ends at graduation.
+    - The reference NFT is *retired* by a `cip_policy` burn at its final `step` within the `d4` window — the issuance logic's `Retire` mode validates the burn shape and payout, and the transfer logic admits no continuation on this shape only.
     - The principal coupon is then redeemed at the vault like any other coupon (see the redemption page): burn it, the vault pays the principal.
   ],
 )

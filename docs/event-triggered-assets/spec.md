@@ -40,6 +40,7 @@ Two postures make the instrument legible:
 | Deposit | **Permissionless, principal-backed mint** | Anyone may deposit one unit; the issuance logic admits the certificate only when the vault gains exactly the unit `principal` (I6). |
 | Vault control | **Burn-to-pay redemptions** | Holders redeem by burning coupons; owner custody is an assumption, not enforced (§7). |
 | Certificate | **One CIP-113 reference NFT per deposit at the PLB** | Each unit gets a holder-staked certificate carrying the terms and its own claim state. |
+| Transfer | **Freely transferable, step-monotone** | Ownership moves with the token; the transfer logic only forbids `step` decreases, so a certificate cannot be rewound to re-claim. |
 | Earnings | **`cNt` coupon tokens, amount in the name** | One native asset per step; the name is the amount, so the vault needs no external oracle or schedule. |
 | Coupon claim | **Holder-signed, step-anchored** | The claim advances that certificate's `step`, so no step can be claimed twice per certificate. |
 | Redemption | **Burn-to-pay at the vault** | Burning a coupon releases exactly `decode(name) × burned` ADA; double redemption is impossible (the coupon is destroyed). |
@@ -103,7 +104,7 @@ credential. Its inline datum carries only the per-certificate claim state:
 
 | Field | Meaning |
 | --- | --- |
-| `step` | The number of the last coupon claimed (`0` at deposit); the claim anchor that makes each step claimable once per certificate. |
+| `step` | The number of the last coupon claimed (`0` at deposit); monotone (never decreases), and the claim anchor that makes each step claimable once per certificate. |
 
 The schedule and the unit principal are deployment constants baked into the
 coupon policy and the graduation logic, so every certificate shares them and
@@ -167,7 +168,7 @@ The reference NFT is a CIP-113 token at the PLB; moving it moves the claim.
 | **Withdrawals** | `programmable_logic_global` [TransferAct] → `transfer` → `transfer_logic` (ours). |
 | **Signatures** | Sender. |
 | **Outputs** | Reference NFT at the PLB [stake: recipient], `cip_policy` × 1, datum preserved. |
-| **Constraints** | The permissive transfer logic gates nothing; a plain transfer leaves the datum (including `step`) untouched. |
+| **Constraints** | At most one certificate per transaction. The transfer logic resolves the governed `cip_policy` from the RegistryNode and decodes the input and continuation datums: a continuation must record the same `step` (plain transfer) or exactly `step + 1` (the coupon claim, §4.4), never less (I7). A transaction with no continuation is admitted only alongside the matching `cip_policy` burn — the retirement shape (§4.6). |
 
 ### 4.4 Coupon claim (step k, T-k)
 
@@ -183,7 +184,7 @@ advances that certificate's `step`.
 | **Signatures** | Holder. |
 | **Outputs** | 1. **Coupon** at the holder's payment address: `cNt(amount_k)` × 1. 2. **Reference NFT** at the PLB [stake: holder], datum with `step: k`. |
 | **Validity range** | Lower bound finite, `≥ d_k`. |
-| **Constraints** | The coupon policy admits the mint only when the validity range reaches its baked `d_k` and the spent certificate records `step: k-1`; the continuation must record `step: k`. This makes each step claimable exactly once per certificate (I3). |
+| **Constraints** | The coupon policy admits the mint only when the validity range reaches its baked `d_k` and the spent certificate records `step: k-1`; the continuation must record `step: k` — the only advance the transfer logic admits (I7). Advancing without the mint simply forfeits that coupon. This makes each step claimable exactly once per certificate (I3). |
 
 ### 4.5 Redemption (burn-to-pay, T-redeem)
 
@@ -202,17 +203,18 @@ the burned coupons name.
 ### 4.6 Graduation (T4)
 
 From `d4` on, the certificate's holder may claim the principal-only coupon and
-retire the reference NFT.
+burn the reference NFT (retirement).
 
 | | |
 | --- | --- |
 | **Inputs** | Reference NFT at the PLB [stake: holder], `step` at its final value. |
-| **Mint** | coupon policy: `1` unit of asset name `principal` (the principal in lovelace). |
-| **Withdrawals** | The reference NFT's transfer chain. |
+| **Reference inputs** | Protocol params; RegistryNode. |
+| **Mint** | `cip_policy`: `−1` (the certificate burned, under the `issuance_mint` policy) — the issuance logic's `Retire` mode. Coupon policy: `1` unit of asset name `principal` (the principal in lovelace). |
+| **Withdrawals** | The reference NFT's transfer chain; minting logic `[Retire]` → core `issuance_mint`. |
 | **Signatures** | Holder. |
-| **Outputs** | 1. **Principal coupon** at the holder's payment address. 2. The reference NFT is **retired** (burned or spent without continuation). |
+| **Outputs** | **Principal coupon** at the holder's payment address; no certificate continuation. |
 | **Validity range** | Lower bound finite, `≥ d4`. |
-| **Constraints** | The principal amount is the baked unit, so the graduation cannot over- or under-claim. The principal coupon is then redeemed at the vault like any other coupon (§4.5). |
+| **Constraints** | `Retire` validates the burn shape (exactly `−1` of the reference name), the final `step`, the `d4` window and the principal payout; the transfer logic admits a no-continuation spend only on this burn shape (I7). The principal amount is the baked unit, so the graduation cannot over- or under-claim. The principal coupon is then redeemed at the vault like any other coupon (§4.5). |
 
 ## 5. Determinism & time
 
@@ -230,8 +232,9 @@ retire the reference NFT.
   amount encoded in its asset name, and nothing else.
 - **I3 — One claim per step, per certificate.** A coupon for step `k` can be
   minted only when the spent certificate records `step: k-1` and the validity
-  range reaches `d_k`; the continuation advances `step` to `k`. No certificate
-  can claim a step twice.
+  range reaches `d_k`; the continuation advances `step` to `k`. The coupon
+  policy binds every advance to its mint and the transfer logic forbids step
+  decreases (I7), so no certificate can claim a step twice.
 - **I4 — Burn-to-pay exactness.** On redemption the vault releases exactly
   `Σ decode(name) × burned_quantity` ADA — no more, no less — and the burned
   coupons are destroyed, so no coupon is paid twice.
@@ -240,13 +243,21 @@ retire the reference NFT.
 - **I6 — Deposit integrity.** A reference NFT can be minted only in a
   transaction that increases the vault's ADA by exactly the baked unit
   `principal`, so no unbacked certificate exists.
+- **I7 — Step monotonicity.** On any spend of a certificate with a
+  continuation, the continuation records the same `step` or exactly `step + 1`
+  — never less — and a certificate is retired only by a `cip_policy` burn at
+  its final step within the `d4` window.
 
 ## 7. Threat model & assumptions
 
 ### Defended
 
 - **Double claim.** The step anchor (I3) prevents minting a step's coupon more
-  than once per certificate.
+  than once per certificate, and step monotonicity (I7) prevents rewinding a
+  certificate to re-claim.
+- **Step rewind.** The transfer logic rejects any continuation whose `step` is
+  lower than the spent certificate's, so a claimed step cannot be reset and
+  re-claimed (I7).
 - **Double redemption.** Redemption burns the coupon (I4); a burned coupon
   cannot be spent again.
 - **Over/under payment on redemption.** The vault validator recomputes the
