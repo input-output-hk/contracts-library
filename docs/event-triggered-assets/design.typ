@@ -128,7 +128,7 @@ twice._
   validRange: (lower: "d_k"),
   notes: [
     - The coupon policy admits the mint only when the validity range reaches `d_k` *and* the spent reference NFT records `step: k - 1`; the continuation records `step: k`. That anchor makes each step claimable exactly once.
-    - The coupon is a native asset whose **name is its value**: name `"1124"` is worth 1124 lovelace. Two steps of equal amount share a name and are fungible on purpose.
+    - The coupon is a native asset whose *name is its value*: name `"1124"` is worth 1124 lovelace. Two steps of equal amount share a name and are fungible on purpose.
     - The claim is an owner-signed PLB spend of the reference NFT; it never touches the vault.
   ],
 )
@@ -246,7 +246,7 @@ reference NFT. The principal is read from the certificate's datum._
   validRange: (lower: "d4"),
   notes: [
     - The principal amount comes from the reference NFT's datum, so the graduation cannot over- or under-claim.
-    - The reference NFT is **retired** here (burned or spent with no continuation) — it is the instrument's certificate and its life ends at graduation.
+    - The reference NFT is *retired* here (burned or spent with no continuation) — it is the instrument's certificate and its life ends at graduation.
     - The principal coupon is then redeemed at the vault like any other coupon (2 pages back): burn it, the vault pays the principal.
   ],
 )
