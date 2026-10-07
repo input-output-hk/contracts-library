@@ -23,7 +23,7 @@ Two postures make the instrument legible:
 - **Redemption is burn-to-pay.** A `cNt` is worth what its name says and only
   what its name says: the vault validator sums the amounts decoded from the
   burned coupon names and releases exactly that much ADA. The only residual
-  trust is the vault owner's extraction path (§4.6) and the vault's solvency.
+  trust is the vault's solvency and the owner's custody of it (§7).
 
 > This specification **replaces** the earlier single-NFT 1:1 graduation model.
 > A single NFT still lives at the PLB — it is the reference NFT described here —
@@ -35,25 +35,25 @@ Two postures make the instrument legible:
 | Decision | Choice | Rationale |
 | --- | --- | --- |
 | Principal | **ADA held in a vault** | The bond is backed by lovelace in a dedicated UTxO; no fungible principal token is minted into the float. |
-| Vault control | **Owner extraction or burn-to-pay** | The company/country can extract (full custody); holders redeem by burning coupons. |
+| Vault control | **Burn-to-pay redemptions** | Holders redeem by burning coupons; owner custody is an assumption, not enforced (§7). |
 | Certificate | **Single CIP-113 reference NFT at the PLB** | One holder-staked token carries the terms and the claim state and moves with the claim. |
 | Earnings | **`cNt` coupon tokens, amount in the name** | One native asset per step; the name is the amount, so the vault needs no external oracle or schedule. |
 | Coupon claim | **Holder-signed, step-anchored** | The claim advances the reference NFT's `step`, so no step can be claimed twice. |
 | Redemption | **Burn-to-pay at the vault** | Burning a coupon releases exactly `decode(name) × burned` ADA; double redemption is impossible (the coupon is destroyed). |
 | Graduation | **Principal-only coupon at maturity** | A final `cNt` names the principal; the reference NFT is retired. |
-| Trust | **Explicit full custody by the owner** | The owner-sign extraction path is unconditional and documented as the instrument's custody assumption. |
+| Trust | **Explicit owner custody (assumed)** | The owner can withdraw the vault's ADA at any time; documented as the instrument's custody assumption (§7). |
 
 ## 2. Roles
 
 - **User / holder**: deposits the principal ADA into the vault and owns the
   reference NFT. Claims coupons and redeems them; may transfer the reference
   NFT, which transfers the right to future coupons and the principal claim.
-- **Vault owner (company/country)**: holds the signing key that authorizes
-  `OwnerExtract` — an unconditional custody path over the vault's ADA.
+- **Vault owner (company/country)**: controls the vault and may withdraw its
+  ADA at any time; this custody is assumed, not enforced on-chain (§7).
 - **Issuer**: registers the instrument and mints the reference NFT; does not
   control coupons or the vault.
-- **Vault**: an ADA UTxO with a small validator enforcing the two spend paths
-  (§4.4, §4.6).
+- **Vault**: an ADA UTxO with a small validator enforcing the redemption path
+  (§4.4).
 - **Coupon policy**: the minting policy of the `cNt` native assets (§4.3).
 - **Core protocol** (trusted infrastructure): the CIP-113 PLB and the
   transfer / issuance validators that custody and move the reference NFT.
@@ -65,11 +65,10 @@ Two postures make the instrument legible:
 An ADA UTxO that holds the instrument's principal plus the owner's own funds.
 It is **pre-funded**: the holder's deposit sits alongside the owner's funds, so
 coupon and principal redemptions are deterministically payable while the vault
-is solvent. The vault is governed by a validator with two spend paths:
+is solvent. The vault is governed by a validator with a single redemption path:
 
 | Redeemer | Admitted when | Effect |
 | --- | --- | --- |
-| `OwnerExtract` | the owner's credential signs | The owner may move any ADA out of the vault (unconditional custody). |
 | `Redeem` | no owner signature needed | The vault's net ADA loss equals the sum decoded from the burned coupons; the payout(s) go to the address(es) the redeemer names. |
 
 The vault is a single UTxO (or a small set); a redemption spends it and
@@ -191,21 +190,12 @@ reference NFT.
 | **Validity range** | Lower bound finite, `≥ d4`. |
 | **Constraints** | The principal amount comes from the reference NFT's datum, so the graduation cannot over- or under-claim. The principal coupon is then redeemed at the vault like any other coupon (§4.4). |
 
-### 4.6 Owner extract (T-extract)
-
-| | |
-| --- | --- |
-| **Inputs** | The **Vault** UTxO. |
-| **Outputs** | 1. Payout to the owner. 2. Vault continuation with the remaining ADA. |
-| **Signatures** | The vault owner. |
-| **Constraints** | `OwnerExtract` is approved purely by the owner's signature: the owner may move any amount at any time. This is the instrument's explicit custody assumption (§7). |
-
 ## 5. Determinism & time
 
 - §4.3 requires `now ≥ d_k`; the coupon amount is a schedule constant, so a
   late claim lands on the same amount — staleness costs nothing.
 - §4.5 requires `now ≥ d4`; graduation never expires.
-- §4.1, §4.2, §4.4 and §4.6 read no time bound.
+- §4.1, §4.2 and §4.4 read no time bound.
 
 ## 6. Invariants
 
@@ -222,8 +212,6 @@ reference NFT.
   coupons are destroyed, so no coupon is paid twice.
 - **I5 — Graduation integrity.** The graduation coupon names the reference
   NFT's recorded `principal`, and the reference NFT is retired.
-- **I6 — Owner custody.** The vault owner may extract any ADA at any time; the
-  instrument's solvency is an assumption, not an enforced invariant.
 
 ## 7. Threat model & assumptions
 
@@ -246,10 +234,11 @@ reference NFT.
 
 ### Assumptions / out of scope
 
-- **Vault solvency and owner honesty.** The `OwnerExtract` path is
-  unconditional: the company/country can drain the vault, in which case coupon
+- **Vault solvency and owner honesty.** The owner has unconditional custody of
+  the vault: the company/country can drain it at any time, in which case coupon
   and principal redemptions have nothing to pay. Holders trust the owner. This
-  is the instrument's central custodial assumption (I6).
+  is the instrument's central custodial assumption; the owner-extract path
+  itself is out of scope.
 - **Pre-funding.** The vault is assumed funded with the principal plus the
   coupon amounts before redemptions occur.
 - **Name collisions are intended.** Coupons are valued only by amount, so two

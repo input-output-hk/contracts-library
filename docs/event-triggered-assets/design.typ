@@ -56,7 +56,7 @@ the published terms and an initial `step: 0`._
     ),
   ),
   notes: [
-    - The deposit and the reference-NFT mint happen atomically: the certificate and its backing exist together. The vault is assumed already funded by the owner (company/country); the holder's deposit sits on top of those funds.
+    - The deposit and the reference-NFT mint happen atomically: the certificate and its backing exist together. The vault is assumed already funded by the owner (company/country); the holder's deposit sits on top of those funds. The owner's custody of the vault (funds may be withdrawn at any time) is assumed, not enforced — vault logic is out of scope; see spec §7.
     - The reference NFT is the *only* CIP-113 token. It is holder-staked at the PLB and carries the instrument's published terms plus the last-claimed `step`.
     - Coupons are plain native assets minted later by the coupon policy; nothing else is minted here.
   ],
@@ -192,54 +192,6 @@ exactly the ADA the burned coupons name, and nothing else leaves._
 )
 
 #figure(bond_redeem_tx, caption: [Redemption: burn coupons, the vault pays exactly what they name]) <fig:bond-redeem>
-
-#pagebreak()
-
-= Tokenized bond — owner extract
-_The company/country's unconditional custody path: the owner may move any ADA
-out of the vault at any time._
-
-#let bond_owner_extract_tx = vanilla_transaction(
-  "Owner extract",
-  inputs: (
-    (
-      name: "Vault",
-      address: "vault_addr",
-      value: ("ada": "funds"),
-      datum: (
-        owner: "company/country (signing credential)",
-        cnt_policy: "coupon policy id",
-      ),
-      redeemer: [OwnerExtract],
-    ),
-  ),
-  signatures: (
-    "owner (company/country)",
-  ),
-  outputs: (
-    (
-      name: "Payout",
-      wallet: true,
-      address: "owner_addr",
-      value: ("ada": "any amount"),
-    ),
-    (
-      name: "Vault",
-      address: "vault_addr",
-      value: ("ada": "funds - extracted"),
-      datum: (
-        owner: "company/country (signing credential)",
-        cnt_policy: "coupon policy id",
-      ),
-    ),
-  ),
-  notes: [
-    - `OwnerExtract` is approved purely by the owner's signature: the owner may move any amount at any time. This is the instrument's explicit custody assumption — holders trust the owner and the vault's solvency.
-    - The `Redeem` path (previous page) is separate and needs no owner signature.
-  ],
-)
-
-#figure(bond_owner_extract_tx, caption: [Owner extract: the company/country's custody path]) <fig:bond-owner-extract>
 
 #pagebreak()
 
