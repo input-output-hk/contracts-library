@@ -2,18 +2,19 @@
 
 #show: report
 
-= Tokenized bond — register + issue (T0/T1)
-_One transaction registers the CIP-113 instance and mints the first tokens to
-the beneficiary, publishing the bond's terms in the reference token's datum._
+= Tokenized bond — register + deposit (T0)
+_The first transaction: the holder deposits the principal ADA into the vault and
+the instrument mints the single CIP-113 reference NFT to the holder, recording
+the published terms and an initial `step: 0`._
 
-#let bond_register_issue_tx = vanilla_transaction(
-  "Register + issue",
+#let bond_register_deposit_tx = vanilla_transaction(
+  "Register + deposit",
   inputs: (
     (
-      name: "Issuer funds",
+      name: "User funds",
       wallet: true,
-      address: "issuer_addr",
-      value: ("ADA": "min_ada", "FeeAsset": "f"),
+      address: "user_addr",
+      value: ("ada": "principal + min_ada", "FeeAsset": "f"),
     ),
     (
       reference: true,
@@ -23,254 +24,65 @@ the beneficiary, publishing the bond's terms in the reference token's datum._
   ),
   mint: (
     "registry_node_cs": "1 (registry mint handler)",
-    "cip_policy": "N (principal) + 1 (reference 222) — issuance_mint policy",
+    "cip_policy": "1 (reference NFT) — issuance_mint policy",
   ),
   withdrawals: (
     "minting_logic (ours) [RegisterAndMint] (0)",
     "issuance_logic (core) [names policy + OutputIndex proof] (0)",
   ),
   signatures: (
-    "issuer",
+    "holder",
   ),
   outputs: (
     (
-      name: "RegistryNode",
-      address: "registry_addr",
-      value: ("registry_node_cs": "1", "ADA": "min_ada"),
+      name: "Vault",
+      address: "vault_addr",
+      value: ("ada": "existing_funds + principal"),
       datum: (
-        key: "PolicyId",
-        next: "PolicyId",
-        minting_logic: "Credential",
-        transfer_logic: "Credential",
-        third_party_logic: "Credential",
-        unfracking_logic: "empty_vkey = VerificationKey(#\"\")",
-        global_state_cs: "#\"\" (empty)",
+        owner: "company/country (signing credential)",
+        cnt_policy: "coupon policy id",
       ),
     ),
     (
-      name: "Tokens (principal)",
-      address: "plb_addr [stake: beneficiary]",
-      value: ("cip_policy": "N"),
-    ),
-    (
-      name: "Reference token",
-      address: "plb_addr [stake: transformation_script]",
+      name: "Reference NFT",
+      address: "plb_addr [stake: holder]",
       value: ("cip_policy": "1"),
       datum: (
         metadata: "{name, ticker, terms-url, …} (CBOR)",
-        version: "1",
-        extra: "{schedule: [(d1,v1)…(d4,v4)], value: v0, native_policy}",
+        schedule: "[(d1,a1)…(d4,a4)]",
+        principal: "principal (ADA)",
+        step: "0",
       ),
     ),
   ),
   notes: [
-    - Our `minting_logic` runs a single `RegisterAndMint` mode that validates BOTH concerns together — registration authority (issuer signature) + node shape, and the first-batch mint. A single arm is fine (09-DEVELOPING-MODULES §7); it must cross-check the tx shape (node NFT minted → node created; `cip_policy` entries present in `tx.mint`) so a caller cannot reuse it in the wrong context.
-    - Minted tokens must land at a PLB output with an inline stake credential and a bounded inline datum — enforced by the protocol's `issuance_logic` (`no_escape`); the substandard does not re-check it. Supply is issuer-gated: two asset names under one policy (the principal and its reference), no per-holder state to mint against.
-    - The reference token is minted under the *same governed policy* as the principal. It is PLB-custodied and staked to the *transformation script* — a smart-wallet stake credential whose withdraw-0 authorizes in-place metadata updates holder-passively (T3). Its datum must fit the deployment's `max_inline_datum_bytes`: a UTxO born over the bound is frozen and unseizable.
-    - The schedule is a deployment parameter, baked as validator constants — any non-empty sequence of `(deadline, value)` steps, precomputed off-chain with a fixed-point scale. The running example used throughout this design is a fixed 4% annual step over four years: `[(d1, v1), (d2, v2), (d3, v3), (d4, v4)]` with `v4 ≈ 1.1699 × scale`. No on-chain compounding: the validator looks the current value up by time. The reference datum mirrors it for wallets and indexers; the graduation math reads the baked `v4`.
+    - The deposit and the reference-NFT mint happen atomically: the certificate and its backing exist together. The vault is assumed already funded by the owner (company/country); the holder's deposit sits on top of those funds.
+    - The reference NFT is the *only* CIP-113 token. It is holder-staked at the PLB and carries the instrument's published terms plus the last-claimed `step`.
+    - Coupons are plain native assets minted later by the coupon policy; nothing else is minted here.
   ],
 )
 
-#figure(bond_register_issue_tx, caption: [Atomic register + first issue]) <fig:bond-register-issue>
+#figure(bond_register_deposit_tx, caption: [Register + deposit: principal into the vault, reference NFT to the holder]) <fig:bond-register-deposit>
 
 #pagebreak()
 
-= Tokenized bond — free transfer (T2)
-_The owner can transfer the token freely at any point in its life — before and
-after the deadlines. A transfer never gates who may hold or send it._
+= Tokenized bond — coupon claim (step k)
+_At each deadline the holder claims the step's coupon. The claim spends and
+re-outputs the reference NFT, advancing its `step` so no step can be claimed
+twice._
 
-#let bond_transfer_tx = vanilla_transaction(
-  "Free transfer",
+#let bond_coupon_claim_tx = vanilla_transaction(
+  "Coupon claim (k)",
   inputs: (
     (
-      name: "Tokens",
-      address: "plb_addr [stake: sender]",
-      value: ("cip_policy": "N"),
-      redeemer: [BaseSpendRedeemer { params_idx, wdrl_idx }],
-    ),
-    (
-      reference: true,
-      name: "Protocol params",
-      address: "protocol_params",
-    ),
-    (
-      reference: true,
-      name: "RegistryNode",
-      address: "registry_addr",
-      value: ("registry_node_cs": "1"),
-    ),
-  ),
-  withdrawals: (
-    "programmable_logic_global [TransferAct] (0)",
-    "transfer [TransferRedeemer] (0)",
-    "transfer_logic (ours) (0)",
-  ),
-  signatures: (
-    "sender",
-  ),
-  outputs: (
-    (
-      name: "Tokens",
-      address: "plb_addr [stake: recipient]",
-      value: ("cip_policy": "N"),
-    ),
-  ),
-  notes: [
-    - Dispatch chain: `PLB requires the dispatcher → dispatcher (TransferAct) requires transfer → transfer resolves the registry node and requires our transfer logic` (09-DEVELOPING-MODULES §4, §6). A transfer needs *three* script withdrawals, not two — without the dispatcher the tx fails at `programmable_logic_base` before the transfer validator ever runs.
-    - The PLB spend redeemer is `BaseSpendRedeemer { params_idx, wdrl_idx }` — one record for every PLB input in the tx; it carries *no action arm*. The path is selected by the dispatcher's redeemer (`TransferAct`), never by the base redeemer.
-    - Withdrawals are listed here by role; the ledger presents them in its canonical order (scripts before vkeys, ascending) — builders derive every `wdrl_idx` from the sorted set (09-DEVELOPING-MODULES §10).
-    - P1 at every point of the lifecycle — before and after the deadlines: the permissive `transfer_logic` (Q-RULE-3) never gates who may hold or send, so the token is DEX/venue-compatible.
-    - Ownership rides the inline stake credential of the token UTxO — it moves with the token at every transfer, and it is what the graduation binds the payout to (T4).
-  ],
-)
-
-#figure(bond_transfer_tx, caption: [Free transfer before or after the deadlines]) <fig:bond-transfer>
-
-#pagebreak()
-
-= Tokenized bond — register payout key (T2b)
-_A special case of the transfer: the owner spends the token to themselves and
-writes a payment credential into its datum. This is the opt-in that lets someone
-else (typically the issuer) graduate the token later without being able to
-redirect the payout — only the owner, by signing this transfer, can set it.
-An owner who intends to sign their own graduation (T4) never needs this._
-
-#let bond_register_payout_tx = vanilla_transaction(
-  "Register payout key (self-transfer)",
-  inputs: (
-    (
-      name: "Tokens",
-      address: "plb_addr [stake: owner]",
-      value: ("cip_policy": "N"),
-      redeemer: [BaseSpendRedeemer { params_idx, wdrl_idx }],
-    ),
-    (
-      reference: true,
-      name: "Protocol params",
-      address: "protocol_params",
-    ),
-    (
-      reference: true,
-      name: "RegistryNode",
-      address: "registry_addr",
-      value: ("registry_node_cs": "1"),
-    ),
-  ),
-  withdrawals: (
-    "programmable_logic_global [TransferAct] (0)",
-    "transfer [TransferRedeemer] (0)",
-    "transfer_logic (ours) (0)",
-  ),
-  signatures: (
-    "owner",
-  ),
-  outputs: (
-    (
-      name: "Tokens",
-      address: "plb_addr [stake: owner]",
-      value: ("cip_policy": "N"),
-      datum: (
-        payment_credential: "owner_payment_cred",
-      ),
-    ),
-  ),
-  notes: [
-    - Same path as an ordinary transfer (T2): `programmable_logic_global [TransferAct] → transfer → transfer_logic`, owner-signed. The *only* difference is the output datum — the token returns to the same `plb_addr [stake: owner]`.
-    - The datum commits the owner's payout `payment_credential`. Because the transfer is owner-signed (`authorised_stake_cred`), only the owner can set it — that is what makes it trustworthy at graduation.
-    - The transfer path bounds the output datum (`max_inline_datum_bytes`) and preserves the seizable output shape (inline stake credential, no reference script), so the commitment does not freeze the token.
-    - In the third-party graduation path (T4) this datum is preserved byte-for-byte, so a third party can complete the graduation but never redirect the payout.
-    - Optional and re-settable: the owner may skip it (and sign the graduation directly), or overwrite it with a later self-transfer.
-    - The metadata lives in the *reference* token, so the principal token's datum is free for this commitment — the two datums never collide.
-  ],
-)
-
-#figure(bond_register_payout_tx, caption: [Register payout key via owner-signed self-transfer]) <fig:bond-register-payout>
-
-#pagebreak()
-
-= Tokenized bond — scheduled transformation (T3)
-_At each deadline the bond's recorded value steps to the schedule's next value
-(4% in the example schedule): the reference token's
-datum is rewritten *in place*. The reference token is staked to the
-*transformation script*, so its withdraw-0 authorizes the spend — no holder, no
-issuer, no signature; anyone can submit it._
-
-#let bond_transform_tx = vanilla_transaction(
-  "Scheduled transformation (k)",
-  inputs: (
-    (
-      name: "Reference token",
-      address: "plb_addr [stake: transformation_script]",
-      value: ("cip_policy": "1"),
-      datum: (
-        metadata: "{…}",
-        version: "1",
-        extra: "{schedule, value: v_{k-1} (stale is ok), native_policy}",
-      ),
-      redeemer: [BaseSpendRedeemer { params_idx, wdrl_idx }],
-    ),
-    (
-      reference: true,
-      name: "Protocol params",
-      address: "protocol_params",
-    ),
-    (
-      reference: true,
-      name: "RegistryNode",
-      address: "registry_addr",
-      value: ("registry_node_cs": "1"),
-    ),
-  ),
-  withdrawals: (
-    "programmable_logic_global [TransferAct] (0)",
-    "transfer [TransferRedeemer] (0)",
-    "transfer_logic (ours) (0)",
-    "transformation_script (ours) [time gate] (0)",
-  ),
-  signatures: (),
-  validRange: (lower: "d_k"),
-  outputs: (
-    (
-      name: "Reference token",
-      address: "plb_addr [stake: transformation_script]",
-      value: ("cip_policy": "1"),
-      datum: (
-        metadata: "{…}",
-        version: "1",
-        extra: "{schedule, value: v_k = lookup(schedule, now), native_policy (preserved)}",
-      ),
-    ),
-  ),
-  notes: [
-    - In-place datum change, on the *transfer path*: the reference token's stake credential is the transformation script, and `authorised_stake_cred` accepts a script owner via its withdraw-0 — which validates the schedule (`now ≥ d_k`; new value = a pure lookup of the baked constants, so a late submission jumps straight to the current step). The third-party path cannot do this: it preserves datums byte-for-byte.
-    - Holder-passive and permissionless: no signatures — the issuer normally submits and the holder can force it ("if it does not change by itself").
-    - The principal tokens never move — only the instrument's recorded value changes. This is how metadata updates reconcile with CIP-113 custody: the reference token is owned by a script, not by a holder.
-    - Last evolution: after `d4` the schedule is exhausted — the script rejects any further update and the value stops. The graduation window opens at `d4` (T4).
-    - The reference datum must stay within the deployment's `max_inline_datum_bytes` — keep it to the schedule and value; heavy CIP-25-style blobs would freeze the UTxO.
-  ],
-)
-
-#figure(bond_transform_tx, caption: [Scheduled value transformation (example +4%, in-place, holder-passive)]) <fig:bond-transform>
-
-#pagebreak()
-
-= Tokenized bond — deadline graduation (T4)
-_From `d4` on the tokens *may* convert into the corresponding native asset at
-the schedule's final value — graduation is opt-in, never forced. It is allowed
-only when the payout destination is owner-authorized: the owner either signs the
-graduation and names the address, or has pre-committed a payment credential into
-the token's datum on an earlier owner-signed transfer (T2b). Without one the
-transaction is rejected — there is no fallback, because a native asset sent to
-the wrong spending key is unrecoverable. A holder who never opts in simply keeps
-the (now non-transforming) token._
-
-#let bond_graduation_tx = vanilla_transaction(
-  "Deadline graduation",
-  inputs: (
-    (
-      name: "Tokens",
+      name: "Reference NFT",
       address: "plb_addr [stake: holder]",
-      value: ("cip_policy": "N"),
+      value: ("cip_policy": "1"),
+      datum: (
+        schedule: "[(d1,a1)…(d4,a4)]",
+        principal: "principal (ADA)",
+        step: "k - 1",
+      ),
       redeemer: [BaseSpendRedeemer { params_idx, wdrl_idx }],
     ),
     (
@@ -283,58 +95,208 @@ the (now non-transforming) token._
       name: "RegistryNode",
       address: "registry_addr",
       value: ("registry_node_cs": "1"),
-    ),
-    (
-      reference: true,
-      name: "Reference token",
-      address: "plb_addr [stake: transformation_script]",
-      value: ("cip_policy": "1"),
-      datum: (metadata: "{…}", version: "1", extra: "{schedule, value, native_policy}"),
     ),
   ),
   mint: (
-    "cip_policy": "- N (issuance_mint policy, burn)",
-    "native_policy": "N × v4 / scale (native mint policy)",
+    "cNt_policy": "1 unit, asset name = amount_k (decimal lovelace)",
   ),
   withdrawals: (
-    "spend chain — third-party path: programmable_logic_global [ThirdPartyAct] (0)",
-    "spend chain — third-party path: third_party [ThirdPartyRedeemer] (0)",
-    "spend chain — third-party path: third_party_logic (ours) (0)",
-    "spend chain — owner path (instead): programmable_logic_global [TransferAct] (0)",
-    "spend chain — owner path (instead): transfer [TransferRedeemer] (0)",
-    "spend chain — owner path (instead): transfer_logic (ours) (0)",
-    "burn — both paths: minting_logic (ours) [Burn] (0)",
-    "burn — both paths: issuance_logic (core) [names policy] (0)",
+    "programmable_logic_global [TransferAct] (0)",
+    "transfer [TransferRedeemer] (0)",
+    "transfer_logic (ours) (0)",
   ),
-  signatures: (),
-  validRange: (lower: "d4"),
+  signatures: (
+    "holder",
+  ),
   outputs: (
     (
-      name: "Ghost continuation",
-      address: "plb_addr [stake: holder]",
-      value: ("ADA": "min_ada"),
+      name: "Coupon",
+      address: "holder_payment_addr",
+      value: ("cNt_policy": "1 × {name: amount_k}"),
     ),
     (
-      name: "Native asset",
-      wallet: true,
-      address: "owner_addr \n   [payment: owner-authorized, stake: owner]",
-      value: ("native_policy": "N × v4 / scale"),
+      name: "Reference NFT",
+      address: "plb_addr [stake: holder]",
+      value: ("cip_policy": "1"),
+      datum: (
+        schedule: "[(d1,a1)…(d4,a4)]",
+        principal: "principal (ADA)",
+        step: "k",
+      ),
     ),
   ),
+  validRange: (lower: "d_k"),
   notes: [
-    - Two spend chains, one burn: a graduation runs *exactly one* spend chain — either the permissionless third-party path (`programmable_logic_global [ThirdPartyAct] → third_party → third_party_logic`) or the owner-signed transfer path (`… [TransferAct] → transfer → transfer_logic`, with the owner's signature). Both then share the *same* burn withdraw-0s — the substandard's `minting_logic [Burn]` and the core `issuance_logic` — and the same Burn-mode validation. The withdrawals list above shows both chains for reference; a real transaction carries only one.
-    - A burn fires `issuance_mint` with a negative quantity — the *same two* issuance withdraw-0s as a mint (protocol `issuance_logic` + ours) — plus the full spend chain of whichever action releases the tokens (09-DEVELOPING-MODULES §6).
-    - Event gate (Q-RULE-1): there is no separate rule script — the deadline check lives inside the substandard logic that already runs (the `third_party_logic` / `transfer_logic` withdraw-0 on the spend side and the `minting_logic` withdraw-0 on the burn side). It approves iff the validity range reaches `d4` — time-driven, no oracle; the event condition is the tx's own validity range.
-    - Authorization (Q-GRAD-2, this instrument): the `d4` event gate is necessary but not sufficient — the burn also needs an *owner-authorized payout destination*. That is *either* the owner's signature (owner path, which names the destination in the tx) *or* a payment credential the owner pre-committed to the token datum (which a third party can then complete without redirecting). The permissionless third-party path therefore only works for tokens whose owners opted in beforehand; with no owner signature and no committed destination, the tx is rejected.
-    - The conversion function (the Burn-mode validation) is shared by both paths: burn shape, full-burn per asset name (whole holdings burn — it makes the per-owner destination attribution exact), destination binding and the scaled native mirror. The native minting policy is signer-agnostic: it approves the mint only against the burn (`mint == burned × v4 / scale`), whichever credential signed it.
-    - Companion assets are accommodated inside the PLB, under the same policy, by a companion-aware substandard: graduation burns the principal name only, and any other governed name (the reference token, or an unknown one) fails closed — the companion survives a conversion and is never destroyed by it.
-    - Destination binding: the native asset is a plain token at a normal `(payment_credential, stake_credential)` address, but CIP-113 attributes ownership only by the *stake* credential — the payment (spending) key is not something the framework can tie to the owner. So the payment credential must come from the owner: named in an owner-signed graduation, or pre-committed to the token's inline datum on an owner-signed transfer (T2b, preserved byte-for-byte through the third-party path, so a third party can complete but never redirect it). The stake credential stays bound to the owner's current credential.
-    - No safe fallback, so no fallback: absent an owner signature *and* a committed payment credential, the transaction is rejected. Sending a native asset to an unverified spending key is unrecoverable, and graduation is optional — the owner may hold the final-value, non-transforming token indefinitely rather than convert it.
-    - Native mint: exactly `burned × v4 / scale`, regardless of which credential signed the burn — the native policy approves the mint only because it is backed by the governed burn of the same name at the schedule's final value ("no burn CIP, no mint", scaled). `v4` is the baked final value (`≈ 1.1699 × scale` in the example schedule): the only on-chain arithmetic is this final multiply. The mint is deliberately not 1:1 quantity-conserved — the scaled value rules that out — so it is governed by the native policy and the substandard's `minting_logic` instead.
-    - Third-party path mechanics: the PLB spend's paired continuation must preserve address, datum and reference script byte-for-byte (lovelace is *ratcheted* — output ≥ input, not conserved) — the *ghost* output (one-time per spent UTxO, reclaimable by the owner via a transfer-path spend). In the issuer's case the ghost remains; on the owner path (transfer path + the same Burn mode) nothing remains — the cheaper shape.
-    - Base-layer guarantee: a transaction that spends a registry node can never mint or burn that node's own token — graduation is pure issuance, never mixed with a registry reconfiguration.
-    - Asset identity (Q-GRAD-1): the native asset is a new policy — DEX pools / price history continuity across the flip remains an open global question.
+    - The coupon policy admits the mint only when the validity range reaches `d_k` *and* the spent reference NFT records `step: k - 1`; the continuation records `step: k`. That anchor makes each step claimable exactly once.
+    - The coupon is a native asset whose **name is its value**: name `"1124"` is worth 1124 lovelace. Two steps of equal amount share a name and are fungible on purpose.
+    - The claim is an owner-signed PLB spend of the reference NFT; it never touches the vault.
   ],
 )
 
-#figure(bond_graduation_tx, caption: [Deadline graduation (opt-in, value-preserving)]) <fig:bond-graduation>
+#figure(bond_coupon_claim_tx, caption: [Coupon claim at step k (holder-signed, step-anchored)]) <fig:bond-coupon-claim>
+
+#pagebreak()
+
+= Tokenized bond — redemption (burn-to-pay)
+_A coupon is redeemed by burning it at the vault: the vault validator pays out
+exactly the ADA the burned coupons name, and nothing else leaves._
+
+#let bond_redeem_tx = vanilla_transaction(
+  "Redemption (burn-to-pay)",
+  inputs: (
+    (
+      name: "Coupon",
+      address: "holder_addr",
+      value: ("cNt_policy": "1 × {name: amount}"),
+      redeemer: [Redeem { payouts }],
+    ),
+    (
+      name: "Vault",
+      address: "vault_addr",
+      value: ("ada": "funds"),
+      datum: (
+        owner: "company/country (signing credential)",
+        cnt_policy: "coupon policy id",
+      ),
+    ),
+  ),
+  mint: (
+    "cNt_policy": "- 1 (coupon burned)",
+  ),
+  signatures: (
+    "redeemer",
+  ),
+  outputs: (
+    (
+      name: "Payout",
+      wallet: true,
+      address: "redeemer-named_addr",
+      value: ("ada": "Σ decode(name) × burned"),
+    ),
+    (
+      name: "Vault",
+      address: "vault_addr",
+      value: ("ada": "funds - Σ decode(name) × burned"),
+      datum: (
+        owner: "company/country (signing credential)",
+        cnt_policy: "coupon policy id",
+      ),
+    ),
+  ),
+  notes: [
+    - The vault validator sums `decode(name) × burned_quantity` over the negative coupon mints and requires the vault's net ADA loss to equal that sum exactly. A redeemer cannot ask for more than the coupons are worth, and the vault cannot short-pay.
+    - The payout goes to the address(es) the redeemer names in the same transaction.
+    - Redemption burns the coupon, so no coupon is ever paid twice.
+    - No owner signature is needed on this path; the burn-to-pay rule is enforced on-chain.
+  ],
+)
+
+#figure(bond_redeem_tx, caption: [Redemption: burn coupons, the vault pays exactly what they name]) <fig:bond-redeem>
+
+#pagebreak()
+
+= Tokenized bond — owner extract
+_The company/country's unconditional custody path: the owner may move any ADA
+out of the vault at any time._
+
+#let bond_owner_extract_tx = vanilla_transaction(
+  "Owner extract",
+  inputs: (
+    (
+      name: "Vault",
+      address: "vault_addr",
+      value: ("ada": "funds"),
+      datum: (
+        owner: "company/country (signing credential)",
+        cnt_policy: "coupon policy id",
+      ),
+      redeemer: [OwnerExtract],
+    ),
+  ),
+  signatures: (
+    "owner (company/country)",
+  ),
+  outputs: (
+    (
+      name: "Payout",
+      wallet: true,
+      address: "owner_addr",
+      value: ("ada": "any amount"),
+    ),
+    (
+      name: "Vault",
+      address: "vault_addr",
+      value: ("ada": "funds - extracted"),
+      datum: (
+        owner: "company/country (signing credential)",
+        cnt_policy: "coupon policy id",
+      ),
+    ),
+  ),
+  notes: [
+    - `OwnerExtract` is approved purely by the owner's signature: the owner may move any amount at any time. This is the instrument's explicit custody assumption — holders trust the owner and the vault's solvency.
+    - The `Redeem` path (previous page) is separate and needs no owner signature.
+  ],
+)
+
+#figure(bond_owner_extract_tx, caption: [Owner extract: the company/country's custody path]) <fig:bond-owner-extract>
+
+#pagebreak()
+
+= Tokenized bond — graduation (T4)
+_From `d4` on the holder claims the principal-only coupon and retires the
+reference NFT. The principal is read from the certificate's datum._
+
+#let bond_graduation_tx = vanilla_transaction(
+  "Graduation",
+  inputs: (
+    (
+      name: "Reference NFT",
+      address: "plb_addr [stake: holder]",
+      value: ("cip_policy": "1"),
+      datum: (
+        schedule: "[(d1,a1)…(d4,a4)]",
+        principal: "principal (ADA)",
+        step: "final",
+      ),
+      redeemer: [BaseSpendRedeemer { params_idx, wdrl_idx }],
+    ),
+    (
+      reference: true,
+      name: "Protocol params",
+      address: "protocol_params",
+    ),
+    (
+      reference: true,
+      name: "RegistryNode",
+      address: "registry_addr",
+      value: ("registry_node_cs": "1"),
+    ),
+  ),
+  mint: (
+    "cNt_policy": "1 unit, asset name = principal (decimal lovelace)",
+  ),
+  withdrawals: (
+    "programmable_logic_global [TransferAct] (0)",
+    "transfer [TransferRedeemer] (0)",
+    "transfer_logic (ours) (0)",
+  ),
+  signatures: (
+    "holder",
+  ),
+  outputs: (
+    (
+      name: "Principal coupon",
+      address: "holder_payment_addr",
+      value: ("cNt_policy": "1 × {name: principal}"),
+    ),
+  ),
+  validRange: (lower: "d4"),
+  notes: [
+    - The principal amount comes from the reference NFT's datum, so the graduation cannot over- or under-claim.
+    - The reference NFT is **retired** here (burned or spent with no continuation) — it is the instrument's certificate and its life ends at graduation.
+    - The principal coupon is then redeemed at the vault like any other coupon (2 pages back): burn it, the vault pays the principal.
+  ],
+)
+
+#figure(bond_graduation_tx, caption: [Graduation: claim the principal-only coupon, retire the reference NFT]) <fig:bond-graduation>

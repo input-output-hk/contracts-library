@@ -2,214 +2,262 @@
 
 ## 1. Summary
 
-A **tokenized bond** is a CIP-113 programmable token that records a fixed schedule of value and settles into a plain native token at maturity. One transaction **registers** the CIP-113 instance and **issues** the first tokens to the beneficiary, publishing the bond's terms in the reference token's datum (§4.1). The principal then moves **freely** — no transfer rule gates who may hold or send it at any point of its life (§4.2). At each deadline the bond's recorded value steps to the schedule's next value (4% in this document's example): the **reference token's** datum is rewritten *in place*, holder-passively, with no signatures (§4.4). From the final deadline on, the owner **may** — never must — **graduate**: the programmable token burns and the plain native token is minted at the schedule's final value (§4.5).
+A **tokenized bond** backed by an ADA **vault**. The holder deposits the
+principal into a vault (an ADA UTxO controlled by a company/country) and
+receives a single CIP-113 **reference NFT** at the Programmable Logic Base
+(PLB) that carries the instrument's published terms and its claim state. Over
+the bond's life the holder claims **coupon tokens** (`cNt`) — one per scheduled
+step — each of which is a plain native asset whose **asset name encodes the ADA
+amount** it is worth. A `cNt` is redeemed by burning it at the vault: the vault
+validator pays out exactly the ADA named by the burned coupons. At maturity the
+holder claims a final `cNt` worth **only the principal** and retires the
+reference NFT.
 
-Two postures make the instrument trustworthy:
+Two postures make the instrument legible:
 
-- **Ownership rides the inline stake credential** of the token UTxO. It moves with the token at every transfer and is what the graduation binds the payout to. CIP-113 attributes ownership only by the *stake* credential — the native asset's *payment* (spending) key is not something the framework can tie to the owner, so it must come from the owner: named in an owner-signed graduation, or pre-committed to the token's datum on an owner-signed self-transfer (§4.3).
-- **A graduation can never redirect a payout.** It runs exactly one spend chain — the owner-signed transfer path, or the permissionless third-party path (which only works for tokens whose owner opted in beforehand) — plus a shared burn. Absent an owner signature *and* a committed payment credential the transaction is rejected: a native asset sent to an unverified spending key is unrecoverable, so there is no fallback.
+- **The reference NFT is the certificate.** It lives at the PLB, is
+  holder-staked (ownership = the UTxO's inline stake credential), holds the
+  published terms and the last-claimed step, and moves with the claim: whoever
+  holds it may claim the coupons still due. Its `step` anchor makes each coupon
+  claimable exactly once.
+- **Redemption is burn-to-pay.** A `cNt` is worth what its name says and only
+  what its name says: the vault validator sums the amounts decoded from the
+  burned coupon names and releases exactly that much ADA. The only residual
+  trust is the vault owner's extraction path (§4.6) and the vault's solvency.
+
+> This specification **replaces** the earlier single-NFT 1:1 graduation model.
+> A single NFT still lives at the PLB — it is the reference NFT described here —
+> but the economics now flow through the vault and the coupon tokens, not
+> through a burn-and-mint of the certificate.
 
 ### Design choices
 
 | Decision | Choice | Rationale |
 | --- | --- | --- |
-| Custody | **CIP-113 programmable-logic base (PLB)** | All token UTxOs are custodied at the shared base; ownership is the token UTxO's inline stake credential, which rides the token and is what graduation binds the payout to. |
-| Transfer | **Permissive `transfer_logic`, forever** | The transfer path never gates who may hold or send; the token is DEX/venue-compatible before and after every deadline (P1, Q-RULE-3). |
-| Instrument state | **Reference token under the same policy** | The mutable state (schedule, current value) lives in a reference token custodied at the PLB and staked to the *transformation script*, so it can be updated in place without touching any holder's tokens (§4.4). |
-| Schedule | **Baked validator constants, fixed-point** | Deployment-supplied: any non-empty sequence of `(deadline, value)` steps, precomputed off-chain. This document's running example is a fixed 4% annual step over four years (`v4 ≈ 1.1699 × scale`). No on-chain compounding: the validator only looks the current value up by time. |
-| Registration | **Atomic register + issue** | A single `RegisterAndMint` arm validates registration authority (issuer signature), node shape and the first-batch mint in one transaction (§4.1); no window between registering and holding tokens. |
-| Transformation | **Holder-passive, permissionless** | No signatures: anyone may submit; the transformation script's withdraw-0 is the time gate. A late submission jumps straight to the current step (the new value is a pure lookup). |
-| Payout key | **Opt-in, owner-signed self-transfer** | Only the owner can write a `payment_credential` into the token's datum; optional and re-settable (§4.3). |
-| Graduation | **Opt-in, owner-authorized destination, no fallback** | Two spend paths (owner-signed; permissionless third-party for opted-in tokens), one shared burn (§4.5). Absent an owner signature and a committed destination the tx is rejected (Q-GRAD-2). |
-| Graduated asset | **New native policy, burn-backed scaled mirror** | The native policy mints exactly `burned × v4 / scale`, approving only against the governed burn of the same name ("no burn CIP, no mint", scaled). Deliberately not 1:1 quantity-conserved (Q-GRAD-1). |
-| Companion assets | **Fail closed** | Graduation burns the principal asset name only; any other governed name (the reference token or an unknown one) survives a conversion. |
-| Third-party mechanics | **Ghost continuation, ratcheted** | The paired continuation preserves address, datum and reference script byte-for-byte; lovelace is ratcheted (`output ≥ input`). The ghost UTxO is one-time per spent UTxO and reclaimable by the owner via a transfer-path spend. |
+| Principal | **ADA held in a vault** | The bond is backed by lovelace in a dedicated UTxO; no fungible principal token is minted into the float. |
+| Vault control | **Owner extraction or burn-to-pay** | The company/country can extract (full custody); holders redeem by burning coupons. |
+| Certificate | **Single CIP-113 reference NFT at the PLB** | One holder-staked token carries the terms and the claim state and moves with the claim. |
+| Earnings | **`cNt` coupon tokens, amount in the name** | One native asset per step; the name is the amount, so the vault needs no external oracle or schedule. |
+| Coupon claim | **Holder-signed, step-anchored** | The claim advances the reference NFT's `step`, so no step can be claimed twice. |
+| Redemption | **Burn-to-pay at the vault** | Burning a coupon releases exactly `decode(name) × burned` ADA; double redemption is impossible (the coupon is destroyed). |
+| Graduation | **Principal-only coupon at maturity** | A final `cNt` names the principal; the reference NFT is retired. |
+| Trust | **Explicit full custody by the owner** | The owner-sign extraction path is unconditional and documented as the instrument's custody assumption. |
 
 ## 2. Roles
 
-- **Issuer**: parameterizes and registers the instance and gates the supply (the T0/T1 signature).
-- **Owner / holder**: whoever the token UTxO's **inline stake credential** names. May transfer freely (§4.2), commit a payout key (§4.3), and graduate by signing (§4.5 owner path). An owner who intends to sign their own graduation never needs §4.3.
-- **Beneficiary**: the initial owner named at issue (the §4.1 principal output's stake credential).
-- **Transformation script**: a smart-wallet stake credential that owns the reference token; its withdraw-0 authorizes the in-place schedule update (§4.4) — the only mutation authority over bond state.
-- **Payout payment credential**: the spending credential of the destination the native asset lands at (§4.5). It must be owner-supplied (named in an owner-signed graduation, or pre-committed via §4.3); the destination's stake credential stays bound to the owner's current credential.
-- **Submitters**: §4.2/§4.3 — the owner (signature required). §4.4 — anyone, no signature (normally the issuer; the holder can force it). §4.5 — the owner (owner path) or any third party (third-party path; only for tokens whose owner opted in).
-- **Core protocol** (trusted infrastructure, not part of this instrument): the PLB global validator, the core `transfer` / `third_party` stake validators (dispatch), the `issuance_mint` policy, and the registry mint/spend handlers.
+- **User / holder**: deposits the principal ADA into the vault and owns the
+  reference NFT. Claims coupons and redeems them; may transfer the reference
+  NFT, which transfers the right to future coupons and the principal claim.
+- **Vault owner (company/country)**: holds the signing key that authorizes
+  `OwnerExtract` — an unconditional custody path over the vault's ADA.
+- **Issuer**: registers the instrument and mints the reference NFT; does not
+  control coupons or the vault.
+- **Vault**: an ADA UTxO with a small validator enforcing the two spend paths
+  (§4.4, §4.6).
+- **Coupon policy**: the minting policy of the `cNt` native assets (§4.3).
+- **Core protocol** (trusted infrastructure): the CIP-113 PLB and the
+  transfer / issuance validators that custody and move the reference NFT.
 
 ## 3. State model
 
-### 3.1 Ownership and custody
+### 3.1 Vault
 
-- Token UTxOs live at the programmable-logic base; **ownership = the UTxO's inline stake credential**. It moves with the token at every transfer.
-- Minted tokens must land at PLB outputs with an inline stake credential and a **bounded inline datum** (the deployment's `max_inline_datum_bytes`); a UTxO born over the bound is frozen and unseizable. This is enforced by the core's `issuance_logic` (`no_escape`); the substandard does not re-check it, but builders must respect the bound or freeze the instrument.
-- A transfer's continuation preserves the seizable output shape (inline stake credential, no reference script) and bounds the datum, so commitments written into the datum (§4.3) never freeze the token.
+An ADA UTxO that holds the instrument's principal plus the owner's own funds.
+It is **pre-funded**: the holder's deposit sits alongside the owner's funds, so
+coupon and principal redemptions are deterministically payable while the vault
+is solvent. The vault is governed by a validator with two spend paths:
 
-### 3.2 Principal token
+| Redeemer | Admitted when | Effect |
+| --- | --- | --- |
+| `OwnerExtract` | the owner's credential signs | The owner may move any ADA out of the vault (unconditional custody). |
+| `Redeem` | no owner signature needed | The vault's net ADA loss equals the sum decoded from the burned coupons; the payout(s) go to the address(es) the redeemer names. |
+
+The vault is a single UTxO (or a small set); a redemption spends it and
+re-outputs the remainder. Solvency is an assumption, not an invariant (§7).
+
+### 3.2 Coupon token (`cNt`)
+
+A plain native asset under the **coupon policy**, with no CIP-113 custody. One
+coupon is minted per scheduled step:
 
 | Field | Meaning |
 | --- | --- |
-| value | `cip_policy` × `N` — the principal supply, issuer-gated; two asset names under one policy (principal + reference), no per-holder state to mint against. |
-| stake credential | Inline — the owner. Moves with the token at every transfer. |
-| datum | Inline, optional — normally empty; after §4.3 optionally `{ payment_credential }`, the owner's pre-committed payout credential. Free for this purpose because the metadata lives on the reference token. |
+| policy id | The coupon policy's id. |
+| asset name | The coupon's value **in lovelace, decimal**: name `"1124"` is worth `1124` lovelace. |
+| quantity | `1` per claim (a coupon is a single claim unit). |
 
-### 3.3 Reference token
+Because the name is only the amount, two coupons of equal amount are the same
+asset (they are fungible with each other). This is intended: redeeming any unit
+of `"1124"` pays `1124` lovelace, regardless of which step it came from.
 
-One unit under the same `cip_policy`, custodied at the PLB with the **transformation script** as inline stake credential. Inline datum:
+### 3.3 Reference NFT (single CIP-113 token at the PLB)
+
+The instrument's certificate and state anchor. Quantity `1`, custodied at the
+PLB with the holder as its inline stake credential. Inline datum:
 
 | Field | Meaning |
 | --- | --- |
 | `metadata` | `{ name, ticker, terms-url, … }` (CBOR) — publication for wallets and indexers. |
-| `version` | `1`. |
-| `extra` | `{ schedule: [(d1,v1) … (d4,v4)], value: v_k, native_policy }` — the baked schedule, the current recorded value (`v0` at issue; stale values are harmless) and the graduated asset's policy id (the instrument's published terms, written at registration and preserved by every later update; the graduation's burn reads it from the referenced reference token). |
+| `schedule` | `[(d1, amount1) … (d4, amount4)]` — the baked coupon schedule for reference. |
+| `principal` | The ADA principal deposited into the vault (the graduation amount). |
+| `step` | The number of the last coupon claimed (`0` at deposit); the claim anchor that makes each step claimable once. |
 
-The datum must stay within `max_inline_datum_bytes`: keep it to the schedule and value, heavy CIP-25-style blobs would freeze the UTxO.
+Ownership of the reference NFT is the claim: transferring it transfers the
+remaining coupons and the principal claim. Its datum must stay within the
+deployment's `max_inline_datum_bytes`.
 
-### 3.4 RegistryNode
+### 3.4 Schedule
 
-One node at the registry address holds the instance configuration:
-
-| Field | Meaning |
-| --- | --- |
-| `key` / `next` | Linked-list keys; `key` is the governed policy id. |
-| `minting_logic` | This substandard's mint/burn authority (the `RegisterAndMint` / `Burn` arm). |
-| `transfer_logic` | The permissive transfer predicate (P1). |
-| `third_party_logic` | The governed-extraction predicate (graduation-only in this instrument). |
-| `unfracking_logic` | `empty_vkey = VerificationKey(#"")` — unfracking forbidden (no withdrawal can be keyed by an empty hash); the instrument's frozen posture. |
-| `global_state_cs` | `#""` — unused by this instrument. |
-
-The node is **only ever referenced**, never spent, by instrument transactions (§6, I7). Its logic fields resolve at runtime: the governed policy id is a hash *of* the issuance script's applied form, so no validator parameter carries it — the issuance logic resolves it from the node (created at registration, referenced at graduation), and the transfer / third-party logics by matching their own node field; only scripts outside that dependency cone (the native mint policy) may bake `cip_policy` (09-DEVELOPING-MODULES, "Finding your own policy id").
-
-Every withdraw-zero stake credential must carry a `publish` handler accepting `RegisterCredential` and refusing every other certificate, or it can never be registered and therefore never invoked (09-DEVELOPING-MODULES, "Your credential must also carry a publish handler").
-
-### 3.5 Schedule
-
-The schedule is a **deployment parameter**, not a fixed shape: a non-empty,
-ascending sequence of `(deadline, value)` steps, precomputed off-chain in
-fixed-point `scale` units and baked as validator constants. The step count,
-spacing and implied rate are the deployer's choice; registration only requires
-the initial recorded value `v0` to equal `scale` and the reference datum
-to mirror the baked sequence exactly (§4.1).
-
-Throughout this document the running example is a four-step, 4% annual schedule
-— `d1 < d2 < d3 < d4`, with values `v1 … v4` and `v4 ≈ 1.1699 × scale` (4%
-compounded) — so `d1`/`d4` below denote the first/last steps of whatever
-sequence is deployed. The reference datum mirrors the values for wallets
-and indexers, and the graduation math reads the baked final value (the value at
-the latest deadline).
+A non-empty, ascending sequence of `(deadline, amount)` steps, precomputed
+off-chain. At each deadline `d_k` the holder may claim a coupon of `amount_k`
+lovelace. The final deadline `d4` opens the graduation (principal) claim. The
+schedule is recorded in the reference NFT's datum for wallets and indexers and
+is enforced by the coupon policy's gating.
 
 ## 4. Transactions
 
-Each section is one complete transaction; the normative diagrams are the `design.typ` figures of the same name. The withdraw-0s of a PLB spend are listed by role; the ledger presents withdrawals in its canonical order (scripts before vkeys, ascending), and builders derive every `wdrl_idx` of the `BaseSpendRedeemer { params_idx, wdrl_idx }` from the sorted set (09-DEVELOPING-MODULES §10).
+Each section is one complete transaction. Withdrawals are listed by role; the
+ledger presents them in its canonical order and builders derive indices from
+the sorted set.
 
-### 4.1 Register + issue (T0/T1)
+### 4.1 Register + deposit (T0)
 
-| | |
-| --- | --- |
-| **Inputs** | Issuer funds (wallet): `min_ada` + a fee asset `f`. |
-| **Reference inputs** | Protocol params. |
-| **Mint** | `registry_node_cs`: `1` (registry mint handler). `cip_policy`: `N` (principal) `+ 1` (reference) — under the `issuance_mint` policy. |
-| **Withdrawals** | `minting_logic` [RegisterAndMint] (0); core `issuance_logic` [names policy + OutputIndex proof] (0). |
-| **Signatures** | Issuer. |
-| **Outputs** | 1. **RegistryNode** at the registry address: `registry_node_cs` × 1 + `min_ada`, datum per §3.4. 2. **Principal tokens** at the PLB [stake: beneficiary]: `cip_policy` × `N`. 3. **Reference token** at the PLB [stake: transformation script]: `cip_policy` × 1, datum per §3.3 with `value: v0`. |
-| **Validity range** | Unconstrained. |
-| **Authorization** | Issuer signature. |
-| **Constraints** | The single `RegisterAndMint` arm validates registration authority, node shape and the first-batch mint together, and cross-checks the transaction shape: the node NFT is minted → the node is created; the `cip_policy` entries are present in `tx.mint`. |
-
-### 4.2 Free transfer (T2)
+The first transaction: the holder deposits the principal ADA into the vault and
+the instrument mints the reference NFT to the holder.
 
 | | |
 | --- | --- |
-| **Inputs** | Principal tokens at the PLB [stake: sender], `cip_policy` × `N`, redeemer `BaseSpendRedeemer { params_idx, wdrl_idx }`. |
+| **Inputs** | User wallet funds: the principal ADA + `min_ada` + fees. |
+| **Mint** | `cip_policy`: `1` (the reference NFT) — under the CIP-113 `issuance_mint` policy. `registry mint handler`: `1` (the RegistryNode). |
+| **Outputs** | 1. **Vault**: its existing ADA **+ the deposited principal**, datum per §3.1. 2. **Reference NFT** at the PLB [stake: holder]: `cip_policy` × 1, datum `{ metadata, schedule, principal, step: 0 }`. 3. Change. |
+| **Signatures** | Holder. |
+| **Constraints** | The deposit into the vault and the reference-NFT mint happen atomically so the certificate and its backing exist together. The reference datum mirrors the schedule and records `step: 0`. |
+
+### 4.2 Transfer the reference NFT (T1)
+
+The reference NFT is a CIP-113 token at the PLB; moving it moves the claim.
+
+| | |
+| --- | --- |
+| **Inputs** | Reference NFT at the PLB [stake: sender], `cip_policy` × 1. |
 | **Reference inputs** | Protocol params; RegistryNode. |
-| **Withdrawals** | `programmable_logic_global` [TransferAct] (0) → `transfer` [TransferRedeemer] (0) → `transfer_logic` (ours) (0). |
-| **Signatures** | Sender (the spent UTxO's stake credential). |
-| **Outputs** | Principal tokens at the PLB [stake: recipient], `cip_policy` × `N`. |
-| **Validity range** | Unconstrained — valid at every point of the lifecycle, before and after the deadlines. |
-| **Constraints** | The dispatcher selects the transfer path (`TransferAct`); the PLB spend redeemer carries no action arm. The permissive `transfer_logic` never gates who may hold or send. |
+| **Withdrawals** | `programmable_logic_global` [TransferAct] → `transfer` → `transfer_logic` (ours). |
+| **Signatures** | Sender. |
+| **Outputs** | Reference NFT at the PLB [stake: recipient], `cip_policy` × 1, datum preserved. |
+| **Constraints** | The permissive transfer logic gates nothing; a plain transfer leaves the datum (including `step`) untouched. |
 
-### 4.3 Register payout key (T2b)
+### 4.3 Coupon claim (step k, T-k)
 
-A special case of §4.2: the owner transfers the token to themselves and writes a payment credential into its datum. This is the opt-in that lets someone else (typically the issuer) graduate the token later without being able to redirect the payout — only the owner, by signing this transfer, can set it.
-
-| | |
-| --- | --- |
-| **Inputs** | Principal tokens at the PLB [stake: owner], `cip_policy` × `N`, redeemer `BaseSpendRedeemer { params_idx, wdrl_idx }`. |
-| **Reference inputs** | Protocol params; RegistryNode. |
-| **Withdrawals** | As §4.2. |
-| **Signatures** | Owner. |
-| **Outputs** | Principal tokens at the PLB [stake: owner] (same address), `cip_policy` × `N`, datum `{ payment_credential: owner_payment_cred }`. |
-| **Validity range** | Unconstrained. |
-| **Constraints** | The only difference from an ordinary transfer is the output datum. Because the transfer is owner-signed (`authorised_stake_cred`), only the owner can set the commitment. The transfer path bounds the output datum (`max_inline_datum_bytes`) and preserves the seizable output shape, so the commitment does not freeze the token. Optional and re-settable: the owner may skip it (and sign the graduation directly) or overwrite it with a later self-transfer. |
-
-### 4.4 Scheduled transformation (T3)
-
-At each deadline `d_k` the bond's value steps up: the reference token's datum is rewritten *in place*.
+At each deadline the holder claims the step's coupon; the claim advances the
+reference NFT's `step`.
 
 | | |
 | --- | --- |
-| **Inputs** | Reference token at the PLB [stake: transformation script], `cip_policy` × 1, datum `{ metadata, version, extra: { schedule, value: v_{k-1} (stale is ok) } }`, redeemer `BaseSpendRedeemer { params_idx, wdrl_idx }`. |
+| **Inputs** | Reference NFT at the PLB [stake: holder], dereferenced to its `step: k-1` state. |
 | **Reference inputs** | Protocol params; RegistryNode. |
-| **Withdrawals** | `programmable_logic_global` [TransferAct] (0) → `transfer` [TransferRedeemer] (0) → `transfer_logic` (ours) (0); `transformation_script` (ours) [time gate] (0). |
-| **Signatures** | None. |
-| **Outputs** | Reference token at the PLB [stake: transformation script], `cip_policy` × 1, datum `{ metadata, version, extra: { schedule, value: v_k = lookup(schedule, now) } }`. |
+| **Mint** | coupon policy: `1` unit of asset name `amount_k` (the step's amount in lovelace). |
+| **Withdrawals** | The reference NFT's transfer chain (the claim is an owner-signed PLB spend). |
+| **Signatures** | Holder. |
+| **Outputs** | 1. **Coupon** at the holder's payment address: `cNt(amount_k)` × 1. 2. **Reference NFT** at the PLB [stake: holder], datum with `step: k`. |
 | **Validity range** | Lower bound finite, `≥ d_k`. |
-| **Constraints** | In-place datum change on the *transfer path*: `authorised_stake_cred` accepts a script owner via its withdraw-0, which validates the schedule — the new value is a pure lookup of the baked constants, so a late submission jumps straight to the current step. The third-party path cannot do this: it preserves datums byte-for-byte. The principal tokens never move — only the instrument's recorded value changes. After `d4` the schedule is exhausted: the script rejects any further update and the value stops (the graduation window opens at `d4`, §4.5). |
+| **Constraints** | The coupon policy admits the mint only when the validity range reaches `d_k` **and** the spent reference NFT records `step: k-1`; the continuation must record `step: k`. This makes each step claimable exactly once (I3). |
 
-### 4.5 Deadline graduation (T4)
+### 4.4 Redemption (burn-to-pay, T-redeem)
 
-From `d4` on, the tokens *may* convert into the corresponding native asset at the schedule's final value. Graduation is opt-in, never forced.
+A coupon is redeemed by burning it at the vault. The vault pays exactly the ADA
+the burned coupons name.
 
 | | |
 | --- | --- |
-| **Inputs** | Principal tokens at the PLB [stake: holder], `cip_policy` × `N`, redeemer `BaseSpendRedeemer { params_idx, wdrl_idx }`. |
-| **Reference inputs** | Protocol params; RegistryNode; Reference token (its datum names the graduated asset's policy, §3.3). |
-| **Mint** | `cip_policy`: `−N` (burn, under the `issuance_mint` policy). `native_policy`: `N × v4 / scale` (the graduated asset). |
-| **Withdrawals** | Exactly **one** spend chain, plus the shared burn — *owner path*: `programmable_logic_global` [TransferAct] (0) → `transfer` [TransferRedeemer] (0) → `transfer_logic` (ours) (0); *third-party path*: `programmable_logic_global` [ThirdPartyAct] (0) → `third_party` [ThirdPartyRedeemer] (0) → `third_party_logic` (ours) (0); *both paths*: `minting_logic` (ours) [Burn] (0) → core `issuance_logic` [names policy] (0). |
-| **Signatures** | Owner path: the owner. Third-party path: none. |
-| **Outputs** | 1. **Native asset** (wallet) at `owner_addr` [payment: owner-authorized, stake: owner]: `native_policy` × `N × v4 / scale`. 2. *Third-party path only:* **ghost continuation** at the PLB [stake: holder]: `min_ada` — the paired continuation preserves address, datum and reference script byte-for-byte, with lovelace ratcheted (`output ≥ input`). |
+| **Inputs** | Coupon UTxO(s) holding the `cNt`(s) to redeem; the **Vault** UTxO. |
+| **Mint** | coupon policy: negative quantities (the coupons burned). |
+| **Withdrawals** | None (the vault validator runs on the vault spend). |
+| **Signatures** | The redeemer. |
+| **Outputs** | 1. **Payout(s)**: ADA to the address(es) the redeemer names, summing to the redeemed amount. 2. **Vault continuation**: the vault UTxO with its ADA reduced by exactly the redeemed amount. |
+| **Constraints** | The vault validator sums `decode(name) × burned_quantity` over the negative coupon mints and requires the vault's net ADA decrease to equal that sum exactly (I4). Nothing else leaves the vault on this path. |
+
+### 4.5 Graduation (T4)
+
+From `d4` on, the holder claims the principal-only coupon and retires the
+reference NFT.
+
+| | |
+| --- | --- |
+| **Inputs** | Reference NFT at the PLB [stake: holder], `step` at its final value. |
+| **Mint** | coupon policy: `1` unit of asset name `principal` (the principal in lovelace). |
+| **Withdrawals** | The reference NFT's transfer chain. |
+| **Signatures** | Holder. |
+| **Outputs** | 1. **Principal coupon** at the holder's payment address. 2. The reference NFT is **retired** (burned or spent without continuation). |
 | **Validity range** | Lower bound finite, `≥ d4`. |
-| **Constraints** | The Burn-mode validation is shared by both paths: burn shape; **full burn per asset name** (whole holdings burn, which makes per-owner destination attribution exact); destination binding; the scaled native mirror. Graduation burns the principal name only — any other governed name fails closed and survives. The native policy is signer-agnostic: it approves the mint only against the governed burn (`mint == burned × v4 / scale`), whichever credential signed. A burn fires `issuance_mint` with a negative quantity — the same two issuance withdraw-0s as a mint — plus the full spend chain of whichever action releases the tokens (09-DEVELOPING-MODULES §6). |
+| **Constraints** | The principal amount comes from the reference NFT's datum, so the graduation cannot over- or under-claim. The principal coupon is then redeemed at the vault like any other coupon (§4.4). |
 
-**Event gate (Q-RULE-1).** There is no separate rule script: the deadline check lives inside the substandard logic that already runs — the spend-side withdraw-0 (`third_party_logic` / `transfer_logic`) and the burn-side `minting_logic [Burn]` withdraw-0 — and approves iff the validity range reaches `d4` (time-driven, no oracle; the event condition is the transaction's own validity range).
+### 4.6 Owner extract (T-extract)
 
-**Authorization (Q-GRAD-2): the owner-authorized payout destination.** The `d4` event gate is necessary but not sufficient: the burn also needs a destination the owner authorized — *either* the owner's signature (owner path, which names the destination in the transaction) *or* a payment credential the owner pre-committed to the token datum (§4.3, preserved byte-for-byte through the third-party path, so a third party can complete the graduation but never redirect the payout). The permissionless third-party path therefore only works for tokens whose owners opted in beforehand. With no owner signature and no committed destination the transaction is rejected — graduation is optional, and the owner may hold the final-value, non-transforming token indefinitely.
-
-**Base-layer guarantee.** A transaction that spends a registry node can never mint or burn that node's own token: graduation is pure issuance, never mixed with a registry reconfiguration (§6, I7).
+| | |
+| --- | --- |
+| **Inputs** | The **Vault** UTxO. |
+| **Outputs** | 1. Payout to the owner. 2. Vault continuation with the remaining ADA. |
+| **Signatures** | The vault owner. |
+| **Constraints** | `OwnerExtract` is approved purely by the owner's signature: the owner may move any amount at any time. This is the instrument's explicit custody assumption (§7). |
 
 ## 5. Determinism & time
 
-Scripts read the transaction's validity range; `now` is the **lower bound** (the ledger guarantees the real slot is ≥ it).
-
-- §4.4 requires `now ≥ d_k`; since the new value is a pure lookup of the baked schedule, a late submission (`now ≥ d_{k+1}`) simply lands on the current step — staleness costs nothing.
-- After `d4` the schedule is exhausted: §4.4 is rejected, and §4.5 becomes available with **no upper bound** — graduation stays opt-in forever.
-- §4.1, §4.2 and §4.3 read no time bound.
+- §4.3 requires `now ≥ d_k`; the coupon amount is a schedule constant, so a
+  late claim lands on the same amount — staleness costs nothing.
+- §4.5 requires `now ≥ d4`; graduation never expires.
+- §4.1, §4.2, §4.4 and §4.6 read no time bound.
 
 ## 6. Invariants
 
-- **I1 — Ownership binding.** Ownership is the token UTxO's inline stake credential; it rides the token at every transfer, and graduation binds the payout to the owner's current credential (destination stake) with an owner-authorized payment credential.
-- **I2 — Ungated transfer.** A transfer never gates who may hold or send; the permissive `transfer_logic` holds at every point of the lifecycle.
-- **I3 — Seizable-shape and datum bounds.** Token continuations keep an inline stake credential, no reference script, and a datum within `max_inline_datum_bytes`; commitments (§4.3) never freeze the token, and UTxOs born over the bound are frozen and unseizable (builder responsibility).
-- **I4 — Transformation integrity.** A §4.4 update is a pure time lookup of baked constants, gated by `now ≥ d_k`, applied only to the reference token under the transformation script's stake credential; the principal tokens never move.
-- **I5 — Graduation integrity.** Graduation burns the principal name only (whole holdings per name), requires `now ≥ d4` **and** an owner-authorized payout destination, and mints exactly `burned × v4 / scale` under the native policy — backed by the governed burn ("no burn CIP, no mint"), regardless of which credential signed.
-- **I6 — Ghost fidelity.** The third-party path's paired continuation preserves address, datum and reference script byte-for-byte, ratcheting lovelace (`output ≥ input`); the ghost is one-time per spent UTxO and reclaimable by the owner via a transfer-path spend. The owner path leaves nothing behind (the cheaper shape).
-- **I7 — Pure issuance.** A transaction that spends a registry node can never mint or burn that node's own token: graduation is pure issuance, never mixed with a registry reconfiguration (base-layer guarantee; instrument transactions only *reference* the node).
-- **I8 — Companion survival.** Other governed names under the policy (the reference token, or unknown ones) fail closed under a graduation burn and are never destroyed by a conversion.
+- **I1 — Certificate ownership.** Ownership of the reference NFT is its inline
+  stake credential; it moves with the token, and transferring it transfers the
+  right to future coupons and the principal claim.
+- **I2 — Coupon value in the name.** A `cNt` is worth exactly the lovelace
+  amount encoded in its asset name, and nothing else.
+- **I3 — One claim per step.** A coupon for step `k` can be minted only when the
+  spent reference NFT records `step: k-1` and the validity range reaches `d_k`;
+  the continuation advances `step` to `k`. No step is claimable twice.
+- **I4 — Burn-to-pay exactness.** On redemption the vault releases exactly
+  `Σ decode(name) × burned_quantity` ADA — no more, no less — and the burned
+  coupons are destroyed, so no coupon is paid twice.
+- **I5 — Graduation integrity.** The graduation coupon names the reference
+  NFT's recorded `principal`, and the reference NFT is retired.
+- **I6 — Owner custody.** The vault owner may extract any ADA at any time; the
+  instrument's solvency is an assumption, not an enforced invariant.
 
 ## 7. Threat model & assumptions
 
 ### Defended
 
-- **Payout redirection.** A graduation pays out only to an owner-authorized destination: the owner's signature, or the §4.3 pre-commitment preserved byte-for-byte through the third-party path, so a completer cannot redirect. Absent both, the transaction is rejected. (I5)
-- **Unauthorized burn.** The `d4` gate plus the owner-authorized destination; whole-holdings-per-name burning keeps per-owner destination attribution exact. (I5)
-- **Premature graduation or transformation.** Both are validity-range gated (`≥ d4`, `≥ d_k`) and there is no oracle to forge. (§5)
-- **Schedule manipulation.** The schedule is baked as validator constants and the transformation is a pure lookup — no on-chain compounding to exploit. (I4)
-- **Companion destruction.** Graduation burns the principal name only; companions fail closed. (I8)
-- **Registry/issuance mixing.** Base-layer separation: a registry-node spend never co-occurs with that node's token mint/burn. (I7)
-- **Over-minting the native asset.** The mint is burn-backed and scaled: the native policy approves only `burned × v4 / scale`, governed by the burn of the same name. (I5)
+- **Double claim.** The step anchor (I3) prevents minting a step's coupon more
+  than once.
+- **Double redemption.** Redemption burns the coupon (I4); a burned coupon
+  cannot be spent again.
+- **Over/under payment on redemption.** The vault validator recomputes the
+  exact amount from the burned coupon names (I4), so a redeemer cannot request
+  more than the coupons are worth, nor can the vault short-pay.
+- **Wrong-amount coupons.** The coupon policy mints the schedule's `amount_k`
+  at step `k` (I2); a coupon's name is its value.
+- **Unauthorized coupon mint.** The claim requires the holder's reference NFT
+  and signature, gated to the deadline (I3).
+- **Payout redirection.** Redemptions pay only the addresses the redeemer names
+  in the same transaction; the vault validator ties the payout total to the
+  burned value.
 
 ### Assumptions / out of scope
 
-- **Submitter liveness is permissionless.** §4.4 needs no signatures, so the holder can force an update if the issuer stalls; §4.5's third-party path can be completed by anyone for opted-in tokens. No keeper is trusted.
-- **`max_inline_datum_bytes` discipline.** Builders must keep datums within the deployment's bound; a UTxO born over it is frozen (harmless but lossy).
-- **Ghost reclaim is the owner's transfer-path spend.** The property is guaranteed (I6); no dedicated transaction shape is specified.
-- **Asset-identity continuity is open.** The native asset is a new policy (Q-GRAD-1): DEX pool / price-history continuity across the flip is a global open question, not solved per instrument.
-- **Regulatory framing.** The library ships code only; whether a tokenized bond is a security in a given jurisdiction is the deployer's concern.
+- **Vault solvency and owner honesty.** The `OwnerExtract` path is
+  unconditional: the company/country can drain the vault, in which case coupon
+  and principal redemptions have nothing to pay. Holders trust the owner. This
+  is the instrument's central custodial assumption (I6).
+- **Pre-funding.** The vault is assumed funded with the principal plus the
+  coupon amounts before redemptions occur.
+- **Name collisions are intended.** Coupons are valued only by amount, so two
+  steps of equal amount share an asset name and are fungible; the year is not
+  encoded. If per-step distinctness is required, the name must encode more.
+- **ADA-only.** The principal and payouts are lovelace.
+- **Reference NFT custody.** The holder must hold the reference NFT to claim;
+  losing it loses the remaining coupons and the principal claim (bounded by
+  I1's transferability).
+- **Regulatory framing.** The library ships code only; whether a tokenized bond
+  is a security in a given jurisdiction is the deployer's concern.
