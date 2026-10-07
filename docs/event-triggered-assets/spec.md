@@ -99,25 +99,26 @@ of `"1124"` pays `1124` lovelace, regardless of which step it came from.
 
 The instrument's certificate and state anchor. One is minted per deposited bond
 unit: quantity `1`, custodied at the PLB with the depositor as its inline stake
-credential. Inline datum:
+credential. Its inline datum carries only the per-certificate claim state:
 
 | Field | Meaning |
 | --- | --- |
-| `schedule` | `[(d1, amount1) … (d4, amount4)]` — the baked coupon schedule for reference. |
-| `principal` | The unit principal deposited into the vault (the graduation amount). |
 | `step` | The number of the last coupon claimed (`0` at deposit); the claim anchor that makes each step claimable once per certificate. |
 
+The schedule and the unit principal are deployment constants baked into the
+coupon policy and the graduation logic, so every certificate shares them and
+they are not certificate state.
+
 Ownership of a certificate is the claim on its unit: transferring it transfers
-that unit's remaining coupons and principal claim. Its datum must stay within
-the deployment's `max_inline_datum_bytes`.
+that unit's remaining coupons and principal claim.
 
 ### 3.4 Schedule
 
 A non-empty, ascending sequence of `(deadline, amount)` steps, precomputed
 off-chain. At each deadline `d_k` a certificate may claim a coupon of `amount_k`
 lovelace. The final deadline `d4` opens the graduation (principal) claim. The
-schedule is recorded in each certificate's datum for wallets and indexers and
-is enforced by the coupon policy's gating.
+schedule is a deployment constant baked into the coupon policy's gate; only the
+per-certificate `step` lives in the datum.
 
 ## 4. Transactions
 
@@ -152,8 +153,8 @@ same transaction mints that depositor's certificate.
 | **Mint** | `cip_policy`: `1` (the depositor's reference NFT) — the core `issuance_mint` policy with the minting logic's `Deposit` mode. |
 | **Withdrawals** | The reference NFT's issuance chain (minting logic `[Deposit]` + core `issuance_mint`). |
 | **Signatures** | Depositor (only to spend their own wallet funds; the mint itself is permissionless). |
-| **Outputs** | 1. **Vault**: input ADA **+ the unit `principal`**, datum preserved. 2. **Reference NFT** at the PLB [stake: depositor]: `cip_policy` × 1, datum `{ schedule, principal, step: 0 }`. 3. Change. |
-| **Constraints** | Deposit integrity (I6): the mint is admitted only when the vault's net ADA gain equals exactly the unit `principal`, so the certificate and its backing exist atomically. Exactly one certificate per transaction; its datum mirrors the registered schedule and records `step: 0`. |
+| **Outputs** | 1. **Vault**: input ADA **+ the unit `principal`**, datum preserved. 2. **Reference NFT** at the PLB [stake: depositor]: `cip_policy` × 1, datum `{ step: 0 }`. 3. Change. |
+| **Constraints** | Deposit integrity (I6): the mint is admitted only when the vault's net ADA gain equals exactly the baked unit `principal`, so the certificate and its backing exist atomically. Exactly one certificate per transaction; its datum records `step: 0`. |
 
 ### 4.3 Transfer the reference NFT (T1)
 
@@ -182,7 +183,7 @@ advances that certificate's `step`.
 | **Signatures** | Holder. |
 | **Outputs** | 1. **Coupon** at the holder's payment address: `cNt(amount_k)` × 1. 2. **Reference NFT** at the PLB [stake: holder], datum with `step: k`. |
 | **Validity range** | Lower bound finite, `≥ d_k`. |
-| **Constraints** | The coupon policy admits the mint only when the validity range reaches `d_k` **and** the spent reference NFT records `step: k-1`; the continuation must record `step: k`. This makes each step claimable exactly once per certificate (I3). |
+| **Constraints** | The coupon policy admits the mint only when the validity range reaches its baked `d_k` and the spent certificate records `step: k-1`; the continuation must record `step: k`. This makes each step claimable exactly once per certificate (I3). |
 
 ### 4.5 Redemption (burn-to-pay, T-redeem)
 
@@ -211,7 +212,7 @@ retire the reference NFT.
 | **Signatures** | Holder. |
 | **Outputs** | 1. **Principal coupon** at the holder's payment address. 2. The reference NFT is **retired** (burned or spent without continuation). |
 | **Validity range** | Lower bound finite, `≥ d4`. |
-| **Constraints** | The principal amount comes from the reference NFT's datum, so the graduation cannot over- or under-claim. The principal coupon is then redeemed at the vault like any other coupon (§4.5). |
+| **Constraints** | The principal amount is the baked unit, so the graduation cannot over- or under-claim. The principal coupon is then redeemed at the vault like any other coupon (§4.5). |
 
 ## 5. Determinism & time
 
@@ -234,11 +235,11 @@ retire the reference NFT.
 - **I4 — Burn-to-pay exactness.** On redemption the vault releases exactly
   `Σ decode(name) × burned_quantity` ADA — no more, no less — and the burned
   coupons are destroyed, so no coupon is paid twice.
-- **I5 — Graduation integrity.** The graduation coupon names the certificate's
-  recorded `principal`, and the certificate is retired.
+- **I5 — Graduation integrity.** The graduation coupon names the baked unit
+  `principal`, and the certificate is retired.
 - **I6 — Deposit integrity.** A reference NFT can be minted only in a
-  transaction that increases the vault's ADA by exactly the certificate's
-  recorded `principal` (one unit), so no unbacked certificate exists.
+  transaction that increases the vault's ADA by exactly the baked unit
+  `principal`, so no unbacked certificate exists.
 
 ## 7. Threat model & assumptions
 
@@ -256,8 +257,11 @@ retire the reference NFT.
 - **Unauthorized coupon mint.** The claim requires the holder's certificate
   and signature, gated to the deadline (I3).
 - **Unbacked certificates.** The `Deposit` mint mode requires the vault's net
-  ADA gain to equal the certificate's `principal` (I6), so a certificate cannot
-  be minted without its backing.
+  ADA gain to equal the baked unit `principal` (I6), so a certificate cannot be
+  minted without its backing.
+- **Forged certificate terms.** The certificate datum holds only `step`; the
+  schedule and unit principal are baked validator constants, so rewriting the
+  datum cannot forge the coupon amounts or the principal.
 - **Payout redirection.** Redemptions pay only the addresses the redeemer names
   in the same transaction; the vault validator ties the payout total to the
   burned value.

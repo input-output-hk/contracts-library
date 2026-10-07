@@ -110,8 +110,6 @@ published terms and an initial `step: 0`._
       address: "plb_addr [stake: depositor]",
       value: ("cip_policy": "1"),
       datum: (
-        schedule: "[(d1,a1)…(d4,a4)]",
-        principal: "principal (ADA)",
         step: "0",
       ),
     ),
@@ -140,8 +138,6 @@ twice._
       address: "plb_addr [stake: holder]",
       value: ("cip_policy": "1"),
       datum: (
-        schedule: "[(d1,a1)…(d4,a4)]",
-        principal: "principal (ADA)",
         step: "k - 1",
       ),
       redeemer: [BaseSpendRedeemer { params_idx, wdrl_idx }],
@@ -180,8 +176,6 @@ twice._
       address: "plb_addr [stake: holder]",
       value: ("cip_policy": "1"),
       datum: (
-        schedule: "[(d1,a1)…(d4,a4)]",
-        principal: "principal (ADA)",
         step: "k",
       ),
     ),
@@ -258,7 +252,7 @@ exactly the ADA the burned coupons name, and nothing else leaves._
 
 = Tokenized bond — graduation (T4)
 _From `d4` on the holder claims the principal-only coupon and retires the
-reference NFT. The principal is read from the certificate's datum._
+reference NFT. The principal is the deployment's baked unit amount._
 
 #let bond_graduation_tx = vanilla_transaction(
   "Graduation",
@@ -268,8 +262,6 @@ reference NFT. The principal is read from the certificate's datum._
       address: "plb_addr [stake: holder]",
       value: ("cip_policy": "1"),
       datum: (
-        schedule: "[(d1,a1)…(d4,a4)]",
-        principal: "principal (ADA)",
         step: "final",
       ),
       redeemer: [BaseSpendRedeemer { params_idx, wdrl_idx }],
@@ -306,7 +298,7 @@ reference NFT. The principal is read from the certificate's datum._
   ),
   validRange: (lower: "d4"),
   notes: [
-    - The principal amount comes from the reference NFT's datum, so the graduation cannot over- or under-claim.
+    - The principal is the deployment's baked unit amount, so the graduation cannot over- or under-claim.
     - The reference NFT is *retired* here (burned or spent with no continuation) — it is the instrument's certificate and its life ends at graduation.
     - The principal coupon is then redeemed at the vault like any other coupon (see the redemption page): burn it, the vault pays the principal.
   ],
