@@ -13,8 +13,8 @@ use cardano/transaction.{InlineDatum, OutputReference, Transaction, find_input}
 use smart_wallet/checks
 use smart_wallet/mint.{validate_burn, validate_mint}
 use smart_wallet/types.{
-  Burn, Close, Deposit, Mint, MintRedeemer, Spend, SpendRedeemer, UpdateConfig,
-  WalletDatum,
+  Burn, Close, Deposit, Mint, MintRedeemer, Spend, SpendRedeemer,
+  UpdatePermissions, WalletDatum,
 }
 
 /// Multivalidator for a smart wallet. A wallet UTxO is identified by the NFT
@@ -23,7 +23,7 @@ use smart_wallet/types.{
 /// `admin` credential allowed to change them is a script parameter. `Spend`
 /// releases funds when at least `threshold` of `members` (read from the wallet
 /// configuration) sign **and** every delegated withdrawal script in the datum is
-/// invoked. `UpdateConfig` lets the `admin` rewrite the config in place.
+/// invoked. `UpdatePermissions` lets the `admin` rewrite the config in place.
 /// `Deposit` lets the `depositor` add funds without spending or changing config.
 validator smart_wallet(
   seed_utxo: OutputReference,

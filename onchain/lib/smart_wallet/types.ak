@@ -29,7 +29,7 @@ pub type SpendRedeemer {
   Spend
   /// Rewrite this UTxO's config (`withdrawals` and `depositor`); `out_ix`
   /// locates the continuation.
-  UpdateConfig { out_ix: Int }
+  UpdatePermissions { out_ix: Int }
   /// Deposit funds: the `depositor` authorizes, funds are added and the datum
   /// is preserved; `out_ix` locates the continuation.
   Deposit { out_ix: Int }

@@ -55,12 +55,12 @@ withdraw-0 scripts, and per-script mutable state) before generalizing it.
 ## 3. Roles
 
 - **Admin** (`admin`, a validator parameter). Creates the wallet (mint), rewrites
-  its config (`UpdateConfig`), and closes it (`Close`). A `Credential`, so a key,
+  its config (`UpdatePermissions`), and closes it (`Close`). A `Credential`, so a key,
   multisig, DAO, or smart wallet can fill the role. It has no power over
   individual spends, and (being a parameter) it is fixed for the life of the
   script address.
 - **Depositor** (`depositor`, a datum field). May add funds (`Deposit`) without
-  spending or reconfiguring. Rewritable by the admin via `UpdateConfig`.
+  spending or reconfiguring. Rewritable by the admin via `UpdatePermissions`.
 - **Members** (from the external settings config). The base M-of-N floor: at
   least `threshold` of `members` must sign a `Spend`. A member may itself be a
   script credential, so the floor can be a multisig, a DAO, etc.
@@ -100,7 +100,7 @@ burned.
 | Redeemer | Action |
 |---|---|
 | `Spend` | Pay out: base M-of-N floor **and** every delegated script runs. |
-| `UpdateConfig { out_ix }` | Admin rewrites `withdrawals` and/or `depositor`. |
+| `UpdatePermissions { out_ix }` | Admin rewrites `withdrawals` and/or `depositor`. |
 | `Deposit { out_ix }` | Depositor adds funds; config and value are otherwise preserved. |
 | `Close` | Admin closes: burn the NFT, release funds, unregister every script. |
 
@@ -143,13 +143,13 @@ via a **reward withdrawal** in the same transaction (withdraw-0 pattern).
 The `Spend` branch asserts only its own input, the M-of-N floor, and that the
 required withdrawals ran — never total input/output counts or unrelated value.
 
-### 5.3 UpdateConfig
+### 5.3 UpdatePermissions
 
 | | |
 |---|---|
 | **Inputs** | The wallet UTxO. |
 | **Outputs** | One continuation at `out_ix`: same address, same value (NFT preserved), inline datum with the new config. |
-| **Redeemer** | `UpdateConfig { out_ix }`. |
+| **Redeemer** | `UpdatePermissions { out_ix }`. |
 | **Authorization** | `admin`. |
 | **Constraints** | The old and new `withdrawals` maps are diffed: every script *added* must be **published** here (`RegisterCredential`); every script *removed* must be **unregistered** (`UnregisterCredential`); every script *kept* must carry unchanged `Data`. `depositor` is freely rewritten. |
 
@@ -212,18 +212,18 @@ a compile-time parameter); stateful scripts store and advance real state (e.g.
   `Close`.
 - **I2 — Spend authorization.** A `Spend` is valid only if the M-of-N floor is
   met and every script in `withdrawals` is invoked and approves.
-- **I3 — Config-only updates.** `UpdateConfig` preserves address and value; only
+- **I3 — Config-only updates.** `UpdatePermissions` preserves address and value; only
   `withdrawals` and `depositor` may change, and only by the `admin`.
 - **I4 — Published additions.** A script may appear in `withdrawals` only if it
   was registered (its `publish` handler validated its initial `Data`) in the same
-  transaction — at `Mint` or on `UpdateConfig`.
+  transaction — at `Mint` or on `UpdatePermissions`.
 - **I5 — Unregistered removals.** A script leaving `withdrawals` (on
-  `UpdateConfig` or `Close`) must be unregistered in the same transaction.
+  `UpdatePermissions` or `Close`) must be unregistered in the same transaction.
 - **I6 — Deposit adds, never removes.** `Deposit` preserves the datum and only
   increases value; the depositor cannot spend or reconfigure.
 - **I7 — State coherence.** A stateful script's `withdraw` enforces its own
   transition by reading the input state and requiring the output state to match;
-  kept scripts carry unchanged `Data` across an `UpdateConfig`.
+  kept scripts carry unchanged `Data` across an `UpdatePermissions`.
 - **I8 — Composability.** Each endpoint asserts only its own input, the mint under
   its own policy, the `out_ix` output, the validity range, and the required
   authorization; never total input/output counts or unrelated value.
@@ -234,7 +234,7 @@ a compile-time parameter); stateful scripts store and advance real state (e.g.
 
 - **Unauthorized spend.** Blocked by the M-of-N floor plus the delegated-script
   conjunction (I2). No single member or script can spend alone.
-- **Config tampering / control handoff.** `UpdateConfig` requires the `admin`
+- **Config tampering / control handoff.** `UpdatePermissions` requires the `admin`
   (fixed at deploy) and cannot move funds (I3); the admin cannot be changed, so
   control cannot be handed off without redeployment.
 - **Draining via deposit.** `Deposit` preserves the datum and only increases value

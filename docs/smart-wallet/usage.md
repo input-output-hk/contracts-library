@@ -75,7 +75,7 @@ stateDiagram-v2
 
 | Role | Credential | Powers |
 |---|---|---|
-| **Admin** | `admin` (script parameter) | Mint, `UpdateConfig`, `Close` |
+| **Admin** | `admin` (script parameter) | Mint, `UpdatePermissions`, `Close` |
 | **Depositor** | `depositor` (datum field) | Deposit funds only |
 | **Members** | `members`/`threshold` (settings UTxO) | Sign a `Spend` |
 | **Delegated scripts** | keys of `withdrawals` (datum field) | Run and approve on every `Spend` |
@@ -117,7 +117,7 @@ const settingsDatum: SettingsDatum = {
 Launch the settings instance with `buildLaunchTx` (see the
 [settings guide](../settings/usage.md#2-launch)); its NFT is located by
 `settingsPolicy` / `settingsTokenName` at spend time via reference input. Only
-`Spend` reads the config — `Deposit`, `UpdateConfig`, and `Close` do not
+`Spend` reads the config — `Deposit`, `UpdatePermissions`, and `Close` do not
 require the settings UTxO. Changing members/threshold through the settings
 protocol takes effect for the next spend immediately (no snapshot). A
 malformed or missing `current` halts spending until fixed.
@@ -529,7 +529,7 @@ call site, as the reference suite does
 ### Scope: no delegated withdrawal scripts
 
 Tx3 v1beta0 has no block for Cardano registration/unregistration certificates,
-which the on-chain `Mint` / `UpdateConfig` / `Close` endpoints require (CIP-69
+which the on-chain `Mint` / `UpdatePermissions` / `Close` endpoints require (CIP-69
 `publish` handlers). Consequently **every wallet produced by this reference
 carries an empty `withdrawals` map**, where the on-chain publication and
 unregistration checks are vacuously true. Spending a wallet that already
@@ -573,7 +573,7 @@ and its tests use a 1-of-1 wallet.
 - **Deposits skip the delegated scripts.** No restriction runs on a `Deposit`
   — there is no outflow to check — and the datum must be preserved *exactly*
   (same `withdrawals` map including each script's `Data`, same `depositor`).
-- **Kept scripts must be byte-identical.** `UpdateConfig` compares each kept
+- **Kept scripts must be byte-identical.** `UpdatePermissions` compares each kept
   script's `Data` by CBOR serialization; changing state means removing
   (unregistering) and re-adding (re-registering) the script in the same
   transaction.

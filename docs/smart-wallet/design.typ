@@ -179,7 +179,7 @@ untouched: same address, same value — only the config changes._
     (
       name: "Wallet UTxO",
       address: "wallet_addr",
-      redeemer: [UpdateConfig],
+      redeemer: [UpdatePermissions],
       value: (
         "ada": "x",
         "wallet_nft": "1",
