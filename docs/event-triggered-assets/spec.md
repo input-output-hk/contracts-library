@@ -103,7 +103,6 @@ credential. Inline datum:
 
 | Field | Meaning |
 | --- | --- |
-| `metadata` | `{ name, ticker, terms-url, … }` (CBOR) — publication for wallets and indexers. |
 | `schedule` | `[(d1, amount1) … (d4, amount4)]` — the baked coupon schedule for reference. |
 | `principal` | The unit principal deposited into the vault (the graduation amount). |
 | `step` | The number of the last coupon claimed (`0` at deposit); the claim anchor that makes each step claimable once per certificate. |
@@ -153,7 +152,7 @@ same transaction mints that depositor's certificate.
 | **Mint** | `cip_policy`: `1` (the depositor's reference NFT) — the core `issuance_mint` policy with the minting logic's `Deposit` mode. |
 | **Withdrawals** | The reference NFT's issuance chain (minting logic `[Deposit]` + core `issuance_mint`). |
 | **Signatures** | Depositor (only to spend their own wallet funds; the mint itself is permissionless). |
-| **Outputs** | 1. **Vault**: input ADA **+ the unit `principal`**, datum preserved. 2. **Reference NFT** at the PLB [stake: depositor]: `cip_policy` × 1, datum `{ metadata, schedule, principal, step: 0 }`. 3. Change. |
+| **Outputs** | 1. **Vault**: input ADA **+ the unit `principal`**, datum preserved. 2. **Reference NFT** at the PLB [stake: depositor]: `cip_policy` × 1, datum `{ schedule, principal, step: 0 }`. 3. Change. |
 | **Constraints** | Deposit integrity (I6): the mint is admitted only when the vault's net ADA gain equals exactly the unit `principal`, so the certificate and its backing exist atomically. Exactly one certificate per transaction; its datum mirrors the registered schedule and records `step: 0`. |
 
 ### 4.3 Transfer the reference NFT (T1)

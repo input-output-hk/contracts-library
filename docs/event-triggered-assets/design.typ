@@ -110,7 +110,6 @@ published terms and an initial `step: 0`._
       address: "plb_addr [stake: depositor]",
       value: ("cip_policy": "1"),
       datum: (
-        metadata: "{name, ticker, terms-url, …} (CBOR)",
         schedule: "[(d1,a1)…(d4,a4)]",
         principal: "principal (ADA)",
         step: "0",
