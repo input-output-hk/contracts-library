@@ -46,29 +46,30 @@ pub fn members_signed(
   signed >= threshold
 }
 
-/// Delegation check: every script in `spenders` keys a reward withdrawal in
+/// Delegation check: every script in `required` keys a reward withdrawal in
 /// `withdrawals`, i.e. each delegated withdraw-0 script ran and approved. The
-/// spend asserts this conjunction so no configured restriction can be omitted.
+/// spend and deposit paths assert this conjunction so no configured
+/// authorization can be omitted.
 pub fn withdrawals_invoked(
-  spenders: Pairs<ScriptHash, Data>,
+  required: Pairs<ScriptHash, Data>,
   withdrawals: Pairs<Credential, Lovelace>,
 ) -> Bool {
   list.all(
-    pairs.keys(spenders),
+    pairs.keys(required),
     fn(script_hash) { pairs.has_key(withdrawals, Script(script_hash)) },
   )
 }
 
-/// Publication check: every script in `spenders` was published in this
+/// Publication check: every script in `scripts` was published in this
 /// transaction, i.e. its stake credential was registered via a
 /// `RegisterCredential` certificate, which runs the script's `publish` handler.
 /// The handler itself reads and validates its initial `Data` from the wallet
 /// output's datum, so the wallet only asserts the registration here.
 pub fn withdrawals_published(
-  spenders: Pairs<ScriptHash, Data>,
+  scripts: Pairs<ScriptHash, Data>,
   self: Transaction,
 ) -> Bool {
-  list.all(spenders, fn(pair) { registered_in_tx(pair.1st, self) })
+  list.all(scripts, fn(pair) { registered_in_tx(pair.1st, self) })
 }
 
 /// Update check: every script *added* by `new` (a hash absent from `old`) was
@@ -158,7 +159,8 @@ fn registered_in_tx(hash: ScriptHash, self: Transaction) -> Bool {
 /// spending script's own policy, read from the wallet UTxO at `own_ref`) is
 /// burned in this transaction. Closing spends the wallet UTxO and destroys its
 /// identifying NFT, releasing whatever funds remain, and unregisters every
-/// delegated withdrawal script so their stake deposits are refunded.
+/// delegated script (`spenders` and `depositors`) so their stake deposits are
+/// refunded.
 pub fn validate_close(
   admin: Credential,
   own_ref: OutputReference,
@@ -182,13 +184,16 @@ pub fn validate_close(
     authorization.is_authorized(admin, self.extra_signatories, self.withdrawals),
     burned,
     withdrawals_removed_unregistered(datum.spenders, [], self),
+    withdrawals_removed_unregistered(datum.depositors, [], self),
   }
 }
 
-/// Deposit check: the wallet's `depositor` authorizes, and the continuation at
-/// `out_ix` sits at the same address carrying the wallet's unchanged datum with
-/// at least as much value (any asset, including lovelace and the wallet NFT).
-/// A deposit can only add funds, never spend them or alter the wallet's config.
+/// Deposit check: every script in the wallet's `depositors` map is invoked as a
+/// reward withdrawal and approves, and the continuation at `out_ix` sits at the
+/// same address carrying the wallet's unchanged datum with at least as much
+/// value (any asset, including lovelace and the wallet NFT). A deposit can only
+/// add funds, never spend them or alter the wallet's config. With an empty
+/// `depositors` map, a deposit needs no approval.
 pub fn validate_deposit(
   out_ix: Int,
   own_ref: OutputReference,
@@ -198,34 +203,28 @@ pub fn validate_deposit(
   expect InlineDatum(raw) = own_input.output.datum
   expect datum: WalletDatum = raw
 
-  expect
-    authorization.is_authorized(
-      datum.depositor,
-      self.extra_signatories,
-      self.withdrawals,
-    )
-
   expect Some(continuation) = list.at(self.outputs, out_ix)
   expect InlineDatum(cont_raw) = continuation.datum
   expect cont_datum: WalletDatum = cont_raw
 
   and {
+    withdrawals_invoked(datum.depositors, self.withdrawals),
     continuation.address == own_input.output.address,
     datum_unchanged(datum, cont_datum),
     value_superset(continuation.value, own_input.output.value),
   }
 }
 
-/// Two wallet datums carry the same config: identical `depositor` and identical
-/// `spenders` map (same keys, same `Data`).
+/// Two wallet datums carry the same config: identical `spenders` and
+/// `depositors` maps (same keys, same `Data`).
 fn datum_unchanged(old: WalletDatum, new: WalletDatum) -> Bool {
-  old.depositor == new.depositor && withdrawals_equal(
-    old.spenders,
-    new.spenders,
+  withdrawals_equal(old.spenders, new.spenders) && withdrawals_equal(
+    old.depositors,
+    new.depositors,
   )
 }
 
-/// Two `spenders` maps have the same keys with the same `Data`.
+/// Two script maps have the same keys with the same `Data`.
 fn withdrawals_equal(
   old: Pairs<ScriptHash, Data>,
   new: Pairs<ScriptHash, Data>,

@@ -37,7 +37,7 @@ fn seed_input() -> Input {
 }
 
 fn wallet_datum() -> WalletDatum {
-  WalletDatum { spenders: [], depositor: VerificationKey(admin_vkh) }
+  WalletDatum { spenders: [], depositors: [] }
 }
 
 fn withdrawal_certificate() -> Certificate {
@@ -131,10 +131,7 @@ test rejects_non_empty_withdrawals() fail {
   let bad_output = Output {
     ..wallet_output(),
     datum: InlineDatum(
-      WalletDatum {
-        spenders: [Pair(other_policy, data)],
-        depositor: VerificationKey(admin_vkh),
-      },
+      WalletDatum { spenders: [Pair(other_policy, data)], depositors: [] },
     ),
   }
   mint(Transaction { ..mint_tx(), outputs: [bad_output] })
@@ -145,10 +142,38 @@ test mint_with_published_withdrawals() {
   let output = Output {
     ..wallet_output(),
     datum: InlineDatum(
-      WalletDatum {
-        spenders: [Pair(other_policy, data)],
-        depositor: VerificationKey(admin_vkh),
-      },
+      WalletDatum { spenders: [Pair(other_policy, data)], depositors: [] },
+    ),
+  }
+  mint(
+    Transaction {
+      ..mint_tx(),
+      outputs: [output],
+      certificates: [withdrawal_certificate()],
+      redeemers: [
+        Pair(Publish { at: 0, certificate: withdrawal_certificate() }, data),
+      ],
+    },
+  )
+}
+
+test rejects_non_empty_depositors() fail {
+  let data: Data = 0
+  let bad_output = Output {
+    ..wallet_output(),
+    datum: InlineDatum(
+      WalletDatum { spenders: [], depositors: [Pair(other_policy, data)] },
+    ),
+  }
+  mint(Transaction { ..mint_tx(), outputs: [bad_output] })
+}
+
+test mint_with_published_depositors() {
+  let data = withdrawal_data()
+  let output = Output {
+    ..wallet_output(),
+    datum: InlineDatum(
+      WalletDatum { spenders: [], depositors: [Pair(other_policy, data)] },
     ),
   }
   mint(

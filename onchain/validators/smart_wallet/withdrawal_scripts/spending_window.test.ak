@@ -24,7 +24,7 @@ fn wallet_output(spenders: Pairs<ScriptHash, Data>) -> Output {
   Output {
     address: from_script(wallet_policy),
     value: assets.zero,
-    datum: InlineDatum(WalletDatum { spenders, depositor: Script(a) }),
+    datum: InlineDatum(WalletDatum { spenders, depositors: [] }),
     reference_script: None,
   }
 }

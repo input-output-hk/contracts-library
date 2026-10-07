@@ -1,7 +1,6 @@
 //// Smart wallet — on-chain types.
 
 use aiken/crypto.{ScriptHash, VerificationKeyHash}
-use cardano/address.{Credential}
 
 /// The wallet's self-governing config, stored in the `current` field of the
 /// settings UTxO datum so it is updatable without redeploying consumers.
@@ -12,14 +11,16 @@ pub type WalletConfig {
   threshold: Int,
 }
 
-/// Datum carried by each wallet UTxO: the delegated authorization list and the
-/// deposit authorization. The credential allowed to update them is a parameter
-/// of the spending script.
+/// Datum carried by each wallet UTxO: the delegated authorization scripts for
+/// spends and deposits. The credential allowed to update them is a parameter of
+/// the spending script.
 pub type WalletDatum {
   /// Delegated withdraw-0 scripts that must run on every spend of this UTxO,
   /// each carrying its own mutable data (if any) in `Data`.
   spenders: Pairs<ScriptHash, Data>,
-  /// Credential allowed to deposit funds into this UTxO (see `Deposit`).
+  /// Delegated withdraw-0 scripts that must run on every deposit into this
+  /// UTxO (e.g. asset or source-address allow/denylists), each carrying its own
+  /// configuration in `Data`.
   depositors: Pairs<ScriptHash, Data>,
 }
 
@@ -27,11 +28,11 @@ pub type WalletDatum {
 pub type SpendRedeemer {
   /// Pay out: base M-of-N floor plus the delegated spenders.
   Spend
-  /// Rewrite this UTxO's config (`spenders` and `depositor`); `out_ix`
+  /// Rewrite this UTxO's config (`spenders` and `depositors`); `out_ix`
   /// locates the continuation.
   UpdatePermissions { out_ix: Int }
-  /// Deposit funds: the `depositor` authorizes, funds are added and the datum
-  /// is preserved; `out_ix` locates the continuation.
+  /// Deposit funds: every `depositors` script runs and approves, funds are
+  /// added and the datum is preserved; `out_ix` locates the continuation.
   Deposit { out_ix: Int }
   /// Close the wallet: the `admin` authorizes, and the wallet NFT is burned.
   Close

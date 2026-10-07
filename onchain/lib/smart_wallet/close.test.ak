@@ -21,24 +21,28 @@ const tx_id =
 const withdrawal_script =
   #"dddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
 
+const deposit_script =
+  #"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+
 fn wallet_ref() -> OutputReference {
   OutputReference { transaction_id: tx_id, output_index: 0 }
 }
 
 fn wallet_input() -> Input {
-  wallet_input_with([])
+  wallet_input_with([], [])
 }
 
-fn wallet_input_with(spenders: Pairs<ScriptHash, Data>) -> Input {
+fn wallet_input_with(
+  spenders: Pairs<ScriptHash, Data>,
+  depositors: Pairs<ScriptHash, Data>,
+) -> Input {
   Input {
     output_reference: wallet_ref(),
     output: Output {
       address: from_script(wallet_policy),
       value: assets.from_lovelace(1_000_000)
         |> assets.add(wallet_policy, wallet_token, 1),
-      datum: InlineDatum(
-        WalletDatum { spenders, depositor: VerificationKey(admin_vkh) },
-      ),
+      datum: InlineDatum(WalletDatum { spenders, depositors }),
       reference_script: None,
     },
   }
@@ -88,7 +92,7 @@ test close_ok_unregisters_withdrawals() {
   let data: Data = 0
   let tx = Transaction {
     ..close_tx(),
-    inputs: [wallet_input_with([Pair(withdrawal_script, data)])],
+    inputs: [wallet_input_with([Pair(withdrawal_script, data)], [])],
     certificates: [
       UnregisterCredential {
         credential: Script(withdrawal_script),
@@ -99,11 +103,32 @@ test close_ok_unregisters_withdrawals() {
   close(tx)
 }
 
+test close_ok_unregisters_depositors() {
+  let data: Data = 0
+  let tx = Transaction {
+    ..close_tx(),
+    inputs: [wallet_input_with([], [Pair(deposit_script, data)])],
+    certificates: [
+      UnregisterCredential { credential: Script(deposit_script), refund: Never },
+    ],
+  }
+  close(tx)
+}
+
 test rejects_close_without_unregistering() fail {
   let data: Data = 0
   let tx = Transaction {
     ..close_tx(),
-    inputs: [wallet_input_with([Pair(withdrawal_script, data)])],
+    inputs: [wallet_input_with([Pair(withdrawal_script, data)], [])],
+  }
+  close(tx)
+}
+
+test rejects_close_without_unregistering_depositors() fail {
+  let data: Data = 0
+  let tx = Transaction {
+    ..close_tx(),
+    inputs: [wallet_input_with([], [Pair(deposit_script, data)])],
   }
   close(tx)
 }

@@ -19,12 +19,13 @@ use smart_wallet/types.{
 
 /// Multivalidator for a smart wallet. A wallet UTxO is identified by the NFT
 /// minted under this script's own policy (one-shot, via `seed_utxo`). Its datum
-/// carries the delegated `spenders` map and the `depositor` credential; the
-/// `admin` credential allowed to change them is a script parameter. `Spend`
-/// releases funds when at least `threshold` of `members` (read from the wallet
-/// configuration) sign **and** every delegated withdrawal script in the datum is
+/// carries the delegated `spenders` and `depositors` maps; the `admin`
+/// credential allowed to change them is a script parameter. `Spend` releases
+/// funds when at least `threshold` of `members` (read from the wallet
+/// configuration) sign **and** every delegated spender script in the datum is
 /// invoked. `UpdatePermissions` lets the `admin` rewrite the config in place.
-/// `Deposit` lets the `depositor` add funds without spending or changing config.
+/// `Deposit` lets the wallet's `depositors` scripts validate added funds without
+/// spending or changing config.
 validator smart_wallet(
   seed_utxo: OutputReference,
   settings_policy: PolicyId,
@@ -75,7 +76,7 @@ validator smart_wallet(
   }
 }
 
-/// Authorized rewrite of a wallet UTxO's config (`spenders` and `depositor`):
+/// Authorized rewrite of a wallet UTxO's config (`spenders` and `depositors`):
 /// the script's `admin` parameter must approve, and the continuation at `out_ix`
 /// must sit at the same address with the same value — only the config may
 /// change, so an update cannot move funds.
@@ -107,5 +108,19 @@ fn validate_config_update(
       self,
     ),
     checks.withdrawals_kept_unchanged(old_datum.spenders, new_datum.spenders),
+    checks.withdrawals_added_published(
+      old_datum.depositors,
+      new_datum.depositors,
+      self,
+    ),
+    checks.withdrawals_removed_unregistered(
+      old_datum.depositors,
+      new_datum.depositors,
+      self,
+    ),
+    checks.withdrawals_kept_unchanged(
+      old_datum.depositors,
+      new_datum.depositors,
+    ),
   }
 }

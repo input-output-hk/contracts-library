@@ -5,10 +5,11 @@
 // script holds the funds and checks a base M-of-N signature floor, delegating
 // every other authorization to the withdraw-0 staking scripts listed in the
 // wallet UTxO's own datum. One spend redeemer asserts the conjunction of the
-// M-of-N floor and all delegated staking authorizations. An admin credential (a
-// parameter of the script) creates the wallet, rewrites the config in place, and
-// closes the wallet by burning the NFT; a depositor credential (stored in the
-// datum) can add funds without spending or changing the config.
+// M-of-N floor and all delegated staking authorizations. A deposit redeemer
+// asserts a second set of delegated scripts, carried in the same datum, that
+// validate funds added to the wallet. An admin credential (a parameter of the
+// script) creates the wallet, rewrites the config in place, and closes the
+// wallet by burning the NFT.
 //
 // The M-of-N members and threshold are supplied as external configuration; this
 // design is agnostic of how they are sourced (a settings UTxO, script
@@ -46,7 +47,7 @@ script's own policy — into a fresh wallet UTxO at the wallet address. The
       ),
       datum: (
         spenders: "Pairs<ScriptHash, Data>",
-        depositor: "Credential",
+        depositors: "Pairs<ScriptHash, Data>",
       ),
     ),
   ),
@@ -66,14 +67,13 @@ script's own policy — into a fresh wallet UTxO at the wallet address. The
       spent at most once, so this policy id mints exactly one token ever. The
       resulting NFT is unforgeable and identifies the wallet.
     - the mint redeemer is `Mint { out_ix }`, locating the new wallet UTxO.
-    - the new wallet UTxO carries the NFT, an inline datum with a `spenders`
-      map and a `depositor` credential, and no reference script. Every script in
-      the `spenders` map must be registered in this same transaction — a
-      `RegisterCredential` certificate for its stake credential, which runs the
-      script's `publish` handler. The handler reads its own initial `Data` from
-      this output's datum and validates it, so a wallet may be created already
-      carrying delegated restrictions, but only ones that self-validated their
-      initial state.
+    - the new wallet UTxO carries the NFT, an inline datum with `spenders` and
+      `depositors` maps, and no reference script. Every script in both maps must
+      be registered in this same transaction — a `RegisterCredential` certificate
+      for its stake credential, which runs the script's `publish` handler. The
+      handler reads its own initial `Data` from this output's datum and validates
+      it, so a wallet may be created already carrying delegated restrictions or
+      deposit validations, but only ones that self-validated their initial state.
     - the `admin` credential (a script parameter) must be satisfied: a key admin
       signs; a script admin authorizes by a withdraw-0 invocation.
   ],
@@ -101,7 +101,7 @@ wallet UTxO's datum; the single spend redeemer asserts their conjunction._
       ),
       datum: (
         spenders: "Pairs<ScriptHash, Data>",
-        depositor: "Credential",
+        depositors: "Pairs<ScriptHash, Data>",
       ),
     ),
   ),
@@ -123,7 +123,7 @@ wallet UTxO's datum; the single spend redeemer asserts their conjunction._
       ),
       datum: (
         spenders: "Pairs<ScriptHash, Data>",
-        depositor: "Credential",
+        depositors: "Pairs<ScriptHash, Data>",
       ),
     ),
   ),
@@ -170,7 +170,7 @@ wallet UTxO's datum; the single spend redeemer asserts their conjunction._
 
 = Update config (per-UTxO)
 _An authorized admin credential — a parameter of the spending script — rewrites
-a wallet UTxO's config (`spenders` and `depositor`) in place. Funds are
+a wallet UTxO's config (`spenders` and `depositors`) in place. Funds are
 untouched: same address, same value — only the config changes._
 
 #let update_config_tx = vanilla_transaction(
@@ -186,7 +186,7 @@ untouched: same address, same value — only the config changes._
       ),
       datum: (
         spenders: "Pairs<ScriptHash, Data>",
-        depositor: "Credential",
+        depositors: "Pairs<ScriptHash, Data>",
       ),
     ),
   ),
@@ -200,7 +200,7 @@ untouched: same address, same value — only the config changes._
       ),
       datum: (
         spenders: [*spenders'*],
-        depositor: [*depositor'*],
+        depositors: [*depositors'*],
       ),
     ),
   ),
@@ -219,18 +219,17 @@ untouched: same address, same value — only the config changes._
       value* — including the NFT — so an update cannot move funds, only swap the
       config. The admin is fixed in the script parameter, so control cannot be
       handed off.
-    - `spenders'` / `depositor'`: the new config. It takes effect immediately
-      for subsequent spends of this UTxO; other wallet UTxOs are unaffected (the
-      config is per-UTxO).
-    - the update diffs the old and new maps: every script *added* must be
-      registered here (`RegisterCredential`, running its `publish` handler, which
-      reads the script's initial `Data` from the continuation datum and validates
-      it); every script *removed* must be unregistered (`UnregisterCredential`,
-      whose `publish` handler only accepts the unregister when it sees the script
-      leaving the wallet); every script *kept* must carry unchanged `Data`. The
-      `depositor` is freely rewritten by the admin. This ensures each entry's
-      `Data` was self-validated at registration and stays coherent across
-      updates.
+    - `spenders'` / `depositors'`: the new config. It takes effect immediately
+      for subsequent spends and deposits of this UTxO; other wallet UTxOs are
+      unaffected (the config is per-UTxO).
+    - the update diffs the old and new maps (both `spenders` and `depositors`):
+      every script *added* must be registered here (`RegisterCredential`, running
+      its `publish` handler, which reads the script's initial `Data` from the
+      continuation datum and validates it); every script *removed* must be
+      unregistered (`UnregisterCredential`, whose `publish` handler only accepts
+      the unregister when it sees the script leaving the wallet); every script
+      *kept* must carry unchanged `Data`. This ensures each entry's `Data` was
+      self-validated at registration and stays coherent across updates.
   ],
 )
 
@@ -238,11 +237,11 @@ untouched: same address, same value — only the config changes._
 
 #pagebreak()
 
-= Deposit (depositor adds funds)
-_The wallet's `depositor` credential adds funds to the wallet UTxO — spending it
-and recreating it at the same address with the NFT, an unchanged datum, and no
-fund removed. It is the only non-admin, non-M-of-N way to touch the wallet, and
-it cannot spend funds or change the config._
+= Deposit (depositors validate added funds)
+_The wallet's `depositors` scripts validate funds added to the wallet UTxO — the
+UTxO is spent and recreated at the same address with the NFT, an unchanged datum,
+and no fund removed. Every deposit script must run and approve; with none
+configured, a deposit is open. A deposit cannot spend funds or change the config._
 
 #let deposit_tx = vanilla_transaction(
   "Deposit",
@@ -257,9 +256,12 @@ it cannot spend funds or change the config._
       ),
       datum: (
         spenders: "Pairs<ScriptHash, Data>",
-        depositor: "Credential",
+        depositors: "Pairs<ScriptHash, Data>",
       ),
     ),
+  ),
+  withdrawals: (
+    "each script in the wallet datum's depositors map",
   ),
   outputs: (
     (
@@ -272,36 +274,36 @@ it cannot spend funds or change the config._
       ),
       datum: (
         spenders: "Pairs<ScriptHash, Data>",
-        depositor: "Credential",
+        depositors: "Pairs<ScriptHash, Data>",
       ),
     ),
   ),
-  signatures: (
-    "depositor (if a key credential)",
-  ),
+  signatures: (),
   notes: [
-    - the `depositor` credential (read from the wallet datum) must be satisfied:
-      a key depositor signs; a script depositor authorizes by a withdraw-0
-      invocation.
+    - every script in the wallet UTxO's `depositors` datum field is a withdraw-0
+      staking script that must run and approve in this transaction — e.g. asset
+      allow/denylists, source-address checks, or a key check. With an empty map,
+      a deposit needs no approval.
     - the continuation must sit at the same `wallet_addr` and carry the *same
-      datum* — a deposit cannot change `spenders` or `depositor`.
+      datum* — a deposit cannot change `spenders` or `depositors`.
     - the continuation's value must be a superset of the input's: every asset
       (including lovelace and the NFT) is present in at least the same quantity,
       so a deposit can only add funds, never spend or remove them.
-    - the delegated withdrawal scripts do not run on a deposit: there is no
-      outflow to restrict.
+    - the `spenders` scripts do not run on a deposit: there is no outflow to
+      restrict.
   ],
 )
 
-#figure(deposit_tx, caption: [Deposit (depositor adds funds)]) <fig:deposit>
+#figure(deposit_tx, caption: [Deposit (depositors validate added funds)]) <fig:deposit>
 
 #pagebreak()
 
 = Close (admin burns the NFT)
 _The admin closes the wallet: the wallet UTxO is spent, releasing whatever funds
 remain, and the identifying NFT is burned. The `Close` spend redeemer requires
-the admin, the burn, and that every delegated withdrawal script is unregistered
-so its stake deposit is refunded; the `Burn` mint redeemer permits the burn._
+the admin, the burn, and that every delegated script (spender and deposit) is
+unregistered so its stake deposit is refunded; the `Burn` mint redeemer permits
+the burn._
 
 #let close_tx = vanilla_transaction(
   "Close",
@@ -316,7 +318,7 @@ so its stake deposit is refunded; the `Burn` mint redeemer permits the burn._
       ),
       datum: (
         spenders: "Pairs<ScriptHash, Data>",
-        depositor: "Credential",
+        depositors: "Pairs<ScriptHash, Data>",
       ),
     ),
   ),
@@ -345,10 +347,10 @@ so its stake deposit is refunded; the `Burn` mint redeemer permits the burn._
       quantity; authorization is enforced by the `Close` spend redeemer.
     - closing spends the wallet UTxO and releases any remaining funds. There is
       no continuation: once the NFT is gone, the wallet can no longer be spent.
-    - every script in the closing wallet's `spenders` map must be unregistered
-      here (`UnregisterCredential`), refunding its stake deposit. Each script's
-      `publish` handler accepts this because it sees itself in the wallet input
-      and no wallet output.
+    - every script in the closing wallet's `spenders` and `depositors` maps must
+      be unregistered here (`UnregisterCredential`), refunding its stake deposit.
+      Each script's `publish` handler accepts this because it sees itself in the
+      wallet input and no wallet output.
   ],
 )
 

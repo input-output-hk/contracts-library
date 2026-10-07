@@ -15,8 +15,8 @@ use smart_wallet/types.{WalletDatum}
 /// policy id can mint at most once. Exactly one token with the expected
 /// name is minted, and the continuation output at `out_ix` must sit at this
 /// script's own address carrying that NFT with a fresh `WalletDatum` whose
-/// delegated spenders are all published in this transaction. The wallet's
-/// `admin` must authorize the mint.
+/// delegated scripts (`spenders` and `depositors`) are all published in this
+/// transaction. The wallet's `admin` must authorize the mint.
 pub fn validate_mint(
   seed_utxo: OutputReference,
   out_ix: Int,
@@ -53,8 +53,11 @@ pub fn validate_mint(
   let correct_value = has_nft(value, own_policy, wallet_token_name)
 
   let correct_datum = {
-    expect WalletDatum { spenders, depositor: _ } = datum
-    checks.withdrawals_published(spenders, self)
+    expect WalletDatum { spenders, depositors } = datum
+    and {
+      checks.withdrawals_published(spenders, self),
+      checks.withdrawals_published(depositors, self),
+    }
   }
 
   and {

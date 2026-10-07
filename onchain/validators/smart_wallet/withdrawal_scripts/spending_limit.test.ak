@@ -30,7 +30,7 @@ fn wallet_output(spenders: Pairs<ScriptHash, Data>) -> Output {
   Output {
     address: from_script(b),
     value: assets.zero,
-    datum: InlineDatum(WalletDatum { spenders, depositor: VerificationKey(a) }),
+    datum: InlineDatum(WalletDatum { spenders, depositors: [] }),
     reference_script: None,
   }
 }
