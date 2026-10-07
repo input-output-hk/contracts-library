@@ -94,7 +94,8 @@ requires spending the parameterized `seed_utxo`, and a UTxO can be spent at most
 once, so the policy mints a single token ever. The NFT is unforgeable and
 identifies the wallet; only an NFT-bearing UTxO at the wallet address is a valid
 wallet. The NFT never leaves the wallet UTxO except on `Close`, where it is
-burned.
+burned: `Spend` requires the wallet to survive, carrying the NFT (and its
+`depositors`) forward (§5.2).
 
 ### 4.3 Redeemers
 
@@ -138,13 +139,14 @@ via a **reward withdrawal** in the same transaction (withdraw-0 pattern).
 | | |
 |---|---|
 | **Inputs** | One wallet UTxO carrying the NFT. |
-| **Outputs** | Unconstrained by the spend branch; a partial spend keeps the NFT in a change output (the builder's responsibility; §6 scripts may require a continuation). |
+| **Outputs** | Must include a **wallet continuation**: an NFT-bearing output at the wallet's payment credential carrying an inline `WalletDatum` with the same `depositors` map as the input. Payout outputs are otherwise unconstrained. |
 | **Redeemer** | `Spend`. |
 | **Authorization** | At least `threshold` of `members` sign (read from the settings UTxO), **and** every script in `spenders` is invoked as a reward withdrawal and approves. |
-| **Constraints** | The wallet UTxO carries its NFT; the delegated spender scripts' `withdraw` handlers run and each enforces its own restriction. |
+| **Constraints** | The wallet UTxO carries its NFT; the delegated spender scripts' `withdraw` handlers run and each enforces its own restriction; the wallet survives with `depositors` unchanged (`spenders` may change — stateful scripts enforce their own transitions). |
 
-The `Spend` branch asserts only its own input, the M-of-N floor, and that the
-required spenders ran — never total input/output counts or unrelated value.
+The `Spend` branch asserts only its own input, the M-of-N floor, that the
+required spender scripts ran, and that the wallet survives with its `depositors`
+unchanged — never total input/output counts or unrelated value.
 
 ### 5.3 UpdatePermissions
 
@@ -214,8 +216,8 @@ configuration, validated at registration; deposits preserve it unchanged.
 ## 7. Invariants
 
 - **I1 — NFT identity.** A valid wallet is exactly the NFT-bearing UTxO at the
-  wallet address; the NFT is minted once (one-shot seed) and burned only on
-  `Close`.
+  wallet address; the NFT is minted once (one-shot seed), kept in the wallet by
+  every `Spend`, and burned only on `Close`.
 - **I2 — Spend authorization.** A `Spend` is valid only if the M-of-N floor is
   met and every script in `spenders` is invoked and approves.
 - **I3 — Config-only updates.** `UpdatePermissions` preserves address and value; only
@@ -234,6 +236,10 @@ configuration, validated at registration; deposits preserve it unchanged.
 - **I8 — Composability.** Each endpoint asserts only its own input, the mint under
   its own policy, the `out_ix` output, the validity range, and the required
   authorization; never total input/output counts or unrelated value.
+- **I9 — Depositor config is admin-only.** The `depositors` map changes only
+  through `UpdatePermissions`; a `Spend` must recreate the wallet with the same
+  `depositors` map, so neither a spend nor moving the NFT out and back can alter
+  deposit validation.
 
 ## 8. Threat model & assumptions
 
@@ -244,6 +250,11 @@ configuration, validated at registration; deposits preserve it unchanged.
 - **Config tampering / control handoff.** `UpdatePermissions` requires the `admin`
   (fixed at deploy) and cannot move funds (I3); the admin cannot be changed, so
   control cannot be handed off without redeployment.
+- **Deposit-rule tampering.** Only the `admin`'s `UpdatePermissions` can change
+  `depositors`: `Deposit` preserves the datum and `Spend` must keep the wallet
+  and its `depositors` map unchanged (I9). M-of-N authority cannot rewrite
+  deposit validation — the NFT cannot leave the wallet on a `Spend`, so it cannot
+  be re-sent with a crafted datum either.
 - **Draining via deposit.** `Deposit` preserves the datum and only increases value
   (I6); a deposit can never withdraw, and configured `depositors` scripts gate
   what may be added.

@@ -155,6 +155,38 @@ fn registered_in_tx(hash: ScriptHash, self: Transaction) -> Bool {
   )
 }
 
+/// Spend check: the wallet survives the spend and its `depositors` map is
+/// immutable across it — only `UpdatePermissions` may change the map. The
+/// transaction must recreate the wallet: an NFT-bearing output at the wallet's
+/// payment credential carrying an inline `WalletDatum` whose `depositors` equal
+/// the input's. `spenders` may change: stateful spender scripts enforce their
+/// own transitions.
+pub fn validate_spend_continuation(
+  old_datum: WalletDatum,
+  wallet_policy: PolicyId,
+  wallet_token_name: AssetName,
+  self: Transaction,
+) -> Bool {
+  let continuations = list.filter(
+    self.outputs,
+    fn(output) {
+      output.address.payment_credential == Script(wallet_policy) && assets.has_nft(
+        output.value,
+        wallet_policy,
+        wallet_token_name,
+      )
+    },
+  )
+  !list.is_empty(continuations) && list.all(
+    continuations,
+    fn(output) {
+      expect InlineDatum(raw) = output.datum
+      expect new_datum: WalletDatum = raw
+      withdrawals_equal(old_datum.depositors, new_datum.depositors)
+    },
+  )
+}
+
 /// Close check: the wallet's `admin` authorizes, and the wallet NFT (under the
 /// spending script's own policy, read from the wallet UTxO at `own_ref`) is
 /// burned in this transaction. Closing spends the wallet UTxO and destroys its

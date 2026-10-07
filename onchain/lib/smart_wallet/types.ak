@@ -26,7 +26,8 @@ pub type WalletDatum {
 
 /// Actions on a wallet UTxO (spend endpoint).
 pub type SpendRedeemer {
-  /// Pay out: base M-of-N floor plus the delegated spenders.
+  /// Pay out: base M-of-N floor plus the delegated spenders; the wallet must
+  /// survive with its `depositors` map unchanged.
   Spend
   /// Rewrite this UTxO's config (`spenders` and `depositors`); `out_ix`
   /// locates the continuation.

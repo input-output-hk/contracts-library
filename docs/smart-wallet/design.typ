@@ -86,7 +86,9 @@ script's own policy — into a fresh wallet UTxO at the wallet address. The
 = Spend (base M-of-N + delegated authorizations)
 _The wallet pays out. The spending script enforces its base M-of-N signature
 floor and forwards every other check to the withdrawal scripts named in the
-wallet UTxO's datum; the single spend redeemer asserts their conjunction._
+wallet UTxO's datum; the single spend redeemer asserts their conjunction. The
+wallet must survive the spend: an NFT-bearing continuation carries `depositors`
+forward unchanged._
 
 #let spend_tx = vanilla_transaction(
   "Spend",
@@ -115,7 +117,7 @@ wallet UTxO's datum; the single spend redeemer asserts their conjunction._
       value: ("ada": "y"),
     ),
     (
-      name: "Wallet change (if partial)",
+      name: "Wallet continuation (required)",
       address: "wallet_addr",
       value: (
         "ada": "x - y",
@@ -157,10 +159,15 @@ wallet UTxO's datum; the single spend redeemer asserts their conjunction._
       locks, recipient allow-lists, oracle attestations, … each is an
       independent withdrawal script observed here, none known to the spending
       script.
-    - composability: the spend asserts only its own inputs and that the
-      required spenders ran — never the total input or output counts, nor
-      unrelated UTxOs. Any partial change keeps the NFT so the wallet stays
-      valid.
+    - wallet survival: the transaction must recreate the wallet — an NFT-bearing
+      output at the wallet address carrying the inline datum. Its `depositors`
+      map must equal the input's (only `UpdatePermissions` may change it), while
+      `spenders` may change: stateful spender scripts enforce their own
+      transitions. The NFT can therefore only leave the wallet on `Close`.
+    - composability: the spend asserts only its own input, the required spenders,
+      and the surviving wallet with unchanged `depositors` — never the total
+      input or output counts, nor unrelated UTxOs. Payout outputs are otherwise
+      unconstrained.
   ],
 )
 
