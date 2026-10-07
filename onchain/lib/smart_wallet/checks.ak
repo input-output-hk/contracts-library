@@ -155,12 +155,13 @@ fn registered_in_tx(hash: ScriptHash, self: Transaction) -> Bool {
   )
 }
 
-/// Spend check: the wallet survives the spend and its `depositors` map is
-/// immutable across it — only `UpdatePermissions` may change the map. The
-/// transaction must recreate the wallet: an NFT-bearing output at the wallet's
-/// payment credential carrying an inline `WalletDatum` whose `depositors` equal
-/// the input's. `spenders` may change: stateful spender scripts enforce their
-/// own transitions.
+/// Spend check: the wallet survives the spend with its permission set intact.
+/// `depositors` is immutable across a spend (only `UpdatePermissions` may change
+/// the map), and the `spenders` key set is fixed (only `UpdatePermissions` may
+/// add or remove delegated scripts). The transaction must recreate the wallet:
+/// an NFT-bearing output at the wallet's payment credential carrying an inline
+/// `WalletDatum` meeting both conditions. Spender `Data` may change: each
+/// spender script enforces its own transition.
 pub fn validate_spend_continuation(
   old_datum: WalletDatum,
   wallet_policy: PolicyId,
@@ -182,7 +183,10 @@ pub fn validate_spend_continuation(
     fn(output) {
       expect InlineDatum(raw) = output.datum
       expect new_datum: WalletDatum = raw
-      withdrawals_equal(old_datum.depositors, new_datum.depositors)
+      withdrawals_equal(old_datum.depositors, new_datum.depositors) && same_keys(
+        old_datum.spenders,
+        new_datum.spenders,
+      )
     },
   )
 }
@@ -269,6 +273,15 @@ fn withdrawals_equal(
         None -> False
       }
     },
+  )
+}
+
+/// Two script maps have the same key set, regardless of order. Keys are unique,
+/// so equal length plus containment is set equality.
+fn same_keys(old: Pairs<ScriptHash, Data>, new: Pairs<ScriptHash, Data>) -> Bool {
+  list.length(old) == list.length(new) && list.all(
+    pairs.keys(old),
+    fn(hash) { pairs.has_key(new, hash) },
   )
 }
 

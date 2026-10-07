@@ -161,9 +161,10 @@ forward unchanged._
       script.
     - wallet survival: the transaction must recreate the wallet — an NFT-bearing
       output at the wallet address carrying the inline datum. Its `depositors`
-      map must equal the input's (only `UpdatePermissions` may change it), while
-      `spenders` may change: stateful spender scripts enforce their own
-      transitions. The NFT can therefore only leave the wallet on `Close`.
+      map must equal the input's and the `spenders` key set must stay fixed (only
+      `UpdatePermissions` may change either), while spender `Data` may change:
+      each spender script enforces its own transition. The NFT can therefore only
+      leave the wallet on `Close`.
     - composability: the spend asserts only its own input, the required spenders,
       and the surviving wallet with unchanged `depositors` — never the total
       input or output counts, nor unrelated UTxOs. Payout outputs are otherwise

@@ -200,12 +200,36 @@ test spend_ok_with_unchanged_depositors() {
   )
 }
 
-test spend_ok_with_changed_spenders() {
+test spend_ok_with_changed_spender_data() {
   let data: Data = 0
   let new_state: Data = 1
   spend_continuation(
     wallet_datum([Pair(a, data)], [Pair(b, data)]),
     [wallet_output([Pair(a, new_state)], [Pair(b, data)])],
+  )
+}
+
+test spend_ok_with_reordered_spenders() {
+  let data: Data = 0
+  spend_continuation(
+    wallet_datum([Pair(a, data), Pair(b, data)], []),
+    [wallet_output([Pair(b, data), Pair(a, data)], [])],
+  )
+}
+
+test spend_rejects_added_spender() fail {
+  let data: Data = 0
+  spend_continuation(
+    wallet_datum([Pair(a, data)], []),
+    [wallet_output([Pair(a, data), Pair(b, data)], [])],
+  )
+}
+
+test spend_rejects_removed_spender() fail {
+  let data: Data = 0
+  spend_continuation(
+    wallet_datum([Pair(a, data), Pair(b, data)], []),
+    [wallet_output([Pair(a, data)], [])],
   )
 }
 

@@ -142,11 +142,12 @@ via a **reward withdrawal** in the same transaction (withdraw-0 pattern).
 | **Outputs** | Must include a **wallet continuation**: an NFT-bearing output at the wallet's payment credential carrying an inline `WalletDatum` with the same `depositors` map as the input. Payout outputs are otherwise unconstrained. |
 | **Redeemer** | `Spend`. |
 | **Authorization** | At least `threshold` of `members` sign (read from the settings UTxO), **and** every script in `spenders` is invoked as a reward withdrawal and approves. |
-| **Constraints** | The wallet UTxO carries its NFT; the delegated spender scripts' `withdraw` handlers run and each enforces its own restriction; the wallet survives with `depositors` unchanged (`spenders` may change — stateful scripts enforce their own transitions). |
+| **Constraints** | The wallet UTxO carries its NFT; the delegated spender scripts' `withdraw` handlers run and each enforces its own restriction; the wallet survives with `depositors` unchanged and the `spenders` key set fixed — adding or removing delegated scripts is reserved for `UpdatePermissions`, while spender `Data` may change (each script enforces its own transition). |
 
 The `Spend` branch asserts only its own input, the M-of-N floor, that the
 required spender scripts ran, and that the wallet survives with its `depositors`
-unchanged — never total input/output counts or unrelated value.
+unchanged and its `spenders` key set fixed — never total input/output counts or
+unrelated value.
 
 ### 5.3 UpdatePermissions
 
@@ -224,9 +225,11 @@ configuration, validated at registration; deposits preserve it unchanged.
   `spenders` and `depositors` may change, and only by the `admin`.
 - **I4 — Published additions.** A script may appear in `spenders` or `depositors`
   only if it was registered (its `publish` handler validated its initial `Data`)
-  in the same transaction — at `Mint` or on `UpdatePermissions`.
+  in the same transaction — at `Mint` or on `UpdatePermissions`. A `Spend` may
+  not add one: it keeps the `spenders` key set fixed.
 - **I5 — Unregistered removals.** A script leaving `spenders` or `depositors` (on
-  `UpdatePermissions` or `Close`) must be unregistered in the same transaction.
+  `UpdatePermissions` or `Close`) must be unregistered in the same transaction. A
+  `Spend` may not remove one.
 - **I6 — Deposit adds, never removes.** `Deposit` preserves the datum and only
   increases value, and every `depositors` script must run and approve (with an
   empty map, deposits are open); a deposit can never spend or reconfigure.
@@ -262,6 +265,11 @@ configuration, validated at registration; deposits preserve it unchanged.
   `UnregisterCredential` unless the script is leaving a wallet (I5), so an
   attacker cannot unregister a delegated script and thereby stop the wallet from
   spending or accepting deposits.
+- **Restriction dropping.** A `Spend` preserves the delegated-script set: it may
+  not add or remove entries in `spenders` (I4/I5), so an approved spend cannot
+  silently shrug off a restriction or leave a stake credential registered without
+  a map entry. Removing a spender requires `UpdatePermissions` and its
+  unregistration certificate.
 - **Unvalidated script state.** A script enters `spenders` or `depositors` only
   after its own `publish` handler validates its initial `Data` (I4); stateful
   transitions are enforced by the script on every spend (I7).
