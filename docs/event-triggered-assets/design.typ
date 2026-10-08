@@ -97,7 +97,6 @@ published terms and an initial `step: 0`._
       address: "vault_addr",
       value: ("ada": "funds"),
       datum: (
-        owner: "company/country (signing credential)",
         cnt_policy: "coupon policy id",
       ),
     ),
@@ -129,7 +128,6 @@ published terms and an initial `step: 0`._
       address: "vault_addr",
       value: ("ada": "funds + principal"),
       datum: (
-        owner: "company/country (signing credential)",
         cnt_policy: "coupon policy id",
       ),
     ),
@@ -295,7 +293,6 @@ exactly the ADA the burned coupons name, and nothing else leaves._
       address: "vault_addr",
       value: ("ada": "funds"),
       datum: (
-        owner: "company/country (signing credential)",
         cnt_policy: "coupon policy id",
       ),
     ),
@@ -318,7 +315,6 @@ exactly the ADA the burned coupons name, and nothing else leaves._
       address: "vault_addr",
       value: ("ada": "funds - Σ decode(name) × burned"),
       datum: (
-        owner: "company/country (signing credential)",
         cnt_policy: "coupon policy id",
       ),
     ),

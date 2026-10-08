@@ -72,8 +72,16 @@ Two postures make the instrument legible:
 An ADA UTxO that holds the deposited principals plus the owner's own funds. It
 is **created and funded by the owner outside this design**, and each deposit
 adds one unit's principal, so coupon and principal redemptions are
-deterministically payable while the vault is solvent. The vault is governed by
-a validator with a single redemption path:
+deterministically payable while the vault is solvent. Its inline datum binds
+the instrument's coupon policy:
+
+| Field | Meaning |
+| --- | --- |
+| `cnt_policy` | The coupon policy whose negative mints the `Redeem` path honors. |
+
+The vault owner lives off-chain — custody is the instrument's central
+assumption (§7), not a datum field. The vault is governed by a validator with
+a single redemption path:
 
 | Redeemer | Admitted when | Effect |
 | --- | --- | --- |
