@@ -1,55 +1,24 @@
-//// Schedule helpers for the event-triggered assets substandard — the
-//// tokenized bond's baked-value arithmetic (spec §3.5, §4.4, §4.5).
+//// Schedule and coupon-name helpers for the event-triggered assets
+//// substandard — the tokenized bond's baked constants (spec §3.4, §4.4, §4.6).
 ////
-//// The deployment-supplied schedule `[(d1,v1) … (dn,vn)]` is baked as
-//// validator constants, precomputed off-chain in fixed-point `scale` units.
-//// There is no on-chain compounding: the transformation is a pure time lookup
-//// (`lookup(schedule, now)`) and the graduation mints exactly
-//// `burned × v_final / scale` per owner. The first deadline, last deadline and
-//// final value are derived from the baked list, so every validator that
-//// carries the schedule derives the same constants. The four-step, 4% annual
-//// schedule in the docs is one example of the parameter, not a constraint.
-////
-//// The payout is **per-owner**: whole holdings burn (§4.5), so each owner's
-//// burned quantity is exact and their share is `floor(Q_owner × v4 / scale)`.
-//// The total mint is the sum of the per-owner shares — rounding dust is
-//// never minted, so nobody gains from batching. The minting logic's `Burn`
-//// mode and the graduated asset's native policy call the same functions on
-//// the same transaction, guaranteeing the two scripts agree on the amount.
+//// The deployment-supplied schedule `[(d1,a1) … (dn,an)]` is baked as
+//// validator constants. There is no on-chain oracle or compounding: each step
+//// gates the claim of one coupon whose **asset name is the decimal lovelace
+//// amount** it is worth. The last deadline, the final step and every step's
+//// amount are derived from the baked list, so every validator that carries
+//// the schedule derives the same constants.
 
+use aiken/collection/dict
 use aiken/collection/list
 use aiken/math.{max}
-use aiken/option.{map, or_else}
-use cardano/address.{Credential, Inline}
-use cardano/assets.{PolicyId, quantity_of}
-use cardano/transaction.{Input, Output}
+use aiken/option.{or_else}
+use aiken/primitive/int
+use aiken/primitive/string
+use cardano/assets.{AssetName, PolicyId, Value, tokens}
 use event_triggered/types.{ScheduleStep}
 
-/// The recorded value at `now` (§4.4): the value of the latest step whose
-/// deadline is ≤ now. `None` before the first deadline (no step applies yet).
-/// Deterministic even for an unsorted list — the latest applicable deadline
-/// wins; deployments bake sorted schedules.
-pub fn lookup(schedule: List<ScheduleStep>, now: Int) -> Option<Int> {
-  schedule
-    |> list.reduce(
-        None,
-        fn(acc: Option<(Int, Int)>, step: ScheduleStep) {
-          let later = when acc is {
-            Some((deadline, _)) -> step.deadline > deadline
-            None -> True
-          }
-          if step.deadline <= now && later {
-            Some((step.deadline, step.value))
-          } else {
-            acc
-          }
-        },
-      )
-    |> map(fn(step) { step.2nd })
-}
-
 /// The schedule's last deadline — `d4`. The graduation window opens here
-/// (§4.5) and the schedule is exhausted afterwards (§5).
+/// (§4.6).
 pub fn final_deadline(schedule: List<ScheduleStep>) -> Option<Int> {
   list.reduce(
     schedule,
@@ -60,126 +29,72 @@ pub fn final_deadline(schedule: List<ScheduleStep>) -> Option<Int> {
   )
 }
 
-/// The schedule's final value — the value of the latest deadline (§3.5;
-/// `≈ 1.1699 × scale` in the example schedule). The graduation math reads the
-/// baked final value, never the reference datum's (possibly stale) recorded
-/// value.
-pub fn final_value(schedule: List<ScheduleStep>) -> Option<Int> {
-  schedule
-    |> list.reduce(
-        None,
-        fn(acc: Option<(Int, Int)>, step: ScheduleStep) {
-          let take = when acc is {
-            Some((deadline, _)) -> step.deadline > deadline
-            None -> True
-          }
-          if take {
-            Some((step.deadline, step.value))
-          } else {
-            acc
-          }
-        },
-      )
-    |> map(fn(step) { step.2nd })
+/// The certificate's final `step`: the number of schedule steps. A certificate
+/// reaches it only by claiming every coupon in order (I7), and it is the only
+/// step at which a retirement is admitted (§4.6).
+pub fn final_step(schedule: List<ScheduleStep>) -> Int {
+  list.length(schedule)
 }
 
-/// One owner's payout: `floor(Q × v4 / scale)` (§4.5).
-fn payout(burned: Int, final_value: Int, scale: Int) -> Int {
-  burned * final_value / scale
+/// The `amount` of step `k` (1-indexed), or `None` if the step is out of range.
+pub fn amount_at(schedule: List<ScheduleStep>, k: Int) -> Option<Int> {
+  when list.at(schedule, k - 1) is {
+    Some(step) -> Some(step.amount)
+    None -> None
+  }
 }
 
-/// Group the burned principal holdings by owner (I5). Every input holding
-/// the principal asset name contributes its **whole** holding, which makes
-/// per-owner destination attribution exact. Fails closed (`None`) when a
-/// holding input's stake credential is not inline — PLB UTxOs always stake
-/// to their holder's inline credential, so anything else is unexpected.
-pub fn burned_holdings(
-  inputs: List<Input>,
-  policy: PolicyId,
-  principal_name: ByteArray,
-) -> Option<List<(Credential, Int)>> {
-  list.reduce(
-    inputs,
-    Some([]),
-    fn(acc: Option<List<(Credential, Int)>>, input: Input) {
+/// The `deadline` of step `k` (1-indexed), or `None` if out of range.
+pub fn deadline_at(schedule: List<ScheduleStep>, k: Int) -> Option<Int> {
+  when list.at(schedule, k - 1) is {
+    Some(step) -> Some(step.deadline)
+    None -> None
+  }
+}
+
+/// Encode a lovelace amount as the coupon asset name: its decimal bytes
+/// (§3.2). Name `"1124"` is worth `1124` lovelace.
+pub fn encode_amount(amount: Int) -> AssetName {
+  int.to_string(amount) |> string.to_bytearray
+}
+
+/// Decode a coupon asset name into its lovelace amount (§3.2). `None` when the
+/// name is not canonical decimal — the round-trip check rejects leading zeros
+/// (so `"01124"` cannot alias `"1124"`) and any non-digit byte.
+pub fn decode_amount(name: AssetName) -> Option<Int> {
+  when int.from_utf8(name) is {
+    Some(amount) ->
+      if encode_amount(amount) == name {
+        Some(amount)
+      } else {
+        None
+      }
+    None -> None
+  }
+}
+
+/// The lovelace value redeemed by the negative mints under `cnt_policy`:
+/// `Σ decode(name) × |quantity|` over burned coupons (I4). `None` when any
+/// burned name is not canonical decimal — the vault fails closed rather than
+/// paying an undecodable coupon. Positive entries are ignored here; the coupon
+/// policy validates those.
+pub fn total_burned(mint: Value, cnt_policy: PolicyId) -> Option<Int> {
+  dict.foldl(
+    tokens(mint, cnt_policy),
+    Some(0),
+    fn(name: AssetName, quantity: Int, acc: Option<Int>) {
       when acc is {
         None -> None
-        Some(holdings) -> {
-          let quantity = quantity_of(input.output.value, policy, principal_name)
-          if quantity > 0 {
-            when owner_of(input.output) is {
-              Some(owner) -> Some(add_to(holdings, owner, quantity))
+        Some(total) ->
+          if quantity < 0 {
+            when decode_amount(name) is {
+              Some(amount) -> Some(total + amount * ( 0 - quantity ))
               None -> None
             }
           } else {
             acc
           }
-        }
       }
     },
   )
-}
-
-/// The scaled payout per owner, as `[(owner, share)]` in the same order.
-pub fn scaled_payouts(
-  holdings: List<(Credential, Int)>,
-  final_value: Int,
-  scale: Int,
-) -> List<(Credential, Int)> {
-  list.map(
-    holdings,
-    fn(entry) { (entry.1st, payout(entry.2nd, final_value, scale)) },
-  )
-}
-
-/// The total mint the graduation must produce: the sum of the per-owner
-/// shares. The graduated asset's native policy checks its mint against this
-/// exact number — the same computation the minting logic's Burn mode runs.
-pub fn total_payout(
-  holdings: List<(Credential, Int)>,
-  final_value: Int,
-  scale: Int,
-) -> Int {
-  list.reduce(
-    scaled_payouts(holdings, final_value, scale),
-    0,
-    fn(total: Int, entry: (Credential, Int)) { total + entry.2nd },
-  )
-}
-
-/// The sum of the quantities in a `[(owner, quantity)]` list — the burned
-/// total for holdings, the mint total for shares.
-pub fn total(entries: List<(Credential, Int)>) -> Int {
-  list.reduce(
-    entries,
-    0,
-    fn(total: Int, entry: (Credential, Int)) { total + entry.2nd },
-  )
-}
-
-// ----------------------------------------------------------------- helpers
-
-/// An output's owner: its inline stake credential (§3.1). Pointer-backed or
-/// absent stake credentials are not owners — they fail closed.
-fn owner_of(output: Output) -> Option<Credential> {
-  when output.address.stake_credential is {
-    Some(Inline(cred)) -> Some(cred)
-    _ -> None
-  }
-}
-
-fn add_to(
-  holdings: List<(Credential, Int)>,
-  owner: Credential,
-  quantity: Int,
-) -> List<(Credential, Int)> {
-  when holdings is {
-    [] -> [(owner, quantity)]
-    [head, ..tail] ->
-      if head.1st == owner {
-        [(owner, head.2nd + quantity), ..tail]
-      } else {
-        [head, ..add_to(tail, owner, quantity)]
-      }
-  }
 }

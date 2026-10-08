@@ -1,36 +1,28 @@
-//// Transfer logic (withdraw-0) — the P1 permissive-transfer base (§4.2).
+//// Transfer logic (withdraw-0) — step monotonicity for the event-triggered
+//// assets substandard (spec §4.3, I7, I8).
 ////
-//// A registered token must ship a `transfer_logic_script`, and the core
-//// `transfer` validator requires its withdraw-0 on every owner transfer, so
-//// "permissive transfer" is a predicate that approves everything — not the
-//// absence of one (09-DEVELOPING-SUBSTANDARDS.md). This instrument imposes
-//// no transfer rules: ownership is never gated, the token moves as freely as
-//// a native token at every point of its life, before and after the
-//// deadlines (§4.2, I2, Q-RULE-3) — DEX/venue-compatible.
+//// The certificate is a CIP-113 token at the PLB; moving it moves the claim.
+//// The core `transfer` validator already verified ownership, custody and value
+//// containment, so this predicate adds only the claim-state rules: a
+//// continuation must record the same `step` (plain transfer) or exactly
+//// `step + 1` (the coupon claim, §4.4) — never less — and a certificate may
+//// only be left without a continuation alongside its `cip_policy` burn (the
+//// retirement shape, §4.6). Every certificate UTxO is held to exactly one
+//// unit, so units cannot be merged or split.
 ////
-//// The one exception is the graduation's spend-side event gate (§4.5,
-//// Q-RULE-1): a transaction that burns governed tokens is a graduation and
-//// must reach the baked `d4` — the deadline check lives inside the
-//// substandard logic that already runs, and approves iff the validity range
-//// reaches `d4` (the transaction's own validity range; no oracle, §5).
-//// Plain transfers read no time bound (§4.2, §4.3).
-////
+//// The governed policy id resolves at runtime from the referenced registry
+//// node: it depends on the issuance credential, so this validator cannot bake
+//// it.
 
 use aiken/collection/dict
 use aiken/collection/list
-use aiken/interval.{is_entirely_after}
 use cardano/address.{Credential}
-use cardano/assets.{PolicyId, tokens}
-use cardano/transaction.{Transaction}
+use cardano/assets.{PolicyId, quantity_of, tokens}
+use cardano/transaction.{Output, Transaction}
+use event_triggered/certificate
 use event_triggered/registry
 use event_triggered/types.{TransferParams}
 
-/// Approve every owner transfer (P1, §4.2). The core `transfer` validator
-/// already verified ownership, custody and value preservation; the
-/// substandard adds no rule — except the graduation deadline gate below. The
-/// governed policy id resolves at runtime from the referenced registry node
-/// (09-DEVELOPING-MODULES, "Finding your own policy id": the policy id
-/// depends on the issuance credential, so this validator cannot bake it).
 pub fn validate(
   account: Credential,
   self: Transaction,
@@ -42,19 +34,57 @@ pub fn validate(
     params.registry_node_cs,
     account,
   )
-  if is_graduation(self, policy) {
-    // Event gate (Q-RULE-1, §4.5): the validity range must reach `d4`.
-    // `is_entirely_after(range, d4 - 1)` ⟺ the lower bound is ≥ d4.
-    is_entirely_after(self.validity_range, params.final_deadline - 1)
-  } else {
-    // A plain transfer reads no time bound (§4.2, §5).
-    True
+  let inputs = certificate.cert_inputs(
+    self.inputs,
+    policy,
+    params.certificate_name,
+  )
+  let outputs = certificate.cert_outputs(
+    self.outputs,
+    policy,
+    params.certificate_name,
+  )
+  when inputs is {
+    [input] -> {
+      let unit_in = quantity_of(
+        input.output.value,
+        policy,
+        params.certificate_name,
+      ) == 1
+      let unit_out = list.all(
+        outputs,
+        fn(output: Output) {
+          quantity_of(output.value, policy, params.certificate_name) == 1
+        },
+      )
+      and {
+        unit_in,
+        unit_out,
+        when outputs is {
+          [] -> retirement(self, policy)
+          [output] -> step_monotone(input.output, output)
+          _ -> False
+        },
+      }
+    }
+    // No certificate input, or more than one (a merge): reject.
+    _ -> False
   }
 }
 
-/// Is this transaction burning governed tokens? A negative mint under the
-/// policy is a graduation attempt — whatever the spend path.
-fn is_graduation(self: Transaction, policy: PolicyId) -> Bool {
+/// Step monotonicity (I7): a continuation records the same `step` or exactly
+/// `step + 1` — never less.
+fn step_monotone(input: Output, output: Output) -> Bool {
+  when (certificate.step_of(input), certificate.step_of(output)) is {
+    (Some(before), Some(after)) -> after == before || after == before + 1
+    _ -> False
+  }
+}
+
+/// A certificate with no continuation is a retirement: the transaction must
+/// carry a negative mint under the governed policy. The exact burn shape is
+/// validated by the minting logic's `Retire` mode (§4.6).
+fn retirement(self: Transaction, policy: PolicyId) -> Bool {
   tokens(self.mint, policy)
     |> dict.values
     |> list.any(fn(quantity) { quantity < 0 })

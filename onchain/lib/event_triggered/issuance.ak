@@ -1,20 +1,26 @@
+//// Minting logic (withdraw-0) for the event-triggered assets substandard —
+//// the tokenized bond's issuance and registry-lifecycle authority (spec §4.1,
+//// §4.2, §4.6).
+////
 //// The minting credential is frozen at registration and is also the
-//// registration authority, so this validator runs in two contexts and
-//// cross-checks the claimed mode against the transaction shape
+//// registration authority, so this validator runs in three contexts and
+//// cross-checks the claimed mode against the transaction shape. The governed
+//// policy id is a hash *of* this script's applied form, so it is never baked:
+//// every mode resolves it at runtime from the registry node.
 
 use aiken/collection/dict
 use aiken/collection/list
 use aiken/crypto.{ScriptHash}
 use aiken/interval.{is_entirely_after}
 use authorization.{is_authorized}
-use cardano/address.{Credential, Inline, Script, VerificationKey}
+use cardano/address.{Credential, Script, VerificationKey}
 use cardano/assets.{PolicyId, quantity_of, tokens}
-use cardano/transaction.{InlineDatum, Output, Transaction}
+use cardano/transaction.{Input, Output, Transaction}
+use event_triggered/certificate
 use event_triggered/registry
 use event_triggered/schedule
 use event_triggered/types.{
-  Burn, MintingAction, MintingParams, PrincipalDatum, ReferenceDatum,
-  RegisterAndMint, RegistryNode,
+  Deposit, MintingAction, MintingParams, Register, RegistryNode, Retire,
 }
 
 pub fn validate(
@@ -24,19 +30,18 @@ pub fn validate(
   params: MintingParams,
 ) -> Bool {
   when action is {
-    RegisterAndMint -> validate_register_and_mint(account, self, params)
-    Burn -> validate_burn(account, self, params)
+    Register -> validate_register(account, self, params)
+    Deposit -> validate_deposit(account, self, params)
+    Retire -> validate_retire(account, self, params)
   }
 }
 
 /// Registration (§4.1): exactly one node for this credential is created, its
-/// stance pinned to the frozen deployment, and the first batch minted in the
-/// same transaction, the reference output staked to the transformation script
-/// with the baked schedule at par (`v0 = scale`). The governed policy id is
-/// resolved at runtime from the created node — its NFT's asset name is the
-/// policy id and its datum's `minting_logic_script` is this credential
-/// (09-DEVELOPING-MODULES, "Your issuance logic must know why it is running").
-fn validate_register_and_mint(
+/// stance pinned to the frozen deployment, and no certificate is minted — so
+/// the same registration serves every later deposit. Register-only is enforced
+/// by refusing any `cip_policy` entry in `tx.mint`, and in-place node updates
+/// are refused by rejecting a governed node among the inputs.
+fn validate_register(
   account: Credential,
   self: Transaction,
   params: MintingParams,
@@ -49,26 +54,25 @@ fn validate_register_and_mint(
   and {
     quantity_of(self.mint, params.registry_node_cs, policy) == 1,
     pinned_stance(node, policy, params),
-    // Registration authority (§4.1): the issuer signature.
     is_authorized(params.issuer, self.extra_signatories, self.withdrawals),
-    // First batch: principal × N (N ≥ 1) + reference × 1 — the only
-    // two names under the policy (§4.1).
-    first_batch(self, policy, params),
-    // Principal outputs stake to holders, never to the transformation
-    // script (§4.4, I4 — see module docs).
-    principals_not_script_staked(self, policy, params),
-    // The reference token lands at the transformation script's stake with
-    // the baked schedule, mirrored at par (§4.1).
-    reference_output(self, policy, params),
+    // Register-only: no token under the governed policy is minted here.
+    dict.is_empty(tokens(self.mint, policy)),
+    // Refuse in-place node updates: no governed node may be spent.
+    list.is_empty(
+      registry.governing(
+        registry.outputs_of(self.inputs),
+        params.registry_node_cs,
+        account,
+      ),
+    ),
   }
 }
 
-/// Graduation (§4.5) — event-gated, destination-bound, burn-backed. The
-/// governed policy id resolves at runtime from the **referenced** registry
-/// node, and the graduated asset's policy id from the referenced reference
-/// token's datum (`extra.native_policy`, §3.3): the graduation requires the
-/// reference token as a reference input.
-fn validate_burn(
+/// Deposit (§4.2): permissionless and per unit. The certificate is admitted
+/// only when the vault gains exactly the unit `principal`, so the certificate
+/// and its backing exist atomically (I6). Exactly one certificate is minted to
+/// a new UTxO with `step: 0`, and no certificate input is spent (I8).
+fn validate_deposit(
   account: Credential,
   self: Transaction,
   params: MintingParams,
@@ -79,77 +83,70 @@ fn validate_burn(
     params.registry_node_cs,
     account,
   )
-  expect Some(native_policy) = published_native_policy(
+  and {
+    dict.size(tokens(self.mint, policy)) == 1,
+    quantity_of(self.mint, policy, params.certificate_name) == 1,
+    list.is_empty(
+      certificate.cert_inputs(self.inputs, policy, params.certificate_name),
+    ),
+    deposit_certificate(self.outputs, policy, params),
+    vault_net_gain(self.inputs, self.outputs, params.vault) == Some(
+      params.principal,
+    ),
+    vault_preserved(self.inputs, self.outputs, params.vault),
+  }
+}
+
+/// Retirement (§4.6): the certificate is burned at its final `step` within the
+/// `d4` window, with no continuation. The principal coupon mint is validated by
+/// the coupon policy in the same transaction (I5).
+fn validate_retire(
+  account: Credential,
+  self: Transaction,
+  params: MintingParams,
+) -> Bool {
+  let referenced = registry.outputs_of(self.reference_inputs)
+  expect [(policy, _)] = registry.governing(
     referenced,
-    policy,
-    params,
+    params.registry_node_cs,
+    account,
   )
-  expect [Pair(name, quantity)] = tokens(self.mint, policy)
-    |> dict.to_pairs()
   expect Some(final_deadline) = schedule.final_deadline(params.schedule)
-  expect Some(holdings) = schedule.burned_holdings(
+  let final_step = schedule.final_step(params.schedule)
+  let inputs = certificate.cert_inputs(
     self.inputs,
     policy,
-    params.principal_name,
+    params.certificate_name,
   )
-  let burned = 0 - quantity
-  expect Some(final_value) = schedule.final_value(params.schedule)
-  let shares = schedule.scaled_payouts(holdings, final_value, params.scale)
+  let outputs = certificate.cert_outputs(
+    self.outputs,
+    policy,
+    params.certificate_name,
+  )
   and {
-    // Burn shape: the principal name only, negative — any other governed
-    // name fails closed and survives (I8).
-    name == params.principal_name,
-    quantity < 0,
-    // Whole holdings per name: everything held burns, which makes the
-    // per-owner destination attribution exact (§4.5, I5).
-    burned == schedule.total(holdings),
-    // Pure issuance — never mixed with a registry reconfiguration (I7).
-    list.is_empty(
-      registry.governing(
-        registry.outputs_of(self.inputs),
-        params.registry_node_cs,
-        account,
-      ),
-    ),
-    // Event gate (Q-RULE-1): the deadline is the transaction's own validity
-    // range — no oracle (§5).
+    // Burn shape: exactly one certificate unit, negative.
+    dict.size(tokens(self.mint, policy)) == 1,
+    quantity_of(self.mint, policy, params.certificate_name) == -1,
+    when inputs is {
+      [input] ->
+        quantity_of(input.output.value, policy, params.certificate_name) == 1 && certificate.step_of(
+          input.output,
+        ) == Some(final_step)
+      _ -> False
+    },
+    // No continuation: the certificate is retired.
+    list.is_empty(outputs),
+    // Event gate (§4.6): the validity range must reach `d4`.
     is_entirely_after(self.validity_range, final_deadline - 1),
-    // Destination binding + the scaled native mirror (Q-GRAD-2, I5).
-    settle(self, params, policy, native_policy, holdings, shares),
   }
 }
 
-/// The graduated asset's policy id, read from the reference token's inline
-/// datum (`extra.native_policy`, §3.3 — the instrument's published terms).
-/// Exactly one reference input must carry the reference token.
-fn published_native_policy(
-  referenced: List<Output>,
-  policy: PolicyId,
-  params: MintingParams,
-) -> Option<PolicyId> {
-  let references = list.filter(
-    referenced,
-    fn(output) { quantity_of(output.value, policy, params.reference_name) == 1 },
-  )
-  when references is {
-    [output] ->
-      when output.datum is {
-        InlineDatum(data) -> {
-          expect ReferenceDatum { extra, .. }: ReferenceDatum = data
-          Some(extra.native_policy)
-        }
-        _ -> None
-      }
-    _ -> None
-  }
-}
+// --------------------------------------------------------------- Register
 
-// ------------------------------------------------------ RegisterAndMint
-
-/// The registered node pins the frozen stance (§3.4): permissive transfer
-/// logic (Q-RULE-3), graduation-only third-party logic, the `empty_vkey`
-/// unfracking hook (unfracking forbidden) and empty global state, and `key`
-/// equal to the governed policy id.
+/// The registered node pins the frozen stance (§4.1): our step-monotone
+/// transfer logic, our fail-closed third-party logic, the `empty_vkey`
+/// unfracking hook (forbidden) and empty global state, with `key` equal to the
+/// governed policy id.
 fn pinned_stance(
   node: RegistryNode,
   policy: PolicyId,
@@ -164,159 +161,62 @@ fn pinned_stance(
   }
 }
 
-/// Exactly the two names under the governed policy: the principal (N ≥ 1)
-/// and the reference (exactly 1) (§4.1).
-fn first_batch(
-  self: Transaction,
-  policy: PolicyId,
-  params: MintingParams,
-) -> Bool {
-  and {
-    dict.size(tokens(self.mint, policy)) == 2,
-    quantity_of(self.mint, policy, params.principal_name) >= 1,
-    quantity_of(self.mint, policy, params.reference_name) == 1,
-  }
-}
+// ---------------------------------------------------------------- Deposit
 
-/// No output holding principal tokens may stake to the transformation
-/// script: tokens born there are owned by the script and could never be
-/// transferred, transformed or graduated — the §4.4 update only rewrites the
-/// reference datum in place, and graduation binds payouts to holder stakes.
-fn principals_not_script_staked(
-  self: Transaction,
-  policy: PolicyId,
-  params: MintingParams,
-) -> Bool {
-  list.all(
-    self.outputs,
-    fn(output: Output) {
-      if quantity_of(output.value, policy, params.principal_name) > 0 {
-        !staked_to(output, params.transformation_script)
-      } else {
-        True
-      }
-    },
-  )
-}
-
-/// Exactly one output carries the reference token (and nothing else under
-/// the policy), staked to the transformation script, with a datum that
-/// mirrors the baked schedule at the initial value `v0 = scale` (§4.1).
-fn reference_output(
-  self: Transaction,
-  policy: PolicyId,
-  params: MintingParams,
-) -> Bool {
-  let candidates = list.filter(
-    self.outputs,
-    fn(output: Output) {
-      let minted = tokens(output.value, policy) |> dict.to_pairs()
-      minted == [Pair(params.reference_name, 1)]
-    },
-  )
-  when candidates is {
-    [output] -> and {
-        staked_to(output, params.transformation_script),
-        reference_datum(output, params),
-      }
-    _ -> False
-  }
-}
-
-fn reference_datum(output: Output, params: MintingParams) -> Bool {
-  when output.datum is {
-    InlineDatum(data) -> {
-      expect ReferenceDatum { version, extra, .. }: ReferenceDatum = data
-      and {
-        version == 1,
-        extra.schedule == params.schedule,
-        extra.value == params.scale,
-      }
-    }
-    _ -> False
-  }
-}
-
-/// Is this output staked to the given script credential?
-fn staked_to(output: Output, script: ScriptHash) -> Bool {
-  when output.address.stake_credential is {
-    Some(Inline(Script(hash))) -> hash == script
-    _ -> False
-  }
-}
-
-// ----------------------------------------------------------------- Burn
-
-/// The graduation's conversion validation, shared by both spend paths
-/// (§4.5): the scaled native mirror, per-owner destination attribution and
-/// the owner-authorized payment credentials.
-///
-/// Two checks pin the mint exactly:
-/// 1. the mint under the native policy equals the sum of the per-owner
-///    shares — the same number the native policy independently derives
-///    (`schedule.total_payout`), so the mint cannot deviate in either
-///    direction;
-/// 2. every burned owner is paid exactly their share, at their current stake
-///    credential (I1: the payout rides the inline stake credential, which
-///    graduation binds the destination to).
-/// Together these also force the new mint fully into owner outputs: any
-/// native asset at a non-owner stake would be pass-through only.
-///
-/// Then every native-bearing output at a burned owner's stake must pay an
-/// owner-authorized payment credential (Q-GRAD-2).
-fn settle(
-  self: Transaction,
-  params: MintingParams,
-  policy: PolicyId,
-  native_policy: PolicyId,
-  holdings: List<(Credential, Int)>,
-  shares: List<(Credential, Int)>,
-) -> Bool {
-  and {
-    quantity_of(self.mint, native_policy, params.principal_name) == schedule.total(
-      shares,
-    ),
-    list.all(
-      shares,
-      fn(entry) {
-        native_at_stake(self.outputs, entry.1st, native_policy, params) == entry.2nd
-      },
-    ),
-    list.all(
-      self.outputs,
-      fn(output: Output) {
-        if quantity_of(output.value, native_policy, params.principal_name) > 0 {
-          when output.address.stake_credential is {
-            Some(Inline(owner)) ->
-              if list.any(holdings, fn(entry) { entry.1st == owner }) {
-                payout_authorized(self, params, policy, owner, output)
-              } else {
-                True
-              }
-            _ -> True
-          }
-        } else {
-          True
-        }
-      },
-    ),
-  }
-}
-
-/// The native assets an owner holds across the outputs (by inline stake
-/// credential).
-fn native_at_stake(
+/// Exactly one output carries the certificate — quantity `1`, inline datum
+/// `{ step: 0 }`. Custody at the PLB is the core `issuance_logic`'s business.
+fn deposit_certificate(
   outputs: List<Output>,
-  owner: Credential,
-  native_policy: PolicyId,
+  policy: PolicyId,
   params: MintingParams,
-) -> Int {
-  list.reduce(
+) -> Bool {
+  let certs = certificate.cert_outputs(outputs, policy, params.certificate_name)
+  when certs is {
+    [output] ->
+      quantity_of(output.value, policy, params.certificate_name) == 1 && certificate.step_of(
+        output,
+      ) == Some(0)
+    _ -> False
+  }
+}
+
+/// The vault's net ADA gain across the transaction: outputs minus inputs whose
+/// payment credential is the vault script (I6).
+fn vault_net_gain(
+  inputs: List<Input>,
+  outputs: List<Output>,
+  vault: ScriptHash,
+) -> Option<Int> {
+  Some(ada_at_outputs(outputs, vault) - ada_at_inputs(inputs, vault))
+}
+
+/// The vault UTxO's address and datum are carried across the deposit
+/// unchanged: exactly one vault input pairs with exactly one vault output.
+fn vault_preserved(
+  inputs: List<Input>,
+  outputs: List<Output>,
+  vault: ScriptHash,
+) -> Bool {
+  let vin = list.filter(inputs, fn(input) { is_vault(input.output, vault) })
+  let vout = list.filter(outputs, fn(output) { is_vault(output, vault) })
+  when (vin, vout) is {
+    ([input], [output]) ->
+      input.output.address == output.address && input.output.datum == output.datum
+    _ -> False
+  }
+}
+
+fn is_vault(output: Output, vault: ScriptHash) -> Bool {
+  output.address.payment_credential == Script(vault)
+}
+
+fn ada_at_outputs(outputs: List<Output>, vault: ScriptHash) -> Int {
+  list.foldl(
     outputs,
     0,
-    fn(total: Int, output: Output) {
-      if output.address.stake_credential == Some(Inline(owner)) {
-        total + quantity_of(output.value, native_policy, params.principal_name)
+    fn(output: Output, total: Int) {
+      if is_vault(output, vault) {
+        total + quantity_of(output.value, #"", #"")
       } else {
         total
       }
@@ -324,65 +224,16 @@ fn native_at_stake(
   )
 }
 
-/// Destination binding for one native-bearing output at a burned owner's
-/// stake (Q-GRAD-2): the owner either signs the graduation (owner path — the
-/// destination is named in the transaction they sign) or pre-committed a
-/// payment credential to the token datum (§4.3, preserved byte-for-byte
-/// through the third-party path). Absent both, the transaction is rejected —
-/// no fallback.
-fn payout_authorized(
-  self: Transaction,
-  params: MintingParams,
-  policy: PolicyId,
-  owner: Credential,
-  output: Output,
-) -> Bool {
-  if is_authorized(owner, self.extra_signatories, self.withdrawals) {
-    True
-  } else {
-    when owner_payout(self, params, policy, owner) is {
-      Some(payment) -> output.address.payment_credential == payment
-      None -> False
-    }
-  }
-}
-
-/// The payment credential an unsigned owner committed to their token datum
-/// (§4.3): every burned input of that owner must carry the **same** one.
-/// `None` means no usable commitment — fail closed (Q-GRAD-2).
-fn owner_payout(
-  self: Transaction,
-  params: MintingParams,
-  policy: PolicyId,
-  owner: Credential,
-) -> Option<Credential> {
-  let inputs = list.filter(
-    self.inputs,
-    fn(input) {
-      quantity_of(input.output.value, policy, params.principal_name) > 0 && input.output.address.stake_credential == Some(
-        Inline(owner),
-      )
+fn ada_at_inputs(inputs: List<Input>, vault: ScriptHash) -> Int {
+  list.foldl(
+    inputs,
+    0,
+    fn(input: Input, total: Int) {
+      if is_vault(input.output, vault) {
+        total + quantity_of(input.output.value, #"", #"")
+      } else {
+        total
+      }
     },
   )
-  when list.map(inputs, fn(input) { committed_payment(input.output) }) is {
-    [Some(payment), ..rest] ->
-      if list.all(rest, fn(credential) { credential == Some(payment) }) {
-        Some(payment)
-      } else {
-        None
-      }
-    _ -> None
-  }
-}
-
-/// The owner's committed payout payment credential from one burned input's
-/// inline datum (§3.2). Absent datum or a `None` commitment yields `None`.
-fn committed_payment(output: Output) -> Option<Credential> {
-  when output.datum is {
-    InlineDatum(data) -> {
-      expect PrincipalDatum { payment_credential }: PrincipalDatum = data
-      payment_credential
-    }
-    _ -> None
-  }
 }
