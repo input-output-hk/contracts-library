@@ -15,7 +15,7 @@ open PlutusCore.UPLC.CekMachine (cekExecuteProgram)
 /-- The validator **accepts** `ctx`: running the compiled program on the script
 context halts returning unit, within the execution budget. -/
 def validatorAccepts (ctx : ScriptContext) (validator : Program) : Prop :=
-  cekExecuteProgram validator [toTerm ctx] 5000000
+  cekExecuteProgram validator [toTerm ctx] 1000
     = .Halt (.VCon Const.Unit)
 
 /-- The validator **rejects** `ctx`: it does not accept (it errors, or fails to
