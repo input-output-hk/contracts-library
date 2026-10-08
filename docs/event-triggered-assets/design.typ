@@ -80,8 +80,8 @@ serves every later deposit._
 
 = Tokenized bond — deposit (unit)
 _Anyone deposits one bond unit: the principal ADA moves into the vault and the
-same transaction mints that depositor's CIP-113 certificate, recording the
-published terms and an initial `step: 0`._
+same transaction mints that depositor's CIP-113 certificate, recording its
+timeline origin and an initial `step: 0`._
 
 #let bond_deposit_tx = vanilla_transaction(
   "Deposit (unit)",
@@ -136,13 +136,15 @@ published terms and an initial `step: 0`._
       address: "plb_addr [stake: depositor]",
       value: ("cip_policy": "1"),
       datum: (
+        start: "upper (finite)",
         step: "0",
       ),
     ),
   ),
   notes: [
     - The deposit is permissionless and per unit: the minting logic admits the certificate only when the vault's net ADA gain equals exactly the unit `principal`, so the certificate and its backing exist atomically (I6). No authority signature is needed — the depositor signs only to spend their own funds.
-    - The certificate is the instrument's only CIP-113 token; exactly one unit is minted per deposit (no certificate inputs, no merge), so many holders share the same registered schedule and advance their own `step`.
+    - The `Deposit` mode pins `start` to the transaction's validity upper bound (finite); since the ledger guarantees `upper ≥ now`, the timeline can never be backdated — it can only start later, at the depositor's own cost. The certificate is minted with `step: 0`.
+    - The certificate is the instrument's only CIP-113 token; exactly one unit is minted per deposit (no certificate inputs, no merge). Units deposited at different times run independent timelines from their own `start`.
     - Coupons are plain native assets minted later by the coupon policy; nothing else is minted here.
   ],
 )
@@ -163,6 +165,7 @@ the claim state never rewinds — its `step` stays the same._
       address: "plb_addr [stake: sender]",
       value: ("cip_policy": "1"),
       datum: (
+        start: "…",
         step: "k",
       ),
       redeemer: [BaseSpendRedeemer { params_idx, wdrl_idx }],
@@ -193,13 +196,14 @@ the claim state never rewinds — its `step` stays the same._
       address: "plb_addr [stake: recipient]",
       value: ("cip_policy": "1"),
       datum: (
+        start: "…",
         step: "k",
       ),
     ),
   ),
   notes: [
-    - Ownership rides the certificate's inline stake credential: moving the token moves the claim on that unit's remaining coupons and principal, and the datum (just `step`) is carried across unchanged.
-    - The transfer logic resolves the governed `cip_policy` from the RegistryNode and enforces step monotonicity (I7): with a continuation, `step` must stay or advance by exactly one — never decrease. A plain transfer preserves it, so a claimed step cannot be rewound and re-claimed.
+    - Ownership rides the certificate's inline stake credential: moving the token moves the claim on that unit's remaining coupons and principal, and the datum (`start`, `step`) is carried across unchanged.
+    - The transfer logic resolves the governed `cip_policy` from the RegistryNode and enforces step monotonicity (I7): with a continuation, `start` is preserved and `step` must stay or advance by exactly one — never decrease. A plain transfer preserves both, so a claimed step cannot be rewound and re-claimed.
     - At most one certificate per transaction, quantity exactly one in and out (no merge or split). The coupon claim page (next) is the admitted advance (`step: k - 1 → k`); retirement is a `cip_policy` burn on the graduation page.
   ],
 )
@@ -209,8 +213,8 @@ the claim state never rewinds — its `step` stays the same._
 #pagebreak()
 
 = Tokenized bond — coupon claim (step k)
-_At each deadline the holder claims the step's coupon. The claim spends and
-re-outputs the certificate, advancing its `step` so no step can be claimed
+_Once `now ≥ start + o_k` the holder claims the step's coupon. The claim spends
+and re-outputs the certificate, advancing its `step` so no step can be claimed
 twice._
 
 #let bond_coupon_claim_tx = vanilla_transaction(
@@ -221,6 +225,7 @@ twice._
       address: "plb_addr [stake: holder]",
       value: ("cip_policy": "1"),
       datum: (
+        start: "…",
         step: "k - 1",
       ),
       redeemer: [BaseSpendRedeemer { params_idx, wdrl_idx }],
@@ -259,13 +264,14 @@ twice._
       address: "plb_addr [stake: holder]",
       value: ("cip_policy": "1"),
       datum: (
+        start: "…",
         step: "k",
       ),
     ),
   ),
-  validRange: (lower: "d_k"),
+  validRange: (lower: "start + o_k"),
   notes: [
-    - The coupon policy admits the mint only when the validity range reaches `d_k` *and* the spent certificate records `step: k - 1`; the continuation records `step: k`, the only advance the transfer logic admits. That anchor makes each step claimable exactly once per certificate.
+    - The coupon policy admits the mint only when the validity range reaches the certificate's baked `start + o_k` *and* the spent certificate records `step: k - 1`; the continuation preserves `start` and records `step: k`, the only advance the transfer logic admits. That anchor makes each step claimable exactly once per certificate.
     - The coupon is a native asset whose *name is its value*: name `"1124"` is worth 1124 lovelace. Two steps of equal amount share a name and are fungible on purpose.
     - The claim is an owner-signed PLB spend of the certificate; it never touches the vault.
   ],
@@ -332,8 +338,9 @@ exactly the ADA the burned coupons name, and nothing else leaves._
 #pagebreak()
 
 = Tokenized bond — graduation (T4)
-_From `d4` on the holder claims the principal-only coupon and retires the
-certificate. The principal is the deployment's baked unit amount._
+_From the unit's maturity (`start + o4`) on, the holder claims the
+principal-only coupon and retires the certificate. The principal is the
+deployment's baked unit amount._
 
 #let bond_graduation_tx = vanilla_transaction(
   "Graduation",
@@ -343,6 +350,7 @@ certificate. The principal is the deployment's baked unit amount._
       address: "plb_addr [stake: holder]",
       value: ("cip_policy": "1"),
       datum: (
+        start: "…",
         step: "final",
       ),
       redeemer: [BaseSpendRedeemer { params_idx, wdrl_idx }],
@@ -380,10 +388,10 @@ certificate. The principal is the deployment's baked unit amount._
       value: ("cNt_policy": "1 × {name: principal}"),
     ),
   ),
-  validRange: (lower: "d4"),
+  validRange: (lower: "start + o4"),
   notes: [
     - The principal is the deployment's baked unit amount, so the graduation cannot over- or under-claim.
-    - The certificate is *retired* by a `cip_policy` burn at its final `step` within the `d4` window — our minting logic's `Retire` mode validates the burn shape and payout, and the transfer logic admits no continuation on this shape only.
+    - The certificate is *retired* by a `cip_policy` burn at its final `step`, on or after its `start + o4` maturity — our minting logic's `Retire` mode validates the burn shape and payout, and the transfer logic admits no continuation on this shape only.
     - The principal coupon is then redeemed at the vault like any other coupon (see the redemption page): burn it, the vault pays the principal.
   ],
 )
