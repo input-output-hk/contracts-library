@@ -5,29 +5,29 @@
 A **tokenized bond** backed by an ADA **vault**. The instrument is **registered
 once** (the issuer creates its registry entry); afterwards **anyone may
 deposit** a fixed bond unit: the principal moves into the vault and the same
-transaction mints that depositor a CIP-113 **reference NFT** at the
-Programmable Logic Base (PLB) — the certificate carrying the instrument's
-published terms and its claim state. Over the bond's life each certificate
+transaction mints that depositor a CIP-113 **certificate** at the
+Programmable Logic Base (PLB) — the holder-staked token carrying the unit's
+claim state. Over the bond's life each certificate
 claims **coupon tokens** (`cNt`) — one per scheduled step — each of which is a
 plain native asset whose **asset name encodes the ADA amount** it is worth. A
 `cNt` is redeemed by burning it at the vault: the vault validator pays out
 exactly the ADA named by the burned coupons. At maturity each certificate
-claims a final `cNt` worth **only the principal** and retires its reference NFT.
+claims a final `cNt` worth **only the principal** and retires its certificate.
 
 Two postures make the instrument legible:
 
-- **The reference NFT is the certificate.** One is minted per deposited unit
-  and lives at the PLB, holder-staked (ownership = the UTxO's inline stake
-  credential); it holds the published terms and the last-claimed step and moves
-  with the claim: whoever holds it may claim that unit's coupons still due. Its
-  `step` anchor makes each coupon claimable exactly once per certificate.
+- **The certificate is the governed CIP-113 token.** One is minted per
+  deposited unit and lives at the PLB, holder-staked (ownership = the UTxO's
+  inline stake credential); it holds the claim state and moves with the claim:
+  whoever holds it may claim that unit's coupons still due. Its `step` anchor
+  makes each coupon claimable exactly once per certificate.
 - **Redemption is burn-to-pay.** A `cNt` is worth what its name says and only
   what its name says: the vault validator sums the amounts decoded from the
   burned coupon names and releases exactly that much ADA. The only residual
   trust is the vault's solvency and the owner's custody of it (§7).
 
 > This specification **replaces** the earlier single-NFT 1:1 graduation model.
-> The reference NFT still lives at the PLB — one per deposit, as described
+> The certificate still lives at the PLB — one per deposit, as described
 > here — but the economics now flow through the vault and the coupon tokens,
 > not through a burn-and-mint of the certificate.
 
@@ -37,9 +37,10 @@ Two postures make the instrument legible:
 | --- | --- | --- |
 | Principal | **ADA held in a vault** | The bond is backed by lovelace in a dedicated UTxO; no fungible principal token is minted into the float. |
 | Registration | **Register once, deposit many** | The issuer pins the instrument in the registry; every later unit deposit reuses it with no new registration. |
-| Deposit | **Permissionless, principal-backed mint** | Anyone may deposit one unit; the issuance logic admits the certificate only when the vault gains exactly the unit `principal` (I6). |
+| Registry node | **Frozen stance** | `transfer` ours (step-monotone), `third_party` fail-closed, `unfracking` forbidden, empty global state; the minting logic refuses node updates. |
+| Deposit | **Permissionless, principal-backed mint** | Anyone may deposit one unit; the minting logic admits the certificate only when the vault gains exactly the unit `principal` (I6). |
 | Vault control | **Burn-to-pay redemptions** | Holders redeem by burning coupons; owner custody is an assumption, not enforced (§7). |
-| Certificate | **One CIP-113 reference NFT per deposit at the PLB** | Each unit gets a holder-staked certificate carrying the terms and its own claim state. |
+| Certificate | **One CIP-113 certificate per deposit at the PLB** | Each unit gets a holder-staked certificate carrying its own claim state. |
 | Transfer | **Freely transferable, step-monotone** | Ownership moves with the token; the transfer logic only forbids `step` decreases, so a certificate cannot be rewound to re-claim. |
 | Earnings | **`cNt` coupon tokens, amount in the name** | One native asset per step; the name is the amount, so the vault needs no external oracle or schedule. |
 | Coupon claim | **Holder-signed, step-anchored** | The claim advances that certificate's `step`, so no step can be claimed twice per certificate. |
@@ -62,7 +63,7 @@ Two postures make the instrument legible:
   (§4.5).
 - **Coupon policy**: the minting policy of the `cNt` native assets (§4.4).
 - **Core protocol** (trusted infrastructure): the CIP-113 PLB and the
-  transfer / issuance validators that custody and move the reference NFT.
+  transfer / issuance validators that custody and move the certificate.
 
 ## 3. State model
 
@@ -96,7 +97,7 @@ Because the name is only the amount, two coupons of equal amount are the same
 asset (they are fungible with each other). This is intended: redeeming any unit
 of `"1124"` pays `1124` lovelace, regardless of which step it came from.
 
-### 3.3 Reference NFT (certificate, one per deposit)
+### 3.3 Certificate (the CIP-113 token, one per deposit)
 
 The instrument's certificate and state anchor. One is minted per deposited bond
 unit: quantity `1`, custodied at the PLB with the depositor as its inline stake
@@ -129,18 +130,18 @@ the sorted set.
 
 ### 4.1 Register (T0)
 
-The issuer registers the instrument once; the registry entry makes the
-certificate policy usable. No certificate is minted here, so the same
-registration serves every deposit.
+The issuer inserts the instrument's RegistryNode into the CIP-113 registry. No
+certificate is minted here, so the same registration serves every deposit.
 
 | | |
 | --- | --- |
-| **Inputs** | Issuer wallet funds: `min_ada` + fees. |
-| **Mint** | `registry mint handler`: `1` (the RegistryNode). |
-| **Withdrawals** | Minting logic `[Register]` (0) — registration authority and node stance. |
-| **Outputs** | 1. **RegistryNode** at the registry: `registry_node_cs` × 1, stance pinned (minting / transfer logic, empty global state). 2. Change. |
+| **Inputs** | Issuer wallet funds: `min_ada` + fees; the **covering RegistryNode** (spent by the insertion). |
+| **Reference inputs** | The one-shot **`IssuanceCborHex` template** (locked at the always-fail address), which binds `cip_policy` to the minting logic. |
+| **Mint** | `registry mint handler`: `1` (the node NFT named `cip_policy`). |
+| **Withdrawals** | Minting logic `[Register]` (0) — registration authority, register-only check and node stance. No `issuance_logic` withdraw-0: no token is minted, so `issuance_mint` never runs. |
+| **Outputs** | 1. **Covering node** re-emitted with `next = cip_policy`. 2. **New node**: `key = cip_policy`, datum pinning `minting_logic` (ours, `Register` / deny updates), `transfer_logic` (ours, step-monotone), `third_party_logic` (fail-closed), `unfracking_logic` `empty_vkey` (forbidden) and an empty `global_state_cs`. 3. Change. |
 | **Signatures** | Issuer. |
-| **Constraints** | Exactly one node is created for the governed `cip_policy`; no token is issued. The vault is assumed created and funded by the owner outside this design (§7). |
+| **Constraints** | The `Register` mode authorises the issuer, asserts `tx.mint` carries no `cip_policy` entries (register-only) and refuses in-place node updates, so the recorded stance is frozen for the instrument's life. Exactly one node is created for the governed `cip_policy`; the vault is assumed created and funded by the owner outside this design (§7). |
 
 ### 4.2 Deposit (unit, T-deposit)
 
@@ -151,24 +152,24 @@ same transaction mints that depositor's certificate.
 | --- | --- |
 | **Inputs** | Depositor wallet funds: the unit `principal` + `min_ada` + fees; the **Vault** UTxO. |
 | **Reference inputs** | Protocol params; RegistryNode. |
-| **Mint** | `cip_policy`: `1` (the depositor's reference NFT) — the core `issuance_mint` policy with the minting logic's `Deposit` mode. |
-| **Withdrawals** | The reference NFT's issuance chain (minting logic `[Deposit]` + core `issuance_mint`). |
+| **Mint** | `cip_policy`: `1` (the depositor's certificate) — the core `issuance_mint` policy with the minting logic's `Deposit` mode. |
+| **Withdrawals** | The certificate's issuance chain (minting logic `[Deposit]` + core `issuance_mint`). |
 | **Signatures** | Depositor (only to spend their own wallet funds; the mint itself is permissionless). |
-| **Outputs** | 1. **Vault**: input ADA **+ the unit `principal`**, datum preserved. 2. **Reference NFT** at the PLB [stake: depositor]: `cip_policy` × 1, datum `{ step: 0 }`. 3. Change. |
-| **Constraints** | Deposit integrity (I6): the mint is admitted only when the vault's net ADA gain equals exactly the baked unit `principal`, so the certificate and its backing exist atomically. Exactly one certificate per transaction; its datum records `step: 0`. |
+| **Outputs** | 1. **Vault**: input ADA **+ the unit `principal`**, datum preserved. 2. **Certificate** at the PLB [stake: depositor]: `cip_policy` × 1, datum `{ step: 0 }`. 3. Change. |
+| **Constraints** | Deposit integrity (I6): the mint is admitted only when the vault's net ADA gain equals exactly the baked unit `principal`, so the certificate and its backing exist atomically. The `Deposit` mode requires exactly `1` unit of the certificate asset to the new UTxO and no certificate inputs, so units can never be merged (I8); its datum records `step: 0`. |
 
-### 4.3 Transfer the reference NFT (T1)
+### 4.3 Transfer the certificate (T1)
 
-The reference NFT is a CIP-113 token at the PLB; moving it moves the claim.
+The certificate is a CIP-113 token at the PLB; moving it moves the claim.
 
 | | |
 | --- | --- |
-| **Inputs** | Reference NFT at the PLB [stake: sender], `cip_policy` × 1. |
+| **Inputs** | Certificate at the PLB [stake: sender], `cip_policy` × 1. |
 | **Reference inputs** | Protocol params; RegistryNode. |
 | **Withdrawals** | `programmable_logic_global` [TransferAct] → `transfer` → `transfer_logic` (ours). |
 | **Signatures** | Sender. |
-| **Outputs** | Reference NFT at the PLB [stake: recipient], `cip_policy` × 1, datum preserved. |
-| **Constraints** | At most one certificate per transaction. The transfer logic resolves the governed `cip_policy` from the RegistryNode and decodes the input and continuation datums: a continuation must record the same `step` (plain transfer) or exactly `step + 1` (the coupon claim, §4.4), never less (I7). A transaction with no continuation is admitted only alongside the matching `cip_policy` burn — the retirement shape (§4.6). |
+| **Outputs** | Certificate at the PLB [stake: recipient], `cip_policy` × 1, datum preserved. |
+| **Constraints** | At most one certificate per transaction and exactly `1` unit in and out — no merge or split (I8). The transfer logic resolves the governed `cip_policy` from the RegistryNode and decodes the input and continuation datums: a continuation must record the same `step` (plain transfer) or exactly `step + 1` (the coupon claim, §4.4), never less (I7). A transaction with no continuation is admitted only alongside the matching `cip_policy` burn — the retirement shape (§4.6). |
 
 ### 4.4 Coupon claim (step k, T-k)
 
@@ -177,12 +178,12 @@ advances that certificate's `step`.
 
 | | |
 | --- | --- |
-| **Inputs** | Reference NFT at the PLB [stake: holder], dereferenced to its `step: k-1` state. |
+| **Inputs** | Certificate at the PLB [stake: holder], dereferenced to its `step: k-1` state. |
 | **Reference inputs** | Protocol params; RegistryNode. |
 | **Mint** | coupon policy: `1` unit of asset name `amount_k` (the step's amount in lovelace). |
-| **Withdrawals** | The reference NFT's transfer chain (the claim is an owner-signed PLB spend). |
+| **Withdrawals** | The certificate's transfer chain (the claim is an owner-signed PLB spend). |
 | **Signatures** | Holder. |
-| **Outputs** | 1. **Coupon** at the holder's payment address: `cNt(amount_k)` × 1. 2. **Reference NFT** at the PLB [stake: holder], datum with `step: k`. |
+| **Outputs** | 1. **Coupon** at the holder's payment address: `cNt(amount_k)` × 1. 2. **Certificate** at the PLB [stake: holder], datum with `step: k`. |
 | **Validity range** | Lower bound finite, `≥ d_k`. |
 | **Constraints** | The coupon policy admits the mint only when the validity range reaches its baked `d_k` and the spent certificate records `step: k-1`; the continuation must record `step: k` — the only advance the transfer logic admits (I7). Advancing without the mint simply forfeits that coupon. This makes each step claimable exactly once per certificate (I3). |
 
@@ -203,18 +204,18 @@ the burned coupons name.
 ### 4.6 Graduation (T4)
 
 From `d4` on, the certificate's holder may claim the principal-only coupon and
-burn the reference NFT (retirement).
+burn the certificate (retirement).
 
 | | |
 | --- | --- |
-| **Inputs** | Reference NFT at the PLB [stake: holder], `step` at its final value. |
+| **Inputs** | Certificate at the PLB [stake: holder], `step` at its final value. |
 | **Reference inputs** | Protocol params; RegistryNode. |
-| **Mint** | `cip_policy`: `−1` (the certificate burned, under the `issuance_mint` policy) — the issuance logic's `Retire` mode. Coupon policy: `1` unit of asset name `principal` (the principal in lovelace). |
-| **Withdrawals** | The reference NFT's transfer chain; minting logic `[Retire]` → core `issuance_mint`. |
+| **Mint** | `cip_policy`: `−1` (the certificate burned, under the `issuance_mint` policy) — our minting logic's `Retire` mode. Coupon policy: `1` unit of asset name `principal` (the principal in lovelace). |
+| **Withdrawals** | The certificate's transfer chain; minting logic `[Retire]` → core `issuance_mint`. |
 | **Signatures** | Holder. |
 | **Outputs** | **Principal coupon** at the holder's payment address; no certificate continuation. |
 | **Validity range** | Lower bound finite, `≥ d4`. |
-| **Constraints** | `Retire` validates the burn shape (exactly `−1` of the reference name), the final `step`, the `d4` window and the principal payout; the transfer logic admits a no-continuation spend only on this burn shape (I7). The principal amount is the baked unit, so the graduation cannot over- or under-claim. The principal coupon is then redeemed at the vault like any other coupon (§4.5). |
+| **Constraints** | Our minting logic's `Retire` validates the burn shape (exactly `−1` of the certificate asset), the final `step`, the `d4` window and the principal payout; the transfer logic admits a no-continuation spend only on this burn shape (I7). The principal amount is the baked unit, so the graduation cannot over- or under-claim. The principal coupon is then redeemed at the vault like any other coupon (§4.5). |
 
 ## 5. Determinism & time
 
@@ -240,13 +241,16 @@ burn the reference NFT (retirement).
   coupons are destroyed, so no coupon is paid twice.
 - **I5 — Graduation integrity.** The graduation coupon names the baked unit
   `principal`, and the certificate is retired.
-- **I6 — Deposit integrity.** A reference NFT can be minted only in a
+- **I6 — Deposit integrity.** A certificate can be minted only in a
   transaction that increases the vault's ADA by exactly the baked unit
   `principal`, so no unbacked certificate exists.
 - **I7 — Step monotonicity.** On any spend of a certificate with a
   continuation, the continuation records the same `step` or exactly `step + 1`
   — never less — and a certificate is retired only by a `cip_policy` burn at
   its final step within the `d4` window.
+- **I8 — Certificate unit integrity.** Every certificate UTxO carries exactly
+  `1` unit of the certificate asset under `cip_policy`; deposits mint exactly
+  one and transfers neither merge nor split certificates.
 
 ## 7. Threat model & assumptions
 
@@ -258,6 +262,9 @@ burn the reference NFT (retirement).
 - **Step rewind.** The transfer logic rejects any continuation whose `step` is
   lower than the spent certificate's, so a claimed step cannot be reset and
   re-claimed (I7).
+- **Certificate merge/split.** The module's deposit and transfer logic hold
+  every certificate UTxO to exactly one unit (I8), so `step` accounting cannot
+  be diluted across merged certificates.
 - **Double redemption.** Redemption burns the coupon (I4); a burned coupon
   cannot be spent again.
 - **Over/under payment on redemption.** The vault validator recomputes the

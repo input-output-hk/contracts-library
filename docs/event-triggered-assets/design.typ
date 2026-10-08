@@ -3,9 +3,10 @@
 #show: report
 
 = Tokenized bond — register (T0)
-_The issuer creates the instrument's registry entry. The vault is assumed
-already created and funded by the owner (out of scope), and no certificate is
-minted here — the same register serves every later deposit._
+_The issuer inserts the instrument's RegistryNode into the CIP-113 registry:
+the insertion spends the covering node, requires the issuance template and
+creates the new node — no certificate is minted here, so the same register
+serves every later deposit._
 
 #let bond_register_tx = vanilla_transaction(
   "Register",
@@ -17,42 +18,69 @@ minted here — the same register serves every later deposit._
       value: ("ada": "min_ada", "FeeAsset": "f"),
     ),
     (
+      name: "RegistryNode (covering)",
+      address: "registry_addr",
+      value: ("registry_node_cs": "1"),
+      datum: (
+        key: "… < cip_policy",
+        next: "cip_policy",
+      ),
+    ),
+    (
       reference: true,
-      name: "Protocol params",
-      address: "protocol_params",
+      name: "Issuance template",
+      address: "always_fail_addr",
+      value: ("issuance_cbor_hex_cs": "1"),
     ),
   ),
   mint: (
-    "registry_node_cs": "1 (registry mint handler)",
+    "registry_node_cs": "1 (node NFT named cip_policy)",
   ),
   withdrawals: (
     "minting_logic (ours) [Register]",
-    "issuance_logic (core) [names policy + OutputIndex proof]",
   ),
   signatures: (
     "issuer",
   ),
   outputs: (
     (
-      name: "RegistryNode",
+      name: "RegistryNode (covering)",
       address: "registry_addr",
       value: ("registry_node_cs": "1"),
+      datum: (
+        key: "… < cip_policy",
+        next: "cip_policy",
+      ),
+    ),
+    (
+      name: "RegistryNode (new)",
+      address: "registry_addr",
+      value: ("registry_node_cs": "1"),
+      datum: (
+        key: "cip_policy",
+        next: "… (old next)",
+        minting_logic: "ours [Register / deny update]",
+        transfer_logic: "ours [step-monotone]",
+        third_party_logic: "fail-closed script",
+        unfracking_logic: "empty_vkey (forbidden)",
+        global_state: "#\"\" (none)",
+      ),
     ),
   ),
   notes: [
-    - The issuer registers the instrument once: the RegistryNode pins the governed `cip_policy` and the transfer / minting logic stance, with the schedule baked into the validators. No reference NFT is minted here, so the instrument is reusable.
-    - The ADA vault is assumed already created and funded by the owner (company/country); its creation, funding and the owner's custody are out of scope — see spec §7.
-    - The governed `cip_policy` is resolved at runtime from the RegistryNode, so it is never baked into the minting logic's parameters.
+    - The core `registry` mint handler inserts the node: it requires the one-shot `IssuanceCborHex` *template* as a reference input (locked at `always_fail`) to bind `cip_policy` to our minting logic, spends the covering node, mints exactly one node NFT named `cip_policy`, and emits the two node outputs with sorted `key` / `next`.
+    - Our minting logic runs once as `[Register]`: it authorises the issuer, asserts `tx.mint` carries no `cip_policy` entries (register-only — deposits come later), and refuses registry-node updates, so the stance recorded in the new node is frozen for the instrument's life.
+    - No token is minted, so `issuance_mint` never runs and the core `issuance_logic` withdraw-0 is not needed here. The ADA vault is assumed created and funded by the owner (company/country) outside this design — see spec §7.
   ],
 )
 
-#figure(bond_register_tx, caption: [Register: the issuer pins the instrument once; deposits can follow]) <fig:bond-register>
+#figure(bond_register_tx, caption: [Register: the issuer inserts the node once; deposits can follow]) <fig:bond-register>
 
 #pagebreak()
 
 = Tokenized bond — deposit (unit)
 _Anyone deposits one bond unit: the principal ADA moves into the vault and the
-same transaction mints that depositor's CIP-113 reference NFT, recording the
+same transaction mints that depositor's CIP-113 certificate, recording the
 published terms and an initial `step: 0`._
 
 #let bond_deposit_tx = vanilla_transaction(
@@ -86,7 +114,7 @@ published terms and an initial `step: 0`._
     ),
   ),
   mint: (
-    "cip_policy": "1 (reference NFT) — issuance_mint [Deposit]",
+    "cip_policy": "1 (certificate) — issuance_mint [Deposit]",
   ),
   withdrawals: (
     "minting_logic (ours) [Deposit]",
@@ -106,7 +134,7 @@ published terms and an initial `step: 0`._
       ),
     ),
     (
-      name: "Reference NFT",
+      name: "Certificate",
       address: "plb_addr [stake: depositor]",
       value: ("cip_policy": "1"),
       datum: (
@@ -116,12 +144,12 @@ published terms and an initial `step: 0`._
   ),
   notes: [
     - The deposit is permissionless and per unit: the minting logic admits the certificate only when the vault's net ADA gain equals exactly the unit `principal`, so the certificate and its backing exist atomically (I6). No authority signature is needed — the depositor signs only to spend their own funds.
-    - The reference NFT is the instrument's only CIP-113 token; one certificate is minted per deposit, so many holders share the same registered schedule and advance their own `step`.
+    - The certificate is the instrument's only CIP-113 token; exactly one unit is minted per deposit (no certificate inputs, no merge), so many holders share the same registered schedule and advance their own `step`.
     - Coupons are plain native assets minted later by the coupon policy; nothing else is minted here.
   ],
 )
 
-#figure(bond_deposit_tx, caption: [Deposit: one unit of principal into the vault, one reference NFT to the depositor]) <fig:bond-deposit>
+#figure(bond_deposit_tx, caption: [Deposit: one unit of principal into the vault, one certificate to the depositor]) <fig:bond-deposit>
 
 #pagebreak()
 
@@ -133,7 +161,7 @@ the claim state never rewinds — its `step` stays the same._
   "Transfer",
   inputs: (
     (
-      name: "Reference NFT",
+      name: "Certificate",
       address: "plb_addr [stake: sender]",
       value: ("cip_policy": "1"),
       datum: (
@@ -163,7 +191,7 @@ the claim state never rewinds — its `step` stays the same._
   ),
   outputs: (
     (
-      name: "Reference NFT",
+      name: "Certificate",
       address: "plb_addr [stake: recipient]",
       value: ("cip_policy": "1"),
       datum: (
@@ -174,7 +202,7 @@ the claim state never rewinds — its `step` stays the same._
   notes: [
     - Ownership rides the certificate's inline stake credential: moving the token moves the claim on that unit's remaining coupons and principal, and the datum (just `step`) is carried across unchanged.
     - The transfer logic resolves the governed `cip_policy` from the RegistryNode and enforces step monotonicity (I7): with a continuation, `step` must stay or advance by exactly one — never decrease. A plain transfer preserves it, so a claimed step cannot be rewound and re-claimed.
-    - At most one certificate per transaction. The coupon claim page (next) is the admitted advance (`step: k - 1 → k`); retirement is a `cip_policy` burn on the graduation page.
+    - At most one certificate per transaction, quantity exactly one in and out (no merge or split). The coupon claim page (next) is the admitted advance (`step: k - 1 → k`); retirement is a `cip_policy` burn on the graduation page.
   ],
 )
 
@@ -184,14 +212,14 @@ the claim state never rewinds — its `step` stays the same._
 
 = Tokenized bond — coupon claim (step k)
 _At each deadline the holder claims the step's coupon. The claim spends and
-re-outputs the reference NFT, advancing its `step` so no step can be claimed
+re-outputs the certificate, advancing its `step` so no step can be claimed
 twice._
 
 #let bond_coupon_claim_tx = vanilla_transaction(
   "Coupon claim (k)",
   inputs: (
     (
-      name: "Reference NFT",
+      name: "Certificate",
       address: "plb_addr [stake: holder]",
       value: ("cip_policy": "1"),
       datum: (
@@ -229,7 +257,7 @@ twice._
       value: ("cNt_policy": "1 × {name: amount_k}"),
     ),
     (
-      name: "Reference NFT",
+      name: "Certificate",
       address: "plb_addr [stake: holder]",
       value: ("cip_policy": "1"),
       datum: (
@@ -239,9 +267,9 @@ twice._
   ),
   validRange: (lower: "d_k"),
   notes: [
-    - The coupon policy admits the mint only when the validity range reaches `d_k` *and* the spent reference NFT records `step: k - 1`; the continuation records `step: k`, the only advance the transfer logic admits. That anchor makes each step claimable exactly once per certificate.
+    - The coupon policy admits the mint only when the validity range reaches `d_k` *and* the spent certificate records `step: k - 1`; the continuation records `step: k`, the only advance the transfer logic admits. That anchor makes each step claimable exactly once per certificate.
     - The coupon is a native asset whose *name is its value*: name `"1124"` is worth 1124 lovelace. Two steps of equal amount share a name and are fungible on purpose.
-    - The claim is an owner-signed PLB spend of the reference NFT; it never touches the vault.
+    - The claim is an owner-signed PLB spend of the certificate; it never touches the vault.
   ],
 )
 
@@ -309,13 +337,13 @@ exactly the ADA the burned coupons name, and nothing else leaves._
 
 = Tokenized bond — graduation (T4)
 _From `d4` on the holder claims the principal-only coupon and retires the
-reference NFT. The principal is the deployment's baked unit amount._
+certificate. The principal is the deployment's baked unit amount._
 
 #let bond_graduation_tx = vanilla_transaction(
   "Graduation",
   inputs: (
     (
-      name: "Reference NFT",
+      name: "Certificate",
       address: "plb_addr [stake: holder]",
       value: ("cip_policy": "1"),
       datum: (
@@ -336,7 +364,7 @@ reference NFT. The principal is the deployment's baked unit amount._
     ),
   ),
   mint: (
-    "cip_policy": "- 1 (certificate retired) — issuance_mint [Retire]",
+    "cip_policy": "- 1 (certificate retired) — minting_logic [Retire]",
     "cNt_policy": "1 unit, asset name = principal (decimal lovelace)",
   ),
   withdrawals: (
@@ -359,9 +387,9 @@ reference NFT. The principal is the deployment's baked unit amount._
   validRange: (lower: "d4"),
   notes: [
     - The principal is the deployment's baked unit amount, so the graduation cannot over- or under-claim.
-    - The reference NFT is *retired* by a `cip_policy` burn at its final `step` within the `d4` window — the issuance logic's `Retire` mode validates the burn shape and payout, and the transfer logic admits no continuation on this shape only.
+    - The certificate is *retired* by a `cip_policy` burn at its final `step` within the `d4` window — our minting logic's `Retire` mode validates the burn shape and payout, and the transfer logic admits no continuation on this shape only.
     - The principal coupon is then redeemed at the vault like any other coupon (see the redemption page): burn it, the vault pays the principal.
   ],
 )
 
-#figure(bond_graduation_tx, caption: [Graduation: claim the principal-only coupon, retire the reference NFT]) <fig:bond-graduation>
+#figure(bond_graduation_tx, caption: [Graduation: claim the principal-only coupon, retire the certificate]) <fig:bond-graduation>
