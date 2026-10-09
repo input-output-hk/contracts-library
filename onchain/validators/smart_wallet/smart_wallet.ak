@@ -23,8 +23,9 @@ use smart_wallet/types.{
 /// credential allowed to change them is a script parameter. `Spend` releases
 /// funds when at least `threshold` of `members` (read from the wallet
 /// configuration) sign **and** every delegated spender script in the datum is
-/// invoked, and the wallet survives with its `depositors` map unchanged.
-/// `UpdatePermissions` lets the `admin` rewrite the config in place.
+/// invoked, and the wallet survives without gaining value, with its `depositors`
+/// map unchanged. `UpdatePermissions` lets the `admin` rewrite the config in
+/// place.
 /// `Deposit` lets the wallet's `depositors` scripts validate added funds without
 /// spending or changing config.
 validator smart_wallet(
@@ -51,6 +52,7 @@ validator smart_wallet(
           self.withdrawals,
         ) && checks.validate_spend_continuation(
           wallet_datum,
+          own_input.output.value,
           own_hash,
           wallet_token_name,
           self,

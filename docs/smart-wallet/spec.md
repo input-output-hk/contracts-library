@@ -139,15 +139,15 @@ via a **reward withdrawal** in the same transaction (withdraw-0 pattern).
 | | |
 |---|---|
 | **Inputs** | One wallet UTxO carrying the NFT. |
-| **Outputs** | Must include a **wallet continuation**: an NFT-bearing output at the wallet's payment credential carrying an inline `WalletDatum` with the same `depositors` map as the input. Payout outputs are otherwise unconstrained. |
+| **Outputs** | Must include a **wallet continuation**: an NFT-bearing output at the wallet's payment credential carrying an inline `WalletDatum` with the same `depositors` map and `spenders` keys as the input, and a value that is a **subset** of the input's (every asset, including lovelace, in at most the same quantity). Payout outputs are otherwise unconstrained. |
 | **Redeemer** | `Spend`. |
 | **Authorization** | At least `threshold` of `members` sign (read from the settings UTxO), **and** every script in `spenders` is invoked as a reward withdrawal and approves. |
-| **Constraints** | The wallet UTxO carries its NFT; the delegated spender scripts' `withdraw` handlers run and each enforces its own restriction; the wallet survives with `depositors` unchanged and the `spenders` key set fixed — adding or removing delegated scripts is reserved for `UpdatePermissions`, while spender `Data` may change (each script enforces its own transition). |
+| **Constraints** | The wallet UTxO carries its NFT; the delegated spender scripts' `withdraw` handlers run and each enforces its own restriction; the wallet survives with `depositors` unchanged, the `spenders` key set fixed (adding or removing delegated scripts is reserved for `UpdatePermissions`, while spender `Data` may change — each script enforces its own transition), and a continuation value no greater than the input's (a spend only removes value: additions belong to `Deposit`). |
 
 The `Spend` branch asserts only its own input, the M-of-N floor, that the
 required spender scripts ran, and that the wallet survives with its `depositors`
-unchanged and its `spenders` key set fixed — never total input/output counts or
-unrelated value.
+unchanged, its `spenders` key set fixed, and a value no greater than the input's
+— never total input/output counts or unrelated value.
 
 ### 5.3 UpdatePermissions
 
@@ -241,7 +241,9 @@ window), enforcing their own input→output transition.
   wallet address; the NFT is minted once (one-shot seed), kept in the wallet by
   every `Spend`, and burned only on `Close`.
 - **I2 — Spend authorization.** A `Spend` is valid only if the M-of-N floor is
-  met and every script in `spenders` is invoked and approves.
+  met, every script in `spenders` is invoked and approves, the wallet survives
+  with its permission set intact, and the continuation's value is a subset of the
+  input's (a spend only removes value).
 - **I3 — Config-only updates.** `UpdatePermissions` preserves address and value; only
   `spenders` and `depositors` may change, and only by the `admin`.
 - **I4 — Published additions.** A script may appear in `spenders` or `depositors`
@@ -283,6 +285,10 @@ window), enforcing their own input→output transition.
   and its `depositors` map unchanged (I9). M-of-N authority cannot rewrite
   deposit validation — the NFT cannot leave the wallet on a `Spend`, so it cannot
   be re-sent with a crafted datum either.
+- **Deposit bypass via spend.** A `Spend` cannot increase any asset of the
+  wallet — not from other inputs, and not from tokens minted in the same
+  transaction (I2). Additions therefore only enter through `Deposit` and its
+  `depositors` scripts.
 - **Draining via deposit.** `Deposit` preserves the datum and only increases value
   (I6); a deposit can never withdraw, and configured `depositors` scripts gate
   what may be added.

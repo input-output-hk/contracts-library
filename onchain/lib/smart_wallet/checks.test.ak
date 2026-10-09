@@ -1,6 +1,6 @@
 use aiken/crypto.{ScriptHash}
 use cardano/address.{Script, from_script}
-use cardano/assets
+use cardano/assets.{Value}
 use cardano/certificate.{RegisterCredential, UnregisterCredential}
 use cardano/transaction.{
   DatumHash, InlineDatum, NoDatum, Output, Transaction, placeholder,
@@ -170,22 +170,38 @@ fn wallet_datum(
   WalletDatum { spenders, depositors }
 }
 
+fn wallet_value() -> Value {
+  assets.from_lovelace(1_000_000) |> assets.add(wallet_policy, wallet_token, 1)
+}
+
 fn wallet_output(
+  spenders: Pairs<ScriptHash, Data>,
+  depositors: Pairs<ScriptHash, Data>,
+) -> Output {
+  wallet_output_with(wallet_value(), spenders, depositors)
+}
+
+fn wallet_output_with(
+  value: Value,
   spenders: Pairs<ScriptHash, Data>,
   depositors: Pairs<ScriptHash, Data>,
 ) -> Output {
   Output {
     address: from_script(wallet_policy),
-    value: assets.from_lovelace(1_000_000)
-      |> assets.add(wallet_policy, wallet_token, 1),
+    value,
     datum: InlineDatum(wallet_datum(spenders, depositors)),
     reference_script: None,
   }
 }
 
-fn spend_continuation(old_datum: WalletDatum, outputs: List<Output>) -> Bool {
+fn spend_continuation(
+  old_datum: WalletDatum,
+  old_value: Value,
+  outputs: List<Output>,
+) -> Bool {
   validate_spend_continuation(
     old_datum,
+    old_value,
     wallet_policy,
     wallet_token,
     Transaction { ..placeholder, outputs },
@@ -196,6 +212,7 @@ test spend_ok_with_unchanged_depositors() {
   let data: Data = 0
   spend_continuation(
     wallet_datum([], [Pair(a, data)]),
+    wallet_value(),
     [wallet_output([], [Pair(a, data)])],
   )
 }
@@ -205,6 +222,7 @@ test spend_ok_with_changed_spender_data() {
   let new_state: Data = 1
   spend_continuation(
     wallet_datum([Pair(a, data)], [Pair(b, data)]),
+    wallet_value(),
     [wallet_output([Pair(a, new_state)], [Pair(b, data)])],
   )
 }
@@ -213,7 +231,19 @@ test spend_ok_with_reordered_spenders() {
   let data: Data = 0
   spend_continuation(
     wallet_datum([Pair(a, data), Pair(b, data)], []),
+    wallet_value(),
     [wallet_output([Pair(b, data), Pair(a, data)], [])],
+  )
+}
+
+test spend_ok_when_continuation_value_decreases() {
+  let data: Data = 0
+  let cont_value = assets.from_lovelace(500_000)
+    |> assets.add(wallet_policy, wallet_token, 1)
+  spend_continuation(
+    wallet_datum([], [Pair(a, data)]),
+    wallet_value(),
+    [wallet_output_with(cont_value, [], [Pair(a, data)])],
   )
 }
 
@@ -221,6 +251,7 @@ test spend_rejects_added_spender() fail {
   let data: Data = 0
   spend_continuation(
     wallet_datum([Pair(a, data)], []),
+    wallet_value(),
     [wallet_output([Pair(a, data), Pair(b, data)], [])],
   )
 }
@@ -229,6 +260,7 @@ test spend_rejects_removed_spender() fail {
   let data: Data = 0
   spend_continuation(
     wallet_datum([Pair(a, data), Pair(b, data)], []),
+    wallet_value(),
     [wallet_output([Pair(a, data)], [])],
   )
 }
@@ -243,6 +275,7 @@ test spend_ignores_non_nft_outputs_at_wallet_address() {
   }
   spend_continuation(
     wallet_datum([], [Pair(a, data)]),
+    wallet_value(),
     [wallet_output([], [Pair(a, data)]), extra],
   )
 }
@@ -252,25 +285,29 @@ test spend_rejects_rewritten_depositors() fail {
   let new_data: Data = 1
   spend_continuation(
     wallet_datum([], [Pair(a, old_data)]),
+    wallet_value(),
     [wallet_output([], [Pair(a, new_data)])],
   )
 }
 
 test spend_rejects_missing_wallet_continuation() fail {
   let data: Data = 0
-  spend_continuation(wallet_datum([], [Pair(a, data)]), [])
+  spend_continuation(wallet_datum([], [Pair(a, data)]), wallet_value(), [])
 }
 
 test spend_rejects_nft_sent_elsewhere() fail {
   let data: Data = 0
   let elsewhere = Output {
     address: from_script(other_policy),
-    value: assets.from_lovelace(1_000_000)
-      |> assets.add(wallet_policy, wallet_token, 1),
+    value: wallet_value(),
     datum: InlineDatum(wallet_datum([], [Pair(a, data)])),
     reference_script: None,
   }
-  spend_continuation(wallet_datum([], [Pair(a, data)]), [elsewhere])
+  spend_continuation(
+    wallet_datum([], [Pair(a, data)]),
+    wallet_value(),
+    [elsewhere],
+  )
 }
 
 test spend_rejects_non_inline_continuation() fail {
@@ -279,5 +316,38 @@ test spend_rejects_non_inline_continuation() fail {
     ..wallet_output([], [Pair(a, data)]),
     datum: DatumHash(tx_id),
   }
-  spend_continuation(wallet_datum([], [Pair(a, data)]), [output])
+  spend_continuation(
+    wallet_datum([], [Pair(a, data)]),
+    wallet_value(),
+    [output],
+  )
+}
+
+test spend_rejects_continuation_increasing_lovelace() fail {
+  let cont_value = assets.from_lovelace(1_500_000)
+    |> assets.add(wallet_policy, wallet_token, 1)
+  spend_continuation(
+    wallet_datum([], []),
+    wallet_value(),
+    [wallet_output_with(cont_value, [], [])],
+  )
+}
+
+test spend_rejects_continuation_gaining_asset() fail {
+  let cont_value = wallet_value() |> assets.add(other_policy, "SOME", 5)
+  spend_continuation(
+    wallet_datum([], []),
+    wallet_value(),
+    [wallet_output_with(cont_value, [], [])],
+  )
+}
+
+test spend_rejects_continuation_increasing_asset_quantity() fail {
+  let in_value = wallet_value() |> assets.add(other_policy, "SOME", 3)
+  let cont_value = wallet_value() |> assets.add(other_policy, "SOME", 5)
+  spend_continuation(
+    wallet_datum([], []),
+    in_value,
+    [wallet_output_with(cont_value, [], [])],
+  )
 }

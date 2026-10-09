@@ -155,15 +155,18 @@ fn registered_in_tx(hash: ScriptHash, self: Transaction) -> Bool {
   )
 }
 
-/// Spend check: the wallet survives the spend with its permission set intact.
-/// `depositors` is immutable across a spend (only `UpdatePermissions` may change
-/// the map), and the `spenders` key set is fixed (only `UpdatePermissions` may
-/// add or remove delegated scripts). The transaction must recreate the wallet:
-/// an NFT-bearing output at the wallet's payment credential carrying an inline
-/// `WalletDatum` meeting both conditions. Spender `Data` may change: each
+/// Spend check: the wallet survives the spend with its permission set intact
+/// and without gaining value. `depositors` is immutable across a spend (only
+/// `UpdatePermissions` may change the map), the `spenders` key set is fixed
+/// (only `UpdatePermissions` may add or remove delegated scripts), and the
+/// continuation's value is a subset of the input's — a spend only removes value;
+/// additions belong to `Deposit`. The transaction must recreate the wallet: an
+/// NFT-bearing output at the wallet's payment credential carrying an inline
+/// `WalletDatum` meeting those conditions. Spender `Data` may change: each
 /// spender script enforces its own transition.
 pub fn validate_spend_continuation(
   old_datum: WalletDatum,
+  old_value: Value,
   wallet_policy: PolicyId,
   wallet_token_name: AssetName,
   self: Transaction,
@@ -183,10 +186,11 @@ pub fn validate_spend_continuation(
     fn(output) {
       expect InlineDatum(raw) = output.datum
       expect new_datum: WalletDatum = raw
-      withdrawals_equal(old_datum.depositors, new_datum.depositors) && same_keys(
-        old_datum.spenders,
-        new_datum.spenders,
-      )
+      and {
+        withdrawals_equal(old_datum.depositors, new_datum.depositors),
+        same_keys(old_datum.spenders, new_datum.spenders),
+        value_contains(old_value, output.value),
+      }
     },
   )
 }
@@ -250,7 +254,7 @@ pub fn validate_deposit(
     continuation.address == own_input.output.address,
     withdrawals_equal(datum.spenders, cont_datum.spenders),
     same_keys(datum.depositors, cont_datum.depositors),
-    value_superset(continuation.value, own_input.output.value),
+    value_contains(continuation.value, own_input.output.value),
   }
 }
 
@@ -279,14 +283,16 @@ fn same_keys(old: Pairs<ScriptHash, Data>, new: Pairs<ScriptHash, Data>) -> Bool
   )
 }
 
-/// `cont` holds at least as much of every asset (and lovelace) as `input`, i.e.
-/// a deposit may add value but never remove any.
-fn value_superset(cont: Value, input: Value) -> Bool {
+/// `superset` holds at least as much of every asset (and lovelace) as `subset`.
+/// Used both ways: a deposit's continuation must contain the input (`superset` =
+/// continuation), and a spend's continuation must be contained by the input
+/// (`subset` = continuation).
+fn value_contains(superset: Value, subset: Value) -> Bool {
   list.all(
-    assets.flatten(input),
+    assets.flatten(subset),
     fn(triple) {
       let (policy, asset, qty) = triple
-      assets.quantity_of(cont, policy, asset) >= qty
+      assets.quantity_of(superset, policy, asset) >= qty
     },
   )
 }
