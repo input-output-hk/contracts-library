@@ -226,9 +226,11 @@ pub fn validate_close(
 
 /// Deposit check: every script in the wallet's `depositors` map is invoked as a
 /// reward withdrawal and approves, and the continuation at `out_ix` sits at the
-/// same address carrying the wallet's unchanged datum with at least as much
-/// value (any asset, including lovelace and the wallet NFT). A deposit can only
-/// add funds, never spend them or alter the wallet's config. With an empty
+/// same address with at least as much value (any asset, including lovelace and
+/// the wallet NFT). A deposit preserves `spenders` and the `depositors` key set
+/// (both are `UpdatePermissions`-only), while depositor `Data` may advance —
+/// each deposit script enforces its own transition. A deposit can only add
+/// funds, never spend them or change the permission set. With an empty
 /// `depositors` map, a deposit needs no approval.
 pub fn validate_deposit(
   out_ix: Int,
@@ -246,18 +248,10 @@ pub fn validate_deposit(
   and {
     withdrawals_invoked(datum.depositors, self.withdrawals),
     continuation.address == own_input.output.address,
-    datum_unchanged(datum, cont_datum),
+    withdrawals_equal(datum.spenders, cont_datum.spenders),
+    same_keys(datum.depositors, cont_datum.depositors),
     value_superset(continuation.value, own_input.output.value),
   }
-}
-
-/// Two wallet datums carry the same config: identical `spenders` and
-/// `depositors` maps (same keys, same `Data`).
-fn datum_unchanged(old: WalletDatum, new: WalletDatum) -> Bool {
-  withdrawals_equal(old.spenders, new.spenders) && withdrawals_equal(
-    old.depositors,
-    new.depositors,
-  )
 }
 
 /// Two script maps have the same keys with the same `Data`.

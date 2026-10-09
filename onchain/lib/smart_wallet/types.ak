@@ -19,8 +19,8 @@ pub type WalletDatum {
   /// each carrying its own mutable data (if any) in `Data`.
   spenders: Pairs<ScriptHash, Data>,
   /// Delegated withdraw-0 scripts that must run on every deposit into this
-  /// UTxO (e.g. asset or source-address allow/denylists), each carrying its own
-  /// configuration in `Data`.
+  /// UTxO (e.g. asset or source-address allow/denylists, or deposit caps), each
+  /// carrying its own configuration or mutable state in `Data`.
   depositors: Pairs<ScriptHash, Data>,
 }
 
@@ -33,7 +33,9 @@ pub type SpendRedeemer {
   /// locates the continuation.
   UpdatePermissions { out_ix: Int }
   /// Deposit funds: every `depositors` script runs and approves, funds are
-  /// added and the datum is preserved; `out_ix` locates the continuation.
+  /// added, `spenders` and the `depositors` key set are preserved, and each
+  /// deposit script may advance its own `Data`; `out_ix` locates the
+  /// continuation.
   Deposit { out_ix: Int }
   /// Close the wallet: the `admin` authorizes, and the wallet NFT is burned.
   Close

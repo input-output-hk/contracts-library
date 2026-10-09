@@ -247,9 +247,10 @@ untouched: same address, same value — only the config changes._
 
 = Deposit (depositors validate added funds)
 _The wallet's `depositors` scripts validate funds added to the wallet UTxO — the
-UTxO is spent and recreated at the same address with the NFT, an unchanged datum,
-and no fund removed. Every deposit script must run and approve; with none
-configured, a deposit is open. A deposit cannot spend funds or change the config._
+UTxO is spent and recreated at the same address with the NFT, `spenders` and the
+`depositors` key set preserved, and no fund removed. Every deposit script must
+run and approve; with none configured, a deposit is open. A deposit cannot spend
+funds or change the permission set._
 
 #let deposit_tx = vanilla_transaction(
   "Deposit",
@@ -282,7 +283,7 @@ configured, a deposit is open. A deposit cannot spend funds or change the config
       ),
       datum: (
         spenders: "Pairs<ScriptHash, Data>",
-        depositors: "Pairs<ScriptHash, Data>",
+        depositors: [*depositors'*],
       ),
     ),
   ),
@@ -292,8 +293,11 @@ configured, a deposit is open. A deposit cannot spend funds or change the config
       staking script that must run and approve in this transaction — e.g. asset
       allow/denylists, source-address checks, or a key check. With an empty map,
       a deposit needs no approval.
-    - the continuation must sit at the same `wallet_addr` and carry the *same
-      datum* — a deposit cannot change `spenders` or `depositors`.
+    - the continuation must sit at the same `wallet_addr` and preserve
+      `spenders` and the `depositors` key set; depositor `Data` may advance
+      (`depositors'`), with each deposit script enforcing its own input→output
+      transition. A deposit cannot add or remove deposit scripts, or touch the
+      spend side.
     - the continuation's value must be a superset of the input's: every asset
       (including lovelace and the NFT) is present in at least the same quantity,
       so a deposit can only add funds, never spend or remove them.

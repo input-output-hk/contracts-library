@@ -82,7 +82,7 @@ at the wallet address (payment credential `Script(wallet_hash)`), where
 | Field | Type | Meaning |
 |---|---|---|
 | `spenders` | `Pairs<ScriptHash, Data>` | The delegated withdraw-0 scripts that must run on every `Spend`, keyed by script hash. The `Data` value is that script's own mutable state. |
-| `depositors` | `Pairs<ScriptHash, Data>` | The delegated withdraw-0 scripts that must run on every `Deposit`, keyed by script hash. The `Data` value is that script's own configuration (e.g. an asset allow/denylist). |
+| `depositors` | `Pairs<ScriptHash, Data>` | The delegated withdraw-0 scripts that must run on every `Deposit`, keyed by script hash. The `Data` value is that script's own configuration or mutable state (e.g. an asset allow/denylist, or a deposit counter). |
 
 The datum is **inline** (datum hashes are rejected). Both maps are
 per-UTxO: different wallet UTxOs may carry different restriction sets.
@@ -167,10 +167,10 @@ input (in fact, only ADA may change, to cover fees).
 | | |
 |---|---|
 | **Inputs** | The wallet UTxO (plus the depositing party's own funding UTxOs). |
-| **Outputs** | One continuation at `out_ix`: same address, same datum, value a **superset** of the input's (every asset, including lovelace and the NFT, present in `>=` quantity). |
+| **Outputs** | One continuation at `out_ix`: same address, `spenders` unchanged, `depositors` keys unchanged with `Data` possibly advanced, value a **superset** of the input's (every asset, including lovelace and the NFT, present in `>=` quantity). |
 | **Redeemer** | `Deposit { out_ix }`. |
 | **Authorization** | Every script in `depositors` is invoked as a reward withdrawal and approves; with an empty map, no approval is needed. |
-| **Constraints** | The datum is unchanged (`spenders` and `depositors` identical); the `spenders` scripts do **not** run (there is no outflow to restrict). |
+| **Constraints** | The `spenders` map is preserved and the `depositors` key set is fixed; depositor `Data` may advance, with each deposit script enforcing its own transition. The `spenders` scripts do **not** run (there is no outflow to restrict). |
 
 ### 5.5 Close
 
@@ -211,8 +211,10 @@ The `Data` value in `spenders[script_hash]` is that script's mutable state:
 stateless scripts store a trivial marker (e.g. `spending_limit`, whose `bound` is
 a compile-time parameter); stateful scripts store and advance real state (e.g.
 `spending_window`, which tracks the last spend time to limit spends per window).
-The `Data` value in `depositors[script_hash]` is that deposit script's own
-configuration, validated at registration; deposits preserve it unchanged.
+`depositors[script_hash]` works the same way on the deposit side: stateless
+deposit scripts store static configuration (e.g. an asset allow/denylist), while
+stateful ones advance real state on each `Deposit` (e.g. a deposit cap per
+window), enforcing their own input→output transition.
 
 ## 7. Invariants
 
@@ -230,19 +232,23 @@ configuration, validated at registration; deposits preserve it unchanged.
 - **I5 — Unregistered removals.** A script leaving `spenders` or `depositors` (on
   `UpdatePermissions` or `Close`) must be unregistered in the same transaction. A
   `Spend` may not remove one.
-- **I6 — Deposit adds, never removes.** `Deposit` preserves the datum and only
-  increases value, and every `depositors` script must run and approve (with an
-  empty map, deposits are open); a deposit can never spend or reconfigure.
+- **I6 — Deposit adds, never removes.** `Deposit` preserves `spenders` and the
+  `depositors` key set and only increases value, and every `depositors` script
+  must run and approve (with an empty map, deposits are open); depositor `Data`
+  may advance only through those scripts' own handlers, and a deposit can never
+  spend funds or change the permission set.
 - **I7 — State coherence.** A stateful script's `withdraw` enforces its own
-  transition by reading the input state and requiring the output state to match;
-  kept scripts carry unchanged `Data` across an `UpdatePermissions`.
+  transition by reading the input state and requiring the output state to match
+  (on `Spend` for spender scripts, on `Deposit` for deposit scripts); kept
+  scripts carry unchanged `Data` across an `UpdatePermissions`.
 - **I8 — Composability.** Each endpoint asserts only its own input, the mint under
   its own policy, the `out_ix` output, the validity range, and the required
   authorization; never total input/output counts or unrelated value.
-- **I9 — Depositor config is admin-only.** The `depositors` map changes only
-  through `UpdatePermissions`; a `Spend` must recreate the wallet with the same
-  `depositors` map, so neither a spend nor moving the NFT out and back can alter
-  deposit validation.
+- **I9 — Depositor set is admin-only.** The `depositors` key set changes only
+  through `UpdatePermissions`, and a `Spend` must recreate the wallet with the
+  whole map unchanged; its values advance only through deposit scripts on
+  `Deposit`. Neither a spend nor moving the NFT out and back can alter deposit
+  validation.
 
 ## 8. Threat model & assumptions
 
@@ -272,7 +278,7 @@ configuration, validated at registration; deposits preserve it unchanged.
   unregistration certificate.
 - **Unvalidated script state.** A script enters `spenders` or `depositors` only
   after its own `publish` handler validates its initial `Data` (I4); stateful
-  transitions are enforced by the script on every spend (I7).
+  transitions are enforced by the script on every spend or deposit (I7).
 
 ### Assumptions / out of scope
 
