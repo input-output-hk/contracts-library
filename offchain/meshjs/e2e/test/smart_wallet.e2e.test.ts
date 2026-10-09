@@ -2,10 +2,11 @@
  * End-to-end tests for the smart wallet contract against a Yaci DevKit devnet.
  *
  * Two groups share this file:
- *   - the core lifecycle (no delegated withdrawal scripts): the wallet reads its
- *     base M-of-N config from a settings UTxO (reference input) and carries an
- *     empty `withdrawals` map, so `Spend` only needs the M-of-N floor;
- *   - the delegated withdrawal scripts (`spending_limit`, `spending_window`),
+ *   - the core lifecycle (no delegated scripts): the wallet reads its base
+ *     M-of-N config from a settings UTxO (reference input), carries empty
+ *     `spenders` / `depositors` maps (deposits are open), and exercises adding
+ *     and invoking a depositor script through `UpdatePermissions`;
+ *   - the delegated spender scripts (`spending_limit`, `spending_window`),
  *     which exercise the CIP-69 `publish` lifecycle: register on mint, invoke
  *     (withdraw-0) on spend, deregister on close.
  */
@@ -14,7 +15,7 @@ import {
   buildWalletMintTx,
   buildWalletDepositTx,
   buildWalletSpendTx,
-  buildWalletUpdateConfigTx,
+  buildWalletUpdatePermissionsTx,
   buildWalletCloseTx,
   smartWalletScript,
   smartWalletScriptAddress,
@@ -37,6 +38,7 @@ import {
   resolveScriptHash,
   unixTimeToEnclosingSlot,
   type Asset,
+  type PlutusScript,
   type SlotConfig,
   type UTxO,
 } from "@meshsdk/core";
@@ -57,6 +59,7 @@ import {
   waitForTx,
   type Account,
 } from "../src/devnet";
+import { ALWAYS_TRUE, REJECT_WITHDRAW } from "../src/fixtures";
 
 const reachable = await devnetReachable();
 if (!reachable) {
@@ -68,6 +71,19 @@ if (!reachable) {
 
 const WALLET_TOKEN_NAME = "57414c4c4554"; // hex "WALLET"
 const ADA = 1_000_000n;
+
+/** The always-approving fixture as a parameterless withdraw-0 script. */
+const GUARD_SCRIPT: PlutusScript = { code: ALWAYS_TRUE.cbor, version: "V3" };
+/** The reject-withdraw fixture, as a script that refuses deposit approvals. */
+const REJECT_SCRIPT: PlutusScript = {
+  code: REJECT_WITHDRAW.cbor,
+  version: "V3",
+};
+
+/** An initial/continuation datum with no delegated scripts. */
+function emptyDatum(): WalletDatum {
+  return { spenders: [], depositors: [] };
+}
 
 /** Subtract `lovelace` from an asset list (used to compute the Spend change). */
 function minusLovelace(amount: Asset[], ada: bigint): Asset[] {
@@ -81,7 +97,7 @@ function minusLovelace(amount: Asset[], ada: bigint): Asset[] {
 /**
  * Launch a settings instance and a smart wallet on it, returning the context
  * both test groups need. `admin` owns the wallet; `depositor` funds it in the
- * core lifecycle (the withdrawal-script group reuses `admin` as its depositor).
+ * core lifecycle (the spender-script group reuses `admin` as funder).
  */
 async function setup(provider: ReturnType<typeof makeProvider>): Promise<{
   admin: Account;
@@ -173,22 +189,15 @@ describe.skipIf(!reachable)("smart wallet e2e (Yaci devnet)", () => {
     provider = makeProvider();
   });
 
-  function emptyDatum(depositor: string): WalletDatum {
-    return { withdrawals: [], depositor: { kind: "key", hash: depositor } };
-  }
-
   async function mintWallet(
     ctx: Awaited<ReturnType<typeof setup>>,
-    depositorKeyHash: string,
   ): Promise<UTxO> {
-    const datum = emptyDatum(depositorKeyHash);
-
     const mintTx = await buildWalletMintTx({
       txBuilder: newTxBuilder(provider),
       script: ctx.script,
       walletTokenName: WALLET_TOKEN_NAME,
       seedUtxo: ctx.walletSeed,
-      datum,
+      datum: emptyDatum(),
       outputIndex: 0,
       utxos: await ctx.admin.wallet.getUtxos(),
       changeAddress: ctx.admin.address,
@@ -200,11 +209,11 @@ describe.skipIf(!reachable)("smart wallet e2e (Yaci devnet)", () => {
     return await scriptOutputOf(provider, hash, ctx.scriptAddr);
   }
 
-  it("mints, deposits, spends, updates config, and closes", async () => {
+  it("mints, deposits, spends, updates permissions, and closes", async () => {
     const ctx = await setup(provider);
 
     // 1. Mint
-    const minted = await mintWallet(ctx, ctx.depositor.keyHash);
+    const minted = await mintWallet(ctx);
     const policyId = resolveScriptHash(ctx.script.code, ctx.script.version);
     expect(
       minted.output.amount.some(
@@ -212,18 +221,17 @@ describe.skipIf(!reachable)("smart wallet e2e (Yaci devnet)", () => {
       ),
     ).toBe(true);
 
-    // 2. Deposit
+    // 2. Deposit (open: the `depositors` map is empty, so no scripts run)
     const depositTx = await buildWalletDepositTx({
       txBuilder: newTxBuilder(provider),
       script: ctx.script,
       walletUtxo: minted,
-      datum: emptyDatum(ctx.depositor.keyHash),
+      datum: emptyDatum(),
       deposit: [{ unit: "lovelace", quantity: ADA.toString() }],
       outputIndex: 0,
       utxos: await ctx.depositor.wallet.getUtxos(),
       changeAddress: ctx.depositor.address,
       collateralUtxo: await collateralOf(ctx.depositor),
-      depositor: { kind: "key", hash: ctx.depositor.keyHash },
     });
     const depositHash = await signAndSubmit(ctx.depositor, depositTx);
     await waitForTx(provider, depositHash);
@@ -242,7 +250,7 @@ describe.skipIf(!reachable)("smart wallet e2e (Yaci devnet)", () => {
       script: ctx.script,
       walletUtxo: deposited,
       settingsUtxo: ctx.settingsUtxo,
-      datum: emptyDatum(ctx.depositor.keyHash),
+      datum: emptyDatum(),
       payoutAddress: ctx.member.address,
       payoutAmount: [{ unit: "lovelace", quantity: payoutAda.toString() }],
       changeAmount: change,
@@ -257,17 +265,22 @@ describe.skipIf(!reachable)("smart wallet e2e (Yaci devnet)", () => {
     const spent = await scriptOutputOf(provider, spendHash, ctx.scriptAddr);
     expect(lovelaceOf(spent)).toBe(lovelaceOf(deposited) - payoutAda);
 
-    // 4. UpdateConfig (change depositor to the admin)
-    const updated = await buildWalletUpdateConfigTx({
+    // 4. UpdatePermissions: add the always-approving guard as a depositor
+    const guardDatum: WalletDatum = {
+      spenders: [],
+      depositors: [{ scriptHash: ALWAYS_TRUE.hash, data: 0 }],
+    };
+    const updated = await buildWalletUpdatePermissionsTx({
       txBuilder: newTxBuilder(provider),
       script: ctx.script,
       walletUtxo: spent,
-      newDatum: emptyDatum(ctx.admin.keyHash),
+      newDatum: guardDatum,
       outputIndex: 0,
       utxos: await ctx.admin.wallet.getUtxos(),
       changeAddress: ctx.admin.address,
       collateralUtxo: await collateralOf(ctx.admin),
       admin: { kind: "key", hash: ctx.admin.keyHash },
+      registerScripts: [GUARD_SCRIPT],
     });
     const updatedHash = await signAndSubmit(ctx.admin, updated);
     await waitForTx(provider, updatedHash);
@@ -277,25 +290,87 @@ describe.skipIf(!reachable)("smart wallet e2e (Yaci devnet)", () => {
       ctx.scriptAddr,
     );
 
-    // 5. Close (burn the NFT)
+    // 5. Deposit through the guard (the depositor script must be invoked)
+    const guardedDeposit = await buildWalletDepositTx({
+      txBuilder: newTxBuilder(provider),
+      script: ctx.script,
+      walletUtxo: updatedUtxo,
+      datum: guardDatum,
+      deposit: [{ unit: "lovelace", quantity: ADA.toString() }],
+      outputIndex: 0,
+      utxos: await ctx.depositor.wallet.getUtxos(),
+      changeAddress: ctx.depositor.address,
+      collateralUtxo: await collateralOf(ctx.depositor),
+      depositorScripts: [GUARD_SCRIPT],
+    });
+    const guardedHash = await signAndSubmit(ctx.depositor, guardedDeposit);
+    await waitForTx(provider, guardedHash);
+    const guardedUtxo = await scriptOutputOf(
+      provider,
+      guardedHash,
+      ctx.scriptAddr,
+    );
+
+    // 6. Close (deregisters the depositor script)
     const closeTx = await buildWalletCloseTx({
       txBuilder: newTxBuilder(provider),
       script: ctx.script,
       walletTokenName: WALLET_TOKEN_NAME,
-      walletUtxo: updatedUtxo,
+      walletUtxo: guardedUtxo,
       utxos: await ctx.admin.wallet.getUtxos(),
       changeAddress: ctx.admin.address,
       collateralUtxo: await collateralOf(ctx.admin),
       admin: { kind: "key", hash: ctx.admin.keyHash },
+      deregisterScripts: [GUARD_SCRIPT],
     });
     const closeHash = await signAndSubmit(ctx.admin, closeTx);
     await waitForTx(provider, closeHash);
     const outs = await provider.fetchUTxOs(closeHash);
     expect(outs.some((u) => u.output.address === ctx.scriptAddr)).toBe(false);
   });
+
+  it("rejects a deposit whose depositor script refuses", async () => {
+    const ctx = await setup(provider);
+
+    const datum: WalletDatum = {
+      spenders: [],
+      depositors: [{ scriptHash: REJECT_WITHDRAW.hash, data: 0 }],
+    };
+    const mintTx = await buildWalletMintTx({
+      txBuilder: newTxBuilder(provider),
+      script: ctx.script,
+      walletTokenName: WALLET_TOKEN_NAME,
+      seedUtxo: ctx.walletSeed,
+      datum,
+      outputIndex: 0,
+      utxos: await ctx.admin.wallet.getUtxos(),
+      changeAddress: ctx.admin.address,
+      collateralUtxo: await collateralOf(ctx.admin),
+      admin: { kind: "key", hash: ctx.admin.keyHash },
+      registerScripts: [REJECT_SCRIPT],
+    });
+    const mintHash = await signAndSubmit(ctx.admin, mintTx);
+    await waitForTx(provider, mintHash);
+    const minted = await scriptOutputOf(provider, mintHash, ctx.scriptAddr);
+
+    await expect(
+      buildWalletDepositTx({
+        txBuilder: newTxBuilder(provider),
+        script: ctx.script,
+        walletUtxo: minted,
+        datum,
+        deposit: [{ unit: "lovelace", quantity: ADA.toString() }],
+        outputIndex: 0,
+        utxos: await ctx.depositor.wallet.getUtxos(),
+        changeAddress: ctx.depositor.address,
+        collateralUtxo: await collateralOf(ctx.depositor),
+        depositorScripts: [REJECT_SCRIPT],
+      }),
+    ).rejects.toThrow();
+  });
 });
 
-describe.skipIf(!reachable)("smart wallet withdrawal scripts e2e", () => {
+describe.skipIf(!reachable)("smart wallet spender scripts e2e", () => {
   let provider: ReturnType<typeof makeProvider>;
   let slotConfig: SlotConfig;
 
@@ -313,8 +388,8 @@ describe.skipIf(!reachable)("smart wallet withdrawal scripts e2e", () => {
     });
     const limitHash = resolveScriptHash(limit.code, limit.version);
     const datum: WalletDatum = {
-      withdrawals: [{ scriptHash: limitHash, data: 0 }],
-      depositor: { kind: "key", hash: ctx.admin.keyHash },
+      spenders: [{ scriptHash: limitHash, data: 0 }],
+      depositors: [],
     };
 
     // 1. Mint (registers the script's stake credential).
@@ -346,7 +421,6 @@ describe.skipIf(!reachable)("smart wallet withdrawal scripts e2e", () => {
       utxos: await ctx.admin.wallet.getUtxos(),
       changeAddress: ctx.admin.address,
       collateralUtxo: await collateralOf(ctx.admin),
-      depositor: { kind: "key", hash: ctx.admin.keyHash },
     });
     const depositHash = await signAndSubmit(ctx.admin, depositTx);
     await waitForTx(provider, depositHash);
@@ -373,7 +447,7 @@ describe.skipIf(!reachable)("smart wallet withdrawal scripts e2e", () => {
       changeAddress: ctx.member.address,
       collateralUtxo: await collateralOf(ctx.member),
       signers: [ctx.member.keyHash],
-      withdrawalScripts: [limit],
+      spenderScripts: [limit],
     });
     const underHash = await signAndSubmit(ctx.member, underTx);
     await waitForTx(provider, underHash);
@@ -402,7 +476,7 @@ describe.skipIf(!reachable)("smart wallet withdrawal scripts e2e", () => {
         changeAddress: ctx.member.address,
         collateralUtxo: await collateralOf(ctx.member),
         signers: [ctx.member.keyHash],
-        withdrawalScripts: [limit],
+        spenderScripts: [limit],
       }),
     ).rejects.toThrow();
 
@@ -435,10 +509,10 @@ describe.skipIf(!reachable)("smart wallet withdrawal scripts e2e", () => {
 
     function datumWith(state: SpendingWindowState): WalletDatum {
       return {
-        withdrawals: [
+        spenders: [
           { scriptHash: windowHash, data: spendingWindowStateToData(state) },
         ],
-        depositor: { kind: "key", hash: ctx.admin.keyHash },
+        depositors: [],
       };
     }
 
@@ -476,7 +550,6 @@ describe.skipIf(!reachable)("smart wallet withdrawal scripts e2e", () => {
       utxos: await ctx.admin.wallet.getUtxos(),
       changeAddress: ctx.admin.address,
       collateralUtxo: await collateralOf(ctx.admin),
-      depositor: { kind: "key", hash: ctx.admin.keyHash },
     });
     const depositHash = await signAndSubmit(ctx.admin, depositTx);
     await waitForTx(provider, depositHash);
@@ -504,7 +577,7 @@ describe.skipIf(!reachable)("smart wallet withdrawal scripts e2e", () => {
       changeAddress: ctx.member.address,
       collateralUtxo: await collateralOf(ctx.member),
       signers: [ctx.member.keyHash],
-      withdrawalScripts: [window],
+      spenderScripts: [window],
       invalidBeforeSlot: slot1,
     });
     const firstHash = await signAndSubmit(ctx.member, firstTx);
@@ -530,7 +603,7 @@ describe.skipIf(!reachable)("smart wallet withdrawal scripts e2e", () => {
         changeAddress: ctx.member.address,
         collateralUtxo: await collateralOf(ctx.member),
         signers: [ctx.member.keyHash],
-        withdrawalScripts: [window],
+        spenderScripts: [window],
         invalidBeforeSlot: slot2,
       }),
     ).rejects.toThrow();

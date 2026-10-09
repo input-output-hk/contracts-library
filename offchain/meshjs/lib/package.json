@@ -32,9 +32,9 @@
     "dao.vote": "159c194c38c731f22357da05d3f7ddd1078e80067222340a55789bf1",
     "settings": "2404b296676c4ab96a657c873a5bf58d01c77c6021f380a481a9a0bd",
     "settings_typed": "df77ce7f7d573025b2176af1efaa36ac27bfd324fd68be775c11c04a",
-    "smart_wallet": "257e70084169d1a05681fedef86044d68af822509d7cce27de221b29",
-    "smart_wallet.spending_limit": "add28e0fad43d71cff8e5b980c5e6bc770ced6711bb7ef8724b71ea4",
-    "smart_wallet.spending_window": "173a0953c1f4b626c673b52d260e4589f977a53bc3c39883e65979c5",
-    "compiler": "aiken-v1.1.22"
+    "smart_wallet": "02feb41e13bf37943981cbd51590bc6c04def3073474ca166c4a44fa",
+    "smart_wallet.spending_limit": "1a355a0a2814405759c6bbc140d3223e0ed5b11eeb136ae5299f44c0",
+    "smart_wallet.spending_window": "c3be7e5b9032f17d882429548bc28f08644b722d6c36c6f9fa5cb593",
+    "compiler": "aiken-v1.1.24+bacbeb3"
   }
 }

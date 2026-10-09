@@ -1,8 +1,10 @@
 /**
- * The two reference withdrawal scripts (`spending_limit`, `spending_window`).
+ * The two reference delegation withdrawal scripts (`spending_limit`,
+ * `spending_window`).
  *
- * These are withdraw-0 staking scripts delegated by a smart wallet. Their `wallet`
- * parameter is the wallet's payment credential (a `Credential`, normally
+ * These are withdraw-0 staking scripts delegated by a smart wallet (spender
+ * scripts; depositor scripts use the same mechanism). Their `wallet` parameter
+ * is the wallet's payment credential (a `Credential`, normally
  * `{ kind: "script", hash: walletHash }`), which pins a script instance to one
  * wallet — the known limitation noted in the spec's roadmap.
  */
@@ -153,8 +155,9 @@ export function withdrawalScriptAddress(
 /**
  * Publish a withdrawal script's stake credential: emit a `RegisterCredential`
  * certificate and wire in the script witness + cert redeemer so its `publish`
- * handler runs (CIP-69). The wallet requires this on `Mint` / `UpdateConfig`
- * whenever a script is added to the `withdrawals` map.
+ * handler runs (CIP-69). The wallet requires this on `Mint` /
+ * `UpdatePermissions` whenever a script is added to the `spenders` or
+ * `depositors` map.
  */
 export function registerWithdrawalScript(
   txBuilder: MeshTxBuilder,
@@ -177,7 +180,8 @@ export function registerWithdrawalScript(
  * Unregister a withdrawal script's stake credential: emit an
  * `UnregisterCredential` certificate and wire in the script witness + cert
  * redeemer so its `publish` handler runs (CIP-69). The wallet requires this on
- * `UpdateConfig` (removed scripts) and `Close`.
+ * `UpdatePermissions` (removed scripts) and `Close` (every script in either
+ * map).
  */
 export function deregisterWithdrawalScript(
   txBuilder: MeshTxBuilder,
@@ -198,8 +202,8 @@ export function deregisterWithdrawalScript(
 
 /**
  * Invoke a delegated withdrawal script as a withdraw-0 reward withdrawal (so it
- * runs and approves). The wallet requires every script in its `withdrawals` map
- * to be invoked on every `Spend`.
+ * runs and approves). The wallet requires every script in the relevant map to
+ * be invoked: `spenders` on every `Spend`, `depositors` on every `Deposit`.
  */
 export function invokeWithdrawalScript(
   txBuilder: MeshTxBuilder,

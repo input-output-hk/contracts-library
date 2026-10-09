@@ -8,15 +8,20 @@ import type { Credential } from "../common";
 
 export type { Credential };
 
-/** One delegated withdrawal script: its hash and its own mutable state. */
-export interface Withdrawal {
+/**
+ * One delegated withdraw-0 script (spender or depositor): its hash and its own
+ * `Data` (mutable state for spenders, configuration or state for depositors).
+ */
+export interface DelegatedScript {
   scriptHash: string;
   data: Data;
 }
 
 export interface WalletDatum {
-  withdrawals: Withdrawal[];
-  depositor: Credential;
+  /** Scripts that must run and approve on every `Spend` (keys fixed on spend). */
+  spenders: DelegatedScript[];
+  /** Scripts that must run and approve on every `Deposit` (keys fixed on deposit). */
+  depositors: DelegatedScript[];
 }
 
 /** The base M-of-N config the wallet reads from a settings UTxO. */

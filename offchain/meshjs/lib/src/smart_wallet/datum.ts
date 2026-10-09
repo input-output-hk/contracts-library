@@ -2,14 +2,14 @@
  * Datum/redeemer encoding for the smart wallet contract.
  *
  * CBOR constructor layout matching the Aiken blueprint in onchain/plutus.json:
- *   WalletDatum        = Constr 0 [withdrawals: Pairs<ScriptHash, Data>, depositor: Credential]
+ *   WalletDatum        = Constr 0 [spenders: Pairs<ScriptHash, Data>, depositors: Pairs<ScriptHash, Data>]
  *   WalletConfig       = Constr 0 [members: [VerificationKeyHash], threshold: Int]
  *   SpendingWindowState= Constr 0 [last_spend: Int]
- *   SpendRedeemer      = Spend=0 | UpdateConfig{out_ix}=1 | Deposit{out_ix}=2 | Close=3
+ *   SpendRedeemer      = Spend=0 | UpdatePermissions{out_ix}=1 | Deposit{out_ix}=2 | Close=3
  *   MintRedeemer       = Mint{out_ix}=0 | Burn=1
  *
- * `withdrawals` is Aiken's `Pairs<k, v>` (`List<Pair<k, v>>`), which serializes
- * as a Plutus association map — encoded here with the `pairs` helper.
+ * `spenders` / `depositors` are Aiken's `Pairs<k, v>` (`List<Pair<k, v>>`), which
+ * serializes as a Plutus association map — encoded here with a JS `Map`.
  */
 
 import {
@@ -24,6 +24,7 @@ import {
 import { credentialToData } from "../common";
 import { outputRefToData } from "../settings/datum";
 import type {
+  DelegatedScript,
   SpendingLimitParams,
   SpendingWindowParams,
   SpendingWindowState,
@@ -34,11 +35,12 @@ import type {
 
 export { credentialToData, outputRefToData };
 
+function pairsToData(scripts: DelegatedScript[]): Map<Data, Data> {
+  return new Map(scripts.map((s) => [s.scriptHash, s.data]));
+}
+
 export function walletDatumToData(d: WalletDatum): Data {
-  return mConStr0([
-    new Map(d.withdrawals.map((w) => [w.scriptHash, w.data])),
-    credentialToData(d.depositor),
-  ]);
+  return mConStr0([pairsToData(d.spenders), pairsToData(d.depositors)]);
 }
 
 export function walletConfigToData(c: WalletConfig): Data {
@@ -55,7 +57,7 @@ export function walletSpendRedeemer(): Data {
   return mConStr0([]);
 }
 
-export function walletUpdateConfigRedeemer(outIx: number): Data {
+export function walletUpdatePermissionsRedeemer(outIx: number): Data {
   return mConStr1([outIx]);
 }
 

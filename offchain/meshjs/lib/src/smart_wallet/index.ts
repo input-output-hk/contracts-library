@@ -8,7 +8,7 @@ export {
   walletConfigToData,
   spendingWindowStateToData,
   walletSpendRedeemer,
-  walletUpdateConfigRedeemer,
+  walletUpdatePermissionsRedeemer,
   walletDepositRedeemer,
   walletCloseRedeemer,
   walletMintRedeemer,
@@ -23,12 +23,12 @@ export {
   buildWalletMintTx,
   buildWalletDepositTx,
   buildWalletSpendTx,
-  buildWalletUpdateConfigTx,
+  buildWalletUpdatePermissionsTx,
   buildWalletCloseTx,
   type WalletMintParams,
   type WalletDepositParams,
   type WalletSpendParams,
-  type WalletUpdateConfigParams,
+  type WalletUpdatePermissionsParams,
   type WalletCloseParams,
 } from "./smart_wallet";
 export {

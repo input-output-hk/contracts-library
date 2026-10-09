@@ -2,11 +2,11 @@
  * Transaction builders for the smart wallet contract (MeshJS).
  *
  * Action set:
- *   - `buildWalletMintTx`          create the wallet (mint NFT, spend seed UTxO)
- *   - `buildWalletDepositTx`       depositor adds funds (datum and config preserved)
- *   - `buildWalletSpendTx`         pay out (base M-of-N + delegated withdrawals)
- *   - `buildWalletUpdateConfigTx`  admin rewrites withdrawals / depositor
- *   - `buildWalletCloseTx`         burn the NFT and close the wallet
+ *   - `buildWalletMintTx`              create the wallet (mint NFT, spend seed UTxO)
+ *   - `buildWalletDepositTx`           depositors validate added funds (spenders preserved)
+ *   - `buildWalletSpendTx`             pay out (base M-of-N + delegated spenders)
+ *   - `buildWalletUpdatePermissionsTx` admin rewrites spenders / depositors
+ *   - `buildWalletCloseTx`             burn the NFT and close the wallet
  */
 
 import {
@@ -29,11 +29,11 @@ import {
   walletDepositRedeemer,
   walletMintRedeemer,
   walletSpendRedeemer,
-  walletUpdateConfigRedeemer,
+  walletUpdatePermissionsRedeemer,
   walletDatumToData,
   walletParamsToData,
 } from "./datum";
-import type { WalletDatum, WalletParams } from "./types";
+import type { DelegatedScript, WalletDatum, WalletParams } from "./types";
 import {
   deregisterWithdrawalScript,
   invokeWithdrawalScript,
@@ -84,6 +84,29 @@ function addAssets(base: Asset[], extra: Asset[]): Asset[] {
   return result;
 }
 
+/**
+ * The wallet only knows the scripts listed in its datum maps, so every entry
+ * must be covered by a provided script. Fails early with a clear error rather
+ * than submitting a transaction the validator will reject.
+ */
+function assertScriptsCover(
+  scripts: PlutusScript[],
+  required: DelegatedScript[],
+  label: string,
+): void {
+  const provided = new Set(
+    scripts.map((s) => resolveScriptHash(s.code, s.version)),
+  );
+  for (const { scriptHash } of required) {
+    if (!provided.has(scriptHash)) {
+      throw new Error(
+        `Missing ${label} script for ${scriptHash}: every script in the ` +
+          `datum must be provided so it can run or be published.`,
+      );
+    }
+  }
+}
+
 // ---------------------------------------------------- Mint
 
 export interface WalletMintParams {
@@ -91,6 +114,7 @@ export interface WalletMintParams {
   script: PlutusScript;
   walletTokenName: string;
   seedUtxo: UTxO;
+  /** Initial datum; every script in its two maps is published in this tx. */
   datum: WalletDatum;
   outputIndex: number;
   utxos: UTxO[];
@@ -98,7 +122,7 @@ export interface WalletMintParams {
   collateralUtxo: UTxO;
   admin: Credential;
   authorizer?: ScriptAuthorizer;
-  /** Withdrawal scripts in the initial `withdrawals` map (registered here). */
+  /** Scripts in the initial `spenders` / `depositors` maps (published here). */
   registerScripts?: PlutusScript[];
   network?: Network;
 }
@@ -107,6 +131,12 @@ export async function buildWalletMintTx(p: WalletMintParams): Promise<string> {
   const networkId = networkIdOf(p.network ?? "preprod");
   const scriptAddr = smartWalletScriptAddress(p.script, networkId);
   const policyId = resolveScriptHash(p.script.code, p.script.version);
+
+  assertScriptsCover(
+    p.registerScripts ?? [],
+    [...p.datum.spenders, ...p.datum.depositors],
+    "registration",
+  );
 
   applyAuthorization(p.txBuilder, p.admin, p.authorizer, networkId);
   for (const script of p.registerScripts ?? []) {
@@ -146,14 +176,18 @@ export interface WalletDepositParams {
   txBuilder: MeshTxBuilder;
   script: PlutusScript;
   walletUtxo: UTxO;
+  /**
+   * Continuation datum: `spenders` must be identical to the wallet UTxO's and
+   * `depositors` must keep the same keys (their `data` may advance).
+   */
   datum: WalletDatum;
   deposit: Asset[];
   outputIndex: number;
   utxos: UTxO[];
   changeAddress: string;
   collateralUtxo: UTxO;
-  depositor: Credential;
-  authorizer?: ScriptAuthorizer;
+  /** Depositor scripts invoked as withdraw-0 (every `depositors` entry). */
+  depositorScripts?: PlutusScript[];
   network?: Network;
 }
 
@@ -163,7 +197,10 @@ export async function buildWalletDepositTx(
   const networkId = networkIdOf(p.network ?? "preprod");
   const scriptAddr = smartWalletScriptAddress(p.script, networkId);
 
-  applyAuthorization(p.txBuilder, p.depositor, p.authorizer, networkId);
+  assertScriptsCover(p.depositorScripts ?? [], p.datum.depositors, "depositor");
+  for (const script of p.depositorScripts ?? []) {
+    invokeWithdrawalScript(p.txBuilder, script, networkId);
+  }
 
   const contValue = addAssets(p.walletUtxo.output.amount, p.deposit);
 
@@ -199,12 +236,18 @@ export interface WalletSpendParams {
   walletUtxo: UTxO;
   /** Reference input holding the base M-of-N `WalletConfig`. */
   settingsUtxo: UTxO;
-  /** Unchanged wallet datum carried by the change output. */
+  /**
+   * Continuation datum: `depositors` must be identical to the wallet UTxO's,
+   * `spenders` must keep the same keys (their `data` may advance).
+   */
   datum: WalletDatum;
   /** Payout destination and amount. */
   payoutAddress: string;
   payoutAmount: Asset[];
-  /** Wallet change (must keep the NFT), at the script address. */
+  /**
+   * Wallet continuation (must keep the NFT), at the script address. Its value
+   * must be a subset of the wallet UTxO's: a spend only removes value.
+   */
   changeAmount: Asset[];
   outputIndex: number;
   utxos: UTxO[];
@@ -212,8 +255,8 @@ export interface WalletSpendParams {
   collateralUtxo: UTxO;
   /** Member key hashes satisfying the M-of-N floor. */
   signers: string[];
-  /** Delegated withdrawal scripts (invoked as withdraw-0 on this spend). */
-  withdrawalScripts?: PlutusScript[];
+  /** Delegated spender scripts (invoked as withdraw-0 on this spend). */
+  spenderScripts?: PlutusScript[];
   /** Validity-range lower bound slot (for stateful scripts that read `now`). */
   invalidBeforeSlot?: number;
   network?: Network;
@@ -225,10 +268,12 @@ export async function buildWalletSpendTx(
   const networkId = networkIdOf(p.network ?? "preprod");
   const scriptAddr = smartWalletScriptAddress(p.script, networkId);
 
+  assertScriptsCover(p.spenderScripts ?? [], p.datum.spenders, "spender");
+
   for (const signer of p.signers) {
     p.txBuilder.requiredSignerHash(signer);
   }
-  for (const script of p.withdrawalScripts ?? []) {
+  for (const script of p.spenderScripts ?? []) {
     invokeWithdrawalScript(p.txBuilder, script, networkId);
   }
   if (p.invalidBeforeSlot !== undefined) {
@@ -268,9 +313,9 @@ export async function buildWalletSpendTx(
     .complete();
 }
 
-// ---------------------------------------------------- UpdateConfig
+// ---------------------------------------------------- UpdatePermissions
 
-export interface WalletUpdateConfigParams {
+export interface WalletUpdatePermissionsParams {
   txBuilder: MeshTxBuilder;
   script: PlutusScript;
   walletUtxo: UTxO;
@@ -281,15 +326,15 @@ export interface WalletUpdateConfigParams {
   collateralUtxo: UTxO;
   admin: Credential;
   authorizer?: ScriptAuthorizer;
-  /** Withdrawal scripts added by this update (registered here). */
+  /** Scripts added by this update, in either map (published here). */
   registerScripts?: PlutusScript[];
-  /** Withdrawal scripts removed by this update (unregistered here). */
+  /** Scripts removed by this update, in either map (unregistered here). */
   deregisterScripts?: PlutusScript[];
   network?: Network;
 }
 
-export async function buildWalletUpdateConfigTx(
-  p: WalletUpdateConfigParams,
+export async function buildWalletUpdatePermissionsTx(
+  p: WalletUpdatePermissionsParams,
 ): Promise<string> {
   const networkId = networkIdOf(p.network ?? "preprod");
   const scriptAddr = smartWalletScriptAddress(p.script, networkId);
@@ -311,7 +356,7 @@ export async function buildWalletUpdateConfigTx(
       p.walletUtxo.output.address,
     )
     .txInInlineDatumPresent()
-    .txInRedeemerValue(walletUpdateConfigRedeemer(p.outputIndex))
+    .txInRedeemerValue(walletUpdatePermissionsRedeemer(p.outputIndex))
     .txInScript(p.script.code)
     .txOut(scriptAddr, p.walletUtxo.output.amount)
     .txOutInlineDatumValue(walletDatumToData(p.newDatum))
@@ -338,7 +383,7 @@ export interface WalletCloseParams {
   collateralUtxo: UTxO;
   admin: Credential;
   authorizer?: ScriptAuthorizer;
-  /** Withdrawal scripts in the wallet's `withdrawals` map (unregistered here). */
+  /** Scripts in the wallet's `spenders` and `depositors` maps (unregistered here). */
   deregisterScripts?: PlutusScript[];
   network?: Network;
 }
