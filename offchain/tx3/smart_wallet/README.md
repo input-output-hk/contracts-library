@@ -10,10 +10,11 @@ The language-agnostic behavior is specified in
 
 A wallet is a single UTxO at the parameterized `smart_wallet` script address,
 identified by a one-shot NFT minted under the script's own policy. Its inline
-datum carries the delegated `withdrawals` map and the `depositor` credential;
-the `admin` that creates, reconfigures, and closes the wallet is a compile-time
-script parameter. The base M-of-N floor (`members`, `threshold`) is read at
-runtime from a settings UTxO, located by its NFT via **reference input**.
+datum carries two delegated script maps, `spenders` (run on every spend) and
+`depositors` (run on every deposit); the `admin` that creates, reconfigures,
+and closes the wallet is a compile-time script parameter. The base M-of-N floor
+(`members`, `threshold`) is read at runtime from a settings UTxO, located by
+its NFT via **reference input**.
 
 ## Action set
 
@@ -21,9 +22,9 @@ runtime from a settings UTxO, located by its NFT via **reference input**.
 | --- | --- |
 | `launch_settings` | Mint a settings instance holding the wallet's `WalletConfig` (fixture / consumer convenience). |
 | `mint_wallet` | One-shot create: spend the seed UTxO, mint the wallet NFT, write the initial datum. |
-| `deposit` | The depositor adds ADA; datum and value otherwise preserved. |
-| `spend` | The M-of-N floor signs; the wallet pays out and continues with the remainder. |
-| `update_config` | The admin rewrites the depositor; withdrawals and value are preserved. |
+| `deposit` | The depositor funds ADA; `spenders` are preserved, the `depositors` keys stay fixed and value only grows. |
+| `spend` | The M-of-N floor signs; the wallet pays out and continues with the remainder (must survive, cannot gain value). |
+| `update_permissions` | The admin rewrites the permission set (`spenders` / `depositors`); value and address are preserved. |
 | `close` | The admin burns the wallet NFT and releases the funds; irreversible. |
 
 Each builder is a Tx3 transaction template in [`main.tx3`](./main.tx3); the
@@ -44,15 +45,16 @@ parameter application): the test parameterizes the script with MeshJS
 | `settings_script` | Single-CBOR flat settings validator script. |
 
 Parties bound at runtime: `Admin`, `Depositor`, `Member`, `Wallet` (wallet
-script address), `Settings` (settings script address). This reference
-implements the **key-authorized** paths only: each party is bound to the key
-credential the validator authorizes. The M-of-N floor supports N members
-on-chain, but a Tx3 party is a single key, so this reference and its tests use a
-1-of-1 wallet.
+script address), `Settings` (settings script address). `Admin` and `Member` are
+bound to the key credentials the validator authorizes; `Depositor` is not an
+authorization role — deposits are gated by the `depositors` scripts (empty
+here, so open) — it is the party that funds them. The M-of-N floor supports N
+members on-chain, but a Tx3 party is a single key, so this reference and its
+tests use a 1-of-1 wallet.
 
 ## Scope: delegated withdrawal scripts are not expressible yet
 
-The on-chain `Mint`, `UpdateConfig` (adding/removing scripts), and `Close`
+The on-chain `Mint`, `UpdatePermissions` (adding/removing scripts), and `Close`
 endpoints require CIP-69 `publish` handlers to run, i.e. a
 `RegisterCredential` / `UnregisterCredential` certificate **in the same
 transaction**. The Tx3 v1beta0 language has no block for Cardano
@@ -61,13 +63,13 @@ registration/unregistration certificates (only `withdrawal`,
 `treasury_donation`, and `publish`), tracked upstream by
 [tx3-lang/tx3#164](https://github.com/tx3-lang/tx3/issues/164).
 
-Consequently every wallet produced by this reference carries an **empty
-`withdrawals` map**, where the on-chain publication and unregistration checks
-are vacuously true. Spending a wallet that already delegates to scripts remains
-valid on-chain, but such a wallet cannot be produced or torn down by Tx3 until
-upstream certificate support lands. The map's values are carried as an opaque
-`Bytes` stand-in — Tx3 has no raw `Data` type — and are only usable empty
-today.
+Consequently every wallet produced by this reference carries **empty
+`spenders` and `depositors` maps**, where the on-chain publication and
+unregistration checks are vacuously true. Spending a wallet that already
+delegates to scripts remains valid on-chain, but such a wallet cannot be
+produced or torn down by Tx3 until upstream certificate support lands. The
+map's values are carried as an opaque `Bytes` stand-in — Tx3 has no raw `Data`
+type — and are only usable empty today.
 
 ## Running the tests
 
@@ -93,8 +95,12 @@ troubleshooting.
 
 ## Coverage
 
-- **Happy path**: settings launch → mint → deposit → spend → update config →
-  close, asserting the wallet's value and NFT lifecycle.
-- **Attack paths**: M-of-N bypass, deposit removing value, deposit rewriting
-  the datum, non-admin config update, and close without burning the NFT — each
-  must fail phase-2 validation and leave the wallet UTxO untouched.
+- **Happy path**: settings launch → mint → deposit → spend → update
+  permissions → close, asserting the wallet's value and NFT lifecycle.
+- **Attack paths**: M-of-N bypass, deposit removing value, spend without a
+  wallet continuation (NFT stranded), spend adding value, non-admin permission
+  update, and close without burning the NFT — each must fail phase-2 validation
+  and leave the wallet UTxO untouched.
+- **Not expressible in Tx3**: a deposit that rewrites the datum. Both maps are
+  always empty here (non-empty entries would need registration certificates),
+  so there is no key or value to change.

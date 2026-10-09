@@ -6,55 +6,57 @@
 //
 // A wallet is a single UTxO at the parameterized `smart_wallet` script
 // address, identified by a one-shot NFT minted under the script's own policy.
-// Its inline datum carries the delegated `withdrawals` map and the `depositor`
-// credential; the `admin` allowed to create, reconfigure, and close the wallet
-// is a compile-time script parameter. The base M-of-N floor (members +
-// threshold) is read at runtime from a *settings* UTxO located by its NFT via
-// reference input.
+// Its inline datum carries two delegated script maps, `spenders` (run on
+// every spend) and `depositors` (run on every deposit); the `admin` allowed to
+// create, reconfigure, and close the wallet is a compile-time script
+// parameter. The base M-of-N floor (members + threshold) is read at runtime
+// from a *settings* UTxO located by its NFT via reference input.
 //
 //   launch_settings     mint the settings instance holding the wallet's
 //                       `WalletConfig` as `current` (fixture for this
 //                       protocol and for consumers of the wallet)
 //   mint_wallet         create the wallet: burn the seed UTxO (one-shot),
 //                       mint the wallet NFT, write the initial datum
-//   deposit             the depositor adds ADA; datum and value otherwise
-//                       preserved
-//   spend               pay out: the M-of-N floor signs and the wallet
-//                       continues with the remaining value
-//   update_config       the admin rewrites the depositor (withdrawals kept)
+//   deposit             the depositor funds ADA; `spenders` are preserved and
+//                       the `depositors` keys stay fixed, value only grows
+//   spend               pay out: the M-of-N floor signs, the wallet must
+//                       survive (NFT continuation) and cannot gain value
+//   update_permissions  the admin rewrites the permission set (`spenders` /
+//                       `depositors`); value and address are preserved
 //   close               the admin burns the NFT and releases the funds
 //
 // SCOPE — delegated withdrawal scripts are NOT part of this reference yet.
-// The on-chain `Mint`/`UpdateConfig`/`Close` endpoints require
+// The on-chain `Mint`/`UpdatePermissions`/`Close` endpoints require
 // `RegisterCredential` / `UnregisterCredential` certificates in the same
 // transaction (CIP-69 `publish` handlers), and the Tx3 v1beta0 language has no
 // block for Cardano registration/unregistration certificates. Until upstream
 // support lands (https://github.com/tx3-lang/tx3/issues/164) every Tx3 wallet
-// carries an empty `withdrawals` map, where the on-chain publication and
-// unregistration checks are vacuously true. Spending a wallet that already
-// delegates to scripts remains valid on-chain, but such a wallet cannot be
-// produced (or torn down) by this protocol.
+// carries empty `spenders` and `depositors` maps, where the on-chain
+// publication and unregistration checks are vacuously true. Spending a wallet
+// that already delegates to scripts remains valid on-chain, but such a wallet
+// cannot be produced (or torn down) by this protocol.
 //
 // Datum / redeemer CBOR layout (must match the Aiken blueprint):
-//   Credential       = Constr 0 [hash] (key) | Constr 1 [hash] (script)
 //   WalletConfig     = Constr 0 [members: List<VKH>, threshold: Int]
-//   WalletDatum      = Constr 0 [withdrawals: Map<ScriptHash, Data>, depositor]
-//   SpendRedeemer    = Spend=0 | UpdateConfig{out_ix}=1 | Deposit{out_ix}=2 | Close=3
+//   WalletDatum      = Constr 0 [spenders: Map<ScriptHash, Data>, depositors: Map<ScriptHash, Data>]
+//   SpendRedeemer    = Spend=0 | UpdatePermissions{out_ix}=1 | Deposit{out_ix}=2 | Close=3
 //   MintRedeemer     = Mint{out_ix}=0 | Burn=1
 //   SettingsDatum    = Constr 0 [current, next: Option, next_apply: Option<Int>]
 //
 // Tx3 has no raw `Data` type, so the opaque elements of the on-chain datums are
-// carried as `Bytes`: the `withdrawals` values (each delegated script's own
-// mutable state) and the settings `current` when read by the wallet validator.
-// The wallet's `WalletConfig`, however, is known to this protocol and is
-// carried typed so the settings instance can be launched and read coherently.
+// carried as `Bytes`: the `spenders`/`depositors` values (each delegated
+// script's own state/configuration) and the settings `current` when read by the
+// wallet validator. The wallet's `WalletConfig`, however, is known to this
+// protocol and is carried typed so the settings instance can be launched and
+// read coherently.
 //
 // Authorization: the on-chain `is_authorized` accepts either a key credential
 // (a required signer) or a script credential (a withdraw-0 reward withdrawal).
 // Tx3 has no runtime key-vs-script branch, so, like the DAO reference, this
-// protocol implements the key-authorized paths only: the named parties
-// (`Admin`, `Depositor`, `Member`) are bound to the key credentials the
-// validator requires.
+// protocol implements the key-authorized paths only: `Admin` and `Member` are
+// bound to the key credentials the validator requires. `Depositor` is not an
+// authorization role — deposits are gated by the `depositors` scripts (empty
+// here, so deposits are open) — it is simply the party that funds them.
 
 env {
     /// Hash of the parameterized `smart_wallet` validator (also the wallet NFT
@@ -74,7 +76,9 @@ env {
 /// funds the one-shot mint and the settings fixture.
 party Admin;
 
-/// The wallet's depositor (stored in the datum): may add funds only.
+/// Funds deposits. Deposits are gated by the `depositors` scripts (empty in
+/// this reference), not by a datum credential, so this party authorizes
+/// nothing itself — it pays the deposit and its fees.
 party Depositor;
 
 /// A member of the base M-of-N floor. This reference binds a single signer;
@@ -89,36 +93,25 @@ party Settings;
 
 // ------------------------------------------------------------------- types
 
-// `Credential` in the Aiken sense: constructor 0 is a key credential,
-// constructor 1 a script credential. The carried value is a Blake2b-224 hash.
-type Credential {
-    Key {
-        hash: Bytes,
-    },
-    Script {
-        hash: Bytes,
-    },
-}
-
 // The wallet's base M-of-N configuration, stored as the settings `current`.
 type WalletConfig {
     members: List<Bytes>,
     threshold: Int,
 }
 
-// The inline datum carried by the wallet UTxO. `withdrawals` maps each
-// delegated withdraw-0 script's hash to its mutable `Data` — carried as an
-// opaque `Bytes` stand-in (see the SCOPE note: only the empty map is usable
-// through Tx3 today).
+// The inline datum carried by the wallet UTxO. Each map associates a delegated
+// withdraw-0 script's hash with its own `Data` — carried as an opaque `Bytes`
+// stand-in (see the SCOPE note: only empty maps are usable through Tx3 today).
+// `spenders` must run on every spend; `depositors` on every deposit.
 type WalletDatum {
-    withdrawals: Map<Bytes, Bytes>,
-    depositor: Credential,
+    spenders: Map<Bytes, Bytes>,
+    depositors: Map<Bytes, Bytes>,
 }
 
 // Actions on a wallet UTxO (spend endpoint).
 type SpendRedeemer {
     Spend,
-    UpdateConfig {
+    UpdatePermissions {
         out_ix: Int,
     },
     Deposit {
@@ -224,14 +217,12 @@ tx launch_settings(
 
 /// Create a wallet: spend the one-shot `seed` UTxO, mint exactly one wallet
 /// NFT under the script's own policy, and produce the wallet UTxO at `out_ix`
-/// carrying the NFT and an inline datum with an empty `withdrawals` map and the
-/// given `depositor`. `validate_mint` requires the `Admin` to authorize.
+/// carrying the NFT and an inline datum with empty `spenders` / `depositors`
+/// maps. `validate_mint` requires the `Admin` to authorize.
 tx mint_wallet(
     /// The UTxO consumed as the mint seed. Must equal the `seed_utxo` the
     /// wallet validator was parameterized with (enforcing one-shot minting).
     seed: UtxoRef,
-    /// The initial depositor credential stored in the wallet datum.
-    depositor: Credential,
     /// Index of the wallet output within the transaction outputs.
     out_ix: Int,
 ) {
@@ -252,8 +243,8 @@ tx mint_wallet(
         to: Wallet,
         amount: AnyAsset(wallet_hash, wallet_token_name, 1) + Ada(2000000),
         datum: WalletDatum {
-            withdrawals: {},
-            depositor: depositor,
+            spenders: {},
+            depositors: {},
         },
     }
 
@@ -279,9 +270,11 @@ tx mint_wallet(
 
 // ---------------------------------------------------------------- deposit
 
-/// Deposit ADA into the wallet. The `Depositor` (read from the input datum)
-/// authorizes; the continuation at `out_ix` carries the unchanged datum and a
-/// value superset of the input. The delegated scripts do not run.
+/// Deposit ADA into the wallet, funded by `Depositor`. The continuation at
+/// `out_ix` preserves `spenders` and the `depositors` keys and carries a value
+/// superset of the input. Every `depositors` script would run; the map is empty
+/// here, so deposits are open and the wallet requires no signature (the
+/// `Depositor` only signs its own funding input).
 tx deposit(
     /// Lovelace added to the wallet by this deposit. Funded by `Depositor`.
     deposit_ada: Int,
@@ -307,8 +300,8 @@ tx deposit(
         to: Wallet,
         amount: wallet_in + Ada(deposit_ada),
         datum: WalletDatum {
-            withdrawals: wallet_in.withdrawals,
-            depositor: wallet_in.depositor,
+            spenders: wallet_in.spenders,
+            depositors: wallet_in.depositors,
         },
     }
 
@@ -336,8 +329,10 @@ tx deposit(
 
 /// Pay out from the wallet: the base M-of-N floor signs (read from the
 /// settings reference input) and the wallet continues with the remaining
-/// value, retaining the NFT. With an empty `withdrawals` map no delegated
-/// script needs to run.
+/// value, retaining the NFT. The on-chain `Spend` requires that continuation,
+/// keeps the `spenders` key set fixed and `depositors` unchanged, and forbids
+/// the continuation from gaining value. With empty maps no delegated script
+/// runs.
 tx spend(
     /// The settings UTxO carrying the wallet's `WalletConfig` (reference input).
     settings_ref: UtxoRef,
@@ -372,8 +367,8 @@ tx spend(
         to: Wallet,
         amount: wallet_in - Ada(payout_ada),
         datum: WalletDatum {
-            withdrawals: wallet_in.withdrawals,
-            depositor: wallet_in.depositor,
+            spenders: wallet_in.spenders,
+            depositors: wallet_in.depositors,
         },
     }
 
@@ -397,23 +392,20 @@ tx spend(
     }
 }
 
-// ---------------------------------------------------------- update config
+// ------------------------------------------------------ update permissions
 
-/// Rewrite the wallet's config: the `Admin` authorizes and the continuation at
-/// `out_ix` sits at the same address with the same value, carrying the same
-/// `withdrawals` map and a new `depositor`. An update cannot move funds.
-tx update_config(
-    /// The new depositor credential written into the continuation datum.
-    new_depositor: Credential,
-    /// Index of the continuation output within the transaction outputs.
-    out_ix: Int,
-) {
+/// Rewrite the wallet's permission set: the `Admin` authorizes and the
+/// continuation at `out_ix` sits at the same address with the same value. In
+/// this Tx3 reference both maps are always empty (see the SCOPE note), so the
+/// update is a no-op that only exercises the admin authorization and the
+/// value/address preservation of `validate_config_update`.
+tx update_permissions(out_ix: Int) {
     // Resolver-selected: the unique NFT-bearing UTxO at the wallet address.
     input wallet_in {
         from: Wallet,
         datum_is: WalletDatum,
         min_amount: AnyAsset(wallet_hash, wallet_token_name, 1),
-        redeemer: SpendRedeemer::UpdateConfig {
+        redeemer: SpendRedeemer::UpdatePermissions {
             out_ix: out_ix,
         },
     }
@@ -427,8 +419,8 @@ tx update_config(
         to: Wallet,
         amount: wallet_in,
         datum: WalletDatum {
-            withdrawals: wallet_in.withdrawals,
-            depositor: new_depositor,
+            spenders: wallet_in.spenders,
+            depositors: wallet_in.depositors,
         },
     }
 
@@ -537,16 +529,13 @@ tx close_without_burn_attack() {
     }
 }
 
-/// Attack-only variant of `update_config`: a member (not the admin) signs.
-tx update_config_non_admin_attack(
-    new_depositor: Credential,
-    out_ix: Int,
-) {
+/// Attack-only variant of `update_permissions`: a member (not the admin) signs.
+tx update_permissions_non_admin_attack(out_ix: Int) {
     input wallet_in {
         from: Wallet,
         datum_is: WalletDatum,
         min_amount: AnyAsset(wallet_hash, wallet_token_name, 1),
-        redeemer: SpendRedeemer::UpdateConfig {
+        redeemer: SpendRedeemer::UpdatePermissions {
             out_ix: out_ix,
         },
     }
@@ -560,8 +549,8 @@ tx update_config_non_admin_attack(
         to: Wallet,
         amount: wallet_in,
         datum: WalletDatum {
-            withdrawals: wallet_in.withdrawals,
-            depositor: new_depositor,
+            spenders: wallet_in.spenders,
+            depositors: wallet_in.depositors,
         },
     }
 
@@ -606,8 +595,8 @@ tx deposit_removing_value_attack(out_ix: Int) {
         to: Wallet,
         amount: wallet_in - Ada(1000000),
         datum: WalletDatum {
-            withdrawals: wallet_in.withdrawals,
-            depositor: wallet_in.depositor,
+            spenders: wallet_in.spenders,
+            depositors: wallet_in.depositors,
         },
     }
 
@@ -631,47 +620,95 @@ tx deposit_removing_value_attack(out_ix: Int) {
     }
 }
 
-/// Attack-only variant of `deposit`: the continuation rewrites the datum,
-/// which `validate_deposit`'s unchanged-datum check must reject.
-tx deposit_changed_datum_attack(
-    other_depositor: Credential,
-    out_ix: Int,
+/// Attack-only variant of `spend`: the wallet is spent without recreating the
+/// wallet UTxO (the NFT is paid out), which the wallet-survival check in
+/// `validate_spend_continuation` must reject.
+tx spend_without_continuation_attack(
+    settings_ref: UtxoRef,
+    payout_address: Address,
 ) {
+    reference wallet_settings {
+        ref: settings_ref,
+    }
+
     input wallet_in {
         from: Wallet,
         datum_is: WalletDatum,
         min_amount: AnyAsset(wallet_hash, wallet_token_name, 1),
-        redeemer: SpendRedeemer::Deposit {
-            out_ix: out_ix,
-        },
+        redeemer: SpendRedeemer::Spend {},
     }
 
     input gas {
-        from: Depositor,
+        from: Member,
         min_amount: fees,
     }
 
-    output wallet_out {
-        to: Wallet,
+    output {
+        to: payout_address,
         amount: wallet_in,
-        datum: WalletDatum {
-            withdrawals: wallet_in.withdrawals,
-            depositor: other_depositor,
-        },
     }
 
     output {
-        to: Depositor,
+        to: Member,
         amount: gas - fees,
     }
 
     collateral {
-        from: Depositor,
+        from: Member,
         min_amount: fees,
     }
 
     signers {
-        Depositor,
+        Member,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: wallet_script,
+    }
+}
+
+/// Attack-only variant of `spend`: the continuation gains ADA (funded by the
+/// member), which the value-subset check in `validate_spend_continuation` must
+/// reject.
+tx spend_gaining_value_attack(settings_ref: UtxoRef) {
+    reference wallet_settings {
+        ref: settings_ref,
+    }
+
+    input wallet_in {
+        from: Wallet,
+        datum_is: WalletDatum,
+        min_amount: AnyAsset(wallet_hash, wallet_token_name, 1),
+        redeemer: SpendRedeemer::Spend {},
+    }
+
+    input gas {
+        from: Member,
+        min_amount: Ada(1000000) + fees,
+    }
+
+    output wallet_out {
+        to: Wallet,
+        amount: wallet_in + Ada(1000000),
+        datum: WalletDatum {
+            spenders: wallet_in.spenders,
+            depositors: wallet_in.depositors,
+        },
+    }
+
+    output {
+        to: Member,
+        amount: gas - Ada(1000000) - fees,
+    }
+
+    collateral {
+        from: Member,
+        min_amount: fees,
+    }
+
+    signers {
+        Member,
     }
 
     cardano::plutus_witness {
@@ -712,8 +749,8 @@ tx spend_without_member_signature_attack(
         to: Wallet,
         amount: wallet_in - Ada(payout_ada),
         datum: WalletDatum {
-            withdrawals: wallet_in.withdrawals,
-            depositor: wallet_in.depositor,
+            spenders: wallet_in.spenders,
+            depositors: wallet_in.depositors,
         },
     }
 

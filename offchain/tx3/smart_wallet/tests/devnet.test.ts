@@ -3,18 +3,18 @@
  * trix/dolos devnet.
  *
  * Coverage is the wallet's *core lifecycle*: the on-chain multivalidator with
- * an empty delegated-withdrawals map, where the only spend authorization is the
- * base M-of-N floor read from a settings reference input:
+ * empty `spenders` / `depositors` maps, where the only spend authorization is
+ * the base M-of-N floor read from a settings reference input:
  *
  *   - happy path: settings launch -> mint -> deposit -> spend -> update
- *     config -> close;
+ *     permissions -> close;
  *   - attack paths: each negative transaction must fail phase-2 validation for
  *     the right reason and leave the wallet UTxO untouched.
  *
  * Delegated withdrawal scripts are out of scope for Tx3 until upstream gains
  * registration/unregistration certificate blocks
  * (https://github.com/tx3-lang/tx3/issues/164): the wallet's `Mint` /
- * `UpdateConfig` / `Close` endpoints require `RegisterCredential` /
+ * `UpdatePermissions` / `Close` endpoints require `RegisterCredential` /
  * `UnregisterCredential` certificates in the same transaction, which the Tx3
  * v1beta0 language cannot express. See `../README.md`.
  */
@@ -57,9 +57,6 @@ const GAS = 10n * ADA;
 const COLLATERAL = 5n * ADA;
 
 const toBytes = (hex: string): Uint8Array => Buffer.from(hex, "hex");
-
-/** A key credential in the `Credential` variant's encoding (Constr 0 [hash]). */
-const keyCred = (keyHash: string) => ({ Key: { hash: toBytes(keyHash) } });
 
 /**
  * Dummy env satisfying the protocol's declared env for test-kit transactions.
@@ -163,19 +160,22 @@ type LaunchSettingsArgs = Parameters<Client["launchSettings"]>[0];
 type MintWalletArgs = Parameters<Client["mintWallet"]>[0];
 type DepositArgs = Parameters<Client["deposit"]>[0];
 type SpendArgs = Parameters<Client["spend"]>[0];
-type UpdateConfigArgs = Parameters<Client["updateConfig"]>[0];
+type UpdatePermissionsArgs = Parameters<Client["updatePermissions"]>[0];
 type CloseArgs = Parameters<Client["close"]>[0];
 type DepositRemovingValueAttackArgs = Parameters<
   Client["depositRemovingValueAttack"]
 >[0];
-type DepositChangedDatumAttackArgs = Parameters<
-  Client["depositChangedDatumAttack"]
->[0];
-type UpdateConfigNonAdminAttackArgs = Parameters<
-  Client["updateConfigNonAdminAttack"]
+type UpdatePermissionsNonAdminAttackArgs = Parameters<
+  Client["updatePermissionsNonAdminAttack"]
 >[0];
 type SpendWithoutMemberSignatureAttackArgs = Parameters<
   Client["spendWithoutMemberSignatureAttack"]
+>[0];
+type SpendWithoutContinuationAttackArgs = Parameters<
+  Client["spendWithoutContinuationAttack"]
+>[0];
+type SpendGainingValueAttackArgs = Parameters<
+  Client["spendGainingValueAttack"]
 >[0];
 
 /** Runtime env overrides for the values baked into the `local` profile. */
@@ -203,7 +203,7 @@ interface Instance {
 
 /**
  * Launch a settings instance holding a 1-of-1 wallet config and mint a wallet
- * whose depositor is the test's `depositor` key.
+ * with empty permission maps (deposits are open).
  */
 async function setup(): Promise<Instance> {
   const admin = devnet.wallet("admin");
@@ -298,7 +298,6 @@ async function setup(): Promise<Instance> {
     client
       .mintWallet({
         seed: walletSeed.ref,
-        depositor: keyCred(depositor.keyHash),
         out_ix: 0,
       } as unknown as MintWalletArgs)
       .env(env),
@@ -352,13 +351,10 @@ test("mints, deposits, spends, updates config, and closes", async () => {
   const afterSpend = await devnet.lovelaceBalanceOf(ctx.walletAddr);
   expect(afterSpend.lovelace).toBe(afterDeposit.lovelace - ADA);
 
-  // 3. UpdateConfig: the admin rewrites the depositor.
+  // 3. UpdatePermissions: the admin rewrites the (empty) permission set.
   await confirm(
     ctx.client
-      .updateConfig({
-        new_depositor: keyCred(ctx.admin.keyHash),
-        out_ix: 0,
-      } as unknown as UpdateConfigArgs)
+      .updatePermissions({ out_ix: 0 } as unknown as UpdatePermissionsArgs)
       .env(ctx.env),
   );
   expect(await devnet.utxosOf(ctx.walletAddr)).toHaveLength(1);
@@ -402,28 +398,40 @@ test("rejects unauthorized and malformed wallet transactions", async () => {
     guard,
   );
 
-  // ...nor rewrite the datum.
+  // A spend must recreate the wallet (keep the NFT).
   await expectAttackRejected(
     submit(
       ctx.client
-        .depositChangedDatumAttack({
-          other_depositor: keyCred(ctx.admin.keyHash),
-          out_ix: 0,
-        } as unknown as DepositChangedDatumAttackArgs)
+        .spendWithoutContinuationAttack({
+          settings_ref: ctx.settingsRef,
+          payout_address: ctx.member.address,
+        } as unknown as SpendWithoutContinuationAttackArgs)
         .env(ctx.env),
     ),
     ctx.walletAddr,
     guard,
   );
 
-  // A non-admin (a member) cannot rewrite the config.
+  // A spend cannot add value to the wallet.
   await expectAttackRejected(
     submit(
       ctx.client
-        .updateConfigNonAdminAttack({
-          new_depositor: keyCred(ctx.admin.keyHash),
+        .spendGainingValueAttack({
+          settings_ref: ctx.settingsRef,
+        } as unknown as SpendGainingValueAttackArgs)
+        .env(ctx.env),
+    ),
+    ctx.walletAddr,
+    guard,
+  );
+
+  // A non-admin (a member) cannot rewrite the permission set.
+  await expectAttackRejected(
+    submit(
+      ctx.client
+        .updatePermissionsNonAdminAttack({
           out_ix: 0,
-        } as unknown as UpdateConfigNonAdminAttackArgs)
+        } as unknown as UpdatePermissionsNonAdminAttackArgs)
         .env(ctx.env),
     ),
     ctx.walletAddr,

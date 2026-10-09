@@ -467,12 +467,6 @@ address. Depositor scripts use the same mechanics: publish on
 
 ## Off-chain usage: Tx3 client
 
-> **Stale — pending offchain pass.** The Tx3 template/client below still targets
-> the previous datum shape (`withdrawals` / `depositor`) and the old
-> `UpdateConfig` naming. It has not been updated to the current protocol
-> (`spenders` / `depositors`, `UpdatePermissions`); treat it as outdated until
-> the Tx3 pass.
-
 The Tx3 implementation lives in
 [`offchain/tx3/smart_wallet/`](../../offchain/tx3/smart_wallet/) with a generated
 TypeScript client in `codegen/ts-client/smart-wallet` (regenerate it from
@@ -493,7 +487,7 @@ import { Party } from "tx3-sdk";
 
 const client = new Client({ endpoint: "http://localhost:8164" }, "local")
   .withAdmin(adminParty)                      // creates, reconfigures, closes; funds the seed
-  .withDepositor(depositorParty)              // adds funds only
+  .withDepositor(depositorParty)              // funds deposits (deposits are open)
   .withMember(memberParty)                    // the M-of-N signer (one key per party)
   .withWallet(Party.address(walletAddr))
   .withSettings(Party.address(settingsAddr));
@@ -523,12 +517,12 @@ await client
   .launchSettings({ seed: settingsSeedRef, wallet_config: walletConfig, out_ix: 0 })
   .env(env).resolve().then((r) => r.sign()).then((s) => s.submit());
 
-// Create the wallet: spend the one-shot seed, mint the NFT (empty spenders)
+// Create the wallet: spend the one-shot seed, mint the NFT (empty maps)
 await client
-  .mintWallet({ seed: walletSeedRef, depositor: keyCred(depositorKeyHash), out_ix: 0 })
+  .mintWallet({ seed: walletSeedRef, out_ix: 0 })
   .env(env).resolve().then((r) => r.sign()).then((s) => s.submit());
 
-// Deposit: the depositor adds ADA; datum and value otherwise preserved
+// Deposit: the depositor funds ADA; spenders preserved, depositor keys fixed
 await client
   .deposit({ deposit_ada: 1_000_000, out_ix: 0 })
   .env(env).resolve().then((r) => r.sign()).then((s) => s.submit());
@@ -538,9 +532,9 @@ await client
   .spend({ settings_ref: settingsRef, payout_address: memberAddress, payout_ada: 1_000_000 })
   .env(env).resolve().then((r) => r.sign()).then((s) => s.submit());
 
-// Update config: the admin rewrites the depositor
+// Update permissions: the admin rewrites the (empty) permission set
 await client
-  .updateConfig({ new_depositor: keyCred(adminKeyHash), out_ix: 0 })
+  .updatePermissions({ out_ix: 0 })
   .env(env).resolve().then((r) => r.sign()).then((s) => s.submit());
 
 // Close: burn the NFT and release the funds (irreversible)
@@ -560,17 +554,18 @@ call site, as the reference suite does
 Tx3 v1beta0 has no block for Cardano registration/unregistration certificates,
 which the on-chain `Mint` / `UpdatePermissions` / `Close` endpoints require (CIP-69
 `publish` handlers). Consequently **every wallet produced by this reference
-carries an empty `spenders` map**, where the on-chain publication and
-unregistration checks are vacuously true. Spending a wallet that already
+carries empty `spenders` and `depositors` maps**, where the on-chain publication
+and unregistration checks are vacuously true. Spending a wallet that already
 delegates to scripts remains valid on-chain, but such a wallet cannot be
 produced or torn down through Tx3 until upstream certificate support lands
-([tx3-lang/tx3#164](https://github.com/tx3-lang/tx3/issues/164)). The map's
-values travel as opaque `Bytes` and are only usable empty today.
+([tx3-lang/tx3#164](https://github.com/tx3-lang/tx3/issues/164)). The maps'
+values travel as opaque `Bytes` and are only usable empty today. With an empty
+`depositors` map, deposits are open — `Depositor` is not an authorization role,
+just the funding party.
 
-The reference implements the **key-authorized** paths only: `Admin`,
-`Depositor`, and `Member` are bound to key credentials. The M-of-N floor
-supports N members on-chain, but a Tx3 party is a single key, so the reference
-and its tests use a 1-of-1 wallet.
+`Admin` and `Member` are the key-authorized roles. The M-of-N floor supports N
+members on-chain, but a Tx3 party is a single key, so the reference and its
+tests use a 1-of-1 wallet.
 
 ## Gotchas and safety notes
 
@@ -631,9 +626,10 @@ and its tests use a 1-of-1 wallet.
   and ARCHITECTURE.md §3). Depositor scripts are not a credential: invoke them
   through `depositorScripts`.
 - **Tx3 carries no withdrawal scripts.** Until upstream certificate support,
-  Tx3 wallets are empty-`spenders`, key-authorized, and their attack-path /
-  devnet-kit transactions (`spendWithoutMemberSignatureAttack`, `devnetPay`, …)
-  are test-only — never use them in production.
+  Tx3 wallets have empty `spenders` / `depositors` maps, `Admin`/`Member` are
+  key-authorized, and the attack-path / devnet-kit transactions
+  (`spendWithoutMemberSignatureAttack`, `devnetPay`, …) are test-only — never use
+  them in production.
 
 ## Where to go next
 
