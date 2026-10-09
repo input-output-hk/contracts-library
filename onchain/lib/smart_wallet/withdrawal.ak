@@ -5,6 +5,13 @@
 //// map, keyed by the script's own hash) and decide whether it is being
 //// removed. They are used by delegated scripts' `publish` and `withdraw`
 //// handlers, never by the core wallet.
+////
+//// A delegated script is trusted to be well-formed: the core validates neither
+//// the size nor the semantics of its `Data`. It should validate its initial
+//// `Data` in `publish`, verify its own input→output transition in `withdraw`
+//// when stateful, keep its `Data` small (it is copied into every wallet UTxO),
+//// rely on its own entry only, and accept `UnregisterCredential` when leaving —
+//// a script that refuses to unregister blocks `Close` and removal.
 
 use aiken/collection/list
 use aiken/collection/pairs

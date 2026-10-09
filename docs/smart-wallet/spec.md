@@ -216,6 +216,25 @@ deposit scripts store static configuration (e.g. an asset allow/denylist), while
 stateful ones advance real state on each `Deposit` (e.g. a deposit cap per
 window), enforcing their own input→output transition.
 
+> **Well-formed delegated scripts (trust).** A delegated script is the sole
+> authority over its own `Data`: the core enforces the `spenders` key set and
+> `depositors` immutability across spends, but never an entry's size or
+> semantics. A buggy or malicious script can therefore:
+>
+> - **grow its entry without bound** (bounded only by the ledger's transaction
+>   size limit), bloating the wallet UTxO. Because `Deposit` copies `spenders`
+>   byte-identically and `UpdatePermissions` keeps surviving entries unchanged,
+>   the payload is carried by every later transaction and can make spends,
+>   deposits, and updates fail.
+> - **rewrite its own state arbitrarily** if its `withdraw` handler does not
+>   verify the input→output transition.
+> - **refuse to cooperate**: a script whose `publish` handler rejects
+>   `UnregisterCredential` cannot be removed and blocks both `Close` and
+>   `UpdatePermissions` removal, leaving the funds stranded.
+>
+> Delegate only reviewed scripts (at `Mint` or `UpdatePermissions`), and never
+> read or trust another entry's `Data` — a script may rely on its own only.
+
 ## 7. Invariants
 
 - **I1 — NFT identity.** A valid wallet is exactly the NFT-bearing UTxO at the
@@ -289,8 +308,13 @@ window), enforcing their own input→output transition.
 - **Min-ada / surplus value.** A wallet UTxO may hold ADA beyond what restrictions
   reference; only the delegated scripts' own checks (if any) constrain it.
 - **Open deposits.** A wallet with an empty `depositors` map accepts deposits from
-  anyone; the core only preserves the datum and requires added value. Use deposit
-  scripts to gate who and what may be deposited.
+  anyone; the core only preserves the spend side and the `depositors` key set and
+  requires added value. Use deposit scripts to gate who and what may be deposited.
+- **Delegated scripts are trusted to be well-formed.** The core validates
+  neither the size nor the semantics of an entry's `Data` (see §6): a buggy or
+  malicious script can grief the wallet through datum bloat, unchecked state
+  rewrites, or refusing unregistration (which blocks `Close` and removal). Vet
+  scripts before delegating them.
 - **The wallet is a single UTxO.** The one-shot NFT guarantees one identity; the
   protocol does not model a multi-UTxO wallet.
 - **Time.** The core wallet does not read a clock. Stateful scripts that need time
