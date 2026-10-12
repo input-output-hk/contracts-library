@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Properties file",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["id", "title", "category", "status", "summary"],
+    "additionalProperties": false,
+    "properties": {
+      "id": { "type": "string" },
+      "title": { "type": "string" },
+      "category": {
+        "enum": ["universal", "vesting-escrow", "lending-cdp", "oracle", "dex-amm-cross-script", "stablecoin"]
+      },
+      "status": { "enum": ["draft", "agreed", "deprecated"] },
+      "summary": { "type": "string" },
+      "spec_ref": { "type": "string" },
+      "theorems": { "type": "array", "items": { "type": "string" } },
+      "open_targets": { "type": "array", "items": { "type": "string" } }
+    }
+  }
+}
