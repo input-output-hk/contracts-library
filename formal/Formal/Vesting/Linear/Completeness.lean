@@ -151,17 +151,15 @@ theorem claim_accept_script_auth (bhash : ByteString) :
       spendValidator := by
   blaster
 
-/-- **Batched claim accepted (the `k`-scaling, accept side; spec §5.1).** Two
-contract inputs sharing a datum, with a single continuation holding `2 × required`
-(100 = 2 × 50 at `now = 1500`), is accepted. The companion of
-`no_double_satisfaction`: this confirms a correctly funded batch *is* accepted,
-so the rejection there is specifically about under-funding, not a 2-input
-artifact. -/
+/-- **Batched claim accepted (spec §5.1, C4).** Two contract inputs sharing a
+datum, with two separate continuations each holding the required remainder
+(50 at `now = 1500`), are accepted. -/
 theorem claim_accept_two_inputs :
     validatorAccepts
       (mkClaimCtxDouble dConcrete
         (withAsset 2000000 "policyA" "assetA" 100)   -- each input holds 100
-        (withAsset 2000000 "policyA" "assetA" 100)   -- continuation holds 2 × required
+        [withAsset 2000000 "policyA" "assetA" 50,
+         withAsset 2000000 "policyA" "assetA" 50]   -- each continuation holds required
         (datumData dConcrete)
         1500
         ["beneficiary_key_hash"]

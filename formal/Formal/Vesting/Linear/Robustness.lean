@@ -231,17 +231,44 @@ theorem reject_unauthorized_cancel (now : Int) (hgt : 3000 < now) :
   blaster
 
 /-- **No double satisfaction (spec §5.1, I2).** Two contract inputs sharing a
-byte-identical datum, with a single continuation holding only `1 × required`
-(50 at `now = 1500`), is rejected: invoked for the first input, the validator
-computes `k = 2` and requires `2 × required` (100), which the lone 50-output
-fails to meet. So one shared continuation cannot satisfy two inputs; an attacker
-cannot pocket the duplicate. Contrast `claim_accept_two_inputs`, where the same
-two inputs with a `2 × required` continuation are accepted. -/
+byte-identical datum, with a single continuation holding one required remainder
+(50 at `now = 1500`), are rejected. The continuation count must remain at least
+two; `claim_accept_two_inputs` supplies two separately funded continuations. -/
 theorem no_double_satisfaction :
     validatorRejects
       (mkClaimCtxDouble dConcrete
         (withAsset 2000000 "policyA" "assetA" 100)   -- each input holds 100
-        (withAsset 2000000 "policyA" "assetA" 50)    -- ONE continuation: only 1 × required
+        [withAsset 2000000 "policyA" "assetA" 50]   -- only one continuation
+        (datumData dConcrete)
+        1500
+        ["beneficiary_key_hash"]
+        claimRedeemer)
+      spendValidator := by
+  blaster
+
+/-- **No instance merging (spec §5.1, C4).** One continuation is rejected even
+when it holds the aggregate required remainder for both inputs. -/
+theorem reject_merged_instances :
+    validatorRejects
+      (mkClaimCtxDouble dConcrete
+        (withAsset 2000000 "policyA" "assetA" 100)
+        [withAsset 2000000 "policyA" "assetA" 100]
+        (datumData dConcrete)
+        1500
+        ["beneficiary_key_hash"]
+        claimRedeemer)
+      spendValidator := by
+  blaster
+
+/-- **Each continuation must be funded (spec §5.1, C4).** Two continuations
+with the correct aggregate remainder are rejected if one holds less than its
+own required remainder. -/
+theorem reject_underfunded_batch :
+    validatorRejects
+      (mkClaimCtxDouble dConcrete
+        (withAsset 2000000 "policyA" "assetA" 100)
+        [withAsset 2000000 "policyA" "assetA" 40,
+         withAsset 2000000 "policyA" "assetA" 60]
         (datumData dConcrete)
         1500
         ["beneficiary_key_hash"]

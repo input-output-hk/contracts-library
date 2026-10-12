@@ -115,24 +115,23 @@ def mkClaimCtxHashInput
     scriptContextScriptInfo := .SpendingScript utxoRef inDatumData }
 
 /-- A spend context with **two** contract inputs that share a byte-identical
-datum and value (refs differ only by index), and a **single** continuation
-carrying that datum. The validator, invoked for the first input, computes
-`k = 2` and requires the continuation to hold `2 × required`; this builder lets
-us test both that a correctly funded batch is accepted and that an under-funded
-one (one continuation for two inputs) is rejected (spec §5.1, I2). -/
+datum and value (refs differ only by index), with explicit continuation values.
+Before `end_time`, a claim requires at least two continuations, each holding the
+full remainder (spec §5.1, I2). -/
 def mkClaimCtxDouble
     (datum : VestingDatum) (inValue : Value)
-    (outValue : Value) (outDatum : Data)
+    (outValues : List Value) (outDatum : Data)
     (now : Int) (sigs : List ByteString) (r : Redeemer) : ScriptContext :=
   let inDatumData := datumData datum
   let ref0 := ⟨"txid_placeholder_32bytes!!!!!!!!", 0⟩
   let ref1 := ⟨"txid_placeholder_32bytes!!!!!!!!", 1⟩
   let inUtxo : TxOut := ⟨scriptAddress, inValue, .OutputDatum inDatumData, none⟩
-  let outUtxo : TxOut := ⟨scriptAddress, outValue, .OutputDatum outDatum, none⟩
+  let outUtxos : List TxOut := outValues.map fun value =>
+    ⟨scriptAddress, value, .OutputDatum outDatum, none⟩
   let txInfo :=
     { baseTxInfo now sigs with
       txInfoInputs := [⟨ref0, inUtxo⟩, ⟨ref1, inUtxo⟩]  -- two inputs, same datum
-      txInfoOutputs := [outUtxo]                          -- one continuation
+      txInfoOutputs := outUtxos
       txInfoRedeemers := [(.Spending ref0, r), (.Spending ref1, r)] }
   { scriptContextTxInfo := txInfo
     scriptContextRedeemer := r

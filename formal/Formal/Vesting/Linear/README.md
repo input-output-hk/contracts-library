@@ -42,7 +42,7 @@ instance is comprehensive across all three directions.
 | `claim_accept_anytime` | C0–C4 across all `now`, symbolic ada (full-retention) |
 | `claim_complete_full` | §8.2, I4 (full claim once `now ≥ end`) |
 | `claim_accept_script_auth` | C1 (script beneficiary via withdraw-0) |
-| `claim_accept_two_inputs` | §5.1 (correctly funded batch accepted) |
+| `claim_accept_two_inputs` | §5.1, C4 (two separately funded continuations accepted) |
 | `cancel_complete` | C6–C8 (authorized cancel after recovery) |
 
 ### Robustness — rejection (§9 R-clauses, §5.1)
@@ -56,7 +56,9 @@ instance is comprehensive across all three directions.
 | `reject_premature_cancel` | R6 (cancel before recovery, strict) |
 | `reject_unauthorized_cancel` | I5 (unauthorized cancel) |
 | `reject_script_no_withdrawal` | R1 (script beneficiary, no withdrawal) |
-| `no_double_satisfaction` | §5.1, I2 (`k`-scaling: one continuation cannot satisfy two inputs) |
+| `no_double_satisfaction` | §5.1, I2 (one continuation cannot satisfy two inputs) |
+| `reject_merged_instances` | §5.1, C4 (one combined continuation rejected despite sufficient aggregate value) |
+| `reject_underfunded_batch` | §5.1, C4 (each continuation must hold its own required remainder) |
 
 ### Soundness — `accepts ⇒ spec` (§9)
 
