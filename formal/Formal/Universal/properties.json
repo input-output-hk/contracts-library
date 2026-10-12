@@ -5,6 +5,7 @@
     "category": "universal",
     "status": "draft",
     "summary": "basic sanity checks on evaluator",
+    "spec_ref": "README.md#specification",
     "theorems": [
       "Formal.Universal.Evaluator.success_not_error",
       "Formal.Universal.Evaluator.zero_fuel_always_fails"
