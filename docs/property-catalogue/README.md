@@ -1,11 +1,6 @@
 # Validator snapshot metadata
 
-For a property set about a specific validator, snapshot metadata identifies the
-source revision and compiled script that the properties concern.
-
-## Placement and association
-
-Keep the existing `formal/` layout. Place `validator-metadata.json` beside the
+In the existing `formal/` tree, place `validator-metadata.json` beside the
 validator's `properties.json`:
 
 ```text
@@ -14,57 +9,48 @@ validator's `properties.json`:
 └── validator-metadata.json
 ```
 
-The metadata describes the snapshot for all entries in that folder's
-`properties.json`. The shared folder supplies the association, without adding
-a reference field to the property entries or changing their schema.
+One snapshot covers every property entry in that folder. This association adds
+no fields to the property-entry schema.
 
-## Metadata contents
+Use [validator-metadata.schema.json](validator-metadata.schema.json). All ten
+non-compiler fields are mandatory. Compiler fields are optional; omit unknown
+values. Do not add fields.
 
-Use [validator-metadata.schema.json](validator-metadata.schema.json). The
-10 non-compiler fields are mandatory. Compiler name and version are optional;
-omit them when unknown. No additional metadata fields are allowed.
+## Fields
 
 | Field | Meaning |
 | --- | --- |
-| `validator_name` | The selected validator's name; use the full entry title where applicable. |
-| `source_repository` | The canonical HTTPS URL of the IO upstream repository. |
-| `source_commit` | The exact full commit SHA in that IO repository, not a fork working-branch commit. |
-| `file_name` | The repository-relative `.ak` source path at that commit. |
-| `sha256` | SHA-256 of that file's raw bytes, including comments and formatting. |
-| `cbor_hex` | The full compiled validator's Concise Binary Object Representation (CBOR), in hex. Mandatory, not a hash. |
-| `cbor_format` | `single_cbor_hex` or `double_cbor_hex`, matching the stored representation. |
-| `plutus_version` | The compiled validator's Plutus version: `v1`, `v2`, or `v3`. |
-| `parameterization_state` | The state of the validator's fixed parameters in the stored script. |
-| `applied_parameters` | Applied parameter values as CBOR-hex strings, in application order. |
-| `compiler_name` | Compiler name, when known. Optional. |
-| `compiler_version` | Exact compiler version and build identifier, when known. Optional. |
+| `validator_name` | Actual validator name; full entry title where applicable. |
+| `source_repository` | Canonical HTTPS URL of the IO upstream repository. |
+| `source_commit` | Full 40-character commit SHA in that IO repository, not the fork's working commit. |
+| `file_name` | Repository-relative `.ak` path at that commit. |
+| `sha256` | SHA-256 of the named file's raw bytes, including comments and formatting; excludes imported files and CBOR. |
+| `cbor_hex` | Full compiled validator's Concise Binary Object Representation (CBOR) hex, not a hash. |
+| `cbor_format` | `single_cbor_hex` or `double_cbor_hex`, matching the stored wrapping. |
+| `plutus_version` | Compiled validator's language version: `v1`, `v2`, or `v3`. |
+| `parameterization_state` | State of the stored script's fixed parameters, as below. |
+| `applied_parameters` | Already-applied parameter values as complete CBOR-hex strings, in application order. |
+| `compiler_name` | Compiler name, if known. |
+| `compiler_version` | Exact compiler version and build identifier, if known. |
 
-The source commit, source-file checksum, and compiled CBOR are distinct values.
-The checksum covers the named `.ak` file, not its imported files or the CBOR.
-The commit anchors the repository snapshot.
+## Fixed parameters
 
-## Parameter states
-
-These fields describe fixed validator parameters, not datum, redeemer, or
-transaction inputs.
+These are fixed script parameters, not datum, redeemer, or transaction inputs.
 
 | State | Meaning | `applied_parameters` |
 | --- | --- | --- |
-| `unparameterized` | The validator declares no fixed parameters. | `[]` |
-| `unapplied` | Parameters exist, but none are applied to the stored script. | `[]` |
-| `partially_applied` | Some fixed parameters are applied to the stored script. | Non-empty list. |
-| `fully_applied` | All fixed parameters are applied to the stored script. | Non-empty list. |
+| `unparameterized` | No fixed parameters exist. | `[]` |
+| `unapplied` | Parameters exist; none applied. | `[]` |
+| `partially_applied` | Some parameters applied. | Non-empty list. |
+| `fully_applied` | All parameters applied. | Non-empty list. |
 
-Record only values already applied to the script represented by `cbor_hex`.
-Do not select concrete parameter values merely to fill the metadata.
+Record only values already applied to the script in `cbor_hex`, not values
+chosen for documentation.
+Determine partial versus full application from the validator's declared parameters.
 
-## Validation boundary
+## Validation limits
 
-The schema checks field names, types, formats, and empty versus non-empty
-parameter lists. It does not check that the upstream commit exists, recompute
-the source checksum, decode the CBOR, or establish compilation or proof results.
-
-Determining partial versus full application requires checking the selected
-validator's declared parameters. Confirming that the proofs concern the recorded
-script also requires evidence beyond this schema; the folder association alone
-does not establish that result.
+The schema checks structure, types, formats, and parameter-list lengths. It
+does not verify commits, recompute hashes, decode CBOR, or establish compilation
+or proof results. Folder association alone does not prove that the proofs
+concern the recorded script.
