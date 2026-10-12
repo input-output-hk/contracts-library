@@ -70,14 +70,19 @@ just deps        # once: fetch Blaster + PlutusCore + CardanoLedgerApi (lake upd
 just verify      # build -> flats -> lake build (annotated)
 ```
 
-Or directly, inside the dev shell:
+For the manual sequence, put `just` and Aiken **v1.1.22** on `PATH`, alongside
+Lean 4.24.0 and Z3 4.15.2 (provided by the dev shell).
 
 ```bash
 cd formal
 # (in `nix develop`, or with elan + z3 on PATH)
 lake update      # fetch Blaster + PlutusCore + CardanoLedgerApi
+just flats       # compile Aiken and generate Scripts/*.flat
 lake build       # type-check all modules and run every `blaster` proof
 ```
+
+Git ignores the generated files under `Scripts/`. `lake build` requires them;
+run `just flats` before the first build and after changing the on-chain source.
 
 A failing `blaster` goal can be debugged with its options, e.g.
 `blaster (verbose: 1)` or `blaster (gen-cex: 1)` to print a counterexample.

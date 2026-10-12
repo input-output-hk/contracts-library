@@ -39,7 +39,7 @@
             echo "  z3:   $(z3 --version 2>/dev/null || echo missing)"
             echo "  elan: $(elan --version 2>/dev/null || echo missing)  (Lean pinned in ./lean-toolchain)"
             echo
-            echo "  build the proofs:  lake update && lake build"
+            echo "  build the proofs:  lake update && just flats && lake build"
           '';
         };
 

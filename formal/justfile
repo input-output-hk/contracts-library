@@ -25,6 +25,8 @@ deps:
 
 # Compile validators and dump textual UPLC under ../onchain/artifacts/.
 build:
+    # Aiken 1.1.22 does not create export directories for nested modules.
+    mkdir -p {{artifacts}}/dao
     cd {{onchain}} && aiken build -u
 
 # Encode each artifacts/<module>.<validator>.<handler>.uplc into
