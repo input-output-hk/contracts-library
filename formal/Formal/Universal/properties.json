@@ -1,0 +1,14 @@
+[
+  {
+    "id": "PROP-001",
+    "title": "CEK evaluator sanity checks",
+    "category": "universal",
+    "status": "draft",
+    "summary": "basic sanity checks on evaluator",
+    "theorems": [
+      "Formal.Universal.Evaluator.success_not_error",
+      "Formal.Universal.Evaluator.zero_fuel_always_fails"
+    ],
+    "open_targets": []
+  }
+]
