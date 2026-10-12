@@ -54,3 +54,18 @@ Choose the existing category that describes the property's scope:
 | `deprecated` | Entry no longer recommended for use. |
 
 Status does not establish proof completeness or successful validation.
+
+## Checks
+
+With Node.js 24 or newer, run from the repository root:
+
+```sh
+npm ci --ignore-scripts
+npm run catalogue:check
+npm run catalogue:test
+```
+
+The check validates both schemas and every `properties.json` and
+`validator-metadata.json` under `formal/Formal/`. Tests include invalid inputs
+and synthetic metadata, not real validator snapshots. These checks establish
+structure only, not source provenance, CBOR correctness, or proof results.
