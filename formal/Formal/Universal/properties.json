@@ -1,0 +1,62 @@
+[
+  {
+    "id": "U-001",
+    "title": "Success is preserved under more fuel",
+    "category": "universal",
+    "summary": "If a program halts within n CEK steps, it halts in the same final state for any fuel m >= n. Failure is not preserved: running out of fuel ends in the same error state as a genuine failure.",
+    "theorems": [
+      "Formal.Universal.Evaluator.runSteps_eq_of_halt",
+      "Formal.Universal.Evaluator.cekExecuteProgram_eq_of_success",
+      "Formal.Universal.Evaluator.cekExecuteProgram_mono_in_fuel"
+    ]
+  },
+  {
+    "id": "U-002",
+    "title": "Run outcomes are well defined",
+    "category": "universal",
+    "summary": "A successful run never ends in the error state, and every run with zero fuel is unsuccessful.",
+    "theorems": [
+      "Formal.Universal.Evaluator.ne_error_of_success",
+      "Formal.Universal.Evaluator.unsuccessful_of_zero_fuel"
+    ]
+  },
+  {
+    "id": "U-003",
+    "title": "Valid transactions spend an input and pay a positive fee",
+    "category": "universal",
+    "summary": "Every transaction accepted by the V3 model has at least one input and a strictly positive fee.",
+    "theorems": [
+      "Formal.Universal.Ledger.inputs_ne_nil",
+      "Formal.Universal.Ledger.fee_pos"
+    ]
+  },
+  {
+    "id": "U-004",
+    "title": "Non-ada tokens are conserved when nothing is minted",
+    "category": "universal",
+    "summary": "For every transaction accepted by the V3 model with an empty mint, the non-ada tokens in the inputs equal those in the outputs.",
+    "theorems": [
+      "Formal.Universal.Ledger.tokens_conserved_of_no_mint"
+    ]
+  },
+  {
+    "id": "U-005",
+    "title": "In the V3 model, ada in equals ada out plus fee",
+    "category": "universal",
+    "summary": "For every transaction accepted by the V3 model, input ada equals output ada plus the fee, so ada strictly decreases. This is the model's rule, not the chain's: on chain, withdrawals, refunds, deposits and donations also move ada. The model's rule matches the chain's for transactions with none of these.",
+    "theorems": [
+      "Formal.Universal.Ledger.ada_balanced",
+      "Formal.Universal.Ledger.ada_decreases",
+      "Formal.Universal.Ledger.ada_balanced_of_simple_tx"
+    ]
+  },
+  {
+    "id": "U-006",
+    "title": "Valid transactions never mint or burn ada",
+    "category": "universal",
+    "summary": "For every transaction accepted by the V3 model, the mint field holds no ada: its lovelace amount is zero.",
+    "theorems": [
+      "Formal.Universal.Ledger.mint_lovelace_eq_zero"
+    ]
+  }
+]
