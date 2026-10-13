@@ -8,7 +8,7 @@ form the first entries of the property catalogue.
 | `Evaluator.lean` | Properties of the CEK evaluator, for any program and Plutus version |
 | `Ledger.lean` | Properties of every transaction the V3 ledger model (`validTxInfo`) accepts |
 | `properties.json` | The catalogue entries |
-| `schema.json` | The entry schema (JSON Schema 2020-12) |
+| [property.schema.json](../../../docs/property-catalogue/property.schema.json) | Shared entry schema (JSON Schema 2020-12) |
 
 ## Catalogue entries
 
@@ -18,26 +18,24 @@ Each entry in `properties.json` has five required fields and no others:
 | --- | --- |
 | `id` | Stable identifier, e.g. `U-001` |
 | `title` | One-line statement |
-| `category` | Taxonomy; currently only `universal` |
+| `category` | Category name as non-empty text; no predefined values |
 | `summary` | The property in plain words, including its limits |
-| `theorems` | Fully qualified Lean names of the proving theorems (at least one) |
+| `theorems` | Fully qualified Lean theorem names; `[]` when none are available |
 
-To add a property: prove it in a Lean module imported by `Formal.lean`, add an
-entry, and run both checks below. Fields and categories are added only when a
-property needs them.
+Use the [shared authoring guide](../../../docs/property-catalogue/property-entries.md)
+to add an entry and reference its available Lean theorems.
 
 ## Checks
 
-From `formal/`:
+From the repository root, after installing the locked Node dependencies:
 
-```bash
-scripts/check-properties.sh Universal
+```sh
+npm run catalogue:check
+npm run catalogue:test
 ```
 
-This builds `Formal.Universal`, validates `properties.json` against `schema.json`,
-and runs `#print axioms` on every listed theorem. It fails if a name is missing or a
-proof uses `sorry`. Pass another module (e.g. `Vesting.Linear`) to check its
-catalogue, and a schema path as the second argument if it has its own.
+These checks validate JSON structure against the shared schemas. They do not
+build Lean modules, verify theorem names, or inspect proof axioms.
 
 The evaluator proofs are checked by the Lean kernel. The ledger proofs use
 `blaster`, so they are checked by Z3 (4.15.2 on `PATH`) and reported as

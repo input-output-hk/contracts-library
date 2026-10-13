@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -79,21 +80,17 @@ for (const [name, data, schema] of [
   });
 }
 
-test("property schema accepts existing categories and statuses", () => {
-  for (const category of propertySchema.items.properties.category.enum) {
-    for (const status of propertySchema.items.properties.status.enum) {
-      assert(
-        validators["properties.json"]([{ ...sample[0], category, status }]),
-      );
-    }
+test("property schema accepts arbitrary non-empty categories without a default", () => {
+  assert.equal(propertySchema.items.properties.category.enum, undefined);
+  assert.equal(propertySchema.items.properties.category.default, undefined);
+  for (const category of ["universal", "new-category", "ANY_CATEGORY"]) {
+    assert(validators["properties.json"]([{ ...sample[0], category }]));
   }
 });
 
 for (const [field, value] of [
-  ["category", "unknown"],
-  ["status", "unknown"],
+  ["category", ""],
   ["theorems", [42]],
-  ["open_targets", [42]],
 ]) {
   test(`property schema rejects invalid ${field}`, () => {
     assert.equal(
@@ -103,9 +100,35 @@ for (const [field, value] of [
   });
 }
 
-test("property schema preserves its existing permissive string rules", () => {
+test("property schema permits empty theorem lists and unchanged string rules", () => {
   assert(validators["properties.json"]([]));
   assert(validators["properties.json"]([{ ...sample[0], title: "" }]));
+  assert(validators["properties.json"]([{ ...sample[0], theorems: [] }]));
+});
+
+for (const [field, value] of [
+  ["status", "draft"],
+  ["spec_ref", "README.md"],
+  ["open_targets", []],
+]) {
+  test(`property schema rejects removed field ${field}`, () => {
+    assert.equal(
+      validators["properties.json"]([{ ...sample[0], [field]: value }]),
+      false,
+    );
+  });
+}
+
+test("the shared property schema replaces the Universal-local schema", () => {
+  assert.equal(
+    existsSync(join(root, "formal/Formal/Universal/schema.json")),
+    false,
+  );
+  const script = readFileSync(join(root, "formal/check_properties.sh"), "utf8");
+  assert.match(
+    script,
+    /-s \.\.\/docs\/property-catalogue\/property\.schema\.json/,
+  );
 });
 
 test("copyable guide template satisfies the property schema", () => {

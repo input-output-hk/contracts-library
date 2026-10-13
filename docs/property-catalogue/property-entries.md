@@ -9,13 +9,12 @@ Place `properties.json` in the relevant property-set folder under `formal/Formal
 alongside its Lean modules. It contains an array of property entries; see the
 [Universal sample](../../formal/Formal/Universal/properties.json).
 
-Each entry requires `id`, `title`, `category`, `status`, and `summary`.
+Each entry requires `id`, `title`, `category`, `summary`, and `theorems`.
 The `id` identifies the property, not a validator. Give the property a descriptive
 title and summarize what it asserts.
 
-Optional fields: `spec_ref` references the specification, `theorems` lists fully
-qualified Lean theorem names, and `open_targets` lists outstanding proof targets.
-Omit unresolved optional references; do not invent specifications or theorem names.
+The `theorems` field lists fully qualified Lean theorem names. Use `[]` when none
+are available; do not invent theorem names. No other entry fields are allowed.
 
 Copy this draft template and replace its example values:
 
@@ -24,9 +23,9 @@ Copy this draft template and replace its example values:
   {
     "id": "replace-with-property-id",
     "title": "Replace with the property title",
-    "category": "universal",
-    "status": "draft",
-    "summary": "Replace with a precise statement of the property."
+    "category": "replace-with-category",
+    "summary": "Replace with a precise statement of the property.",
+    "theorems": []
   }
 ]
 ```
@@ -36,7 +35,8 @@ For a concrete validator snapshot, use the separate
 
 ## Taxonomy
 
-Choose the existing category that describes the property's scope:
+Use a non-empty category name describing the property's scope. The schema sets
+no category values or defaults. These are examples, not an exhaustive list:
 
 | Category | Scope |
 | --- | --- |
@@ -46,14 +46,6 @@ Choose the existing category that describes the property's scope:
 | `oracle` | Oracle properties. |
 | `dex-amm-cross-script` | Decentralized exchange, automated market maker, and multi-script properties. |
 | `stablecoin` | Stablecoin properties. |
-
-| Status | Meaning |
-| --- | --- |
-| `draft` | Proposed entry, not yet agreed. |
-| `agreed` | Agreed entry. |
-| `deprecated` | Entry no longer recommended for use. |
-
-Status does not establish proof completeness or successful validation.
 
 ## Checks
 
