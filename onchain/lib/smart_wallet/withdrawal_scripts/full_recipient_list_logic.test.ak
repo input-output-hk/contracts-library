@@ -1,4 +1,3 @@
-use aiken/crypto.{ScriptHash}
 use cardano/address.{
   Address, Script, from_script, from_verification_key, with_delegation_key,
   with_delegation_script,
