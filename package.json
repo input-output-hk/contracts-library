@@ -6,7 +6,7 @@
   "license": "Apache-2.0",
   "scripts": {
     "catalogue:check": "node scripts/check-catalogue.mjs",
-    "catalogue:test": "node --test test/check-catalogue.test.mjs",
+    "catalogue:test": "node --test test/check-catalogue.test.mjs test/check-properties.test.mjs",
     "format": "biome format --write .",
     "format:check": "biome format .",
     "catalogue:axioms:test": "node --test test/check-property-axioms.test.mjs",

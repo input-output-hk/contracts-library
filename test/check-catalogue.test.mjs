@@ -125,9 +125,15 @@ test("the shared property schema replaces the Universal-local schema", () => {
     false,
   );
   const script = readFileSync(join(root, "formal/check_properties.sh"), "utf8");
+  assert.match(script, /scripts\/check-properties\.mjs/);
+  assert.doesNotMatch(script, /npx/);
+  const helper = readFileSync(
+    join(root, "scripts/check-properties.mjs"),
+    "utf8",
+  );
   assert.match(
-    script,
-    /-s \.\.\/docs\/property-catalogue\/property\.schema\.json/,
+    helper,
+    /import \{ checkCatalogue \} from "\.\/check-catalogue\.mjs"/,
   );
 });
 

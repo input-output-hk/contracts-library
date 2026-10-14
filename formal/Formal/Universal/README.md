@@ -37,6 +37,17 @@ npm run catalogue:test
 These checks validate JSON structure against the shared schemas. They do not
 build Lean modules, verify theorem names, or inspect proof axioms.
 
+For the scoped Lean check, with the pinned toolchain and Z3 on `PATH`:
+
+```sh
+bash formal/check_properties.sh Universal
+```
+
+Pass a module name without `Formal.`; use dots for nested modules. This command
+validates the selected folder's JSON, builds that module, and checks its listed
+theorem names. It does not inspect axioms or check that theorem statements match
+the property summaries.
+
 The evaluator proofs are checked by the Lean kernel. The ledger proofs use
 `blaster`, so they are checked by Z3 (4.15.2 on `PATH`) and reported as
 SMT-verified with no proof term.
