@@ -1,55 +1,48 @@
-//// Schedule and coupon-name helpers for the event-triggered assets
-//// substandard — the tokenized bond's baked constants (spec §3.4, §4.4, §4.6).
+//// Schedule and asset-name helpers for the event-triggered assets
+//// substandard — the tokenized bond's baked constants (spec §3.2, §3.4,
+//// §4.5, §4.7).
 ////
-//// The deployment-supplied schedule `[(d1,a1) … (dn,an)]` is baked as
-//// validator constants. There is no on-chain oracle or compounding: each step
-//// gates the claim of one coupon whose **asset name is the decimal lovelace
-//// amount** it is worth. The last deadline, the final step and every step's
-//// amount are derived from the baked list, so every validator that carries
-//// the schedule derives the same constants.
+//// A certificate's **asset name is one byte: its current step** (`0` at
+//// deposit, `N` at maturity). Coupons are plain native assets whose **asset
+//// name is the decimal lovelace amount** they are worth. The per-vault coupon
+//// policy bakes the `interval` and the `amounts`, so every validator that
+//// carries them derives the same terms; the certificate's `cnt_policy` datum
+//// selects which policy applies.
 
 use aiken/collection/dict
 use aiken/collection/list
-use aiken/math.{max}
-use aiken/option.{or_else}
+use aiken/primitive/bytearray
 use aiken/primitive/int
 use aiken/primitive/string
 use cardano/assets.{AssetName, PolicyId, Value, tokens}
-use event_triggered/types.{ScheduleStep}
 
-/// The schedule's last deadline — `d4`. The graduation window opens here
-/// (§4.6).
-pub fn final_deadline(schedule: List<ScheduleStep>) -> Option<Int> {
-  list.reduce(
-    schedule,
-    None,
-    fn(acc: Option<Int>, step: ScheduleStep) {
-      Some(max(or_else(acc, step.deadline), step.deadline))
-    },
-  )
+/// The certificate asset name for step `k`: exactly one byte, big-endian.
+/// `N <= 255` is a deployment invariant.
+pub fn step_name(k: Int) -> AssetName {
+  bytearray.from_int_big_endian(k, 1)
 }
 
-/// The certificate's final `step`: the number of schedule steps. A certificate
+/// Decode a certificate asset name: `Some(k)` iff the name is exactly one
+/// byte. Any other name under the governed policy is not a certificate.
+pub fn step_of_name(name: AssetName) -> Option<Int> {
+  if bytearray.length(name) == 1 {
+    Some(bytearray.to_int_big_endian(name))
+  } else {
+    None
+  }
+}
+
+/// The `amount` of step `k` (1-indexed), or `None` if the step is out of
+/// range.
+pub fn amount_at(amounts: List<Int>, k: Int) -> Option<Int> {
+  list.at(amounts, k - 1)
+}
+
+/// The certificate's final `step`: the number of coupon steps. A certificate
 /// reaches it only by claiming every coupon in order (I7), and it is the only
-/// step at which a retirement is admitted (§4.6).
-pub fn final_step(schedule: List<ScheduleStep>) -> Int {
-  list.length(schedule)
-}
-
-/// The `amount` of step `k` (1-indexed), or `None` if the step is out of range.
-pub fn amount_at(schedule: List<ScheduleStep>, k: Int) -> Option<Int> {
-  when list.at(schedule, k - 1) is {
-    Some(step) -> Some(step.amount)
-    None -> None
-  }
-}
-
-/// The `deadline` of step `k` (1-indexed), or `None` if out of range.
-pub fn deadline_at(schedule: List<ScheduleStep>, k: Int) -> Option<Int> {
-  when list.at(schedule, k - 1) is {
-    Some(step) -> Some(step.deadline)
-    None -> None
-  }
+/// step at which a retirement is admitted (§4.7).
+pub fn final_step(amounts: List<Int>) -> Int {
+  list.length(amounts)
 }
 
 /// Encode a lovelace amount as the coupon asset name: its decimal bytes

@@ -28,7 +28,8 @@ fn accept_registration(redeemer: Certificate) -> Bool {
 }
 
 /// Issuance logic (withdraw-0): the registration authority, the permissionless
-/// unit deposit and the maturity retirement (see `issuance.validate`).
+/// unit deposit, the coupon claim advance and the maturity retirement (see
+/// `issuance.validate`).
 validator issuance(p: MintingParams) {
   withdraw(redeemer: MintingAction, account: Credential, self: Transaction) {
     issuance_logic.validate(redeemer, account, self, p)
@@ -43,9 +44,9 @@ validator issuance(p: MintingParams) {
   }
 }
 
-/// Transfer logic (withdraw-0): step monotonicity — the claim state never
-/// rewinds, and a certificate is only retired by its governed burn (§4.3,
-/// §4.6).
+/// Transfer logic (withdraw-0): name monotonicity — the claim state never
+/// rewinds, and a certificate is only retired alongside its governed burn
+/// (§4.3, §4.7).
 validator transfer(p: TransferParams) {
   withdraw(_redeemer: TransferAction, account: Credential, self: Transaction) {
     transfer_logic.validate(account, self, p)
@@ -60,8 +61,10 @@ validator transfer(p: TransferParams) {
   }
 }
 
-/// Third-party logic (withdraw-0): fail-closed — the instrument admits no
-/// third-party extraction (§4.1).
+/// Third-party logic (withdraw-0): the opt-in issuer trigger — it advances or
+/// retires a committed certificate and binds the coupon minted under the
+/// certificate's `cnt_policy` to the committed payment credential (§4.5,
+/// §4.7).
 validator third_party(p: ThirdPartyParams) {
   withdraw(_redeemer: ThirdPartyAction, account: Credential, self: Transaction) {
     third_party_logic.validate(account, self, p)

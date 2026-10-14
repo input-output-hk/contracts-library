@@ -1,26 +1,32 @@
 //// Minting logic (withdraw-0) for the event-triggered assets substandard —
 //// the tokenized bond's issuance and registry-lifecycle authority (spec §4.1,
-//// §4.2, §4.6).
+//// §4.2, §4.5, §4.7).
 ////
 //// The minting credential is frozen at registration and is also the
-//// registration authority, so this validator runs in three contexts and
+//// registration authority, so this validator runs in four contexts and
 //// cross-checks the claimed mode against the transaction shape. The governed
 //// policy id is a hash *of* this script's applied form, so it is never baked:
 //// every mode resolves it at runtime from the registry node.
+////
+//// The module is schedule-agnostic: the certificate's `cnt_policy` selects the
+//// coupon terms, and the coupon policy validates time/amount/transition. These
+//// modes validate the certificate's own state machine and require the
+//// corresponding coupon mint, so no advance or retirement can skip its coupon.
 
 use aiken/collection/dict
 use aiken/collection/list
 use aiken/crypto.{ScriptHash}
-use aiken/interval.{is_entirely_after}
+use aiken/interval.{Finite, Interval}
 use authorization.{is_authorized}
-use cardano/address.{Credential, Script, VerificationKey}
+use cardano/address.{Credential, Inline, Script, VerificationKey}
 use cardano/assets.{PolicyId, quantity_of, tokens}
-use cardano/transaction.{Input, Output, Transaction}
+use cardano/transaction.{InlineDatum, Input, Output, Transaction}
 use event_triggered/certificate
 use event_triggered/registry
 use event_triggered/schedule
 use event_triggered/types.{
-  Deposit, MintingAction, MintingParams, Register, RegistryNode, Retire,
+  Advance, CertificateDatum, Deposit, MintingAction, MintingParams, Register,
+  RegistryNode, Retire, VaultDatum,
 }
 
 pub fn validate(
@@ -32,6 +38,7 @@ pub fn validate(
   when action is {
     Register -> validate_register(account, self, params)
     Deposit -> validate_deposit(account, self, params)
+    Advance -> validate_advance(account, self, params)
     Retire -> validate_retire(account, self, params)
   }
 }
@@ -69,9 +76,11 @@ fn validate_register(
 }
 
 /// Deposit (§4.2): permissionless and per unit. The certificate is admitted
-/// only when the vault gains exactly the unit `principal`, so the certificate
-/// and its backing exist atomically (I6). Exactly one certificate is minted to
-/// a new UTxO with `step: 0`, and no certificate input is spent (I8).
+/// only when the **chosen vault** gains exactly the unit `principal` and
+/// continues with its address and datum unchanged, so the certificate and its
+/// backing exist atomically (I6). Exactly one step-`0` certificate is minted,
+/// carrying the vault's `cnt_policy`, with `commit: None` and `start` pinned
+/// to the transaction's finite validity upper bound.
 fn validate_deposit(
   account: Credential,
   self: Transaction,
@@ -83,23 +92,71 @@ fn validate_deposit(
     params.registry_node_cs,
     account,
   )
+  let certs_in = certificate.cert_inputs(self.inputs, policy)
+  let certs_out = certificate.cert_outputs(self.outputs, policy)
   and {
-    dict.size(tokens(self.mint, policy)) == 1,
-    quantity_of(self.mint, policy, params.certificate_name) == 1,
-    list.is_empty(
-      certificate.cert_inputs(self.inputs, policy, params.certificate_name),
-    ),
-    deposit_certificate(self.outputs, policy, params),
-    vault_net_gain(self.inputs, self.outputs, params.vault) == Some(
-      params.principal,
-    ),
-    vault_preserved(self.inputs, self.outputs, params.vault),
+    dict.to_pairs(tokens(self.mint, policy)) == [Pair(schedule.step_name(0), 1)],
+    list.is_empty(certs_in),
+    when certs_out is {
+      [(output, _k, d)] -> and {
+          quantity_of(output.value, policy, schedule.step_name(0)) == 1,
+          d.commit == None,
+          d.cnt_policy != policy,
+          when upper_bound(self.validity_range) is {
+            Some(t) -> d.start == t
+            None -> False
+          },
+          vault_continues(
+            self.inputs,
+            self.outputs,
+            params.vault,
+            params.principal,
+            d.cnt_policy,
+          ),
+        }
+      _ -> False
+    },
   }
 }
 
-/// Retirement (§4.6): the certificate is burned at its final `step` within the
-/// `d4` window, with no continuation. The principal coupon mint is validated by
-/// the coupon policy in the same transaction (I5).
+/// Advance (§4.5): burns the certificate's current name, mints the next and
+/// requires the step's coupon mint under the certificate's `cnt_policy`. The
+/// transfer/third-party path authorises who may run it; the coupon policy
+/// validates the coupon's amount, deadline and transition.
+fn validate_advance(
+  account: Credential,
+  self: Transaction,
+  params: MintingParams,
+) -> Bool {
+  let referenced = registry.outputs_of(self.reference_inputs)
+  expect [(policy, _)] = registry.governing(
+    referenced,
+    params.registry_node_cs,
+    account,
+  )
+  let certs_in = certificate.cert_inputs(self.inputs, policy)
+  let certs_out = certificate.cert_outputs(self.outputs, policy)
+  when (certs_in, certs_out) is {
+    ([(input, k, d)], [(output, k_out, d_out)]) -> and {
+        k_out == k + 1,
+        k_out <= 255,
+        input.output.address == output.address,
+        d_out == d,
+        dict.to_pairs(tokens(self.mint, policy)) == [
+          Pair(schedule.step_name(k), -1),
+          Pair(schedule.step_name(k_out), 1),
+        ],
+        single_coupon(self.mint, d.cnt_policy),
+        authorized_spend(input.output, d, self, params),
+      }
+    _ -> False
+  }
+}
+
+/// Retirement (§4.7): the certificate is burned at its current name with no
+/// continuation, and the principal coupon mint under the certificate's
+/// `cnt_policy` is required. The coupon policy validates the maturity window,
+/// the final step and the `principal` amount.
 fn validate_retire(
   account: Credential,
   self: Transaction,
@@ -111,40 +168,25 @@ fn validate_retire(
     params.registry_node_cs,
     account,
   )
-  expect Some(final_deadline) = schedule.final_deadline(params.schedule)
-  let final_step = schedule.final_step(params.schedule)
-  let inputs = certificate.cert_inputs(
-    self.inputs,
-    policy,
-    params.certificate_name,
-  )
-  let outputs = certificate.cert_outputs(
-    self.outputs,
-    policy,
-    params.certificate_name,
-  )
-  and {
-    // Burn shape: exactly one certificate unit, negative.
-    dict.size(tokens(self.mint, policy)) == 1,
-    quantity_of(self.mint, policy, params.certificate_name) == -1,
-    when inputs is {
-      [input] ->
-        quantity_of(input.output.value, policy, params.certificate_name) == 1 && certificate.step_of(
-          input.output,
-        ) == Some(final_step)
-      _ -> False
-    },
-    // No continuation: the certificate is retired.
-    list.is_empty(outputs),
-    // Event gate (§4.6): the validity range must reach `d4`.
-    is_entirely_after(self.validity_range, final_deadline - 1),
+  let certs_in = certificate.cert_inputs(self.inputs, policy)
+  let certs_out = certificate.cert_outputs(self.outputs, policy)
+  when certs_in is {
+    [(input, k, d)] -> and {
+        list.is_empty(certs_out),
+        dict.to_pairs(tokens(self.mint, policy)) == [
+          Pair(schedule.step_name(k), -1),
+        ],
+        single_coupon(self.mint, d.cnt_policy),
+        authorized_spend(input.output, d, self, params),
+      }
+    _ -> False
   }
 }
 
 // --------------------------------------------------------------- Register
 
-/// The registered node pins the frozen stance (§4.1): our step-monotone
-/// transfer logic, our fail-closed third-party logic, the `empty_vkey`
+/// The registered node pins the frozen stance (§4.1): our name-monotone
+/// transfer logic, our issuer-triggered third-party logic, the `empty_vkey`
 /// unfracking hook (forbidden) and empty global state, with `key` equal to the
 /// governed policy id.
 fn pinned_stance(
@@ -163,45 +205,29 @@ fn pinned_stance(
 
 // ---------------------------------------------------------------- Deposit
 
-/// Exactly one output carries the certificate — quantity `1`, inline datum
-/// `{ step: 0 }`. Custody at the PLB is the core `issuance_logic`'s business.
-fn deposit_certificate(
-  outputs: List<Output>,
-  policy: PolicyId,
-  params: MintingParams,
-) -> Bool {
-  let certs = certificate.cert_outputs(outputs, policy, params.certificate_name)
-  when certs is {
-    [output] ->
-      quantity_of(output.value, policy, params.certificate_name) == 1 && certificate.step_of(
-        output,
-      ) == Some(0)
-    _ -> False
-  }
-}
-
-/// The vault's net ADA gain across the transaction: outputs minus inputs whose
-/// payment credential is the vault script (I6).
-fn vault_net_gain(
+/// The chosen vault continues: exactly one vault input and one vault output,
+/// same address and datum, output ADA = input ADA + `principal`, and the
+/// output's datum binds `cnt` (the certificate's coupon policy) to the vault.
+fn vault_continues(
   inputs: List<Input>,
   outputs: List<Output>,
   vault: ScriptHash,
-) -> Option<Int> {
-  Some(ada_at_outputs(outputs, vault) - ada_at_inputs(inputs, vault))
-}
-
-/// The vault UTxO's address and datum are carried across the deposit
-/// unchanged: exactly one vault input pairs with exactly one vault output.
-fn vault_preserved(
-  inputs: List<Input>,
-  outputs: List<Output>,
-  vault: ScriptHash,
+  principal: Int,
+  cnt: PolicyId,
 ) -> Bool {
-  let vin = list.filter(inputs, fn(input) { is_vault(input.output, vault) })
-  let vout = list.filter(outputs, fn(output) { is_vault(output, vault) })
-  when (vin, vout) is {
-    ([input], [output]) ->
-      input.output.address == output.address && input.output.datum == output.datum
+  let vins = list.filter(inputs, fn(input) { is_vault(input.output, vault) })
+  let vouts = list.filter(outputs, fn(output) { is_vault(output, vault) })
+  when (vins, vouts) is {
+    ([vin], [vout]) -> and {
+        vin.output.address == vout.address,
+        vin.output.datum == vout.datum,
+        vault_cnt(vin.output) == Some(cnt),
+        quantity_of(vout.value, #"", #"") == quantity_of(
+          vin.output.value,
+          #"",
+          #"",
+        ) + principal,
+      }
     _ -> False
   }
 }
@@ -210,30 +236,54 @@ fn is_vault(output: Output, vault: ScriptHash) -> Bool {
   output.address.payment_credential == Script(vault)
 }
 
-fn ada_at_outputs(outputs: List<Output>, vault: ScriptHash) -> Int {
-  list.foldl(
-    outputs,
-    0,
-    fn(output: Output, total: Int) {
-      if is_vault(output, vault) {
-        total + quantity_of(output.value, #"", #"")
-      } else {
-        total
-      }
-    },
-  )
+fn vault_cnt(output: Output) -> Option<PolicyId> {
+  when output.datum is {
+    InlineDatum(data) -> {
+      expect d: VaultDatum = data
+      Some(d.cnt_policy)
+    }
+    _ -> None
+  }
 }
 
-fn ada_at_inputs(inputs: List<Input>, vault: ScriptHash) -> Int {
-  list.foldl(
-    inputs,
-    0,
-    fn(input: Input, total: Int) {
-      if is_vault(input.output, vault) {
-        total + quantity_of(input.output.value, #"", #"")
-      } else {
-        total
-      }
-    },
-  )
+/// The finite upper bound of the transaction's validity range, if any.
+fn upper_bound(range: Interval) -> Option<Int> {
+  when range.upper_bound.bound_type is {
+    Finite(t) -> Some(t)
+    _ -> None
+  }
+}
+
+// ------------------------------------------------------ Advance / Retire
+
+/// Exactly one positive coupon unit (quantity `1`) under the certificate's
+/// `cnt_policy` (any name; the coupon policy validates it). This is the
+/// presence rule: no advance or retirement can skip its coupon.
+fn single_coupon(mint, cnt: PolicyId) -> Bool {
+  when dict.to_pairs(tokens(mint, cnt)) is {
+    [Pair(_, 1)] -> True
+    _ -> False
+  }
+}
+
+/// The spend is authorised by the certificate's holder (its inline stake
+/// credential) or by the issuer when the certificate commits a payment
+/// credential (§4.5, §4.7).
+fn authorized_spend(
+  output: Output,
+  d: CertificateDatum,
+  self: Transaction,
+  params: MintingParams,
+) -> Bool {
+  let holder_ok = when output.address.stake_credential is {
+    Some(Inline(c)) ->
+      is_authorized(c, self.extra_signatories, self.withdrawals)
+    _ -> False
+  }
+  let issuer_ok = when d.commit is {
+    Some(_) ->
+      is_authorized(params.issuer, self.extra_signatories, self.withdrawals)
+    None -> False
+  }
+  holder_ok || issuer_ok
 }
