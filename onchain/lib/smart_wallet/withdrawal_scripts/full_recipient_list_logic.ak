@@ -1,5 +1,5 @@
 //// Smart wallet — the `full_recipient_allow_list` and
-//// `full_recipient_block_list` withdrawal scripts' logic: constrain which
+//// `full_recipient_deny_list` withdrawal scripts' logic: constrain which
 //// addresses may receive the wallet's funds.
 ////
 //// Both checks match *full* addresses (payment and stake credential) and
@@ -21,15 +21,15 @@ pub fn only_allowed_recipients(
     |> list.all(fn(address) { list.has(allowed, address) })
 }
 
-/// Block-list check: no payout address may be listed in `blocked` (an empty
+/// Deny-list check: no payout address may be listed in `denied` (an empty
 /// list allows any payout).
-pub fn no_blocked_recipients(
+pub fn no_denied_recipients(
   self: Transaction,
   wallet: Credential,
-  blocked: List<Address>,
+  denied: List<Address>,
 ) -> Bool {
   payout_addresses(self, wallet)
-    |> list.all(fn(address) { !list.has(blocked, address) })
+    |> list.all(fn(address) { !list.has(denied, address) })
 }
 
 /// The full addresses of outputs that receive the wallet's funds: every output

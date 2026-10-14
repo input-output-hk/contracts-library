@@ -6,7 +6,7 @@ use cardano/assets
 use cardano/transaction.{InlineDatum, NoDatum, Output, Transaction, placeholder}
 use smart_wallet/types.{WalletDatum}
 use smart_wallet/withdrawal_scripts/full_recipient_list_logic.{
-  no_blocked_recipients, only_allowed_recipients,
+  no_denied_recipients, only_allowed_recipients,
 }
 
 const wallet_policy =
@@ -64,8 +64,8 @@ fn allowed_payout(tx: Transaction) -> Bool {
   only_allowed_recipients(tx, Script(wallet_policy), [alice()])
 }
 
-fn blocked_payout(tx: Transaction) -> Bool {
-  no_blocked_recipients(tx, Script(wallet_policy), [alice()])
+fn denied_payout(tx: Transaction) -> Bool {
+  no_denied_recipients(tx, Script(wallet_policy), [alice()])
 }
 
 // ------------------------------------------------- only_allowed_recipients
@@ -112,34 +112,34 @@ test allow_exempts_wallet_payment_credential() {
   )
 }
 
-// -------------------------------------------------- no_blocked_recipients
+// -------------------------------------------------- no_denied_recipients
 
-test block_rejects_blocked_payout() fail {
-  blocked_payout(tx_with([wallet_output(), payout(alice())]))
+test deny_rejects_denied_payout() fail {
+  denied_payout(tx_with([wallet_output(), payout(alice())]))
 }
 
-test block_allows_unblocked_payout() {
-  blocked_payout(tx_with([wallet_output(), payout(bob())]))
+test deny_allows_unlisted_payout() {
+  denied_payout(tx_with([wallet_output(), payout(bob())]))
 }
 
-test block_empty_list_allows_any_payout() {
-  no_blocked_recipients(
+test deny_empty_list_allows_any_payout() {
+  no_denied_recipients(
     tx_with([wallet_output(), payout(alice())]),
     Script(wallet_policy),
     [],
   )
 }
 
-test block_rejects_any_blocked_payout() fail {
-  blocked_payout(tx_with([wallet_output(), payout(alice()), payout(bob())]))
+test deny_rejects_any_denied_payout() fail {
+  denied_payout(tx_with([wallet_output(), payout(alice()), payout(bob())]))
 }
 
-test block_matches_exact_address_only() {
-  blocked_payout(tx_with([wallet_output(), payout(alice_with_stake())]))
+test deny_matches_exact_address_only() {
+  denied_payout(tx_with([wallet_output(), payout(alice_with_stake())]))
 }
 
-test block_exempts_wallet_address() {
-  no_blocked_recipients(
+test deny_exempts_wallet_address() {
+  no_denied_recipients(
     tx_with([wallet_output()]),
     Script(wallet_policy),
     [from_script(wallet_policy)],

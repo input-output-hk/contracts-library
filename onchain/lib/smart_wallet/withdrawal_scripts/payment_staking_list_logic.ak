@@ -1,5 +1,5 @@
 //// Smart wallet — the `payment_staking_allow_list` and
-//// `payment_staking_block_list` withdrawal scripts' logic: constrain which
+//// `payment_staking_deny_list` withdrawal scripts' logic: constrain which
 //// payment and staking credentials may receive the wallet's funds.
 ////
 //// Each payout address is checked on two independent dimensions: its payment
