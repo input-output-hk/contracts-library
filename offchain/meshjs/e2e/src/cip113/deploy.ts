@@ -7,7 +7,16 @@
 
 import { mConStr0, type Asset, type UTxO } from "@meshsdk/core";
 
-import { registryNodeToData } from "@contracts-library/meshjs";
+import {
+  EX_UNITS,
+  registryNodeToData,
+  rewardAddressOf,
+  scriptAddressOf,
+  scriptHashOf,
+  type CoreConfig,
+  type CoreDeployment,
+  type CoreRefs,
+} from "@contracts-library/meshjs";
 
 import {
   collateralOf,
@@ -19,18 +28,12 @@ import {
 } from "../devnet";
 import { issuanceMintCompiledCode } from "./blueprint";
 import {
-  EX_UNITS,
-  rewardAddressOf,
-  scriptAddressOf,
-  scriptHashOf,
-} from "./core";
-import {
   issuanceCborHexToData,
   multisigSignature,
   multisigToData,
   protocolParamsToData,
 } from "./data";
-import { applyCoreScripts, type CoreConfig, type CoreScripts } from "./scripts";
+import { applyCoreScripts } from "./scripts";
 import { issuanceTemplate } from "./template";
 
 type Provider = ReturnType<typeof makeProvider>;
@@ -64,15 +67,8 @@ function outRefKey(utxo: UTxO): string {
   return `${utxo.input.txHash}#${utxo.input.outputIndex}`;
 }
 
-export interface Deployment {
-  config: CoreConfig;
-  core: CoreScripts;
-  refs: {
-    protocolParams: UTxO;
-    cborHex: UTxO;
-    originNode: UTxO;
-    upgradeConfig: UTxO;
-  };
+export interface Deployment extends CoreDeployment {
+  refs: CoreRefs & { upgradeConfig: UTxO };
   /** Funding UTxOs left to the payer after reserving the one-shot refs. */
   funding: UTxO[];
 }
@@ -308,6 +304,7 @@ export async function deployCore(
     config,
     core,
     refs: { protocolParams, cborHex, originNode, upgradeConfig },
+    issuanceMintCode: issuanceMintCompiledCode,
     funding,
   };
 }

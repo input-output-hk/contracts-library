@@ -12,7 +12,7 @@
 
 import { applyParamsToScript, mConStr1 } from "@meshsdk/core";
 
-import { unwrapCborBytes } from "./core";
+import { unwrapCborBytes } from "@contracts-library/meshjs";
 
 export interface IssuanceTemplate {
   prefix: string;

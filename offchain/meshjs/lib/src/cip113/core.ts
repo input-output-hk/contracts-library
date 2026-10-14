@@ -1,13 +1,12 @@
 /**
- * CIP-113 core offchain helpers: parameter application, hashes, addresses and
+ * CIP-113 core off-chain helpers: parameter application, hashes, addresses and
  * the ledger's index-ordering rules.
  *
  * Framing note: `applyParamsToScript` double-CBOR-wraps. MeshJS takes
  * `script.code` verbatim as the script witness/reference content, so the
  * double-CBOR form is the one that puts the single-CBOR payload (what the
  * Plutus evaluator decodes and the ledger hashes) on chain; `resolveScriptHash`
- * unwraps the same way. Keep this aligned with the library's `event_triggered`
- * builders.
+ * unwraps the same way. Keep this aligned with the event_triggered builders.
  */
 
 import {
@@ -21,7 +20,7 @@ import {
   type UTxO,
 } from "@meshsdk/core";
 
-import { plutusVersion } from "./blueprint";
+import { cip113PlutusVersion } from "./types";
 
 /** Strip every CBOR bytestring wrapper (`58xx`/`59xxxx`) to the flat program. */
 export function stripCborWrappers(hex: string): string {
@@ -53,7 +52,7 @@ export function unwrapCborBytes(hex: string): string {
  */
 export function applyScript(code: string, params: Data[]): PlutusScript {
   const applied = applyParamsToScript(code, params, "Mesh") as string;
-  return { code: applied, version: plutusVersion };
+  return { code: applied, version: cip113PlutusVersion };
 }
 
 /** Ledger script hash (policy id / stake credential) of an applied script. */
@@ -139,9 +138,9 @@ export function withdrawalIndexOf(
 }
 
 /**
- * Explicit per-redeemer execution budget for the e2e builders. Every CIP-113
- * script here evaluates far below this (the heaviest observed is ~0.6M mem),
- * and keeping each budget bounded keeps multi-script transactions under the
- * 14M per-tx limit.
+ * Explicit per-redeemer execution budget for the real-core builders. Every
+ * CIP-113 script here evaluates far below this (the heaviest observed is
+ * ~0.6M mem), and keeping each budget bounded keeps multi-script transactions
+ * under the 14M per-tx limit.
  */
 export const EX_UNITS = { mem: 1_500_000, steps: 700_000_000 };

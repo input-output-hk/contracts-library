@@ -1,42 +1,11 @@
 /**
  * Event-triggered assets (tokenized bond) — MeshJS off-chain submodule.
  * See docs/event-triggered-assets/spec.md.
+ *
+ * The builders compose with a deployed CIP-113 core; see `../cip113` for the
+ * deployment types and helpers they take.
  */
 
 export * from "./types";
-export {
-  bondExtraToData,
-  graduateRedeemer,
-  mintingActionToData,
-  mintingParamsToData,
-  moveRedeemer,
-  nativeMintParamsToData,
-  nativeMintRedeemer,
-  principalDatumToData,
-  referenceDatumToData,
-  registryNodeToData,
-  thirdPartyParamsToData,
-  transferParamsToData,
-  transformationParamsToData,
-  updateRedeemer,
-} from "./datum";
-export {
-  issuanceScript,
-  nativeMintPolicyScript,
-  buildGraduationTx,
-  buildRegisterAndIssueTx,
-  buildTransferTx,
-  buildTransformationTx,
-  plbScriptAddress,
-  policyIdOf,
-  referenceTokenAddress,
-  scriptHashOf,
-  stakeAddressOf,
-  thirdPartyScript,
-  transferScript,
-  transformationScript,
-  type GraduationTxParams,
-  type RegisterAndIssueTxParams,
-  type TransferTxParams,
-  type TransformationTxParams,
-} from "./event_triggered";
+export * from "./datum";
+export * from "./event_triggered";

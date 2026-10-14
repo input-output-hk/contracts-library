@@ -2,117 +2,105 @@
  * Transaction builders for the event-triggered assets (tokenized bond)
  * substandard (MeshJS) — docs/event-triggered-assets/spec.md.
  *
- * The instrument ships five validators, four of which are withdraw-0 stake
- * scripts exercised standalone via reward withdrawals. The core CIP-113 base
- * (PLB, `issuance_mint`, registry handlers) lives outside this repo, so the
- * builders wire the substandard's own scripts directly, with stand-ins:
+ * These are **real-core** builders: they compose with a deployed CIP-113 core
+ * (`CoreDeployment`: PLB, dispatcher, delegates, issuance, registry) and the
+ * bond's own validators (issuance, transfer, third-party, vault, coupon policy,
+ * vault NFT policy). Every transaction is built to validate against the core,
+ * including the withdraw-0 chains, registry proofs and ledger index ordering
+ * (`params_idx` / `node_idx` / `wdrl_idx`).
  *
- *   - `cipPolicy`      stand-in for the core `issuance_mint` policy (mints the
- *                      principal and the reference);
- *   - `nodePolicy`     stand-in for the core registry node-NFT policy;
- *   - `plbScript`      stand-in for the programmable-logic base's custody
- *                      validator: the principal is custodied at an address whose
- *                      payment credential is this (always-approving) script and
- *                      whose stake credential is the owner's — so a third party
- *                      can spend it without the owner's key, mirroring §4.5's
- *                      permissionless path.
- *
- * Builders:
- *   - `buildRegisterAndIssueTx`  T0/T1 (§4.1): atomic register + first issue
- *   - `buildTransferTx`          T2/T2b (§4.2/§4.3): free transfer / payout-key
- *   - `buildTransformationTx`    T3 (§4.4): holder-passive value step
- *   - `buildGraduationTx`        T4 (§4.5): owner path or third-party path
- *
- * Every builder returns an unsigned transaction (hex) from a configured
- * `MeshTxBuilder`; signing and submission are the caller's wallet's business.
+ * Builders (all return an unsigned transaction hex):
+ *   - `buildCreateVaultTx`      §3.1: mint the vault NFT into a funded vault
+ *   - `buildRegisterTx`         §4.1: registry insert (no certificate)
+ *   - `buildBondDepositTx`      §4.2: unit deposit → certificate (step 0)
+ *   - `buildTransferTx`         §4.3: plain transfer / owner change
+ *   - `buildAuthorizeTx`        §4.4: self-transfer committing a payout credit
+ *   - `buildClaimOwnerTx`       §4.5: owner-signed coupon claim (advance)
+ *   - `buildClaimIssuerTx`      §4.5: issuer-triggered claim (third party)
+ *   - `buildRedeemTx`           §4.6: burn-to-pay at the vault
+ *   - `buildGraduateOwnerTx`    §4.7: owner-signed retirement + principal coupon
+ *   - `buildGraduateIssuerTx`   §4.7: issuer-triggered retirement (third party)
  */
 
 import {
   applyParamsToScript,
-  mConStr0,
-  pubKeyAddress,
-  resolveScriptHash,
-  scriptAddress,
-  serializeAddressObj,
-  serializeRewardAddress,
-  unixTimeToEnclosingSlot,
+  type Asset,
   type Data,
   type MeshTxBuilder,
-  type Network,
   type PlutusScript,
-  type SlotConfig,
   type UTxO,
 } from "@meshsdk/core";
 
 import { applyAuthorization, type ScriptAuthorizer } from "../authorization";
+import { credentialToData } from "../common";
 import {
+  baseSpendRedeemer,
+  EX_UNITS,
+  issuanceLogicRedeemer,
+  issuanceMintRedeemer,
+  cip113PlutusVersion,
+  referenceIndexOf,
+  registryInsertRedeemer,
+  rewardAddressOf,
+  scriptAddressOf,
+  scriptHashOf,
+  sortReferenceInputs,
+  thirdPartyAct,
+  thirdPartyRedeemer,
+  transferAct,
+  transferRedeemer,
+  withdrawalIndexOf,
+  type CoreDeployment,
+  type WithdrawalKey,
+} from "../cip113";
+import {
+  couponPolicyCompiledCode,
   issuanceCompiledCode,
-  nativeMintCompiledCode,
-  plutusVersion,
   thirdPartyCompiledCode,
   transferCompiledCode,
-  transformationCompiledCode,
+  vaultCompiledCode,
+  vaultNftPolicyCompiledCode,
 } from "./blueprint";
 import {
+  certificateDatumToData,
+  couponName,
+  decodeCouponName,
   mintingActionToData,
   mintingParamsToData,
   moveRedeemer,
-  nativeMintParamsToData,
-  nativeMintRedeemer,
-  referenceDatumToData,
+  redeemRedeemer,
   registryNodeToData,
+  stepName,
   thirdPartyParamsToData,
   transferParamsToData,
-  transformationParamsToData,
-  updateRedeemer,
+  triggerRedeemer,
+  unitRedeemer,
+  vaultDatumToData,
+  vaultDepositRedeemer,
+  vaultNftParamsToData,
+  vaultParamsToData,
+  couponParamsToData,
 } from "./datum";
 import type {
+  Bond,
+  BondConfig,
+  CertificateDatum,
+  CouponParams,
   MintingParams,
-  NativeMintParams,
-  ReferenceDatum,
+  Payout,
   RegistryNode,
-  Schedule,
   ThirdPartyParams,
   TransferParams,
-  TransformationParams,
+  VaultNftParams,
+  VaultParams,
 } from "./types";
 
 const MIN_ADA = 2_000_000n;
+const EMPTY_VKEY = { kind: "key" as const, hash: "" };
 
-function networkIdOf(network: Network): 0 | 1 {
-  return network === "mainnet" ? 1 : 0;
-}
-
-/**
- * Strip CBOR bytestring wrapper(s) (`58xx`/`59xxxx` length headers) from a
- * script hex, yielding the flat program.
- */
-export function stripCborWrappers(hex: string): string {
-  let h = hex;
-  for (;;) {
-    const tag = h.slice(0, 2);
-    if (tag === "59") {
-      h = h.slice(6, 6 + parseInt(h.slice(2, 6), 16) * 2);
-    } else if (tag === "58") {
-      h = h.slice(4, 4 + parseInt(h.slice(2, 4), 16) * 2);
-    } else {
-      break;
-    }
-  }
-  return h;
-}
-
-/**
- * Apply parameters and return the script in `applyParamsToScript`'s
- * (double-CBOR) form — the form MeshJS's `resolveScriptHash` expects and the
- * one whose single-CBOR unwrap (`unwrapCborBytes`) is the ledger's script
- * witness/reference content. This matches the settings submodule: a ledger
- * script hash is `blake2b224(0x03 || content)`, where `content` is the
- * CBOR-wrapped compiled code.
- */
 function applyParams(code: string, params: Data[]): PlutusScript {
   const applied = applyParamsToScript(code, params, "Mesh") as string;
-  return { code: applied, version: plutusVersion };
+  return { code: applied, version: cip113PlutusVersion };
 }
 
 // -------------------------------------------------------------- script setup
@@ -129,82 +117,191 @@ export function thirdPartyScript(p: ThirdPartyParams): PlutusScript {
   return applyParams(thirdPartyCompiledCode, thirdPartyParamsToData(p));
 }
 
-export function transformationScript(p: TransformationParams): PlutusScript {
-  return applyParams(transformationCompiledCode, transformationParamsToData(p));
+export function vaultScript(p: VaultParams): PlutusScript {
+  return applyParams(vaultCompiledCode, vaultParamsToData(p));
 }
 
-export function nativeMintPolicyScript(p: NativeMintParams): PlutusScript {
-  return applyParams(nativeMintCompiledCode, nativeMintParamsToData(p));
+export function couponPolicyScript(p: CouponParams): PlutusScript {
+  return applyParams(couponPolicyCompiledCode, couponParamsToData(p));
 }
 
-/** Blake2b-224 hash of an (already parameterized) script. */
-export function scriptHashOf(script: PlutusScript): string {
-  return resolveScriptHash(script.code, script.version);
+export function vaultNftPolicyScript(p: VaultNftParams): PlutusScript {
+  return applyParams(vaultNftPolicyCompiledCode, vaultNftParamsToData(p));
 }
 
-/** Policy id of a mint policy — its script hash. */
-export const policyIdOf = scriptHashOf;
-
-/** Reward (stake) address of a stake script, for its withdraw-0. */
-export function stakeAddressOf(script: PlutusScript, networkId: 0 | 1): string {
-  return serializeRewardAddress(scriptHashOf(script), true, networkId);
-}
+// ------------------------------------------------------------ bond assembly
 
 /**
- * The address the reference token lives at: a base address whose payment
- * credential is `paymentKeyHash` and whose stake credential is the
- * transformation script. The payment part must be a key so the transformation
- * can spend it; the stake part is what §4.4's withdraw-0 owns.
+ * Apply a bond over a core deployment, in the documented dependency order:
+ * transfer / third-party / vault-NFT policy → vault → minting logic →
+ * `issuance_mint` (the governed `cipPolicy`) → coupon policy (`cntPolicy`).
  */
-export function referenceTokenAddress(
-  paymentKeyHash: string,
-  transformation: PlutusScript,
-  networkId: 0 | 1,
+export function applyBond(
+  deployment: CoreDeployment,
+  config: BondConfig,
+): Bond {
+  const { registryNodeCs, paramsPolicy } = deployment.core;
+
+  const transfer = transferScript({ registryNodeCs });
+  const thirdParty = thirdPartyScript({
+    registryNodeCs,
+    issuer: config.issuer,
+  });
+
+  const vaultNft = vaultNftPolicyScript({
+    authority: config.authority ?? config.issuer,
+  });
+  const vaultNftCs = scriptHashOf(vaultNft);
+
+  const vault = vaultScript({
+    principal: config.principal,
+    vaultNftCs,
+  });
+  const vaultHash = scriptHashOf(vault);
+
+  const issuance = issuanceScript({
+    registryNodeCs,
+    issuer: config.issuer,
+    transferLogic: scriptHashOf(transfer),
+    thirdPartyLogic: scriptHashOf(thirdParty),
+    vault: vaultHash,
+    vaultNftCs,
+    principal: config.principal,
+  });
+  const issuanceMint = applyParams(deployment.issuanceMintCode, [
+    credentialToData({ kind: "script", hash: scriptHashOf(issuance) }),
+    paramsPolicy,
+  ]);
+  const cipPolicy = scriptHashOf(issuanceMint);
+
+  const couponPolicy = couponPolicyScript({
+    cipPolicy,
+    principal: config.principal,
+    interval: config.interval,
+    amounts: config.amounts,
+  });
+  const cntPolicy = scriptHashOf(couponPolicy);
+
+  return {
+    config,
+    networkId: deployment.config.networkId,
+    transfer,
+    thirdParty,
+    issuance,
+    issuanceMint,
+    cipPolicy,
+    vaultNft,
+    vaultNftCs,
+    vault,
+    vaultHash,
+    couponPolicy,
+    cntPolicy,
+    withdrawCredentials: [issuance, transfer, thirdParty],
+  };
+}
+
+// ---------------------------------------------------------------- addresses
+
+/** The PLB-custodied certificate address: PLB payment + the holder's stake. */
+export function plbAddress(
+  deployment: CoreDeployment,
+  stakeHash: string,
+  isStakeScript = false,
 ): string {
-  return serializeAddressObj(
-    pubKeyAddress(paymentKeyHash, scriptHashOf(transformation), true),
-    networkId,
+  return scriptAddressOf(
+    scriptHashOf(deployment.core.programmableLogicBase),
+    deployment.config.networkId,
+    { hash: stakeHash, isScript: isStakeScript },
   );
 }
 
-/**
- * The programmable-logic-base stand-in address that a principal token is
- * custodied at: payment credential is the (always-approving) `plbScriptHash`,
- * stake credential is the owner's key hash. Ownership rides the stake
- * credential; anyone can spend via the PLB script.
- */
-export function plbScriptAddress(
-  plbScriptHash: string,
-  ownerStakeKeyHash: string,
-  networkId: 0 | 1,
-): string {
-  return serializeAddressObj(
-    scriptAddress(plbScriptHash, ownerStakeKeyHash, false),
-    networkId,
+/** The vault script address of this bond. */
+export function vaultAddress(bond: Bond): string {
+  return scriptAddressOf(bond.vaultHash, bond.networkId);
+}
+
+/** The registry node address of the core deployment. */
+export function nodeAddress(deployment: CoreDeployment): string {
+  return scriptAddressOf(
+    deployment.core.registryNodeCs,
+    deployment.config.networkId,
   );
 }
 
-/** Wire a withdraw-0 gate: a zero-ada reward withdrawal running `script`. */
-function applyGate(
-  txBuilder: MeshTxBuilder,
+// ----------------------------------------------------------------- plumbing
+
+export interface TxBase {
+  txBuilder: MeshTxBuilder;
+  deployment: CoreDeployment;
+  funding: UTxO[];
+  collateral: UTxO;
+  changeAddress: string;
+}
+
+async function complete(base: TxBase, refs: UTxO[] = []): Promise<string> {
+  for (const ref of refs) {
+    base.txBuilder.readOnlyTxInReference(
+      ref.input.txHash,
+      ref.input.outputIndex,
+    );
+  }
+  const tx = await base.txBuilder
+    .txInCollateral(
+      base.collateral.input.txHash,
+      base.collateral.input.outputIndex,
+      base.collateral.output.amount,
+      base.collateral.output.address,
+    )
+    .changeAddress(base.changeAddress)
+    .selectUtxosFrom(base.funding)
+    .complete();
+  return tx;
+}
+
+/** The certificate holder's credential from its hash (+ script flag). */
+function holderCredential(hash: string, isScript = false) {
+  return isScript
+    ? ({ kind: "script", hash } as const)
+    : ({ kind: "key", hash } as const);
+}
+
+function w0(
+  tb: MeshTxBuilder,
+  d: CoreDeployment,
   script: PlutusScript,
   redeemer: Data,
-  networkId: 0 | 1,
 ): void {
-  txBuilder
-    .withdrawalPlutusScriptV3()
-    .withdrawal(stakeAddressOf(script, networkId), "0")
+  tb.withdrawalPlutusScriptV3()
+    .withdrawal(rewardAddressOf(scriptHashOf(script), d.config.networkId), "0")
     .withdrawalScript(script.code)
-    .withdrawalRedeemerValue(redeemer);
+    .withdrawalRedeemerValue(redeemer, "Mesh", EX_UNITS);
 }
 
-/** Spend a PLB-custodied UTxO by running the (always-approving) PLB script. */
-function spendPlbInput(
-  txBuilder: MeshTxBuilder,
+/**
+ * Index of `programmable_logic_global` in the ledger's complete withdrawal
+ * set. Pass every withdraw-0 script the transaction carries: the PLB redeemer
+ * witnesses PLG's position in the full set, not just the transfer chain.
+ */
+function wdrlIdxOf(d: CoreDeployment, scripts: PlutusScript[]): number {
+  const all: WithdrawalKey[] = scripts.map((s) => ({
+    hash: scriptHashOf(s),
+    isScript: true,
+  }));
+  return withdrawalIndexOf(all, {
+    hash: d.core.programmableLogicGlobalHash,
+    isScript: true,
+  });
+}
+
+function plbSpend(
+  tb: MeshTxBuilder,
+  d: CoreDeployment,
   utxo: UTxO,
-  plbScript: PlutusScript,
+  paramsIdx: number,
+  wdrlIdx: number,
 ): void {
-  const b = txBuilder
+  tb.inputForEvaluation(utxo);
+  const s = tb
     .spendingPlutusScriptV3()
     .txIn(
       utxo.input.txHash,
@@ -212,348 +309,674 @@ function spendPlbInput(
       utxo.output.amount,
       utxo.output.address,
     );
-  if (utxo.output.plutusData !== undefined) {
-    b.txInInlineDatumPresent();
+  s.txInInlineDatumPresent();
+  s.txInRedeemerValue(
+    baseSpendRedeemer(paramsIdx, wdrlIdx),
+    "Mesh",
+    EX_UNITS,
+  ).txInScript(d.core.programmableLogicBase.code);
+}
+
+function vaultSpend(
+  tb: MeshTxBuilder,
+  bond: Bond,
+  utxo: UTxO,
+  redeemer: Data,
+): void {
+  tb.inputForEvaluation(utxo);
+  const s = tb
+    .spendingPlutusScriptV3()
+    .txIn(
+      utxo.input.txHash,
+      utxo.input.outputIndex,
+      utxo.output.amount,
+      utxo.output.address,
+    );
+  s.txInInlineDatumPresent();
+  s.txInRedeemerValue(redeemer, "Mesh", EX_UNITS).txInScript(bond.vault.code);
+}
+
+function mintCertificate(
+  tb: MeshTxBuilder,
+  bond: Bond,
+  paramsIdx: number,
+  name: string,
+  quantity: string,
+): void {
+  tb.mintPlutusScriptV3()
+    .mint(quantity, bond.cipPolicy, name)
+    .mintRedeemerValue(issuanceMintRedeemer(paramsIdx), "Mesh", EX_UNITS)
+    .mintingScript(bond.issuanceMint.code);
+}
+
+function mintCoupon(
+  tb: MeshTxBuilder,
+  bond: Bond,
+  name: string,
+  quantity: string,
+): void {
+  tb.mintPlutusScriptV3()
+    .mint(quantity, bond.cntPolicy, name)
+    .mintRedeemerValue(unitRedeemer(), "Mesh", EX_UNITS)
+    .mintingScript(bond.couponPolicy.code);
+}
+
+function lovelace(quantity: bigint): Asset {
+  return { unit: "lovelace", quantity: quantity.toString() };
+}
+
+/** Add `delta` lovelace to an asset list (its "lovelace" entry exists). */
+function addLovelace(amount: Asset[], delta: bigint): Asset[] {
+  return amount.map((a) =>
+    a.unit === "lovelace"
+      ? { unit: a.unit, quantity: (BigInt(a.quantity) + delta).toString() }
+      : a,
+  );
+}
+
+/** Sum the coupon value (decode(name) × quantity) across the given UTxOs. */
+function couponValue(coupons: UTxO[], cntPolicy: string): bigint {
+  let total = 0n;
+  for (const u of coupons) {
+    for (const a of u.output.amount) {
+      if (a.unit.startsWith(cntPolicy) && a.unit.length > 56) {
+        const amount = decodeCouponName(a.unit.slice(56));
+        total += BigInt(amount) * BigInt(a.quantity);
+      }
+    }
   }
-  b.txInRedeemerValue(mConStr0([])).txInScript(plbScript.code);
+  return total;
 }
 
-function splitUnit(unit: string): { policyId: string; assetName: string } {
-  return { policyId: unit.slice(0, 56), assetName: unit.slice(56) };
-}
+// ------------------------------------------------------------ create vault
 
-// -------------------------------------------------- RegisterAndIssue (T0/T1)
-
-export interface RegisterAndIssueTxParams {
-  txBuilder: MeshTxBuilder;
-  issuance: PlutusScript;
-  /** Stand-in for the core `issuance_mint` policy (the governed cip policy). */
-  cipPolicy: PlutusScript;
-  /** Stand-in for the core registry node-NFT policy. */
-  nodePolicy: PlutusScript;
-  transferLogic: PlutusScript;
-  thirdPartyLogic: PlutusScript;
-  transformationScript: PlutusScript;
-  principalName: string;
-  referenceName: string;
-  /** The graduated asset's policy id — part of the published terms (§3.3). */
-  nativePolicy: string;
-  schedule: Schedule;
-  scale: number;
-  quantity: bigint;
-  nodeAddress: string;
-  /** Principal custody: the beneficiary's PLB-stand-in address. */
-  beneficiaryAddress: string;
-  /** Payment key hash of the beneficiary — the reference token address's
-   * payment credential, so the beneficiary can spend it (§4.4). */
-  beneficiaryKeyHash: string;
-  issuer: Parameters<typeof applyAuthorization>[1];
+export interface CreateVaultParams extends TxBase {
+  bond: Bond;
+  /** ADA the vault starts with (coupon reserve + deposits). */
+  vaultAda: bigint;
   authorizer?: ScriptAuthorizer;
-  utxos: UTxO[];
-  changeAddress: string;
-  collateralUtxo: UTxO;
-  network?: Network;
 }
 
-/**
- * Build the atomic register + first-issue transaction (§4.1): create the
- * RegistryNode, mint the first batch (principal + reference), place the
- * principal at the beneficiary's PLB stand-in, and the reference token at the
- * transformation script's stake credential.
- */
-export async function buildRegisterAndIssueTx(
-  p: RegisterAndIssueTxParams,
+/** Mint the vault NFT into a newly funded vault UTxO (§3.1, I10). */
+export async function buildCreateVaultTx(
+  p: CreateVaultParams,
 ): Promise<string> {
-  const networkId = networkIdOf(p.network ?? "preprod");
-  const cipPolicyId = policyIdOf(p.cipPolicy);
-  const nodePolicyId = policyIdOf(p.nodePolicy);
+  const { deployment: d, bond: b } = p;
+  const tb = p.txBuilder;
 
-  const nodeDatum: RegistryNode = {
-    key: cipPolicyId,
-    next: cipPolicyId,
-    mintingLogic: { kind: "script", hash: scriptHashOf(p.issuance) },
-    transferLogic: { kind: "script", hash: scriptHashOf(p.transferLogic) },
-    thirdPartyLogic: { kind: "script", hash: scriptHashOf(p.thirdPartyLogic) },
-    unfrackingLogic: { kind: "key", hash: "" },
-    globalStateCs: "",
-  };
-
-  const refDatum: ReferenceDatum = {
-    metadata: "",
-    version: 1,
-    extra: {
-      schedule: p.schedule,
-      value: p.scale,
-      nativePolicy: p.nativePolicy,
-    },
-  };
-
-  const referenceAddress = referenceTokenAddress(
-    p.beneficiaryKeyHash,
-    p.transformationScript,
-    networkId,
+  applyAuthorization(
+    tb,
+    b.config.authority ?? b.config.issuer,
+    p.authorizer,
+    d.config.networkId,
   );
 
-  const quantity = p.quantity;
+  tb.mintPlutusScriptV3()
+    .mint("1", b.vaultNftCs, b.config.vaultNftName)
+    .mintRedeemerValue(unitRedeemer(), "Mesh", EX_UNITS)
+    .mintingScript(b.vaultNft.code);
 
-  applyAuthorization(p.txBuilder, p.issuer, p.authorizer, networkId);
+  tb.txOut(vaultAddress(b), [
+    lovelace(p.vaultAda),
+    { unit: b.vaultNftCs + b.config.vaultNftName, quantity: "1" },
+  ]);
+  tb.txOutInlineDatumValue(vaultDatumToData({ cntPolicy: b.cntPolicy }));
 
-  const builder = p.txBuilder
-    .mintPlutusScriptV3()
-    .mint(quantity.toString(), cipPolicyId, p.principalName)
-    .mint("1", cipPolicyId, p.referenceName)
-    .mintRedeemerValue(mConStr0([]))
-    .mintingScript(p.cipPolicy.code)
-    .mintPlutusScriptV3()
-    .mint("1", nodePolicyId, cipPolicyId)
-    .mintRedeemerValue(mConStr0([]))
-    .mintingScript(p.nodePolicy.code)
-    .withdrawalPlutusScriptV3()
-    .withdrawal(stakeAddressOf(p.issuance, networkId), "0")
-    .withdrawalScript(p.issuance.code)
-    .withdrawalRedeemerValue(mintingActionToData("RegisterAndMint"))
-    .txOut(p.nodeAddress, [
-      { unit: "lovelace", quantity: MIN_ADA.toString() },
-      { unit: nodePolicyId + cipPolicyId, quantity: "1" },
-    ])
-    .txOutInlineDatumValue(registryNodeToData(nodeDatum))
-    .txOut(p.beneficiaryAddress, [
-      { unit: "lovelace", quantity: MIN_ADA.toString() },
-      { unit: cipPolicyId + p.principalName, quantity: quantity.toString() },
-    ])
-    .txOut(referenceAddress, [
-      { unit: "lovelace", quantity: MIN_ADA.toString() },
-      { unit: cipPolicyId + p.referenceName, quantity: "1" },
-    ])
-    .txOutInlineDatumValue(referenceDatumToData(refDatum));
-
-  return await builder
-    .txInCollateral(
-      p.collateralUtxo.input.txHash,
-      p.collateralUtxo.input.outputIndex,
-      p.collateralUtxo.output.amount,
-      p.collateralUtxo.output.address,
-    )
-    .changeAddress(p.changeAddress)
-    .selectUtxosFrom(p.utxos)
-    .complete();
+  return complete(p);
 }
 
-// ----------------------------------------------------- Transfer (T2 / T2b)
+// --------------------------------------------------------------- register
 
-export interface TransferTxParams {
-  txBuilder: MeshTxBuilder;
-  transfer: PlutusScript;
-  /** The PLB stand-in script custodies the principal (always-approving). */
-  plbScript: PlutusScript;
-  /** The instrument's RegistryNode, referenced per the tx shape (§4.2). */
-  nodeUtxo: UTxO;
-  principalUtxo: UTxO;
-  /** The recipient's PLB-stand-in address (same for a T2b self-transfer). */
+export interface RegisterParams extends TxBase {
+  bond: Bond;
+  /** The covering registry node (the origin node for the first insert). */
+  covering: UTxO;
+  coveringNode: RegistryNode;
+  authorizer?: ScriptAuthorizer;
+}
+
+/** Registry insert (§4.1): pin the node stance; mint no certificate. */
+export async function buildRegisterTx(p: RegisterParams): Promise<string> {
+  const { deployment: d, bond: b } = p;
+  const tb = p.txBuilder;
+
+  applyAuthorization(tb, b.config.issuer, p.authorizer, d.config.networkId);
+
+  tb.inputForEvaluation(p.covering);
+  tb.spendingPlutusScriptV3()
+    .txIn(
+      p.covering.input.txHash,
+      p.covering.input.outputIndex,
+      p.covering.output.amount,
+      p.covering.output.address,
+    )
+    .txInInlineDatumPresent()
+    .txInRedeemerValue(unitRedeemer(), "Mesh", EX_UNITS)
+    .txInScript(d.core.registry.code);
+
+  tb.mintPlutusScriptV3()
+    .mint("1", d.core.registryNodeCs, b.cipPolicy)
+    .mintRedeemerValue(
+      registryInsertRedeemer(b.cipPolicy, {
+        kind: "script",
+        hash: scriptHashOf(b.issuance),
+      }),
+      "Mesh",
+      EX_UNITS,
+    )
+    .mintingScript(d.core.registry.code);
+
+  w0(tb, d, b.issuance, mintingActionToData("Register"));
+
+  // The covering node is re-emitted pointing at the new key, then the new node.
+  tb.txOut(nodeAddress(d), [
+    lovelace(MIN_ADA),
+    { unit: d.core.registryNodeCs + p.coveringNode.key, quantity: "1" },
+  ]);
+  tb.txOutInlineDatumValue(
+    registryNodeToData({ ...p.coveringNode, next: b.cipPolicy }),
+  );
+
+  tb.txOut(nodeAddress(d), [
+    lovelace(MIN_ADA),
+    { unit: d.core.registryNodeCs + b.cipPolicy, quantity: "1" },
+  ]);
+  tb.txOutInlineDatumValue(
+    registryNodeToData({
+      key: b.cipPolicy,
+      next: p.coveringNode.next,
+      mintingLogic: { kind: "script", hash: scriptHashOf(b.issuance) },
+      transferLogic: { kind: "script", hash: scriptHashOf(b.transfer) },
+      thirdPartyLogic: { kind: "script", hash: scriptHashOf(b.thirdParty) },
+      unfrackingLogic: EMPTY_VKEY,
+      globalStateCs: "",
+    }),
+  );
+
+  return complete(p, [d.refs.cborHex]);
+}
+
+// ---------------------------------------------------------------- deposit
+
+export interface BondDepositParams extends TxBase {
+  bond: Bond;
+  node: UTxO;
+  vault: UTxO;
+  /** The certificate's stake credential (the depositor). */
+  depositorStakeHash: string;
+  depositorIsScript?: boolean;
+  /** POSIX-ms start; must equal the upper bound of the tx validity range. */
+  start: number;
+  /** Slot whose validity upper bound is exactly `start`. */
+  validHereafterSlot: number;
+}
+
+/** Unit deposit (§4.2): vault gains the principal; mint certificate step 0. */
+export async function buildBondDepositTx(
+  p: BondDepositParams,
+): Promise<string> {
+  const { deployment: d, bond: b } = p;
+  const tb = p.txBuilder;
+
+  const refs = sortReferenceInputs([d.refs.protocolParams, p.node]);
+  const paramsIdx = referenceIndexOf(refs, d.refs.protocolParams);
+  const nodeIdx = referenceIndexOf(refs, p.node);
+
+  vaultSpend(tb, b, p.vault, vaultDepositRedeemer());
+
+  mintCertificate(tb, b, paramsIdx, stepName(0), "1");
+
+  w0(tb, d, b.issuance, mintingActionToData("Deposit"));
+  w0(
+    tb,
+    d,
+    d.core.issuanceLogic,
+    issuanceLogicRedeemer([
+      { policy: b.cipPolicy, index: nodeIdx, proof: "ref" },
+    ]),
+  );
+
+  // Vault continuation: same address/datum/NFT, +principal.
+  tb.txOut(
+    p.vault.output.address,
+    addLovelace(p.vault.output.amount, BigInt(b.config.principal)),
+  );
+  tb.txOutInlineDatumValue(vaultDatumToData({ cntPolicy: b.cntPolicy }));
+
+  const datum: CertificateDatum = {
+    start: p.start,
+    commit: null,
+    cntPolicy: b.cntPolicy,
+  };
+  tb.txOut(plbAddress(d, p.depositorStakeHash, p.depositorIsScript), [
+    lovelace(MIN_ADA),
+    { unit: b.cipPolicy + stepName(0), quantity: "1" },
+  ]);
+  tb.txOutInlineDatumValue(certificateDatumToData(datum));
+
+  tb.invalidHereafter(p.validHereafterSlot);
+  return complete(p, refs);
+}
+
+// ---------------------------------------------------- transfer / authorize
+
+export interface TransferTxParams extends TxBase {
+  bond: Bond;
+  node: UTxO;
+  certificate: UTxO;
   recipientAddress: string;
-  /** Optional inline datum on the continuation (§4.3 payout key). */
-  datum?: Data;
-  utxos: UTxO[];
-  changeAddress: string;
-  collateralUtxo: UTxO;
-  network?: Network;
+  /** The continuation datum (preserved on a plain transfer). */
+  outputDatum: CertificateDatum;
+  holderStakeHash: string;
+  holderIsScript?: boolean;
+  authorizer?: ScriptAuthorizer;
 }
 
-/**
- * Build a free transfer (§4.2), or the payout-key self-transfer (§4.3) when
- * `datum` carries a `PrincipalDatum` commitment. The transfer logic is
- * permissive; the withdraw-0 just runs.
- */
+/** Plain transfer or owner change (§4.3): name and state preserved. */
 export async function buildTransferTx(p: TransferTxParams): Promise<string> {
-  const networkId = networkIdOf(p.network ?? "preprod");
-  const { output } = p.principalUtxo;
+  const { deployment: d, bond: b } = p;
+  const tb = p.txBuilder;
 
-  p.txBuilder.readOnlyTxInReference(
-    p.nodeUtxo.input.txHash,
-    p.nodeUtxo.input.outputIndex,
+  const refs = sortReferenceInputs([d.refs.protocolParams, p.node]);
+  const paramsIdx = referenceIndexOf(refs, d.refs.protocolParams);
+  const nodeIdx = referenceIndexOf(refs, p.node);
+
+  const chain = [d.core.programmableLogicGlobal, d.core.transfer, b.transfer];
+  const wdrlIdx = wdrlIdxOf(d, chain);
+
+  plbSpend(tb, d, p.certificate, paramsIdx, wdrlIdx);
+  w0(tb, d, d.core.programmableLogicGlobal, transferAct());
+  w0(tb, d, d.core.transfer, transferRedeemer([{ nodeIdx }]));
+  w0(tb, d, b.transfer, moveRedeemer());
+
+  applyAuthorization(
+    tb,
+    holderCredential(p.holderStakeHash, p.holderIsScript),
+    p.authorizer,
+    d.config.networkId,
   );
-  applyGate(p.txBuilder, p.transfer, moveRedeemer(), networkId);
-  spendPlbInput(p.txBuilder, p.principalUtxo, p.plbScript);
 
-  const builder = p.txBuilder.txOut(p.recipientAddress, output.amount);
+  tb.txOut(p.recipientAddress, p.certificate.output.amount);
+  tb.txOutInlineDatumValue(certificateDatumToData(p.outputDatum));
 
-  if (p.datum !== undefined) {
-    builder.txOutInlineDatumValue(p.datum);
-  }
-
-  return await builder
-    .txInCollateral(
-      p.collateralUtxo.input.txHash,
-      p.collateralUtxo.input.outputIndex,
-      p.collateralUtxo.output.amount,
-      p.collateralUtxo.output.address,
-    )
-    .changeAddress(p.changeAddress)
-    .selectUtxosFrom(p.utxos)
-    .complete();
+  return complete(p, refs);
 }
 
-// --------------------------------------------------- Transformation (T3)
-
-export interface TransformationTxParams {
-  txBuilder: MeshTxBuilder;
-  transformation: PlutusScript;
-  /** The instrument's RegistryNode, referenced per the tx shape (§4.4). */
-  nodeUtxo: UTxO;
-  referenceUtxo: UTxO;
-  /** Preserved metadata (the datum is rewritten in place). */
-  metadata: Data;
-  /** Preserved graduated-asset policy id (the datum is rewritten in place). */
-  nativePolicy: string;
-  schedule: Schedule;
-  /** The recorded value to write: `lookup(schedule, now)`. */
-  nextValue: number;
-  /** POSIX ms used as the validity-range lower bound. */
-  now: number;
-  slotConfig: SlotConfig;
-  utxos: UTxO[];
-  changeAddress: string;
-  collateralUtxo: UTxO;
-  network?: Network;
+export interface AuthorizeTxParams extends TxBase {
+  bond: Bond;
+  node: UTxO;
+  certificate: UTxO;
+  /** The new commitment (`Some(pay)`) — or `null` to revoke. */
+  commit: CertificateDatum["commit"];
+  /** The current certificate datum (the rest is preserved). */
+  datum: CertificateDatum;
+  holderStakeHash: string;
+  holderIsScript?: boolean;
+  authorizer?: ScriptAuthorizer;
 }
 
-/**
- * Build the scheduled transformation (§4.4): rewrite the reference token's
- * datum in place, its recorded value stepping to the current schedule step.
- * The reference token's payment credential is a key, so the beneficiary signs
- * to spend it; the transformation gate runs as a withdraw-0.
- */
-export async function buildTransformationTx(
-  p: TransformationTxParams,
-): Promise<string> {
-  const networkId = networkIdOf(p.network ?? "preprod");
-  const { input, output } = p.referenceUtxo;
+/** Self-transfer opt-in/revoke (§4.4): same stake, `commit` written. */
+export async function buildAuthorizeTx(p: AuthorizeTxParams): Promise<string> {
+  return buildTransferTx({
+    txBuilder: p.txBuilder,
+    deployment: p.deployment,
+    funding: p.funding,
+    collateral: p.collateral,
+    changeAddress: p.changeAddress,
+    bond: p.bond,
+    node: p.node,
+    certificate: p.certificate,
+    recipientAddress: p.certificate.output.address,
+    outputDatum: { ...p.datum, commit: p.commit },
+    holderStakeHash: p.holderStakeHash,
+    holderIsScript: p.holderIsScript,
+    authorizer: p.authorizer,
+  });
+}
 
-  const nextDatum: ReferenceDatum = {
-    metadata: p.metadata,
-    version: 1,
-    extra: {
-      schedule: p.schedule,
-      value: p.nextValue,
-      nativePolicy: p.nativePolicy,
+// ------------------------------------------------------------- coupon claim
+
+export interface ClaimOwnerParams extends TxBase {
+  bond: Bond;
+  node: UTxO;
+  certificate: UTxO;
+  /** 1-indexed step `k`: the spent name is `k-1`, the continuation `k`. */
+  step: number;
+  /** The certificate datum to preserve. */
+  datum: CertificateDatum;
+  /** Where the coupon is delivered (usually the holder). */
+  couponAddress: string;
+  holderStakeHash: string;
+  holderIsScript?: boolean;
+  authorizer?: ScriptAuthorizer;
+  /** Slot whose validity lower bound reaches `start + k*interval`. */
+  validFromSlot: number;
+}
+
+/** Owner-signed coupon claim (§4.5): advance `k-1 -> k` + coupon mint. */
+export async function buildClaimOwnerTx(p: ClaimOwnerParams): Promise<string> {
+  const { deployment: d, bond: b } = p;
+  const tb = p.txBuilder;
+
+  const refs = sortReferenceInputs([d.refs.protocolParams, p.node]);
+  const paramsIdx = referenceIndexOf(refs, d.refs.protocolParams);
+  const nodeIdx = referenceIndexOf(refs, p.node);
+
+  const chain = [
+    d.core.programmableLogicGlobal,
+    d.core.transfer,
+    b.transfer,
+    b.issuance,
+    d.core.issuanceLogic,
+  ];
+  const wdrlIdx = wdrlIdxOf(d, chain);
+
+  plbSpend(tb, d, p.certificate, paramsIdx, wdrlIdx);
+
+  mintCertificate(tb, b, paramsIdx, stepName(p.step - 1), "-1");
+  mintCertificate(tb, b, paramsIdx, stepName(p.step), "1");
+  mintCoupon(tb, b, couponName(b.config.amounts[p.step - 1]), "1");
+
+  w0(tb, d, d.core.programmableLogicGlobal, transferAct());
+  w0(tb, d, d.core.transfer, transferRedeemer([{ nodeIdx }]));
+  w0(tb, d, b.transfer, moveRedeemer());
+  w0(tb, d, b.issuance, mintingActionToData("Advance"));
+  w0(
+    tb,
+    d,
+    d.core.issuanceLogic,
+    issuanceLogicRedeemer([
+      { policy: b.cipPolicy, index: nodeIdx, proof: "ref" },
+    ]),
+  );
+
+  applyAuthorization(
+    tb,
+    holderCredential(p.holderStakeHash, p.holderIsScript),
+    p.authorizer,
+    d.config.networkId,
+  );
+
+  // Certificate continuation (name advanced, datum preserved).
+  tb.txOut(p.certificate.output.address, [
+    lovelace(MIN_ADA),
+    { unit: b.cipPolicy + stepName(p.step), quantity: "1" },
+  ]);
+  tb.txOutInlineDatumValue(certificateDatumToData(p.datum));
+
+  tb.txOut(p.couponAddress, [
+    lovelace(MIN_ADA),
+    {
+      unit: b.cntPolicy + couponName(b.config.amounts[p.step - 1]),
+      quantity: "1",
     },
-  };
-
-  p.txBuilder.readOnlyTxInReference(
-    p.nodeUtxo.input.txHash,
-    p.nodeUtxo.input.outputIndex,
-  );
-  applyGate(p.txBuilder, p.transformation, updateRedeemer(), networkId);
-
-  return await p.txBuilder
-    .txIn(input.txHash, input.outputIndex, output.amount, output.address)
-    .txOut(output.address, output.amount)
-    .txOutInlineDatumValue(referenceDatumToData(nextDatum))
-    .invalidBefore(unixTimeToEnclosingSlot(p.now, p.slotConfig))
-    .txInCollateral(
-      p.collateralUtxo.input.txHash,
-      p.collateralUtxo.input.outputIndex,
-      p.collateralUtxo.output.amount,
-      p.collateralUtxo.output.address,
-    )
-    .changeAddress(p.changeAddress)
-    .selectUtxosFrom(p.utxos)
-    .complete();
-}
-
-// -------------------------------------------------------- Graduation (T4)
-
-export interface GraduationTxParams {
-  txBuilder: MeshTxBuilder;
-  issuance: PlutusScript;
-  cipPolicy: PlutusScript;
-  nativeMint: PlutusScript;
-  /** The PLB stand-in script custodies the principal (always-approving). */
-  plbScript: PlutusScript;
-  /** The instrument's RegistryNode and reference token, both referenced per
-   * the tx shape (§4.5): the burn resolves its policy ids from them. */
-  nodeUtxo: UTxO;
-  referenceUtxo: UTxO;
-  /** Unit (policyId + assetName, hex) of the principal token to burn. */
-  principalUnit: string;
-  principalQuantity: bigint;
-  /** Unit of the graduated asset to mint (same name, native policy). */
-  nativeUnit: string;
-  nativeQuantity: bigint;
-  /** PLB-custodied UTxOs holding the principal to burn (whole holdings). */
-  principalInputs: UTxO[];
-  /** Destination of the graduated asset. */
-  nativeOutputAddress: string;
-  /** Owner path: the owner's stake-key hash as a required signer (Q-GRAD-2).
-   * Omit for the third-party path (the committed payment credential binds). */
-  ownerSigner?: string;
-  /** POSIX ms used as the validity-range lower bound (must reach `d4`). */
-  now: number;
-  slotConfig: SlotConfig;
-  utxos: UTxO[];
-  changeAddress: string;
-  collateralUtxo: UTxO;
-  network?: Network;
-}
-
-/**
- * Build a graduation (§4.5): burn the principal and mint the graduated asset
- * under the (real) native policy, gated to `d4`. Two spend paths share the
- * burn; select with `ownerSigner`.
- */
-export async function buildGraduationTx(
-  p: GraduationTxParams,
-): Promise<string> {
-  const networkId = networkIdOf(p.network ?? "preprod");
-  const { policyId: cipPolicyId, assetName: principalName } = splitUnit(
-    p.principalUnit,
-  );
-  const { policyId: nativePolicyId, assetName: nativeName } = splitUnit(
-    p.nativeUnit,
-  );
-
-  p.txBuilder.readOnlyTxInReference(
-    p.nodeUtxo.input.txHash,
-    p.nodeUtxo.input.outputIndex,
-  );
-  p.txBuilder.readOnlyTxInReference(
-    p.referenceUtxo.input.txHash,
-    p.referenceUtxo.input.outputIndex,
-  );
-  applyGate(p.txBuilder, p.issuance, mintingActionToData("Burn"), networkId);
-
-  let builder = p.txBuilder
-    .mintPlutusScriptV3()
-    .mint("-" + p.principalQuantity.toString(), cipPolicyId, principalName)
-    .mintRedeemerValue(mConStr0([]))
-    .mintingScript(p.cipPolicy.code)
-    .mintPlutusScriptV3()
-    .mint(p.nativeQuantity.toString(), nativePolicyId, nativeName)
-    .mintRedeemerValue(nativeMintRedeemer())
-    .mintingScript(p.nativeMint.code);
-
-  for (const holder of p.principalInputs) {
-    spendPlbInput(builder, holder, p.plbScript);
-  }
-
-  builder = builder.txOut(p.nativeOutputAddress, [
-    { unit: "lovelace", quantity: MIN_ADA.toString() },
-    { unit: p.nativeUnit, quantity: p.nativeQuantity.toString() },
   ]);
 
-  if (p.ownerSigner !== undefined) {
-    builder = builder.requiredSignerHash(p.ownerSigner);
+  tb.invalidBefore(p.validFromSlot);
+  return complete(p, refs);
+}
+
+export interface ClaimIssuerParams extends TxBase {
+  bond: Bond;
+  node: UTxO;
+  certificate: UTxO;
+  step: number;
+  datum: CertificateDatum;
+  /** The committed payout address (payment credential = `commit`). */
+  payoutAddress: string;
+  authorizer?: ScriptAuthorizer;
+  validFromSlot: number;
+}
+
+/** Issuer-triggered coupon claim (§4.5): third-party spend, coupon to `pay`. */
+export async function buildClaimIssuerTx(
+  p: ClaimIssuerParams,
+): Promise<string> {
+  const { deployment: d, bond: b } = p;
+  const tb = p.txBuilder;
+
+  const refs = sortReferenceInputs([d.refs.protocolParams, p.node]);
+  const paramsIdx = referenceIndexOf(refs, d.refs.protocolParams);
+  const nodeIdx = referenceIndexOf(refs, p.node);
+
+  const chain = [
+    d.core.programmableLogicGlobal,
+    d.core.thirdParty,
+    b.thirdParty,
+    b.issuance,
+    d.core.issuanceLogic,
+  ];
+  const wdrlIdx = wdrlIdxOf(d, chain);
+
+  plbSpend(tb, d, p.certificate, paramsIdx, wdrlIdx);
+
+  mintCertificate(tb, b, paramsIdx, stepName(p.step - 1), "-1");
+  mintCertificate(tb, b, paramsIdx, stepName(p.step), "1");
+  mintCoupon(tb, b, couponName(b.config.amounts[p.step - 1]), "1");
+
+  w0(tb, d, d.core.programmableLogicGlobal, thirdPartyAct());
+  // The pair output (the next certificate) is the first output.
+  w0(tb, d, d.core.thirdParty, thirdPartyRedeemer(nodeIdx, 0));
+  w0(tb, d, b.thirdParty, triggerRedeemer());
+  w0(tb, d, b.issuance, mintingActionToData("Advance"));
+  w0(
+    tb,
+    d,
+    d.core.issuanceLogic,
+    issuanceLogicRedeemer([
+      { policy: b.cipPolicy, index: nodeIdx, proof: "ref" },
+    ]),
+  );
+
+  applyAuthorization(tb, b.config.issuer, p.authorizer, d.config.networkId);
+
+  // Paired continuation: the next certificate, same address and datum.
+  tb.txOut(p.certificate.output.address, [
+    lovelace(MIN_ADA),
+    { unit: b.cipPolicy + stepName(p.step), quantity: "1" },
+  ]);
+  tb.txOutInlineDatumValue(certificateDatumToData(p.datum));
+
+  // Coupon bound to the commitment.
+  tb.txOut(p.payoutAddress, [
+    lovelace(MIN_ADA),
+    {
+      unit: b.cntPolicy + couponName(b.config.amounts[p.step - 1]),
+      quantity: "1",
+    },
+  ]);
+
+  tb.invalidBefore(p.validFromSlot);
+  return complete(p, refs);
+}
+
+// -------------------------------------------------------------- redemption
+
+export interface RedeemParams extends TxBase {
+  bond: Bond;
+  vault: UTxO;
+  coupons: UTxO[];
+  payouts: Payout[];
+}
+
+/** Burn-to-pay at the vault (§4.6): burn coupons, the vault pays them out. */
+export async function buildRedeemTx(p: RedeemParams): Promise<string> {
+  const { bond: b } = p;
+  const tb = p.txBuilder;
+
+  const burned = couponValue(p.coupons, b.cntPolicy);
+
+  for (const coupon of p.coupons) {
+    tb.inputForEvaluation(coupon);
+    tb.txIn(
+      coupon.input.txHash,
+      coupon.input.outputIndex,
+      coupon.output.amount,
+      coupon.output.address,
+    );
   }
 
-  return await builder
-    .invalidBefore(unixTimeToEnclosingSlot(p.now, p.slotConfig))
-    .txInCollateral(
-      p.collateralUtxo.input.txHash,
-      p.collateralUtxo.input.outputIndex,
-      p.collateralUtxo.output.amount,
-      p.collateralUtxo.output.address,
-    )
-    .changeAddress(p.changeAddress)
-    .selectUtxosFrom(p.utxos)
-    .complete();
+  // Burn each coupon name (aggregate per name).
+  const byName = new Map<string, bigint>();
+  for (const coupon of p.coupons) {
+    for (const a of coupon.output.amount) {
+      if (a.unit.startsWith(b.cntPolicy) && a.unit.length > 56) {
+        const name = a.unit.slice(56);
+        byName.set(name, (byName.get(name) ?? 0n) + BigInt(a.quantity));
+      }
+    }
+  }
+  for (const [name, qty] of byName) {
+    mintCoupon(tb, b, name, "-" + qty.toString());
+  }
+
+  vaultSpend(tb, b, p.vault, redeemRedeemer(p.payouts));
+
+  // Payouts first (fresh destinations), then the vault continuation. A payout
+  // output still needs min-ADA: the excess over the named amount is covered by
+  // the payer's wallet, so the vault's loss stays exactly `burned`.
+  for (const payout of p.payouts) {
+    const value = payout.amount >= MIN_ADA ? payout.amount : MIN_ADA;
+    tb.txOut(payout.address, [lovelace(value)]);
+  }
+  tb.txOut(p.vault.output.address, addLovelace(p.vault.output.amount, -burned));
+  tb.txOutInlineDatumValue(vaultDatumToData({ cntPolicy: b.cntPolicy }));
+
+  return complete(p);
+}
+
+// -------------------------------------------------------------- graduation
+
+export interface GraduateOwnerParams extends TxBase {
+  bond: Bond;
+  node: UTxO;
+  certificate: UTxO;
+  /** Final step `N` (the burned name). */
+  step: number;
+  /** Where the principal coupon is delivered. */
+  couponAddress: string;
+  holderStakeHash: string;
+  holderIsScript?: boolean;
+  authorizer?: ScriptAuthorizer;
+  validFromSlot: number;
+}
+
+/** Owner-signed retirement (§4.7): burn name `N`, mint the principal coupon. */
+export async function buildGraduateOwnerTx(
+  p: GraduateOwnerParams,
+): Promise<string> {
+  const { deployment: d, bond: b } = p;
+  const tb = p.txBuilder;
+
+  const refs = sortReferenceInputs([d.refs.protocolParams, p.node]);
+  const paramsIdx = referenceIndexOf(refs, d.refs.protocolParams);
+  const nodeIdx = referenceIndexOf(refs, p.node);
+
+  const chain = [
+    d.core.programmableLogicGlobal,
+    d.core.transfer,
+    b.transfer,
+    b.issuance,
+    d.core.issuanceLogic,
+  ];
+  const wdrlIdx = wdrlIdxOf(d, chain);
+
+  plbSpend(tb, d, p.certificate, paramsIdx, wdrlIdx);
+
+  mintCertificate(tb, b, paramsIdx, stepName(p.step), "-1");
+  mintCoupon(tb, b, couponName(b.config.principal), "1");
+
+  w0(tb, d, d.core.programmableLogicGlobal, transferAct());
+  w0(tb, d, d.core.transfer, transferRedeemer([{ nodeIdx }]));
+  w0(tb, d, b.transfer, moveRedeemer());
+  w0(tb, d, b.issuance, mintingActionToData("Retire"));
+  w0(
+    tb,
+    d,
+    d.core.issuanceLogic,
+    issuanceLogicRedeemer([
+      { policy: b.cipPolicy, index: nodeIdx, proof: "ref" },
+    ]),
+  );
+
+  applyAuthorization(
+    tb,
+    holderCredential(p.holderStakeHash, p.holderIsScript),
+    p.authorizer,
+    d.config.networkId,
+  );
+
+  tb.txOut(p.couponAddress, [
+    lovelace(MIN_ADA),
+    { unit: b.cntPolicy + couponName(b.config.principal), quantity: "1" },
+  ]);
+
+  tb.invalidBefore(p.validFromSlot);
+  return complete(p, refs);
+}
+
+export interface GraduateIssuerParams extends TxBase {
+  bond: Bond;
+  node: UTxO;
+  certificate: UTxO;
+  step: number;
+  /** The certificate datum (the shell preserves it byte-for-byte). */
+  datum: CertificateDatum;
+  payoutAddress: string;
+  authorizer?: ScriptAuthorizer;
+  validFromSlot: number;
+}
+
+/** Issuer-triggered retirement (§4.7): third-party burn + principal to `pay`. */
+export async function buildGraduateIssuerTx(
+  p: GraduateIssuerParams,
+): Promise<string> {
+  const { deployment: d, bond: b } = p;
+  const tb = p.txBuilder;
+
+  const refs = sortReferenceInputs([d.refs.protocolParams, p.node]);
+  const paramsIdx = referenceIndexOf(refs, d.refs.protocolParams);
+  const nodeIdx = referenceIndexOf(refs, p.node);
+
+  const chain = [
+    d.core.programmableLogicGlobal,
+    d.core.thirdParty,
+    b.thirdParty,
+    b.issuance,
+    d.core.issuanceLogic,
+  ];
+  const wdrlIdx = wdrlIdxOf(d, chain);
+
+  plbSpend(tb, d, p.certificate, paramsIdx, wdrlIdx);
+
+  mintCertificate(tb, b, paramsIdx, stepName(p.step), "-1");
+  mintCoupon(tb, b, couponName(b.config.principal), "1");
+
+  w0(tb, d, d.core.programmableLogicGlobal, thirdPartyAct());
+  // The pair output (the certificate-less shell) is the first output.
+  w0(tb, d, d.core.thirdParty, thirdPartyRedeemer(nodeIdx, 0));
+  w0(tb, d, b.thirdParty, triggerRedeemer());
+  w0(tb, d, b.issuance, mintingActionToData("Retire"));
+  w0(
+    tb,
+    d,
+    d.core.issuanceLogic,
+    issuanceLogicRedeemer([
+      { policy: b.cipPolicy, index: nodeIdx, proof: "ref" },
+    ]),
+  );
+
+  applyAuthorization(tb, b.config.issuer, p.authorizer, d.config.networkId);
+
+  // Ghost shell: the paired continuation preserves address and datum.
+  tb.txOut(p.certificate.output.address, [lovelace(MIN_ADA)]);
+  tb.txOutInlineDatumValue(certificateDatumToData(p.datum));
+
+  tb.txOut(p.payoutAddress, [
+    lovelace(MIN_ADA),
+    { unit: b.cntPolicy + couponName(b.config.principal), quantity: "1" },
+  ]);
+
+  tb.invalidBefore(p.validFromSlot);
+  return complete(p, refs);
 }

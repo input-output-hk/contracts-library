@@ -1,21 +1,17 @@
 /**
  * Real-world happy path for the tokenized bond over the actual CIP-113 core
  * validators (vendored from cardano-foundation/cip113-programmable-tokens):
- * deploy the core, register + issue the bond through the registry, then
- * transfer → transform → graduate, all against a Yaci devnet.
+ * deploy the core, create the vault, register the bond, deposit, claim the
+ * coupon, redeem it at the vault, and graduate (owner path) — all against a
+ * Yaci devnet.
  *
  * Single-signer discipline: the tx funder must be the wallet that authorizes,
- * because MeshJS's `signAndSubmit` signs with one wallet. `account` funds and
- * authorizes register/transfer/transform; `recipient` (the post-transfer
- * holder) funds and authorizes the graduation.
+ * because MeshJS's `signAndSubmit` signs with one wallet.
  *
  * Skips when no devnet is reachable (`npm run test:devnet`).
  */
 
 import {
-  mConStr0,
-  pubKeyAddress,
-  serializeAddressObj,
   unixTimeToEnclosingSlot,
   type SlotConfig,
   type UTxO,
@@ -24,20 +20,23 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import {
   applyBond,
-  buildGraduateOwner,
-  buildRegisterAndIssue,
-  buildTransfer,
-  buildTransform,
-  plbAddress,
-  type Bond,
-} from "../src/cip113/bond";
-import {
+  buildBondDepositTx,
+  buildClaimOwnerTx,
+  buildCreateVaultTx,
+  buildGraduateOwnerTx,
+  buildRedeemTx,
+  buildRegisterTx,
+  couponName,
   rewardAddressOf,
-  scriptAddressOf,
   scriptHashOf,
-} from "../src/cip113/core";
+  stepName,
+  vaultAddress,
+  type Bond,
+  type CertificateDatum,
+  type RegistryNode,
+} from "@contracts-library/meshjs";
+
 import { deployCore, type Deployment } from "../src/cip113/deploy";
-import type { RegistryNode } from "../src/cip113/data";
 import {
   chainNowMs,
   collateralOf,
@@ -60,10 +59,11 @@ if (!reachable) {
   );
 }
 
-const PRINCIPAL = "424f4e44"; // "BOND"
-const REFERENCE = "524546"; // "REF"
-const SCALE = 1000;
-const QUANTITY = 1000n;
+const PRINCIPAL = 1000;
+const INTERVAL = 10_000;
+const AMOUNTS = [1040];
+const VAULT_NFT_NAME = Buffer.from("V0").toString("hex");
+const VAULT_ADA = 5_000_000n;
 const ORIGIN_NODE: RegistryNode = {
   key: "",
   next: "ff".repeat(30),
@@ -85,12 +85,20 @@ describe.skipIf(!reachable)(
       slotConfig = await devnetSlotConfig();
     });
 
-    /**
-     * Register a module script's stake credential so its withdraw-0 reward
-     * account exists. The legacy no-deposit registration (certificate tag 0)
-     * is exempt from script consent during the Conway transitional period, so
-     * no `publish` script/redeemer is attached.
-     */
+    /** The first slot whose start time is at least `ms`. */
+    function firstSlotAt(ms: number): number {
+      return Math.ceil((ms - slotConfig.zeroTime) / slotConfig.slotLength);
+    }
+
+    /** The start time (POSIX ms) of a slot. */
+    function slotStartMs(slot: number): number {
+      return (
+        slotConfig.zeroTime +
+        (slot - slotConfig.zeroSlot) * slotConfig.slotLength
+      );
+    }
+
+    /** Register a module script's stake credential so its withdraw-0 exists. */
     async function registerScriptStake(
       payer: Account,
       scriptHash: string,
@@ -133,198 +141,227 @@ describe.skipIf(!reachable)(
       return found;
     }
 
-    async function holdsAt(address: string, unit: string): Promise<bigint> {
-      const utxos = await provider.fetchAddressUTxOs(address);
-      return utxos.reduce((sum, u) => {
-        const a = u.output.amount.find((x) => x.unit === unit);
-        return sum + (a ? BigInt(a.quantity) : 0n);
-      }, 0n);
+    function lovelaceOf(utxo: UTxO): bigint {
+      const a = utxo.output.amount.find((x) => x.unit === "lovelace");
+      return a ? BigInt(a.quantity) : 0n;
     }
 
-    async function holds(account: Account, unit: string): Promise<bigint> {
-      const utxos = await account.wallet.getUtxos();
-      return utxos.reduce((sum, u) => {
-        const a = u.output.amount.find((x) => x.unit === unit);
-        return sum + (a ? BigInt(a.quantity) : 0n);
-      }, 0n);
-    }
-
-    it("deploys the core, registers + issues the bond, transfers, transforms and graduates", async () => {
-      // `account` funds and signs register/transfer/transform; `recipient` becomes
-      // the holder after the transfer and funds/signs the graduation.
+    it("creates the vault, registers, deposits, claims, redeems and graduates", async () => {
+      // `account` funds and signs the core, the vault and the registration;
+      // `holder` deposits and owns the certificate afterwards.
       const account = await fundedAccount(
         provider,
         [20_000, 20_000, 20_000, 20_000, 20_000, 20_000, 20_000, 20_000],
       );
-      const recipient = await fundedAccount(provider);
-      // Ownership rides the PLB address's stake credential. Use the wallet's
-      // payment key hash (which `MeshWallet` always signs) rather than the
-      // separately-derived stake key, so the on-chain `extra_signatories`
-      // checks are satisfied by the same signature that funds the tx.
-      const accountStakeHash = account.keyHash;
-      const recipientStakeHash = recipient.keyHash;
+      const holder = await fundedAccount(provider);
 
       // ---- deploy the core -------------------------------------------------
       const deployment: Deployment = await deployCore(provider, account);
 
-      const start = await chainNowMs();
-      const schedule = [
-        { deadline: start, value: 1040 },
-        { deadline: start + 10_000, value: 1081 },
-        { deadline: start + 20_000, value: 1124 },
-        { deadline: start + 30_000, value: 1169 },
-      ];
-      const finalDeadline = schedule[schedule.length - 1].deadline;
-      const finalValue = BigInt(schedule[schedule.length - 1].value);
-
       // ---- apply the bond + register its module credentials (publish) ------
       const bond: Bond = applyBond(deployment, {
-        principalName: PRINCIPAL,
-        referenceName: REFERENCE,
-        schedule,
-        scale: SCALE,
+        principal: PRINCIPAL,
+        interval: INTERVAL,
+        amounts: AMOUNTS,
         issuer: { kind: "key", hash: account.keyHash },
+        vaultNftName: VAULT_NFT_NAME,
       });
       for (const script of bond.withdrawCredentials) {
         await registerScriptStake(account, scriptHashOf(script));
       }
 
-      const nodeAddress = scriptAddressOf(deployment.core.registryNodeCs, 0);
-      const beneficiaryAddress = plbAddress(
+      // ---- create the vault (§3.1, I10) ------------------------------------
+      const funding0 = await fundingOf(account);
+      const createTx = await buildCreateVaultTx({
+        txBuilder: newTxBuilderManualExUnits(provider),
         deployment,
-        accountStakeHash,
-        false,
+        bond,
+        vaultAda: VAULT_ADA,
+        funding: funding0.funding,
+        collateral: funding0.collateral,
+        changeAddress: account.address,
+      });
+      const createHash = await signAndSubmit(account, createTx);
+      await waitForTx(provider, createHash);
+      const vaultUtxo = await outputHolding(
+        createHash,
+        bond.vaultNftCs + VAULT_NFT_NAME,
       );
-      const referenceAddress = plbAddress(
-        deployment,
-        scriptHashOf(bond.transformation),
-        true,
-      );
+      expect(lovelaceOf(vaultUtxo)).toBe(VAULT_ADA);
 
-      // ---- register + issue (T0/T1) ---------------------------------------
+      // ---- register (§4.1) -------------------------------------------------
       const funding1 = await fundingOf(account);
-      const registerTx = await buildRegisterAndIssue({
+      const registerTx = await buildRegisterTx({
         txBuilder: newTxBuilderManualExUnits(provider),
         deployment,
         bond,
         covering: deployment.refs.originNode,
         coveringNode: ORIGIN_NODE,
-        quantity: QUANTITY,
-        beneficiaryAddress,
-        referenceAddress,
-        nodeAddress,
         funding: funding1.funding,
         collateral: funding1.collateral,
         changeAddress: account.address,
       });
       const registerHash = await signAndSubmit(account, registerTx);
       await waitForTx(provider, registerHash);
-
-      const principalUtxo = await outputHolding(
-        registerHash,
-        bond.policyId + PRINCIPAL,
-      );
-      const referenceUtxo = await outputHolding(
-        registerHash,
-        bond.policyId + REFERENCE,
-      );
       const bondNode = await outputHolding(
         registerHash,
-        deployment.core.registryNodeCs + bond.policyId,
+        deployment.core.registryNodeCs + bond.cipPolicy,
       );
 
-      // ---- transfer (T2, owner path) --------------------------------------
-      const funding2 = await fundingOf(account);
-      const transferTx = await buildTransfer({
+      // ---- deposit (§4.2) --------------------------------------------------
+      const upperSlot = firstSlotAt((await chainNowMs()) + 30_000);
+      const start = slotStartMs(upperSlot);
+      const funding2 = await fundingOf(holder);
+      const depositTx = await buildBondDepositTx({
         txBuilder: newTxBuilderManualExUnits(provider),
         deployment,
         bond,
         node: bondNode,
-        principalInputs: [principalUtxo],
-        recipientAddress: plbAddress(deployment, recipientStakeHash, false),
-        senderStakeHash: accountStakeHash,
+        vault: vaultUtxo,
+        depositorStakeHash: holder.keyHash,
+        start,
+        validHereafterSlot: upperSlot,
         funding: funding2.funding,
         collateral: funding2.collateral,
-        changeAddress: account.address,
+        changeAddress: holder.address,
       });
-      const transferHash = await signAndSubmit(account, transferTx);
-      await waitForTx(provider, transferHash);
+      const depositHash = await signAndSubmit(holder, depositTx);
+      await waitForTx(provider, depositHash);
+      const cert0 = await outputHolding(
+        depositHash,
+        bond.cipPolicy + stepName(0),
+      );
+      const vaultAfterDeposit = await outputHolding(
+        depositHash,
+        bond.vaultNftCs + VAULT_NFT_NAME,
+      );
+      expect(lovelaceOf(vaultAfterDeposit)).toBe(VAULT_ADA + BigInt(PRINCIPAL));
 
-      // The holder is now `recipient`.
-      const recipientPrincipal = await outputHolding(
-        transferHash,
-        bond.policyId + PRINCIPAL,
+      // ---- claim the coupon, step 1 (§4.5) ---------------------------------
+      const deadline = start + INTERVAL;
+      await waitUntilChainTimeMs(deadline);
+      const funding3 = await fundingOf(holder);
+      const datum: CertificateDatum = {
+        start,
+        commit: null,
+        cntPolicy: bond.cntPolicy,
+      };
+      const claimTx = await buildClaimOwnerTx({
+        txBuilder: newTxBuilderManualExUnits(provider),
+        deployment,
+        bond,
+        node: bondNode,
+        certificate: cert0,
+        step: 1,
+        datum,
+        couponAddress: holder.address,
+        holderStakeHash: holder.keyHash,
+        validFromSlot: firstSlotAt(deadline),
+        funding: funding3.funding,
+        collateral: funding3.collateral,
+        changeAddress: holder.address,
+      });
+      const claimHash = await signAndSubmit(holder, claimTx);
+      await waitForTx(provider, claimHash);
+      const cert1 = await outputHolding(
+        claimHash,
+        bond.cipPolicy + stepName(1),
+      );
+      const coupon = await outputHolding(
+        claimHash,
+        bond.cntPolicy + couponName(AMOUNTS[0]),
       );
       expect(
-        recipientPrincipal.output.amount.some(
-          (a) => a.unit === bond.policyId + PRINCIPAL,
+        coupon.output.amount.some(
+          (a) =>
+            a.unit === bond.cntPolicy + couponName(AMOUNTS[0]) &&
+            a.quantity === "1",
         ),
       ).toBe(true);
 
-      // ---- transform (T3) --------------------------------------------------
-      await waitUntilChainTimeMs(schedule[0].deadline);
-      const now = await chainNowMs();
-      const nextValue = schedule.reduce(
-        (v, s) => (s.deadline <= now ? s.value : v),
-        schedule[0].value,
-      );
-      const funding3 = await fundingOf(account);
-      const transformTx = await buildTransform({
+      // ---- redeem the coupon (§4.6) ----------------------------------------
+      const funding4 = await fundingOf(holder);
+      const redeemTx = await buildRedeemTx({
         txBuilder: newTxBuilderManualExUnits(provider),
         deployment,
         bond,
-        node: bondNode,
-        referenceUtxo,
-        nextValue,
-        validFromSlot: unixTimeToEnclosingSlot(now, slotConfig),
-        funding: funding3.funding,
-        collateral: funding3.collateral,
-        changeAddress: account.address,
-      });
-      const transformHash = await signAndSubmit(account, transformTx);
-      await waitForTx(provider, transformHash);
-
-      // The transformation rewrites the reference token in place: graduation
-      // must reference the continuation, not the spent original.
-      const transformedReference = await outputHolding(
-        transformHash,
-        bond.policyId + REFERENCE,
-      );
-
-      // ---- graduate (T4, owner path) --------------------------------------
-      await waitUntilChainTimeMs(finalDeadline);
-      const now4 = await chainNowMs();
-      const nativeQuantity = (QUANTITY * finalValue) / BigInt(SCALE);
-      // `settle` binds the payout to the burned owner's *stake* credential,
-      // so the destination must be a base address staked to it (the wallet's
-      // enterprise address has no stake credential).
-      const nativeOutputAddress = serializeAddressObj(
-        pubKeyAddress(recipient.keyHash, recipient.keyHash),
-        0,
-      );
-      const funding4 = await fundingOf(recipient);
-      const graduateTx = await buildGraduateOwner({
-        txBuilder: newTxBuilderManualExUnits(provider),
-        deployment,
-        bond,
-        node: bondNode,
-        referenceUtxo: transformedReference,
-        principalInputs: [recipientPrincipal],
-        principalQuantity: QUANTITY,
-        nativeQuantity,
-        nativeOutputAddress,
-        ownerStakeHash: recipientStakeHash,
-        validFromSlot: unixTimeToEnclosingSlot(now4, slotConfig),
+        vault: vaultAfterDeposit,
+        coupons: [coupon],
+        payouts: [{ address: holder.address, amount: BigInt(AMOUNTS[0]) }],
         funding: funding4.funding,
         collateral: funding4.collateral,
-        changeAddress: recipient.address,
+        changeAddress: holder.address,
       });
-      await waitForTx(provider, await signAndSubmit(recipient, graduateTx));
+      const redeemHash = await signAndSubmit(holder, redeemTx);
+      await waitForTx(provider, redeemHash);
+      const vaultAfterRedeem = await outputHolding(
+        redeemHash,
+        bond.vaultNftCs + VAULT_NFT_NAME,
+      );
+      expect(lovelaceOf(vaultAfterRedeem)).toBe(
+        VAULT_ADA + BigInt(PRINCIPAL) - BigInt(AMOUNTS[0]),
+      );
 
-      expect(
-        await holdsAt(nativeOutputAddress, bond.nativePolicyId + PRINCIPAL),
-      ).toBe(nativeQuantity);
-      expect(await holds(recipient, bond.policyId + PRINCIPAL)).toBe(0n);
+      // ---- graduate (owner path, §4.7) -------------------------------------
+      const funding5 = await fundingOf(holder);
+      const graduateTx = await buildGraduateOwnerTx({
+        txBuilder: newTxBuilderManualExUnits(provider),
+        deployment,
+        bond,
+        node: bondNode,
+        certificate: cert1,
+        step: 1,
+        couponAddress: holder.address,
+        holderStakeHash: holder.keyHash,
+        validFromSlot: firstSlotAt(deadline),
+        funding: funding5.funding,
+        collateral: funding5.collateral,
+        changeAddress: holder.address,
+      });
+      const graduateHash = await signAndSubmit(holder, graduateTx);
+      await waitForTx(provider, graduateHash);
+      const principalCoupon = await outputHolding(
+        graduateHash,
+        bond.cntPolicy + couponName(PRINCIPAL),
+      );
+
+      // ---- redeem the principal (§4.6) -------------------------------------
+      const funding6 = await fundingOf(holder);
+      const redeemPrincipalTx = await buildRedeemTx({
+        txBuilder: newTxBuilderManualExUnits(provider),
+        deployment,
+        bond,
+        vault: vaultAfterRedeem,
+        coupons: [principalCoupon],
+        payouts: [{ address: holder.address, amount: BigInt(PRINCIPAL) }],
+        funding: funding6.funding,
+        collateral: funding6.collateral,
+        changeAddress: holder.address,
+      });
+      const redeemPrincipalHash = await signAndSubmit(
+        holder,
+        redeemPrincipalTx,
+      );
+      await waitForTx(provider, redeemPrincipalHash);
+
+      // The certificate is retired and the vault is back to the reserve (the
+      // coupon and principal were paid out of it).
+      const vaultFinal = await outputHolding(
+        redeemPrincipalHash,
+        bond.vaultNftCs + VAULT_NFT_NAME,
+      );
+      expect(lovelaceOf(vaultFinal)).toBe(
+        VAULT_ADA + BigInt(PRINCIPAL) - BigInt(AMOUNTS[0]) - BigInt(PRINCIPAL),
+      );
+      const vaultUtxos = await provider.fetchAddressUTxOs(vaultAddress(bond));
+      const certsHeld = vaultUtxos.reduce(
+        (n, u) =>
+          n +
+          u.output.amount.filter((a) => a.unit.startsWith(bond.cipPolicy))
+            .length,
+        0,
+      );
+      expect(certsHeld).toBe(0);
     });
   },
 );

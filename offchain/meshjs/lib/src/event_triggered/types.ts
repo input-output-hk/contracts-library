@@ -3,95 +3,88 @@
  * bond (docs/event-triggered-assets/spec.md).
  *
  * Hashes and asset names are hex strings (28-byte hashes = 56 hex chars);
- * asset names here are the hex encoding of the token name bytes.
+ * asset names here are the hex encoding of the token name bytes. The
+ * certificate's step is a one-byte name (`stepName`); coupon names are the
+ * decimal lovelace amount (`couponName`).
  *
  * Dependency order (09-DEVELOPING-MODULES, "Finding your own policy id"): the
- * governed policy id is a hash *of* the issuance script's applied form, so no
- * validator parameter carries it — the issuance/transfer/third-party/
- * transformation validators resolve it at runtime, and only the native mint
- * policy (outside that dependency cone) bakes `cipPolicy`.
+ * governed `cipPolicy` is the hash *of* the applied `issuance_mint` script, so
+ * no module validator bakes it — only the coupon policy (outside that cone)
+ * bakes it, and the vault NFT policy is independent.
  */
 
-import type { Data } from "@meshsdk/core";
+import type { PlutusScript } from "@meshsdk/core";
 
 import type { Credential } from "../common";
 
 export type { Credential };
 
-/** One step of the baked schedule (§3.5): at `deadline` the value steps to
- * `value` (fixed-point `scale` units). `deadline` is POSIX milliseconds. */
-export interface ScheduleStep {
-  deadline: number;
-  value: number;
-}
-
-export type Schedule = ScheduleStep[];
-
-/** Compile-time parameters of the issuance (minting) logic (§4.1, §4.5). */
+/** Compile-time parameters of the minting logic (§4.1, §4.2, §4.5, §4.7). */
 export interface MintingParams {
   /** Policy of the core registry's node NFTs. */
   registryNodeCs: string;
-  /** Registration authority (issuer). */
+  /** Registration authority and issuer-trigger authority. */
   issuer: Credential;
-  /** Script hash of the permissive transfer logic. */
+  /** Script hash of the name-monotone transfer logic. */
   transferLogic: string;
-  /** Script hash of the graduation-only third-party logic. */
+  /** Script hash of the issuer-triggered third-party logic. */
   thirdPartyLogic: string;
-  /** Script hash of the transformation script (owns the reference token). */
-  transformationScript: string;
-  /** The principal asset name (hex). */
-  principalName: string;
-  /** The reference asset name (hex). */
-  referenceName: string;
-  schedule: Schedule;
-  scale: number;
+  /** Script hash of the vault validator. */
+  vault: string;
+  /** The vault NFT policy every vault UTxO carries (I10). */
+  vaultNftCs: string;
+  /** The unit principal, in lovelace. */
+  principal: number;
 }
 
 export interface TransferParams {
   registryNodeCs: string;
-  finalDeadline: number;
 }
 
 export interface ThirdPartyParams {
   registryNodeCs: string;
-  finalDeadline: number;
+  issuer: Credential;
 }
 
-export interface TransformationParams {
-  referenceName: string;
-  schedule: Schedule;
+/** Compile-time parameters of the vault validator (§3.1, §4.2, §4.6). */
+export interface VaultParams {
+  principal: number;
+  vaultNftCs: string;
 }
 
-export interface NativeMintParams {
+/** Compile-time parameters of the vault NFT policy (§3.1, I10). */
+export interface VaultNftParams {
+  authority: Credential;
+}
+
+/** Compile-time parameters of one vault's coupon policy (§3.2, §4.5, §4.7). */
+export interface CouponParams {
+  /** The governed certificate policy (baked by the coupon policy). */
   cipPolicy: string;
-  principalName: string;
-  scale: number;
-  schedule: Schedule;
+  /** The unit principal, in lovelace — the graduation coupon name. */
+  principal: number;
+  /** Constant POSIX-ms interval between steps: step `k` opens at `start + k*interval`. */
+  interval: number;
+  /** Per-step coupon amounts; `length(amounts)` is the final step `N`. */
+  amounts: number[];
 }
 
-/** `extra` of the reference datum (§3.3): the schedule, the recorded
- * value, and the graduated asset's policy id (published terms). */
-export interface BondExtra {
-  schedule: Schedule;
-  value: number;
-  nativePolicy: string;
+/** Inline datum of a certificate (§3.3). */
+export interface CertificateDatum {
+  /** Timeline origin: the validity upper bound at deposit (POSIX ms). */
+  start: number;
+  /** The owner's committed payment credential for issuer-triggered claims. */
+  commit: Credential | null;
+  /** The coupon policy of the vault this unit deposited into. */
+  cntPolicy: string;
 }
 
-/** Inline datum of the reference token (§3.3). */
-export interface ReferenceDatum {
-  metadata: Data;
-  version: number;
-  extra: BondExtra;
+/** Inline datum of a vault (§3.1). */
+export interface VaultDatum {
+  cntPolicy: string;
 }
 
-/** Inline datum of the principal token (§3.2): optional payout commitment. */
-export interface PrincipalDatum {
-  paymentCredential: Credential | null;
-}
-
-/** The core registry's node datum (§3.4) — seven fields, CBOR layout order.
- * An `empty_vkey` unfracking hook is `VerificationKey(#"")` (unfracking
- * forbidden). */
+/** The core registry's node datum (§3.4) — seven fields, CBOR layout order. */
 export interface RegistryNode {
   key: string;
   next: string;
@@ -102,11 +95,62 @@ export interface RegistryNode {
   globalStateCs: string;
 }
 
-/** Mode redeemer of the issuance logic (§4.1, §4.5). */
-export type MintingAction = "RegisterAndMint" | "Burn";
+// ------------------------------------------------------------------ actions
+
+/** Mode redeemer of the minting logic (§4.1, §4.2, §4.5, §4.7). */
+export type MintingAction = "Register" | "Deposit" | "Advance" | "Retire";
 
 export type TransferAction = "Move";
 
-export type ThirdPartyAction = "Graduate";
+/** Redeemer of the issuer-triggered third-party logic (§4.5, §4.7). */
+export type ThirdPartyAction = "Trigger";
 
-export type TransformationAction = "Update";
+/** One payout the redeemer names on a redemption (§4.6). */
+export interface Payout {
+  /** A bech32 address. */
+  address: string;
+  amount: bigint;
+}
+
+/** Redeemer of the vault validator (§4.2, §4.6). */
+export type VaultAction =
+  | { kind: "VaultDeposit" }
+  | { kind: "Redeem"; payouts: Payout[] };
+
+// ------------------------------------------------------------- bond objects
+
+/** Deployment-supplied terms of one bond. */
+export interface BondConfig {
+  /** Unit principal in lovelace (I6). */
+  principal: number;
+  /** POSIX-ms interval between coupon steps. */
+  interval: number;
+  /** Per-step coupon amounts; `length(amounts)` is the final step `N`. */
+  amounts: number[];
+  /** Registration authority (also the default vault authority). */
+  issuer: Credential;
+  /** Vault NFT authority; defaults to `issuer`. */
+  authority?: Credential;
+  /** Hex asset name of each vault's NFT (one per vault). */
+  vaultNftName: string;
+}
+
+/** The applied validators and policy ids of one bond deployment. */
+export interface Bond {
+  config: BondConfig;
+  networkId: 0 | 1;
+  transfer: PlutusScript;
+  thirdParty: PlutusScript;
+  issuance: PlutusScript;
+  /** The bond's `issuance_mint` script (policy id is `cipPolicy`). */
+  issuanceMint: PlutusScript;
+  cipPolicy: string;
+  vaultNft: PlutusScript;
+  vaultNftCs: string;
+  vault: PlutusScript;
+  vaultHash: string;
+  couponPolicy: PlutusScript;
+  cntPolicy: string;
+  /** Module stake credentials to register (publish consent) before use. */
+  withdrawCredentials: PlutusScript[];
+}

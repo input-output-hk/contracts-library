@@ -86,7 +86,7 @@ export function newTxBuilder(provider: YaciProvider): MeshTxBuilder {
  * A builder without an evaluator, for the CIP-113 real-core suite: the Yaci
  * evaluate endpoint cannot resolve freshly-created inline-datum inputs (and
  * the provider's additional-UTxO mapping drops datums), so those builders
- * declare explicit per-redeemer budgets instead (`cip113/core.ts EX_UNITS`).
+ * declare explicit per-redeemer budgets instead (`@contracts-library/meshjs` `EX_UNITS`).
  */
 export function newTxBuilderManualExUnits(
   provider: YaciProvider,
