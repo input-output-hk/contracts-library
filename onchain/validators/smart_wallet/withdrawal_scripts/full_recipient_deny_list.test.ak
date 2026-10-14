@@ -1,7 +1,6 @@
 use aiken/crypto.{ScriptHash}
 use cardano/address.{
-  Address, Credential, Script, VerificationKey, from_script,
-  from_verification_key, with_delegation_key,
+  Address, Script, VerificationKey, from_script, from_verification_key,
 }
 use cardano/assets
 use cardano/certificate.{Certificate, RegisterCredential, UnregisterCredential}
@@ -9,53 +8,38 @@ use cardano/transaction.{
   InlineDatum, Input, NoDatum, Output, OutputReference, Transaction, placeholder,
 }
 use smart_wallet/types.{WalletDatum}
-use smart_wallet/withdrawal_scripts/payment_staking_block_list
+use smart_wallet/withdrawal_scripts/full_recipient_deny_list
 
 const a = #"11111111111111111111111111111111111111111111111111111111"
 
 const b = #"22222222222222222222222222222222222222222222222222222222"
 
-const payer = #"33333333333333333333333333333333333333333333333333333333"
+const recipient = #"33333333333333333333333333333333333333333333333333333333"
 
-const staker = #"44444444444444444444444444444444444444444444444444444444"
-
-const stranger = #"55555555555555555555555555555555555555555555555555555555"
-
-const stranger_stake =
-  #"66666666666666666666666666666666666666666666666666666666"
+const stranger = #"44444444444444444444444444444444444444444444444444444444"
 
 const tx_id =
   #"0000000000000000000000000000000000000000000000000000000000000000"
 
-fn denied_payments() -> List<Credential> {
-  [VerificationKey(payer)]
-}
-
-fn denied_stakings() -> List<Credential> {
-  [VerificationKey(staker)]
+fn denied() -> List<Address> {
+  [from_verification_key(recipient)]
 }
 
 fn publish(certificate: Certificate, tx: Transaction) -> Bool {
   let redeemer: Data = 0
-  payment_staking_block_list.payment_staking_block_list.publish(
+  full_recipient_deny_list.full_recipient_deny_list.publish(
     Script(b),
-    denied_payments(),
-    denied_stakings(),
+    denied(),
     redeemer,
     certificate,
     tx,
   )
 }
 
-fn withdraw(
-  denied_payments: List<Credential>,
-  denied_stakings: List<Credential>,
-  tx: Transaction,
-) -> Bool {
-  payment_staking_block_list.payment_staking_block_list.withdraw(
+fn withdraw(denied: List<Address>, tx: Transaction) -> Bool {
+  full_recipient_deny_list.full_recipient_deny_list.withdraw(
     Script(b),
-    denied_payments,
-    denied_stakings,
+    denied,
     0,
     Script(a),
     tx,
@@ -168,55 +152,19 @@ test publish_rejects_key_credential_unregister() fail {
 
 // ---------------------------------------------------------------- withdraw
 
-test withdraw_allows_unlisted_payment_and_staking() {
-  withdraw(
-    denied_payments(),
-    denied_stakings(),
-    spend_tx(from_verification_key(stranger)),
-  )
+test withdraw_allows_unlisted_recipient() {
+  withdraw(denied(), spend_tx(from_verification_key(stranger)))
 }
 
-test withdraw_rejects_denied_payment() fail {
-  withdraw(
-    denied_payments(),
-    denied_stakings(),
-    spend_tx(from_verification_key(payer)),
-  )
+test withdraw_rejects_denied_recipient() fail {
+  withdraw(denied(), spend_tx(from_verification_key(recipient)))
 }
 
-test withdraw_rejects_denied_staking() fail {
-  withdraw(
-    denied_payments(),
-    denied_stakings(),
-    spend_tx(with_delegation_key(from_verification_key(stranger), staker)),
-  )
-}
-
-test withdraw_empty_denied_payments_permits_any_payment() {
-  withdraw(
-    [],
-    denied_stakings(),
-    spend_tx(with_delegation_key(from_verification_key(payer), stranger_stake)),
-  )
-}
-
-test withdraw_empty_denied_stakings_permits_any_staking() {
-  withdraw(
-    denied_payments(),
-    [],
-    spend_tx(with_delegation_key(from_verification_key(stranger), staker)),
-  )
-}
-
-test withdraw_empty_lists_permit_all() {
-  withdraw(
-    [],
-    [],
-    spend_tx(with_delegation_key(from_verification_key(payer), staker)),
-  )
+test withdraw_empty_deny_list_allows_any_recipient() {
+  withdraw([], spend_tx(from_verification_key(recipient)))
 }
 
 test withdraw_exempts_wallet_address() {
   let data: Data = 0
-  withdraw([Script(b)], [], wallet_tx([Pair(a, data)]))
+  withdraw([from_script(b)], wallet_tx([Pair(a, data)]))
 }

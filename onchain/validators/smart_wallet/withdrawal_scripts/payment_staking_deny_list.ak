@@ -1,4 +1,4 @@
-//// Reference validator for the delegated `payment_staking_block_list`
+//// Reference validator for the delegated `payment_staking_deny_list`
 //// withdrawal script (see `docs/smart-wallet/design.typ`): a payout must not
 //// carry a payment credential listed in `denied_payments` nor an inline
 //// staking credential listed in `denied_stakings`; either list left empty
@@ -16,7 +16,7 @@ use smart_wallet/withdrawal_scripts/payment_staking_list_logic.{
 /// Delegated payment/staking deny-list script (withdraw-0). Requires no payout
 /// output — no output not at the wallet's payment credential — to carry a
 /// listed payment credential or a listed inline staking credential.
-validator payment_staking_block_list(
+validator payment_staking_deny_list(
   wallet: Credential,
   denied_payments: List<Credential>,
   denied_stakings: List<Credential>,

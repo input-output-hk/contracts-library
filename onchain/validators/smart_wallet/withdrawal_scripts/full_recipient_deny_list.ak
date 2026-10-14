@@ -1,23 +1,20 @@
-//// Reference validator for the delegated `full_recipient_block_list`
+//// Reference validator for the delegated `full_recipient_deny_list`
 //// withdrawal script (see `docs/smart-wallet/design.typ`): no listed full
 //// address may receive the wallet's funds. Consumers may use it as-is or
-//// embed `no_blocked_recipients` in their own validators.
+//// embed `no_denied_recipients` in their own validators.
 
 use cardano/address.{Address, Credential, Script}
 use cardano/certificate.{Certificate, RegisterCredential, UnregisterCredential}
 use cardano/transaction.{Transaction}
 use smart_wallet/withdrawal
 use smart_wallet/withdrawal_scripts/full_recipient_list_logic.{
-  no_blocked_recipients,
+  no_denied_recipients,
 }
 
-/// Delegated block-list script (withdraw-0). Requires no payout output — no
+/// Delegated deny-list script (withdraw-0). Requires no payout output — no
 /// output not at the wallet's payment credential — to go to a full address
-/// listed in `blocked`.
-validator full_recipient_block_list(
-  wallet: Credential,
-  blocked: List<Address>,
-) {
+/// listed in `denied`.
+validator full_recipient_deny_list(wallet: Credential, denied: List<Address>) {
   publish(_redeemer: Data, certificate: Certificate, self: Transaction) {
     when certificate is {
       RegisterCredential { credential: Script(own_hash), .. } -> {
@@ -35,7 +32,7 @@ validator full_recipient_block_list(
   }
 
   withdraw(_redeemer: Data, _account: Credential, self: Transaction) {
-    no_blocked_recipients(self, wallet, blocked)
+    no_denied_recipients(self, wallet, denied)
   }
 
   else(_) {
