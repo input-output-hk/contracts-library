@@ -96,23 +96,32 @@ deposited principals plus its owner's own funds, with an inline datum binding
 | --- | --- |
 | `cnt_policy` | The coupon policy whose negative mints the `Redeem` path honors. |
 
+A vault is **authenticated by a vault NFT**: exactly one unit under
+`vault_nft_cs`, a deployment policy parameterized by an `authority` credential
+(the issuer in the reference deployment) and minted once when the vault is
+created. A script address alone does not identify a vault — anyone can create
+outputs at a script address — so every vault spend and continuation requires
+the NFT.
+
 A vault is **created and funded by its owner outside this design**, and each
 deposit adds one unit's principal to the vault it selects, so coupon and
 principal redemptions are deterministically payable while that vault is
 solvent. The owner lives off-chain — custody is the instrument's central
 assumption (§7), not a datum field. A vault is governed by a validator with
-two spend paths:
+two spend paths, each pairing the spent vault with exactly one continuation
+carrying the same NFT and datum:
 
 | Redeemer | Admitted when | Effect |
 | --- | --- | --- |
-| `VaultDeposit` | a deposit continues the vault | The vault gains exactly the baked unit `principal`; its address and datum are preserved. |
+| `VaultDeposit` | a deposit continues the vault | The vault gains exactly the baked unit `principal`; its address, datum and NFT are preserved. |
 | `Redeem` | no owner signature needed | The vault's net ADA loss equals the sum decoded from the burned coupons; the payout(s) go to the address(es) the redeemer names. |
 
-A vault is a single UTxO (or a small set); a deposit or redemption spends it
-and re-outputs the remainder. Solvency is an assumption, not an invariant
-(§7). Vault creation, vault identity (a vault script address alone does not
-authenticate a UTxO) and the vault's detailed validator logic are out of scope
-(§7).
+A vault is a single UTxO and a redemption spends **exactly one** vault; a
+deposit or redemption re-outputs the remainder. Solvency is an assumption, not
+an invariant (§7). Vault **creation** is out of scope: the deployment assumes
+the `authority` mints exactly one vault NFT into the vault UTxO at creation
+(§7). Vaults that share the same `cnt_policy` are interchangeable — coupons are
+bearer claims under that policy (I10).
 
 ### 3.2 Coupon token (`cNt`)
 
@@ -192,13 +201,13 @@ same transaction mints that depositor's certificate.
 
 | | |
 | --- | --- |
-| **Inputs** | Depositor wallet funds: the unit `principal` + `min_ada` + fees; one **Vault** UTxO (the chosen vault). |
+| **Inputs** | Depositor wallet funds: the unit `principal` + `min_ada` + fees; one **Vault** UTxO (the chosen, NFT-authenticated vault). |
 | **Reference inputs** | Protocol params; RegistryNode. |
 | **Mint** | `cip_policy`: `1` of name step `0` (the depositor's certificate) — the core `issuance_mint` policy with the minting logic's `Deposit` mode. |
 | **Withdrawals** | The certificate's issuance chain (minting logic `[Deposit]` + core `issuance_mint`). |
 | **Signatures** | Depositor (only to spend their own wallet funds; the mint itself is permissionless). |
-| **Outputs** | 1. **Vault**: the chosen vault, input ADA **+ the unit `principal`**, address and datum preserved. 2. **Certificate** at the PLB [stake: depositor]: `cip_policy` × 1 of name step `0`, datum `{ start: upper, commit: None, cnt_policy: <vault's> }`. 3. Change. |
-| **Constraints** | Deposit integrity (I6): the mint is admitted only when **the chosen vault** gains exactly the baked unit `principal` and its address/datum are carried through unchanged, so the certificate and its backing exist atomically. The `Deposit` mode pins `start` to the transaction's validity **upper** bound (required finite) and `cnt_policy` to the vault input's datum; since the ledger guarantees `now ≤ upper`, the timeline origin can never precede the real deposit — a builder can only set it later, at the depositor's own cost. It also rejects certificate inputs, so units can never be merged (I8); the datum records `commit: None`. |
+| **Outputs** | 1. **Vault**: the chosen vault, input ADA **+ the unit `principal`**, address, datum and vault NFT preserved. 2. **Certificate** at the PLB [stake: depositor]: `cip_policy` × 1 of name step `0`, datum `{ start: upper, commit: None, cnt_policy: <vault's> }`. 3. Change. |
+| **Constraints** | Deposit integrity (I6): the mint is admitted only when **the chosen, NFT-authenticated vault** gains exactly the baked unit `principal` and its address/datum/NFT are carried through unchanged, so the certificate and its backing exist atomically. The `Deposit` mode pins `start` to the transaction's validity **upper** bound (required finite) and `cnt_policy` to the vault input's datum; since the ledger guarantees `now ≤ upper`, the timeline origin can never precede the real deposit — a builder can only set it later, at the depositor's own cost. It also rejects certificate inputs, so units can never be merged (I8); the datum records `commit: None`. |
 
 ### 4.3 Transfer the certificate (T1)
 
@@ -267,12 +276,12 @@ the burned coupons name.
 
 | | |
 | --- | --- |
-| **Inputs** | Coupon UTxO(s) holding the `cNt`(s) to redeem; the **Vault** UTxO. |
+| **Inputs** | Coupon UTxO(s) holding the `cNt`(s) to redeem; exactly one **Vault** UTxO. |
 | **Mint** | coupon policy: negative quantities (the coupons burned). |
 | **Withdrawals** | None (the vault validator runs on the vault spend). |
 | **Signatures** | The redeemer. |
-| **Outputs** | 1. **Payout(s)**: ADA to the address(es) the redeemer names, summing to the redeemed amount. 2. **Vault continuation**: the vault UTxO with its ADA reduced by exactly the redeemed amount. |
-| **Constraints** | The vault validator sums `decode(name) × burned_quantity` over the negative coupon mints and requires the vault's net ADA decrease to equal that sum exactly (I4). Nothing else leaves the vault on this path. |
+| **Outputs** | 1. **Payout(s)**: ADA to the address(es) the redeemer names, summing to the redeemed amount. 2. **Vault continuation**: the vault UTxO with its ADA reduced by exactly the redeemed amount, its address, datum and vault NFT preserved. |
+| **Constraints** | The vault validator pairs the spent vault with its continuation (same address/datum/NFT) and requires the vault's net ADA decrease to equal `Σ decode(name) × burned_quantity` exactly (I4). Nothing else leaves the vault on this path, and a redemption spends exactly one vault (I10). |
 
 ### 4.7 Graduation (T4)
 
@@ -339,11 +348,12 @@ owner's behalf:
   certificate is retired only together with it, at its `start + N * interval`
   maturity.
 - **I6 — Deposit integrity.** A certificate can be minted only in a
-  transaction that increases the **chosen vault's** ADA by exactly the baked
-  unit `principal` (carrying the vault's address and datum through unchanged),
-  and its `start` is pinned to the transaction's validity upper bound (finite)
-  while its `cnt_policy` is pinned to that vault's datum, so no unbacked
-  certificate exists and its timeline cannot be backdated.
+  transaction that increases an **NFT-authenticated chosen vault's** ADA by
+  exactly the baked unit `principal` (carrying the vault's address, datum and
+  vault NFT through unchanged), and its `start` is pinned to the transaction's
+  validity upper bound (finite) while its `cnt_policy` is pinned to that
+  vault's datum, so no unbacked certificate exists and its timeline cannot be
+  backdated.
 - **I7 — Certificate name monotonicity.** The certificate's asset name carries
   the step; it can only stay (plain transfer / opting) or advance by exactly
   one (the claim's burn+mint) — never decrease — and every advance carries its
@@ -361,6 +371,10 @@ owner's behalf:
   payouts go to `pay` — the issuer can trigger but never redirect. An
   issuer-claimed coupon's paired output is the next certificate (no shell);
   `commit` is owner-set and cleared on owner change (I7).
+- **I10 — Vault identity.** Every vault UTxO carries exactly one unit under
+  `vault_nft_cs`, minted only by the deployment's `authority`; every vault
+  spend preserves it into exactly one continuation with the same address and
+  datum, and a redemption spends exactly one vault.
 
 ## 7. Threat model & assumptions
 
@@ -418,19 +432,18 @@ owner's behalf:
   and principal redemptions have nothing to pay. Holders trust the owner. This
   is the instrument's central custodial assumption; the owner-extract path and
   the vault's detailed validator logic are out of scope.
-- **Vault creation, identity and pre-funding.** Vaults are assumed created and
-  funded by their owners outside this design. Each deposit adds its unit's
-  principal to the vault it selects; the owner is assumed to fund that vault's
-  coupon amounts (per the terms of its `cnt_policy`) before redemptions occur —
+- **Vault creation and pre-funding.** Vaults are assumed created and funded by
+  their owners outside this design. Each deposit adds its unit's principal to
+  the vault it selects; the owner is assumed to fund that vault's coupon
+  amounts (per the terms of its `cnt_policy`) before redemptions occur —
   depositing does not itself fund coupons. Because units start on their own
   timer, the owner's coupon liability extends with every deposit.
-- **Multi-vault and vault identity.** An instrument may have many vaults, each
-  with its own `cnt_policy`; a certificate is bound to the policy of the vault
-  it deposited into. A vault script address alone does not authenticate a
-  UTxO: forging "fake" vault outputs, vault creation ceremonies and the
-  vault's internal accounting (including any address-wide sums) are out of
-  scope. The design only assumes the deposit anchors to the selected vault by
-  its input/output pair.
+- **Vault creation ceremony.** Vault identity is modeled — every vault UTxO
+  carries exactly one `vault_nft_cs` NFT (I10) — but the creation transaction
+  is out of scope: the deployment assumes the `authority` mints exactly one
+  vault NFT into the vault UTxO at creation. A certificate binds only to the
+  vault's `cnt_policy`, not to a vault outref, so vaults that share a
+  `cnt_policy` are interchangeable (coupons are bearer claims).
 - **Open issuance, no cap.** Deposits are permissionless and the number of
   certificates is not capped on-chain: every certificate claims its vault's
   coupons from that vault's owner-funded balance and the principal at its own

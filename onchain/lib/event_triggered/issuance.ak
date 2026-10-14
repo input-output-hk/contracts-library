@@ -28,6 +28,7 @@ use event_triggered/types.{
   Advance, CertificateDatum, Deposit, MintingAction, MintingParams, Register,
   RegistryNode, Retire, VaultDatum,
 }
+use event_triggered/vault_nft.{nft_of}
 
 pub fn validate(
   action: MintingAction,
@@ -112,6 +113,7 @@ fn validate_deposit(
             params.vault,
             params.principal,
             d.cnt_policy,
+            params.vault_nft_cs,
           ),
         }
       _ -> False
@@ -205,28 +207,43 @@ fn pinned_stance(
 
 // ---------------------------------------------------------------- Deposit
 
-/// The chosen vault continues: exactly one vault input and one vault output,
-/// same address and datum, output ADA = input ADA + `principal`, and the
-/// output's datum binds `cnt` (the certificate's coupon policy) to the vault.
+/// The chosen vault continues: exactly one vault input and one vault output
+/// carrying the vault NFT, same address and datum, output ADA = input ADA +
+/// `principal`, and the input's datum binds `cnt` (the certificate's coupon
+/// policy) to the vault. The NFT is what authenticates the vault (I10): a fake
+/// output at the vault address carries no NFT and can never back a certificate.
 fn vault_continues(
   inputs: List<Input>,
   outputs: List<Output>,
   vault: ScriptHash,
   principal: Int,
   cnt: PolicyId,
+  nft_cs: PolicyId,
 ) -> Bool {
-  let vins = list.filter(inputs, fn(input) { is_vault(input.output, vault) })
-  let vouts = list.filter(outputs, fn(output) { is_vault(output, vault) })
+  let vins = list.filter(
+    inputs,
+    fn(input) { nft_of(input.output, nft_cs) != None },
+  )
+  let vouts = list.filter(
+    outputs,
+    fn(output) { nft_of(output, nft_cs) != None },
+  )
   when (vins, vouts) is {
-    ([vin], [vout]) -> and {
-        vin.output.address == vout.address,
-        vin.output.datum == vout.datum,
-        vault_cnt(vin.output) == Some(cnt),
-        quantity_of(vout.value, #"", #"") == quantity_of(
-          vin.output.value,
-          #"",
-          #"",
-        ) + principal,
+    ([vin], [vout]) ->
+      when (nft_of(vin.output, nft_cs), nft_of(vout, nft_cs)) is {
+        (Some(name), Some(name_out)) -> and {
+            name == name_out,
+            is_vault(vin.output, vault),
+            vin.output.address == vout.address,
+            vin.output.datum == vout.datum,
+            vault_cnt(vin.output) == Some(cnt),
+            quantity_of(vout.value, #"", #"") == quantity_of(
+              vin.output.value,
+              #"",
+              #"",
+            ) + principal,
+          }
+        _ -> False
       }
     _ -> False
   }

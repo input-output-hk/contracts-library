@@ -148,6 +148,10 @@ pub type MintingParams {
     /// The vault script hash. The deposit mode locates the chosen vault UTxO
     /// by this payment credential and checks the pair's net ADA gain (I6).
     vault: ScriptHash,
+    /// The vault NFT policy. Every vault UTxO carries exactly one unit under
+    /// this policy (I10); the deposit requires it, so a fake output at the
+    /// vault address can never back a certificate.
+    vault_nft_cs: PolicyId,
     /// The unit principal, in lovelace. Each deposit must add exactly this to
     /// the chosen vault (I6).
     principal: Int,
@@ -169,7 +173,18 @@ pub type ThirdPartyParams {
 /// coupon policy is read from the vault datum, so it is not a constant here.
 pub type VaultParams {
   /// The unit principal a deposit must add to the vault (§4.2).
-  VaultParams { principal: Int }
+  VaultParams {
+    principal: Int,
+    /// The vault NFT policy every vault UTxO must carry (I10).
+    vault_nft_cs: PolicyId,
+  }
+}
+
+/// Compile-time parameters of the vault NFT policy (§3.1, I10). The vault is
+/// authenticated by exactly one NFT under this policy, minted by `authority`
+/// when the vault is created (creation is out of scope).
+pub type VaultNftParams {
+  VaultNftParams { authority: Credential }
 }
 
 /// Compile-time parameters of one vault's coupon policy (§4.4, §4.5, §4.6,

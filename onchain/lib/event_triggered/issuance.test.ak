@@ -39,6 +39,10 @@ const third_party_script =
 
 const vault_script = #"44444444444444444444444444444444444444444444444444444444"
 
+const vault_nft_cs = #"99999999999999999999999999999999999999999999999999999999"
+
+const vault_nft_name = "V0"
+
 const issuer_key = #"55555555555555555555555555555555555555555555555555555555"
 
 const holder_key = #"66666666666666666666666666666666666666666666666666666666"
@@ -57,6 +61,7 @@ fn params() -> MintingParams {
     transfer_logic: transfer_script,
     third_party_logic: third_party_script,
     vault: vault_script,
+    vault_nft_cs,
     principal,
   }
 }
@@ -117,6 +122,11 @@ fn vault_datum() -> VaultDatum {
   VaultDatum { cnt_policy }
 }
 
+fn vault_value(ada: Int) -> assets.Value {
+  assets.from_lovelace(ada)
+    |> assets.merge(assets.from_asset(vault_nft_cs, vault_nft_name, 1))
+}
+
 fn vault_input(index: Int, ada: Int) -> Input {
   Input {
     output_reference: OutputReference {
@@ -125,7 +135,7 @@ fn vault_input(index: Int, ada: Int) -> Input {
     },
     output: Output {
       address: vault_addr(),
-      value: assets.from_lovelace(ada),
+      value: vault_value(ada),
       datum: InlineDatum(vault_datum()),
       reference_script: None,
     },
@@ -135,7 +145,7 @@ fn vault_input(index: Int, ada: Int) -> Input {
 fn vault_output(ada: Int) -> Output {
   Output {
     address: vault_addr(),
-    value: assets.from_lovelace(ada),
+    value: vault_value(ada),
     datum: InlineDatum(vault_datum()),
     reference_script: None,
   }
@@ -260,6 +270,41 @@ test deposit_rejects_wrong_gain() {
 
 test deposit_rejects_cnt_mismatch() {
   !check(Deposit, deposit_tx(cert_datum(2000, None, other_cnt), principal))
+}
+
+test deposit_rejects_fake_vault() {
+  let d = cert_datum(2000, None, cnt_policy)
+  let fake_vault = Output {
+    address: vault_addr(),
+    value: assets.from_lovelace(5_000_000),
+    datum: InlineDatum(vault_datum()),
+    reference_script: None,
+  }
+  let fake_vault_out = Output {
+    address: vault_addr(),
+    value: assets.from_lovelace(5_000_000 + principal),
+    datum: InlineDatum(vault_datum()),
+    reference_script: None,
+  }
+  !check(
+    Deposit,
+    Transaction {
+      ..placeholder,
+      inputs: [
+        Input {
+          output_reference: OutputReference {
+            transaction_id: tx_id,
+            output_index: 0,
+          },
+          output: fake_vault,
+        },
+      ],
+      reference_inputs: [node_reference()],
+      outputs: [fake_vault_out, cert_output(holder_key, 0, d)],
+      mint: assets.from_asset(cip_policy, schedule.step_name(0), 1),
+      validity_range: interval.between(1000, 2000),
+    },
+  )
 }
 
 // ------------------------------------------------------------------ Advance

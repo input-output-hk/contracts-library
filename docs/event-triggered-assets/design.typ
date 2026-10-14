@@ -96,7 +96,7 @@ recording its timeline origin, the vault's coupon policy and an initial
     (
       name: "Vault",
       address: "vault_addr",
-      value: ("ada": "funds"),
+      value: ("ada": "funds", "vault_nft_cs": "1"),
       datum: (
         cnt_policy: "coupon policy id",
       ),
@@ -127,7 +127,7 @@ recording its timeline origin, the vault's coupon policy and an initial
     (
       name: "Vault",
       address: "vault_addr",
-      value: ("ada": "funds + principal"),
+      value: ("ada": "funds + principal", "vault_nft_cs": "1"),
       datum: (
         cnt_policy: "coupon policy id",
       ),
@@ -146,6 +146,7 @@ recording its timeline origin, the vault's coupon policy and an initial
   notes: [
     - The deposit is permissionless and per unit: the minting logic admits the certificate only when the vault's net ADA gain equals exactly the unit `principal`, so the certificate and its backing exist atomically (I6). No authority signature is needed — the depositor signs only to spend their own funds.
     - The `Deposit` mode pins `start` to the transaction's validity upper bound (finite); since the ledger guarantees `upper ≥ now`, the timeline can never be backdated — it can only start later, at the depositor's own cost. The certificate is minted with the step-`0` name, `commit: None` and the vault's `cnt_policy`, so it is bound to that vault's coupon terms.
+    - The chosen vault is authenticated by its `vault_nft_cs` NFT: the deposit requires the NFT on the spent vault UTxO and preserves it in the continuation, so a fake output at the vault address (no NFT) can never back a certificate.
     - The certificate is the instrument's only CIP-113 token; exactly one unit is minted per deposit (no certificate inputs, no merge), always the step-`0` name. Units deposited at different times run independent timelines from their own `start`.
     - Coupons are plain native assets minted later by the coupon policy; nothing else is minted here.
   ],
@@ -442,7 +443,7 @@ exactly the ADA the burned coupons name, and nothing else leaves._
     (
       name: "Vault",
       address: "vault_addr",
-      value: ("ada": "funds"),
+      value: ("ada": "funds", "vault_nft_cs": "1"),
       datum: (
         cnt_policy: "coupon policy id",
       ),
@@ -464,14 +465,14 @@ exactly the ADA the burned coupons name, and nothing else leaves._
     (
       name: "Vault",
       address: "vault_addr",
-      value: ("ada": "funds - Σ decode(name) × burned"),
+      value: ("ada": "funds - Σ decode(name) × burned", "vault_nft_cs": "1"),
       datum: (
         cnt_policy: "coupon policy id",
       ),
     ),
   ),
   notes: [
-    - The vault validator sums `decode(name) × burned_quantity` over the negative coupon mints and requires the vault's net ADA loss to equal that sum exactly. A redeemer cannot ask for more than the coupons are worth, and the vault cannot short-pay.
+    - The vault validator pairs the spent vault with its continuation (same address, datum and `vault_nft_cs` NFT) and sums `decode(name) × burned_quantity` over the negative coupon mints, requiring the pair's net ADA loss to equal that sum exactly. A redeemer cannot ask for more than the coupons are worth, and the vault cannot short-pay; exactly one vault is spent per redemption.
     - The payout goes to the address(es) the redeemer names in the same transaction.
     - Redemption burns the coupon, so no coupon is ever paid twice.
     - No owner signature is needed on this path; the burn-to-pay rule is enforced on-chain.

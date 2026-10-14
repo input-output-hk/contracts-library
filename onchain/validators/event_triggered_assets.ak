@@ -11,9 +11,11 @@ use event_triggered/third_party as third_party_logic
 use event_triggered/transfer as transfer_logic
 use event_triggered/types.{
   CouponParams, MintingAction, MintingParams, ThirdPartyAction, ThirdPartyParams,
-  TransferAction, TransferParams, VaultAction, VaultDatum, VaultParams,
+  TransferAction, TransferParams, VaultAction, VaultDatum, VaultNftParams,
+  VaultParams,
 }
 use event_triggered/vault as vault_logic
+use event_triggered/vault_nft as vault_nft_logic
 
 /// Every withdraw-0 stake credential must be registered before it can appear
 /// in a transaction's withdrawals, and after Conway registering a script
@@ -103,6 +105,19 @@ validator vault(p: VaultParams) {
 validator coupon_policy(p: CouponParams) {
   mint(_redeemer: Data, own_policy: PolicyId, self: Transaction) {
     coupon.validate(self, own_policy, p)
+  }
+
+  else(_) {
+    fail
+  }
+}
+
+/// The vault NFT policy (§3.1, I10): the deployment's authority mints exactly
+/// one NFT per vault at creation (creation itself is out of scope). Burns are
+/// refused. See `event_triggered/vault_nft.ak`.
+validator vault_nft_policy(p: VaultNftParams) {
+  mint(_redeemer: Data, own_policy: PolicyId, self: Transaction) {
+    vault_nft_logic.validate(self, own_policy, p)
   }
 
   else(_) {
