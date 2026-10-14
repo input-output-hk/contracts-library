@@ -1,77 +1,73 @@
 // Event-triggered assets — tokenized bond (Tx3 off-chain).
 //
 // Reference Tx3 implementation of the event-triggered assets CIP-113
-// substandard (issue #28), mirroring the on-chain withdraw-zero validators in
+// substandard (issue #28), mirroring the on-chain validators in
 // `onchain/validators/event_triggered_assets.ak` and
 // `onchain/lib/event_triggered/`. The normative spec is
 // `docs/event-triggered-assets/spec.md`; these templates follow the flows of
-// `docs/event-triggered-assets/design.typ` (T0/T1, T2, T2b, T3, T4) in full,
-// including the CIP-113 core chains.
+// `docs/event-triggered-assets/design.typ`.
 //
-// The instrument ships four withdraw-zero validators — the substandard's
-// issuance (minting) logic, transfer logic and third-party logic, plus a
-// smart-wallet transformation script — and the graduated asset's native mint
-// policy. There is deliberately no spend or mint endpoint of our own: the
-// shared Programmable Logic Base custodies the token UTxOs, and every PLB
-// spend runs the core dispatch chain
+// Model: the instrument is registered once (registry insert) and then deposits
+// are permissionless per unit — each deposit moves `vault_principal` lovelace
+// into a chosen vault and mints one CIP-113 **certificate** at the Programmable
+// Logic Base. The certificate's asset name is one byte: its current step (`0`
+// at deposit, `N` at maturity); its inline datum carries
+// `{ start, commit, cnt_policy }`. Over the bond's life a certificate claims
+// scheduled **coupon** tokens under its vault's coupon policy (asset name = the
+// decimal lovelace amount) and redeems them at that vault (burn-to-pay). At
+// maturity it claims a principal-only coupon and is retired. Every advance or
+// retirement carries its coupon — presence is enforced on both the owner and
+// the issuer paths.
 //
-//   programmable_logic_global [TransferAct | ThirdPartyAct]
-//     -> transfer | third_party [TransferRedeemer | ThirdPartyRedeemer]
-//     -> transfer_logic | third_party_logic (ours)
-//
-// exactly as the design figures show. Every chain leg carries the vendored
-// core's redeemer encoding: `ProgrammableLogicGlobalRedeemer` selects the
-// dispatcher arm, the core `transfer` / `third_party` redeemers carry the
-// registry-node indices, the registry mint carries `RegistryInsert`, the core
-// issuance logic carries the per-policy `MintingRegistryProof` map, and
-// `issuance_mint` the protocol-params index. The applied core scripts and the
-// bond's module scripts travel through the environment (tx3 cannot apply
-// parameters); the TEST KIT section at the bottom deploys the core with the
-// same scripts.
+// The instrument ships three withdraw-zero validators — `issuance` (minting
+// logic and registration authority), `transfer` (name-monotone) and
+// `third_party` (the opt-in issuer trigger) — plus a `vault` spending validator
+// and a per-vault `coupon_policy` mint policy (and the `vault_nft_policy` the
+// vault is authenticated by). Every PLB spend runs the core dispatch chain
+// (`programmable_logic_global [TransferAct | ThirdPartyAct] -> transfer |
+// third_party [core] -> transfer_logic | third_party_logic (ours)`), every
+// mint/burn under the governed policy runs the core `issuance_mint` ->
+// `issuance_logic`, and registration rides the core registry mint handlers.
 //
 // Script-material convention: tx3 hashes the exact bytes it is handed as a
 // witness (`blake2b224(0x03 || bytes)`) and the Plutus evaluator CBOR-decodes
-// those bytes, so every `*_script` value is the script's single-CBOR
-// "payload" form. The off-chain helpers that compute them (the vendored e2e
-// core helpers and the library's `applyParamsToScript`) are normalized to
-// that form — see `tests/cip113.ts`.
+// those bytes, so every `*_script` value is the script's single-CBOR "payload"
+// form. The off-chain helpers that compute them (the library's `applyBond` and
+// `applyParamsToScript`) are normalized to that form — see `tests/cip113.ts`.
 //
 // Every PLB input carries `BaseSpendRedeemer { params_idx, wdrl_idx }` — one
-// record per PLB input, no action arm; the path is selected by the
-// dispatcher's redeemer, never by the base redeemer (design T2 notes).
-// `params_idx` locates the protocol-params reference input; `wdrl_idx` is
-// derived from the canonical sorted withdrawal set (scripts before vkeys,
-// ascending — 09-DEVELOPING-MODULES §10). Both are caller-supplied.
+// record per PLB input, no action arm; the path is selected by the dispatcher's
+// redeemer, never by the base redeemer (design T2 notes). `params_idx` locates
+// the protocol-params reference input; `wdrl_idx` is derived from the canonical
+// sorted withdrawal set (scripts before vkeys, ascending — 09-DEVELOPING-MODULES
+// §10). Both are caller-supplied, and both count the *complete* ledger sets:
+// every reference-script UTxO behind a `policy { ref: ... }` is a reference
+// input, so the tests sort all of them.
 //
-// The schedule is baked as validator constants (spec §3.5); values derived
-// from it are computed off-chain and passed as parameters:
+// The coupon terms (`interval`, `amounts`, `principal`) are baked into each
+// vault's coupon policy; the certificate's `cnt_policy` datum selects them.
+// Coupon names are the decimal lovelace amount (`"1040"`), so the tests
+// compute them with the library's `couponName`.
 //
-//   - transformation: `next_value = lookup(schedule, now)` with the validity
-//     lower bound in `d1 <= now <= d4` (§4.4, §5);
-//   - graduation: `native_quantity = Σ floor(Q × v4 / scale)` over the burned
-//     owners' whole holdings, with the validity lower bound at `d4` or later
-//     (§4.5); `quantity` must cover the holder's whole holding per name. Both
-//     paths carry the reference token as a reference input: the burn reads the
-//     graduated asset's policy (`extra.native_policy`) from its datum (§3.3).
-//
-// Authorization (key-authorized paths only — Tx3 has no runtime key-vs-script
-// branch): the issuer signs the registration (§4.1); the sender signs the
-// free transfer and the owner signs the payout-key self-transfer (§4.2, §4.3
-// — owner-signed, per the design figures); the graduation's owner path is
-// signed — the signature names and authorizes the payout destination
-// (Q-GRAD-2) — while the third-party path carries no signature and requires
-// the owner's pre-committed payment credential (§4.3) in the token datum,
-// which the template enforces by typing the spent input's datum. The
-// transformation is permissionless: no signature, only the fee payer (§4.4).
+// Authorization: the issuer signs the registration, the vault creation, the
+// issuer-triggered claims and the issuer-path graduation; the certificate
+// holder signs transfers, opt-ins and owner-path claims and graduation. The
+// third-party path carries no holder signature — it requires the owner's
+// pre-committed payment credential (`commit`) in the certificate datum, and the
+// coupon minted is bound to it.
 //
 // The transactions:
 //
-//   register_issue         atomic register + first issue (T0/T1, §4.1)
-//   transfer               free transfer (T2, §4.2)
-//   register_payout_key    payout-key self-transfer (T2b, §4.3)
-//   transform              scheduled transformation (T3, §4.4)
-//   graduate_owner         deadline graduation, owner-signed (T4, §4.5)
-//   graduate_third_party   deadline graduation, permissionless + ghost (§4.5)
+//   create_vault         §3.1: mint the vault NFT into a funded vault
+//   register             §4.1: registry insert (no certificate)
+//   deposit              §4.2: unit deposit → certificate (step 0)
+//   transfer             §4.3: plain transfer / owner change
+//   authorize            §4.4: self-transfer committing a payout credential
+//   claim_owner          §4.5: owner-signed coupon claim (advance)
+//   claim_issuer         §4.5: issuer-triggered claim (third-party path)
+//   redeem               §4.6: burn-to-pay at the vault
+//   graduate_owner       §4.7: owner-signed retirement + principal coupon
+//   graduate_issuer      §4.7: issuer-triggered retirement (ghost shell)
 
 env {
     /// The governed policy id — hash of the `issuance_mint` script
@@ -84,63 +80,65 @@ env {
     node_policy: Bytes,
     /// The applied registry node-NFT minting policy (single-CBOR payload).
     node_policy_script: Bytes,
-    /// Policy id of the graduated asset's native mint policy (§4.5).
-    native_policy: Bytes,
-    /// The applied native mint policy (single-CBOR payload).
-    native_mint_script: Bytes,
-    /// The applied PLB base spend script guarding the token UTxOs
-    /// (single-CBOR payload); the spend redeemer is the `BaseSpendRedeemer`.
+    /// The applied PLB base spend script guarding the certificate UTxOs
+    /// (single-CBOR payload); the redeemers are the `BaseSpendRedeemer` /
+    /// dispatcher arms.
     plb_script: Bytes,
-    /// The protocol-params reference input every transaction carries (the
-    /// design's "Protocol params").
+    /// The protocol-params reference input every minting transaction carries.
     protocol_params_ref: UtxoRef,
-    /// The principal asset name (hex) — the only name a graduation may burn.
-    principal_name: Bytes,
-    /// The reference asset name (hex, §3.3).
-    reference_name: Bytes,
     /// UTxO carrying the PLB global (dispatcher) stake script as a reference
     /// script; its withdraw-0 carries the `TransferAct` / `ThirdPartyAct`.
     plb_global_script_ref: UtxoRef,
     /// Stake (reward) address bytes of the PLB global's withdraw-0.
     plb_global_script_address: Bytes,
-    /// UTxO carrying the core `transfer` stake script as a reference script;
-    /// its withdraw-0 dispatches the transfer path.
+    /// UTxO carrying the core `transfer` stake script as a reference script.
     core_transfer_script_ref: UtxoRef,
     /// Stake (reward) address bytes of the core `transfer` withdraw-0.
     core_transfer_script_address: Bytes,
-    /// UTxO carrying the core `third_party` stake script as a reference
-    /// script; its withdraw-0 dispatches the third-party path.
+    /// UTxO carrying the core `third_party` stake script as a reference script.
     core_third_party_script_ref: UtxoRef,
     /// Stake (reward) address bytes of the core `third_party` withdraw-0.
     core_third_party_script_address: Bytes,
     /// UTxO carrying the core `issuance_logic` stake script as a reference
-    /// script; its withdraw-0 proves the names policy + OutputIndex on every
-    /// mint/burn under the governed policy.
+    /// script; its withdraw-0 proves the names policy + registry proof on every
+    /// governed mint/burn.
     core_issuance_script_ref: UtxoRef,
     /// Stake (reward) address bytes of the core issuance logic's withdraw-0.
     core_issuance_script_address: Bytes,
     /// UTxO carrying the issuance (minting) logic as a reference script; its
-    /// withdraw-0 carries the `RegisterAndMint` / `Burn` mode (§4.1, §4.5).
+    /// withdraw-0 carries the `Register` / `Deposit` / `Advance` / `Retire`
+    /// mode (§4.1, §4.2, §4.5, §4.7).
     issuance_script_ref: UtxoRef,
     /// Stake (reward) address bytes of the issuance logic's withdraw-0.
     issuance_script_address: Bytes,
-    /// UTxO carrying the permissive transfer logic as a reference script.
+    /// UTxO carrying the name-monotone transfer logic as a reference script.
     transfer_logic_script_ref: UtxoRef,
     /// Stake (reward) address bytes of the transfer logic's withdraw-0.
     transfer_logic_script_address: Bytes,
-    /// UTxO carrying the graduation-only third-party logic as a reference
+    /// UTxO carrying the issuer-triggered third-party logic as a reference
     /// script.
     third_party_logic_script_ref: UtxoRef,
     /// Stake (reward) address bytes of the third-party logic's withdraw-0.
     third_party_logic_script_address: Bytes,
-    /// UTxO carrying the transformation script as a reference script.
-    transformation_script_ref: UtxoRef,
-    /// Stake (reward) address bytes of the transformation script's withdraw-0.
-    transformation_script_address: Bytes,
     /// Script hash of the issuance (minting) logic — the credential the
     /// registry node pins as `minting_logic_script` and the `RegistryInsert`
     /// redeemer carries.
     issuance_hash: Bytes,
+    /// Policy id of the vault's coupon policy (bakes the coupon terms).
+    coupon_policy: Bytes,
+    /// The applied coupon policy (single-CBOR payload).
+    coupon_script: Bytes,
+    /// The applied vault spending validator (single-CBOR payload).
+    vault_script: Bytes,
+    /// Policy id of the vault NFT policy (I10).
+    vault_nft_policy: Bytes,
+    /// The applied vault NFT policy (single-CBOR payload).
+    vault_nft_script: Bytes,
+    /// Asset name of each vault's NFT (hex).
+    vault_nft_name: Bytes,
+    /// The unit principal, in lovelace — a deposit must add exactly this to the
+    /// chosen vault (I6).
+    vault_principal: Int,
     /// Policy id of the core `issuance_cbor_hex_mint` (the template reference
     /// NFT policy); TEST KIT bootstrap only.
     cbor_hex_policy: Bytes,
@@ -148,7 +146,7 @@ env {
     cbor_hex_script: Bytes,
     /// UTxO holding the `IssuanceCborHex` template reference NFT (the always-
     /// fail lock). The registry's insert proof derives the governed policy
-    /// from it, so every `register_issue` carries it as a reference input.
+    /// from it, so every `register` carries it as a reference input.
     cbor_hex_ref: UtxoRef,
     /// Policy id of the core `upgrade_multisig` config policy; TEST KIT only.
     upgrade_multisig_policy: Bytes,
@@ -165,9 +163,9 @@ env {
     params_script: Bytes,
 }
 
-/// The transacting key holder: the issuer (registration), the sender / token
-/// owner (transfers, payout key, owner-path graduation), or the fee-paying
-/// submitter (transformation, third-party graduation — no signature).
+/// The transacting key holder: the issuer (registration, vault creation,
+/// issuer-triggered paths) or the certificate holder (transfers, opt-ins,
+/// owner-path claims and graduation, redemptions).
 party Signer;
 
 // ------------------------------------------------------------------- policies
@@ -189,47 +187,39 @@ policy CoreTransfer {
 }
 
 // The core `third_party` stake validator withdraw-0 — the dispatch's second
-// leg on the third-party path. Its `CoreThirdPartyRedeemer` names the
-// subject policy's registry node and the first paired continuation output.
+// leg on the third-party path. Its `CoreThirdPartyRedeemer` names the subject
+// policy's registry node and the first paired continuation output.
 policy CoreThirdParty {
     ref: core_third_party_script_ref,
     hash: core_third_party_script_address,
 }
 
 // The core issuance logic withdraw-0 — proves the names policy and its
-// registry proof on every mint/burn under the governed policy (design T0/T1,
-// T4). Its redeemer is the `IssuanceLogicRedeemer` map (see the types below).
+// registry proof on every mint/burn under the governed policy.
 policy CoreIssuanceLogic {
     ref: core_issuance_script_ref,
     hash: core_issuance_script_address,
 }
 
-// The issuance (minting) logic withdraw-0, carrying the `RegisterAndMint` /
-// `Burn` mode redeemer. Tx3 does not attach a script witness to a withdrawal
-// keyed by an inline script, so the script travels as a reference input (the
-// settings-contract pattern); the `ref` UTxO supplies it.
+// The issuance (minting) logic withdraw-0, carrying the `Register` / `Deposit`
+// / `Advance` / `Retire` mode redeemer. Tx3 does not attach a script witness to
+// a withdrawal keyed by an inline script, so the script travels as a reference
+// input (the settings-contract pattern); the `ref` UTxO supplies it.
 policy IssuanceScript {
     ref: issuance_script_ref,
     hash: issuance_script_address,
 }
 
-// The permissive transfer logic withdraw-0 (§4.2).
+// The name-monotone transfer logic withdraw-0 (§4.3).
 policy TransferLogic {
     ref: transfer_logic_script_ref,
     hash: transfer_logic_script_address,
 }
 
-// The graduation-only third-party logic withdraw-0 (§4.5).
+// The issuer-triggered third-party logic withdraw-0 (§4.5, §4.7).
 policy ThirdPartyLogic {
     ref: third_party_logic_script_ref,
     hash: third_party_logic_script_address,
-}
-
-// The transformation script withdraw-0 (§4.4) — the reference token's stake
-// credential and the in-place update's time gate.
-policy TransformationScript {
-    ref: transformation_script_ref,
-    hash: transformation_script_address,
 }
 
 // TEST KIT bootstrap only: the upgrade authority's withdraw-0. The script
@@ -261,37 +251,45 @@ type OptionalCredential {
     None,
 }
 
-// One step of the baked schedule (§3.5): at `deadline` (POSIX ms) the value
-// steps to `value`, in fixed-point `scale` units. Encodes as
-// `Constr 0 [deadline, value]`.
-type ScheduleStep {
-    deadline: Int,
-    value: Int,
+// Aiken `Referenced<Credential>` (the stdlib's `StakeCredential`); only the
+// `Inline` arm is ever produced here.
+type StakeCredentialData {
+    Inline {
+        credential: Credential,
+    },
 }
 
-// `extra` of the reference datum (§3.3): the baked schedule, mirrored
-// for wallets and indexers, the currently recorded value, and the graduated
-// asset's policy id. The published terms are frozen at registration and
-// preserved by every later update; the graduation's burn reads `native_policy`
-// from the referenced reference token (`issuance.ak`, `published_native_policy`).
-type BondExtra {
-    schedule: List<ScheduleStep>,
-    value: Int,
-    native_policy: Bytes,
+// Aiken `Option<StakeCredential>` — `Some` 0, `None` 1.
+type OptionalStakeCredential {
+    Some {
+        stake: StakeCredentialData,
+    },
+    None,
 }
 
-// Inline datum of the reference token (§3.3). `metadata` is the
-// opaque `Bytes` mirror of the on-chain `Data`.
-type ReferenceDatum {
-    metadata: Bytes,
-    version: Int,
-    extra: BondExtra,
+// Aiken `cardano/address.Address` in its **data** form:
+// `Constr 0 [PaymentCredential, Option<StakeCredential>]`. The `Address`
+// primitive serializes as raw address bytes, which a validator decoding an
+// `Address` from data cannot read, so redeemers that carry an address build
+// the constructor form explicitly.
+type AddrData {
+    payment_credential: Credential,
+    stake_credential: OptionalStakeCredential,
 }
 
-// Inline datum of the principal token (§3.2): normally absent; after §4.3
-// optionally the owner's pre-committed payout payment credential.
-type PrincipalDatum {
-    payment_credential: OptionalCredential,
+// Inline datum of a certificate (§3.3): the per-certificate claim state. The
+// step lives in the asset name; the coupon terms live in the coupon policy
+// selected by `cnt_policy`.
+type CertificateDatum {
+    start: Int,
+    commit: OptionalCredential,
+    cnt_policy: Bytes,
+}
+
+// Inline datum of a vault (§3.1): binds the coupon policy whose negative mints
+// the `Redeem` path honors. The vault owner lives off-chain (§7).
+type VaultDatum {
+    cnt_policy: Bytes,
 }
 
 // The core registry's node datum (§3.4), field order per
@@ -318,28 +316,39 @@ type BaseSpendRedeemer {
     wdrl_idx: Int,
 }
 
-// Mode redeemer of the minting-logic withdraw-0 (§4.1, §4.5): the atomic
-// register + first issue, and the graduation's burn. Encodes as
-// `Constr 0 []` / `Constr 1 []`.
+// Mode redeemer of the minting-logic withdraw-0 (§4.1, §4.2, §4.5, §4.7).
+// Encodes as `Constr 0 []` … `Constr 3 []`.
 type MintingAction {
-    RegisterAndMint,
-    Burn,
+    Register,
+    Deposit,
+    Advance,
+    Retire,
 }
 
-// Redeemer of the transfer-logic withdraw-0 — permissive, no rules (§4.2).
+// Redeemer of the transfer-logic withdraw-0 — permissive, no rules (§4.3).
 type TransferAction {
     Move,
 }
 
-// Redeemer of the third-party logic withdraw-0 (§4.5): the permissionless
-// graduation gate.
+// Redeemer of the third-party logic withdraw-0 (§4.5, §4.7): the opt-in
+// issuer trigger.
 type ThirdPartyAction {
-    Graduate,
+    Trigger,
 }
 
-// Redeemer of the transformation-script withdraw-0 (§4.4).
-type TransformationAction {
-    Update,
+// One payout the redeemer names on a redemption (§4.6). The address is the
+// Aiken data form (see `AddrData`).
+type Payout {
+    address: AddrData,
+    amount: Int,
+}
+
+// Redeemer of the vault spending validator (§4.2, §4.6).
+type VaultAction {
+    VaultDeposit,
+    Redeem {
+        payouts: List<Payout>,
+    },
 }
 
 // ----------------------------------------------------------------- core types
@@ -438,34 +447,68 @@ type ProtocolParamsDatum {
     pending_upgrade_cred: OptionalCredential,
 }
 
+// ---------------------------------------------------------------- create vault
+
+// Vault creation (§3.1, I10): the deployment's authority mints the vault's
+// single NFT into a newly funded vault UTxO carrying the `VaultDatum` (which
+// binds the instrument's coupon policy). Creation is out of scope for the
+// on-chain validators; this template is the reference shape the tests use, and
+// the vault NFT policy is the only thing checked.
+tx create_vault(
+    /// The vault script address.
+    vault_address: Address,
+    /// ADA the vault starts with (coupon reserve + deposits).
+    vault_ada: Int,
+) {
+    input funding {
+        from: Signer,
+        min_amount: Ada(vault_ada) + fees,
+    }
+
+    mint {
+        amount: AnyAsset(vault_nft_policy, vault_nft_name, 1),
+        redeemer: (),
+    }
+
+    output vault_out {
+        to: vault_address,
+        amount: AnyAsset(vault_nft_policy, vault_nft_name, 1) + Ada(vault_ada),
+        datum: VaultDatum {
+            cnt_policy: coupon_policy,
+        },
+    }
+
+    output {
+        to: Signer,
+        amount: funding - Ada(vault_ada) - fees,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    signers {
+        Signer,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: vault_nft_script,
+    }
+}
+
 // ------------------------------------------------------------------- register
 
-// Atomic register + first issue (T0/T1, §4.1): create the RegistryNode and
-// mint the first batch — principal × `quantity` plus the reference
-// token × 1, the only two names under the governed policy. The principal
-// lands at the beneficiary's PLB-custodied address; the reference token at
-// the transformation script's stake. The covering registry node is spent and
-// re-emitted with `next` pointing at the new node (core registry linked
-// list). The initial reference datum must mirror the baked schedule at par
-// (`version: 1`, `value: scale`) and publish the graduated asset's policy
-// (`extra.native_policy` = `native_policy`) — the on-chain registration checks
-// the former and every later update preserves the latter. Withdraw-0s: ours
-// (`RegisterAndMint`) plus the core issuance proof. The issuer signs.
-tx register_issue(
-    /// Quantity of principal tokens to mint (N >= 1; the on-chain first-batch
-    /// check requires exactly two names, the reference exactly 1).
-    quantity: Int,
+// Registration (§4.1): create the instrument's RegistryNode and pin its stance
+// to the frozen deployment. No certificate is minted — the same registration
+// serves every later deposit. The covering registry node is spent and
+// re-emitted with `next` pointing at the new node (core registry linked list).
+// Withdraw-0s: ours (`Register`). The issuer signs.
+tx register(
     /// The registry node datum: `key` = `cip_policy`, the logic fields pinned
-    /// to the frozen deployment's stance (§3.4).
+    /// to the frozen deployment's stance.
     node_datum: RegistryNode,
-    /// The initial reference-token datum (§3.3): the baked schedule mirrored
-    /// at par (`version: 1`, `extra.value = scale`), with `extra.native_policy`
-    /// set to the graduated asset's policy.
-    reference_datum: ReferenceDatum,
-    /// The beneficiary's PLB-custodied address (PLB payment + holder stake).
-    beneficiary_address: Address,
-    /// The reference token's address (PLB payment + transformation stake).
-    reference_address: Address,
     /// The registry node being covered by this insert (the origin node for the
     /// first instrument). It is spent and re-emitted with `next` = `cip_policy`.
     covering_ref: UtxoRef,
@@ -474,17 +517,7 @@ tx register_issue(
     /// The covering node's continuation datum: the input's fields with
     /// `next` = `cip_policy`.
     covering_datum: RegistryNode,
-    /// Index of the protocol-params reference input (`issuance_mint` redeemer).
-    params_idx: Int,
-    /// Index of the new node output (`issuance_logic` `OutputIndex` proof).
-    /// The template's output layout puts the covering node first and the new
-    /// node second, so this is 1.
-    new_node_ix: Int,
 ) {
-    reference protocol_params {
-        ref: protocol_params_ref,
-    }
-
     reference cbor_hex {
         ref: cbor_hex_ref,
     }
@@ -498,15 +531,7 @@ tx register_issue(
 
     input funding {
         from: Signer,
-        min_amount: Ada(6000000) + fees,
-    }
-
-    mint {
-        amount: AnyAsset(cip_policy, principal_name, quantity) +
-            AnyAsset(cip_policy, reference_name, 1),
-        redeemer: IssuanceMintRedeemer {
-            params_idx: params_idx,
-        },
+        min_amount: Ada(2000000) + fees,
     }
 
     mint {
@@ -522,17 +547,7 @@ tx register_issue(
     cardano::withdrawal {
         from: IssuanceScript,
         amount: 0,
-        redeemer: MintingAction::RegisterAndMint {},
-    }
-
-    cardano::withdrawal {
-        from: CoreIssuanceLogic,
-        amount: 0,
-        redeemer: {
-            cip_policy: MintingRegistryProof::OutputIndex {
-                index: new_node_ix,
-            },
-        },
+        redeemer: MintingAction::Register {},
     }
 
     output covering_out {
@@ -547,20 +562,125 @@ tx register_issue(
         datum: node_datum,
     }
 
-    output principal_out {
-        to: beneficiary_address,
-        amount: AnyAsset(cip_policy, principal_name, quantity) + Ada(2000000),
+    output {
+        to: Signer,
+        amount: funding - Ada(2000000) - fees,
     }
 
-    output reference_out {
-        to: reference_address,
-        amount: AnyAsset(cip_policy, reference_name, 1) + Ada(2000000),
-        datum: reference_datum,
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    signers {
+        Signer,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: node_policy_script,
+    }
+}
+
+// -------------------------------------------------------------------- deposit
+
+// Unit deposit (§4.2), permissionless: the chosen vault gains exactly the unit
+// `vault_principal` and continues with address, datum and NFT unchanged (I6),
+// and exactly one step-`0` certificate is minted at the depositor's
+// PLB-custodied address, carrying the vault's `cnt_policy`, `commit: None` and
+// `start` pinned to the transaction's finite validity upper bound. Withdraw-0s:
+// ours (`Deposit`) plus the core issuance proof (`RefInput` on the node).
+// The depositor pays the fees.
+tx deposit(
+    /// The chosen vault's script address.
+    vault_address: Address,
+    /// The vault UTxO being deposited into. It is spent and re-emitted with
+    /// `+ vault_principal`.
+    vault_ref: UtxoRef,
+    /// The vault's datum (the continuation preserves it byte-for-byte).
+    vault_datum: VaultDatum,
+    /// The depositor's PLB-custodied address (PLB payment + holder stake).
+    certificate_address: Address,
+    /// The certificate's step-`0` asset name (one byte).
+    step_name: Bytes,
+    /// POSIX-ms start; must equal the validity range's upper bound.
+    start: Int,
+    /// Slot whose validity upper bound is exactly `start`.
+    until_slot: Int,
+    /// Index of the protocol-params reference input (`issuance_mint` redeemer).
+    params_idx: Int,
+    /// The instrument's RegistryNode among the reference inputs (core
+    /// issuance-proof index).
+    node_idx: Int,
+    /// The instrument's RegistryNode UTxO (reference input).
+    node_ref: UtxoRef,
+) {
+    reference protocol_params {
+        ref: protocol_params_ref,
+    }
+
+    reference registry_node {
+        ref: node_ref,
+    }
+
+    input vault_in {
+        from: vault_address,
+        ref: vault_ref,
+        datum_is: VaultDatum,
+        redeemer: VaultAction::VaultDeposit {},
+    }
+
+    input funding {
+        from: Signer,
+        min_amount: Ada(vault_principal) + Ada(2000000) + fees,
+    }
+
+    mint {
+        amount: AnyAsset(cip_policy, step_name, 1),
+        redeemer: IssuanceMintRedeemer {
+            params_idx: params_idx,
+        },
+    }
+
+    cardano::withdrawal {
+        from: IssuanceScript,
+        amount: 0,
+        redeemer: MintingAction::Deposit {},
+    }
+
+    cardano::withdrawal {
+        from: CoreIssuanceLogic,
+        amount: 0,
+        redeemer: {
+            cip_policy: MintingRegistryProof::RefInput {
+                index: node_idx,
+            },
+        },
+    }
+
+    output vault_out {
+        to: vault_address,
+        amount: vault_in + Ada(vault_principal),
+        datum: vault_datum,
+    }
+
+    output certificate_out {
+        to: certificate_address,
+        amount: AnyAsset(cip_policy, step_name, 1) + Ada(2000000),
+        datum: CertificateDatum {
+            start: start,
+            commit: OptionalCredential::None {},
+            cnt_policy: coupon_policy,
+        },
     }
 
     output {
         to: Signer,
-        amount: funding - Ada(6000000) - fees,
+        amount: funding - Ada(vault_principal) - Ada(2000000) - fees,
+    }
+
+    validity {
+        until_slot: until_slot,
     }
 
     collateral {
@@ -579,34 +699,35 @@ tx register_issue(
 
     cardano::plutus_witness {
         version: 3,
-        script: node_policy_script,
+        script: vault_script,
     }
 }
 
 // ------------------------------------------------------------------- transfer
 
-// Free transfer (T2, §4.2): the full dispatch chain — PLB global
-// (`TransferAct`) dispatches the core `transfer`, which resolves the registry
-// node and requires our permissive transfer logic. Ownership rides the token
-// UTxO's stake credential; the sender signs (design figure). The whole UTxO
-// value moves to the recipient; the design's diagram carries no continuation
-// datum, and a committed payout key is re-set via T2b.
+// Plain transfer / owner change (§4.3): the transfer dispatch chain moves the
+// certificate to the recipient's PLB-custodied address with the step name
+// preserved. The continuation datum is caller-supplied: an owner change must
+// clear `commit`; a self-transfer may set it (use `authorize`). The sender
+// signs.
 tx transfer(
-    /// The token UTxO's PLB-custodied address (PLB payment + sender stake).
-    token_address: Address,
-    /// The token UTxO being transferred.
-    token_ref: UtxoRef,
-    /// The PLB input's `params_idx` (locates the protocol-params reference).
-    params_idx: Int,
-    /// The chain's index in the canonical sorted withdrawal set (09 §10).
-    wdrl_idx: Int,
-    /// The instrument's RegistryNode among the reference inputs (core
-    /// registry-proof index).
-    node_idx: Int,
-    /// The instrument's RegistryNode UTxO (reference input).
-    node_ref: UtxoRef,
+    /// The certificate UTxO's PLB-custodied address.
+    certificate_address: Address,
+    /// The certificate UTxO being transferred.
+    certificate_ref: UtxoRef,
     /// The recipient's PLB-custodied address.
     recipient_address: Address,
+    /// The continuation datum (the new claim state).
+    certificate_datum: CertificateDatum,
+    /// The PLB input's `params_idx` (locates the protocol-params reference).
+    params_idx: Int,
+    /// The instrument's RegistryNode among the reference inputs (core
+    /// registry-proof index).
+    node_idx: Int,
+    /// The chain's index in the canonical sorted withdrawal set (09 §10).
+    wdrl_idx: Int,
+    /// The instrument's RegistryNode UTxO (reference input).
+    node_ref: UtxoRef,
 ) {
     reference protocol_params {
         ref: protocol_params_ref,
@@ -616,9 +737,10 @@ tx transfer(
         ref: node_ref,
     }
 
-    input token_in {
-        from: token_address,
-        ref: token_ref,
+    input certificate_in {
+        from: certificate_address,
+        ref: certificate_ref,
+        datum_is: CertificateDatum,
         redeemer: BaseSpendRedeemer {
             params_idx: params_idx,
             wdrl_idx: wdrl_idx,
@@ -654,9 +776,10 @@ tx transfer(
         redeemer: TransferAction::Move {},
     }
 
-    output {
+    output certificate_out {
         to: recipient_address,
-        amount: token_in,
+        amount: certificate_in,
+        datum: certificate_datum,
     }
 
     output {
@@ -679,28 +802,30 @@ tx transfer(
     }
 }
 
-// Register payout key (T2b, §4.3): a special case of the transfer — the owner
-// spends the token to themselves and writes a payment credential into its
-// datum. Only an owner-signed transfer can set it; the third-party graduation
-// (§4.5) completes it but can never redirect the payout. Optional and
-// re-settable with a later self-transfer. Same path and signatures as the
-// free transfer; the only difference is the output datum.
-tx register_payout_key(
-    /// The token UTxO's PLB-custodied address (self-transfer: same address).
-    token_address: Address,
-    /// The token UTxO being spent to the owner.
-    token_ref: UtxoRef,
+// ------------------------------------------------------------------ authorize
+
+// Opt-in / opt-out (§4.4): a self-transfer to the same PLB-custodied address
+// that writes a payment credential into `commit` (or clears it). Only an
+// owner-signed self-transfer can set it; the issuer-triggered paths complete
+// it but can never redirect the payout. Same chain and signatures as the free
+// transfer; the continuation preserves `start` and `cnt_policy` byte-for-byte
+// and only `commit` changes.
+tx authorize(
+    /// The certificate UTxO's PLB-custodied address (self-transfer: same).
+    certificate_address: Address,
+    /// The certificate UTxO being spent to the owner.
+    certificate_ref: UtxoRef,
+    /// The new commitment (`Some(pay)`); pass `None` to revoke.
+    payout_credential: OptionalCredential,
     /// The PLB input's `params_idx` (locates the protocol-params reference).
     params_idx: Int,
-    /// The chain's index in the canonical sorted withdrawal set (09 §10).
-    wdrl_idx: Int,
     /// The instrument's RegistryNode among the reference inputs (core
     /// registry-proof index).
     node_idx: Int,
+    /// The chain's index in the canonical sorted withdrawal set (09 §10).
+    wdrl_idx: Int,
     /// The instrument's RegistryNode UTxO (reference input).
     node_ref: UtxoRef,
-    /// The owner's payout payment credential to commit (§3.2).
-    payout_credential: Credential,
 ) {
     reference protocol_params {
         ref: protocol_params_ref,
@@ -710,9 +835,10 @@ tx register_payout_key(
         ref: node_ref,
     }
 
-    input token_in {
-        from: token_address,
-        ref: token_ref,
+    input certificate_in {
+        from: certificate_address,
+        ref: certificate_ref,
+        datum_is: CertificateDatum,
         redeemer: BaseSpendRedeemer {
             params_idx: params_idx,
             wdrl_idx: wdrl_idx,
@@ -748,13 +874,13 @@ tx register_payout_key(
         redeemer: TransferAction::Move {},
     }
 
-    output {
-        to: token_address,
-        amount: token_in,
-        datum: PrincipalDatum {
-            payment_credential: OptionalCredential::Some {
-                credential: payout_credential,
-            },
+    output certificate_out {
+        to: certificate_address,
+        amount: certificate_in,
+        datum: CertificateDatum {
+            start: certificate_in.start,
+            commit: payout_credential,
+            cnt_policy: certificate_in.cnt_policy,
         },
     }
 
@@ -778,38 +904,35 @@ tx register_payout_key(
     }
 }
 
-// -------------------------------------------------------------- transformation
+// ---------------------------------------------------------------- coupon claim
 
-// Scheduled transformation (T3, §4.4): the reference token's datum is
-// rewritten in place on the transfer path — the full dispatch chain plus the
-// transformation script's withdraw-0 time gate. The update is a pure lookup
-// of the baked constants, so a late submission jumps straight to the current
-// step. The output keeps the input's `metadata`, `version` and
-// `extra.native_policy` (the published terms are frozen, §3.3) and records
-// `extra.value = lookup(schedule, now)`. Holder-passive and permissionless:
-// no signatures — the Signer only pays fees; the reference token's stake
-// credential (the transformation script) authorizes via its withdraw-0.
-tx transform(
-    /// The reference token UTxO (× 1).
-    reference_ref: UtxoRef,
-    /// The reference token's PLB-custodied address (PLB payment +
-    /// transformation-script stake).
-    reference_address: Address,
+// Owner-signed coupon claim (§4.5): the certificate advances one step
+// (`k -> k+1`), preserving the datum and the owner, and the step's coupon is
+// minted under the vault's coupon policy. Withdraw-0s: the transfer chain plus
+// ours (`Advance`) and the core issuance proof. The owner signs.
+tx claim_owner(
+    /// The certificate UTxO's PLB-custodied address.
+    certificate_address: Address,
+    /// The certificate UTxO being advanced.
+    certificate_ref: UtxoRef,
+    /// The spent (current) step name.
+    old_name: Bytes,
+    /// The minted (next) step name.
+    new_name: Bytes,
+    /// The coupon asset name (decimal lovelace bytes of the step amount).
+    coupon_name: Bytes,
+    /// Where the coupon is delivered (usually the holder).
+    coupon_address: Address,
     /// The PLB input's `params_idx` (locates the protocol-params reference).
     params_idx: Int,
-    /// The chain's index in the canonical sorted withdrawal set (09 §10).
-    wdrl_idx: Int,
     /// The instrument's RegistryNode among the reference inputs (core
     /// registry-proof index).
     node_idx: Int,
+    /// The chain's index in the canonical sorted withdrawal set (09 §10).
+    wdrl_idx: Int,
     /// The instrument's RegistryNode UTxO (reference input).
     node_ref: UtxoRef,
-    /// The continuation datum: keeps the input's `metadata` and `version`,
-    /// mirrors the baked schedule and the published `native_policy`, and
-    /// records `extra.value = lookup(schedule, now)`, computed off-chain from
-    /// the same validity lower bound passed as `since_slot` (§4.4).
-    reference_datum: ReferenceDatum,
-    /// Slot of the validity lower bound; `d1 <= now <= d4` (§5).
+    /// Slot of the validity lower bound; must reach `start + k * interval`.
     since_slot: Int,
 ) {
     reference protocol_params {
@@ -820,10 +943,10 @@ tx transform(
         ref: node_ref,
     }
 
-    input reference_in {
-        from: reference_address,
-        ref: reference_ref,
-        datum_is: ReferenceDatum,
+    input certificate_in {
+        from: certificate_address,
+        ref: certificate_ref,
+        datum_is: CertificateDatum,
         redeemer: BaseSpendRedeemer {
             params_idx: params_idx,
             wdrl_idx: wdrl_idx,
@@ -832,140 +955,19 @@ tx transform(
 
     input gas {
         from: Signer,
-        min_amount: fees,
+        min_amount: Ada(2000000) + fees,
     }
 
-    cardano::withdrawal {
-        from: PlbGlobal,
-        amount: 0,
-        redeemer: ProgrammableLogicGlobalRedeemer::TransferAct {},
-    }
-
-    cardano::withdrawal {
-        from: CoreTransfer,
-        amount: 0,
-        redeemer: CoreTransferRedeemer {
-            proofs: [
-                RegistryProof::TokenExists {
-                    node_idx: node_idx,
-                },
-            ],
-        },
-    }
-
-    cardano::withdrawal {
-        from: TransferLogic,
-        amount: 0,
-        redeemer: TransferAction::Move {},
-    }
-
-    cardano::withdrawal {
-        from: TransformationScript,
-        amount: 0,
-        redeemer: TransformationAction::Update {},
-    }
-
-    output reference_out {
-        to: reference_address,
-        amount: reference_in,
-        datum: reference_datum,
-    }
-
-    output {
-        to: Signer,
-        amount: gas - fees,
-    }
-
-    validity {
-        since_slot: since_slot,
-    }
-
-    collateral {
-        from: Signer,
-        min_amount: fees,
-    }
-
-    cardano::plutus_witness {
-        version: 3,
-        script: plb_script,
-    }
-}
-
-// ----------------------------------------------------------------- graduation
-
-// Deadline graduation, owner path (T4, §4.5): the transfer-path spend chain
-// (PLB global `TransferAct` -> core `transfer` -> our transfer logic) plus
-// the shared burn withdraw-0s (our minting logic `Burn` + the core issuance
-// proof). The reference token rides along as a reference input — the burn
-// reads the graduated asset's policy (`extra.native_policy`) from its datum
-// (§3.3). Burn the principal — whole holdings per name, `quantity` covering
-// the holder's full holding — and mint the graduated asset under the native
-// policy at the schedule's final value (`native_quantity =
-// Σ floor(Q × v4 / scale)`, computed off-chain). The owner signs, which names
-// and authorizes the payout destination (Q-GRAD-2). Nothing remains on the
-// owner path (the cheaper shape): the burned UTxO's leftover ada returns to
-// the Signer.
-tx graduate_owner(
-    /// The token UTxO's PLB-custodied address (PLB payment + owner stake).
-    token_address: Address,
-    /// The token UTxO whose whole holding burns.
-    token_ref: UtxoRef,
-    /// The PLB input's `params_idx` (locates the protocol-params reference).
-    params_idx: Int,
-    /// The chain's index in the canonical sorted withdrawal set (09 §10).
-    wdrl_idx: Int,
-    /// The instrument's RegistryNode among the reference inputs (core
-    /// registry-proof index).
-    node_idx: Int,
-    /// The instrument's RegistryNode UTxO (reference input).
-    node_ref: UtxoRef,
-    /// The reference token UTxO (× 1) — a reference input whose
-    /// datum names the graduated asset's policy (§4.5, §3.3).
-    reference_ref: UtxoRef,
-    /// The burned principal quantity (the holder's whole holding, §4.5).
-    quantity: Int,
-    /// The graduated quantity: `Σ floor(Q × v4 / scale)` (§4.5).
-    native_quantity: Int,
-    /// The owner-authorized payout destination (payment + owner stake).
-    payout_address: Address,
-    /// Slot of the validity lower bound; must be `d4` or later (§5).
-    since_slot: Int,
-) {
-    reference protocol_params {
-        ref: protocol_params_ref,
-    }
-
-    reference registry_node {
-        ref: node_ref,
-    }
-
-    reference reference_token {
-        ref: reference_ref,
-    }
-
-    input token_in {
-        from: token_address,
-        ref: token_ref,
-        redeemer: BaseSpendRedeemer {
-            params_idx: params_idx,
-            wdrl_idx: wdrl_idx,
-        },
-    }
-
-    input gas {
-        from: Signer,
-        min_amount: fees,
-    }
-
-    burn {
-        amount: AnyAsset(cip_policy, principal_name, quantity),
+    mint {
+        amount: AnyAsset(cip_policy, old_name, -1) +
+            AnyAsset(cip_policy, new_name, 1),
         redeemer: IssuanceMintRedeemer {
             params_idx: params_idx,
         },
     }
 
     mint {
-        amount: AnyAsset(native_policy, principal_name, native_quantity),
+        amount: AnyAsset(coupon_policy, coupon_name, 1),
         redeemer: (),
     }
 
@@ -996,7 +998,7 @@ tx graduate_owner(
     cardano::withdrawal {
         from: IssuanceScript,
         amount: 0,
-        redeemer: MintingAction::Burn {},
+        redeemer: MintingAction::Advance {},
     }
 
     cardano::withdrawal {
@@ -1009,15 +1011,423 @@ tx graduate_owner(
         },
     }
 
-    output native_out {
+    output certificate_out {
+        to: certificate_address,
+        amount: certificate_in - AnyAsset(cip_policy, old_name, 1) +
+            AnyAsset(cip_policy, new_name, 1),
+        datum: CertificateDatum {
+            start: certificate_in.start,
+            commit: certificate_in.commit,
+            cnt_policy: certificate_in.cnt_policy,
+        },
+    }
+
+    output coupon_out {
+        to: coupon_address,
+        amount: AnyAsset(coupon_policy, coupon_name, 1) + Ada(2000000),
+    }
+
+    output {
+        to: Signer,
+        amount: gas - Ada(2000000) - fees,
+    }
+
+    validity {
+        since_slot: since_slot,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    signers {
+        Signer,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: cip_policy_script,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: coupon_script,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: plb_script,
+    }
+}
+
+// Issuer-triggered coupon claim (§4.5): the third-party chain advances the
+// certificate — same transition and coupon presence as `claim_owner`, but
+// permissionless on the holder side: it only works for certificates whose datum
+// commits a payment credential, and the coupon minted is bound to it. The
+// paired continuation is the first output (`outputs_start_idx` 0). The issuer
+// signs.
+tx claim_issuer(
+    /// The certificate UTxO's PLB-custodied address.
+    certificate_address: Address,
+    /// The certificate UTxO being advanced (must commit a payout credential).
+    certificate_ref: UtxoRef,
+    /// The spent (current) step name.
+    old_name: Bytes,
+    /// The minted (next) step name.
+    new_name: Bytes,
+    /// The coupon asset name (decimal lovelace bytes of the step amount).
+    coupon_name: Bytes,
+    /// The committed payout address (its payment credential is `commit`).
+    pay_address: Address,
+    /// The PLB input's `params_idx` (locates the protocol-params reference).
+    params_idx: Int,
+    /// The instrument's RegistryNode among the reference inputs (core
+    /// registry-proof index).
+    node_idx: Int,
+    /// The chain's index in the canonical sorted withdrawal set (09 §10).
+    wdrl_idx: Int,
+    /// The instrument's RegistryNode UTxO (reference input).
+    node_ref: UtxoRef,
+    /// Slot of the validity lower bound; must reach `start + k * interval`.
+    since_slot: Int,
+) {
+    reference protocol_params {
+        ref: protocol_params_ref,
+    }
+
+    reference registry_node {
+        ref: node_ref,
+    }
+
+    input certificate_in {
+        from: certificate_address,
+        ref: certificate_ref,
+        datum_is: CertificateDatum,
+        redeemer: BaseSpendRedeemer {
+            params_idx: params_idx,
+            wdrl_idx: wdrl_idx,
+        },
+    }
+
+    input gas {
+        from: Signer,
+        min_amount: Ada(2000000) + fees,
+    }
+
+    mint {
+        amount: AnyAsset(cip_policy, old_name, -1) +
+            AnyAsset(cip_policy, new_name, 1),
+        redeemer: IssuanceMintRedeemer {
+            params_idx: params_idx,
+        },
+    }
+
+    mint {
+        amount: AnyAsset(coupon_policy, coupon_name, 1),
+        redeemer: (),
+    }
+
+    cardano::withdrawal {
+        from: PlbGlobal,
+        amount: 0,
+        redeemer: ProgrammableLogicGlobalRedeemer::ThirdPartyAct {},
+    }
+
+    cardano::withdrawal {
+        from: CoreThirdParty,
+        amount: 0,
+        redeemer: CoreThirdPartyRedeemer {
+            registry_node_idx: node_idx,
+            outputs_start_idx: 0,
+        },
+    }
+
+    cardano::withdrawal {
+        from: ThirdPartyLogic,
+        amount: 0,
+        redeemer: ThirdPartyAction::Trigger {},
+    }
+
+    cardano::withdrawal {
+        from: IssuanceScript,
+        amount: 0,
+        redeemer: MintingAction::Advance {},
+    }
+
+    cardano::withdrawal {
+        from: CoreIssuanceLogic,
+        amount: 0,
+        redeemer: {
+            cip_policy: MintingRegistryProof::RefInput {
+                index: node_idx,
+            },
+        },
+    }
+
+    output certificate_out {
+        to: certificate_address,
+        amount: certificate_in - AnyAsset(cip_policy, old_name, 1) +
+            AnyAsset(cip_policy, new_name, 1),
+        datum: CertificateDatum {
+            start: certificate_in.start,
+            commit: certificate_in.commit,
+            cnt_policy: certificate_in.cnt_policy,
+        },
+    }
+
+    output coupon_out {
+        to: pay_address,
+        amount: AnyAsset(coupon_policy, coupon_name, 1) + Ada(2000000),
+    }
+
+    output {
+        to: Signer,
+        amount: gas - Ada(2000000) - fees,
+    }
+
+    validity {
+        since_slot: since_slot,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    signers {
+        Signer,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: cip_policy_script,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: coupon_script,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: plb_script,
+    }
+}
+
+// ---------------------------------------------------------------- redemption
+
+// Burn-to-pay redemption (§4.6): the coupon UTxO is spent and burned, and the
+// vault pays out exactly the value its names decode to. The redeemer names the
+// payout; the payout output carries at least the named amount (`payout_lovelace`
+// is the output's lovelace, so a small coupon can still meet the ledger's
+// min-ADA), and the vault loses exactly `payout_amount`. The redeeming holder
+// signs (the coupon UTxO is the signer's input).
+tx redeem(
+    /// The coupon UTxO being burned (the signer's input).
+    coupon_ref: UtxoRef,
+    /// The coupon asset name (decimal lovelace bytes).
+    coupon_name: Bytes,
+    /// The coupon quantity being burned.
+    coupon_quantity: Int,
+    /// The vault's script address.
+    vault_address: Address,
+    /// The vault UTxO being spent; it continues with `- payout_amount`.
+    vault_ref: UtxoRef,
+    /// The vault's datum (the continuation preserves it byte-for-byte).
+    vault_datum: VaultDatum,
+    /// The payout destination's output address.
+    payout_address: Address,
+    /// The payout destination's address in its Aiken **data** form: the
+    /// `Address` primitive serializes as raw bytes, which a validator decoding
+    /// `Address` from data cannot read (see `AddrData`).
+    payout_address_data: AddrData,
+    /// The declared payout value (must equal the burned value).
+    payout_amount: Int,
+    /// Lovelace attached to the payout output (>= `payout_amount`).
+    payout_lovelace: Int,
+) {
+    input coupon_in {
+        from: Signer,
+        ref: coupon_ref,
+    }
+
+    input vault_in {
+        from: vault_address,
+        ref: vault_ref,
+        datum_is: VaultDatum,
+        redeemer: VaultAction::Redeem {
+            payouts: [
+                Payout {
+                    address: payout_address_data,
+                    amount: payout_amount,
+                },
+            ],
+        },
+    }
+
+    input gas {
+        from: Signer,
+        min_amount: Ada(2000000) + fees,
+    }
+
+    burn {
+        amount: AnyAsset(coupon_policy, coupon_name, coupon_quantity),
+        redeemer: (),
+    }
+
+    output payout_out {
         to: payout_address,
-        amount: AnyAsset(native_policy, principal_name, native_quantity) +
+        amount: Ada(payout_lovelace),
+    }
+
+    output vault_out {
+        to: vault_address,
+        amount: vault_in - Ada(payout_amount),
+        datum: vault_datum,
+    }
+
+    output {
+        to: Signer,
+        amount: coupon_in -
+            AnyAsset(coupon_policy, coupon_name, coupon_quantity) + gas -
+            Ada(payout_lovelace) + Ada(payout_amount) - fees,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    signers {
+        Signer,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: coupon_script,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: vault_script,
+    }
+}
+
+// ---------------------------------------------------------------- graduation
+
+// Retirement, owner path (§4.7): the certificate is burned at its current
+// (final) name with no continuation, and the principal coupon is minted under
+// the vault's coupon policy. Withdraw-0s: the transfer chain plus ours
+// (`Retire`) and the core issuance proof. The owner signs, which names and
+// authorizes the payout destination.
+tx graduate_owner(
+    /// The certificate UTxO's PLB-custodied address.
+    certificate_address: Address,
+    /// The certificate UTxO whose final name burns.
+    certificate_ref: UtxoRef,
+    /// The burned (final) step name.
+    final_name: Bytes,
+    /// The principal coupon asset name (decimal lovelace bytes of `principal`).
+    principal_coupon_name: Bytes,
+    /// Where the principal coupon is delivered.
+    coupon_address: Address,
+    /// The PLB input's `params_idx` (locates the protocol-params reference).
+    params_idx: Int,
+    /// The instrument's RegistryNode among the reference inputs (core
+    /// registry-proof index).
+    node_idx: Int,
+    /// The chain's index in the canonical sorted withdrawal set (09 §10).
+    wdrl_idx: Int,
+    /// The instrument's RegistryNode UTxO (reference input).
+    node_ref: UtxoRef,
+    /// Slot of the validity lower bound; must reach `start + N * interval`.
+    since_slot: Int,
+) {
+    reference protocol_params {
+        ref: protocol_params_ref,
+    }
+
+    reference registry_node {
+        ref: node_ref,
+    }
+
+    input certificate_in {
+        from: certificate_address,
+        ref: certificate_ref,
+        datum_is: CertificateDatum,
+        redeemer: BaseSpendRedeemer {
+            params_idx: params_idx,
+            wdrl_idx: wdrl_idx,
+        },
+    }
+
+    input gas {
+        from: Signer,
+        min_amount: Ada(2000000) + fees,
+    }
+
+    burn {
+        amount: AnyAsset(cip_policy, final_name, 1),
+        redeemer: IssuanceMintRedeemer {
+            params_idx: params_idx,
+        },
+    }
+
+    mint {
+        amount: AnyAsset(coupon_policy, principal_coupon_name, 1),
+        redeemer: (),
+    }
+
+    cardano::withdrawal {
+        from: PlbGlobal,
+        amount: 0,
+        redeemer: ProgrammableLogicGlobalRedeemer::TransferAct {},
+    }
+
+    cardano::withdrawal {
+        from: CoreTransfer,
+        amount: 0,
+        redeemer: CoreTransferRedeemer {
+            proofs: [
+                RegistryProof::TokenExists {
+                    node_idx: node_idx,
+                },
+            ],
+        },
+    }
+
+    cardano::withdrawal {
+        from: TransferLogic,
+        amount: 0,
+        redeemer: TransferAction::Move {},
+    }
+
+    cardano::withdrawal {
+        from: IssuanceScript,
+        amount: 0,
+        redeemer: MintingAction::Retire {},
+    }
+
+    cardano::withdrawal {
+        from: CoreIssuanceLogic,
+        amount: 0,
+        redeemer: {
+            cip_policy: MintingRegistryProof::RefInput {
+                index: node_idx,
+            },
+        },
+    }
+
+    output coupon_out {
+        to: coupon_address,
+        amount: AnyAsset(coupon_policy, principal_coupon_name, 1) +
             Ada(2000000),
     }
 
     output {
         to: Signer,
-        amount: token_in - AnyAsset(cip_policy, principal_name, quantity) -
+        amount: certificate_in - AnyAsset(cip_policy, final_name, 1) -
             Ada(2000000) + gas - fees,
     }
 
@@ -1041,7 +1451,7 @@ tx graduate_owner(
 
     cardano::plutus_witness {
         version: 3,
-        script: native_mint_script,
+        script: coupon_script,
     }
 
     cardano::plutus_witness {
@@ -1050,47 +1460,34 @@ tx graduate_owner(
     }
 }
 
-// Deadline graduation, third-party path (T4, §4.5): the permissionless arm —
-// the third-party dispatch chain (PLB global `ThirdPartyAct` -> core
-// `third_party` -> our third-party logic) plus the same burn withdraw-0s. The
-// reference token rides along as a reference input — the burn reads the
-// graduated asset's policy (`extra.native_policy`) from its datum (§3.3). No
-// signature: it only works for tokens whose owner pre-committed a payout
-// payment credential to the token datum (§4.3) — the template enforces that
-// by typing the spent input's datum, and the paired ghost continuation
-// preserves the spent UTxO's address and datum byte-for-byte (lovelace
-// ratcheted: the ghost keeps the burned UTxO's ada, reclaimable by the owner
-// via a transfer-path spend), so a completer can complete but never redirect.
-tx graduate_third_party(
-    /// The token UTxO's PLB-custodied address (PLB payment + owner stake);
-    /// also the ghost continuation's address (preserved byte-for-byte).
-    token_address: Address,
-    /// The token UTxO whose whole holding burns. Must carry the owner's
-    /// pre-committed payout payment credential (§4.3) — Q-GRAD-2.
-    token_ref: UtxoRef,
+// Retirement, issuer path (§4.7): the permissionless arm — the third-party
+// chain retires the certificate (no continuation) and delivers the principal
+// coupon to the committed payout credential. The paired output is a certificate-
+// less shell that preserves the spent UTxO's address and datum byte-for-byte
+// and keeps its lovelace, so the issuer can trigger but never redirect; the
+// shell is reclaimable by the owner via a transfer-path spend. The issuer
+// signs.
+tx graduate_issuer(
+    /// The certificate UTxO's PLB-custodied address; also the shell's address.
+    certificate_address: Address,
+    /// The certificate UTxO being retired (must commit a payout credential).
+    certificate_ref: UtxoRef,
+    /// The burned (final) step name.
+    final_name: Bytes,
+    /// The principal coupon asset name (decimal lovelace bytes of `principal`).
+    principal_coupon_name: Bytes,
+    /// The committed payout address (its payment credential is `commit`).
+    pay_address: Address,
     /// The PLB input's `params_idx` (locates the protocol-params reference).
     params_idx: Int,
-    /// The chain's index in the canonical sorted withdrawal set (09 §10).
-    wdrl_idx: Int,
     /// The instrument's RegistryNode among the reference inputs (core
     /// registry-proof index).
     node_idx: Int,
+    /// The chain's index in the canonical sorted withdrawal set (09 §10).
+    wdrl_idx: Int,
     /// The instrument's RegistryNode UTxO (reference input).
     node_ref: UtxoRef,
-    /// First output paired with the processed PLB inputs (core
-    /// `ThirdPartyRedeemer`). The template emits the native payout first and
-    /// the ghost continuation second, so this is 1.
-    outputs_start_idx: Int,
-    /// The reference token UTxO (× 1) — a reference input whose
-    /// datum names the graduated asset's policy (§4.5, §3.3).
-    reference_ref: UtxoRef,
-    /// The burned principal quantity (the holder's whole holding, §4.5).
-    quantity: Int,
-    /// The graduated quantity: `Σ floor(Q × v4 / scale)` (§4.5).
-    native_quantity: Int,
-    /// The owner-committed payout destination (§4.3).
-    payout_address: Address,
-    /// Slot of the validity lower bound; must be `d4` or later (§5).
+    /// Slot of the validity lower bound; must reach `start + N * interval`.
     since_slot: Int,
 ) {
     reference protocol_params {
@@ -1101,14 +1498,10 @@ tx graduate_third_party(
         ref: node_ref,
     }
 
-    reference reference_token {
-        ref: reference_ref,
-    }
-
-    input token_in {
-        from: token_address,
-        ref: token_ref,
-        datum_is: PrincipalDatum,
+    input certificate_in {
+        from: certificate_address,
+        ref: certificate_ref,
+        datum_is: CertificateDatum,
         redeemer: BaseSpendRedeemer {
             params_idx: params_idx,
             wdrl_idx: wdrl_idx,
@@ -1121,14 +1514,14 @@ tx graduate_third_party(
     }
 
     burn {
-        amount: AnyAsset(cip_policy, principal_name, quantity),
+        amount: AnyAsset(cip_policy, final_name, 1),
         redeemer: IssuanceMintRedeemer {
             params_idx: params_idx,
         },
     }
 
     mint {
-        amount: AnyAsset(native_policy, principal_name, native_quantity),
+        amount: AnyAsset(coupon_policy, principal_coupon_name, 1),
         redeemer: (),
     }
 
@@ -1143,20 +1536,20 @@ tx graduate_third_party(
         amount: 0,
         redeemer: CoreThirdPartyRedeemer {
             registry_node_idx: node_idx,
-            outputs_start_idx: outputs_start_idx,
+            outputs_start_idx: 0,
         },
     }
 
     cardano::withdrawal {
         from: ThirdPartyLogic,
         amount: 0,
-        redeemer: ThirdPartyAction::Graduate {},
+        redeemer: ThirdPartyAction::Trigger {},
     }
 
     cardano::withdrawal {
         from: IssuanceScript,
         amount: 0,
-        redeemer: MintingAction::Burn {},
+        redeemer: MintingAction::Retire {},
     }
 
     cardano::withdrawal {
@@ -1169,23 +1562,26 @@ tx graduate_third_party(
         },
     }
 
-    output native_out {
-        to: payout_address,
-        amount: AnyAsset(native_policy, principal_name, native_quantity) +
-            Ada(2000000),
+    output shell_out {
+        to: certificate_address,
+        amount: Ada(2000000),
+        datum: CertificateDatum {
+            start: certificate_in.start,
+            commit: certificate_in.commit,
+            cnt_policy: certificate_in.cnt_policy,
+        },
     }
 
-    output ghost_out {
-        to: token_address,
-        amount: token_in - AnyAsset(cip_policy, principal_name, quantity),
-        datum: PrincipalDatum {
-            payment_credential: token_in.payment_credential,
-        },
+    output coupon_out {
+        to: pay_address,
+        amount: AnyAsset(coupon_policy, principal_coupon_name, 1) +
+            Ada(2000000),
     }
 
     output {
         to: Signer,
-        amount: gas - Ada(2000000) - fees,
+        amount: certificate_in - AnyAsset(cip_policy, final_name, 1) -
+            Ada(2000000) - Ada(2000000) + gas - fees,
     }
 
     validity {
@@ -1197,6 +1593,10 @@ tx graduate_third_party(
         min_amount: fees,
     }
 
+    signers {
+        Signer,
+    }
+
     cardano::plutus_witness {
         version: 3,
         script: cip_policy_script,
@@ -1204,7 +1604,7 @@ tx graduate_third_party(
 
     cardano::plutus_witness {
         version: 3,
-        script: native_mint_script,
+        script: coupon_script,
     }
 
     cardano::plutus_witness {

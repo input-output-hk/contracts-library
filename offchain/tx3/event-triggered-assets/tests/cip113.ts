@@ -2,44 +2,35 @@
  * Test-only CIP-113 core helpers for the event-triggered assets tx3 e2e.
  *
  * The tx3 protocol cannot apply parameters to scripts, so the applied core and
- * module scripts are computed here with the vendored blueprints and handed to
- * the protocol through its environment. Both the vendored e2e helpers and the
- * library builders return `applyParamsToScript`'s double-CBOR form; tx3 hashes
- * the exact bytes it is handed and the Plutus evaluator CBOR-decodes them, so
- * every script handed over is reduced to its single-CBOR payload with
- * `unwrapCborBytes`.
+ * module scripts are computed here with the vendored blueprints and the
+ * library's `applyBond`, then handed to the protocol through its environment.
+ * Both the vendored e2e helpers and the library builders return
+ * `applyParamsToScript`'s double-CBOR form; tx3 hashes the exact bytes it is
+ * handed and the Plutus evaluator CBOR-decodes them, so every script handed
+ * over is reduced to its single-CBOR payload with `unwrapCborBytes`.
  */
 
 import {
+  deserializeAddress,
   pubKeyAddress,
   scriptAddress,
   serializeAddressObj,
-  type PlutusScript,
 } from "@meshsdk/core";
 
 import {
-  credentialToData,
-  issuanceScript,
-  nativeMintPolicyScript,
-  scriptHashOf as meshScriptHashOf,
-  thirdPartyScript,
-  transferScript,
-  transformationScript,
-  type Credential,
-  type Schedule,
-} from "@contracts-library/meshjs";
-
-import { issuanceMintCompiledCode } from "../../../meshjs/e2e/src/cip113/blueprint";
-import {
+  applyBond,
   applyScript,
   scriptHashOf,
   stripCborWrappers,
-} from "../../../meshjs/e2e/src/cip113/core";
-import {
-  applyCoreScripts,
+  type Bond,
   type CoreConfig,
+  type CoreDeployment,
   type CoreScripts,
-} from "../../../meshjs/e2e/src/cip113/scripts";
+  type Credential,
+} from "@contracts-library/meshjs";
+
+import { issuanceMintCompiledCode } from "../../../meshjs/e2e/src/cip113/blueprint";
+import { applyCoreScripts } from "../../../meshjs/e2e/src/cip113/scripts";
 import { issuanceTemplate } from "../../../meshjs/e2e/src/cip113/template";
 
 export {
@@ -125,81 +116,93 @@ export function baseAddr(paymentHash: string, stakeHash: string): string {
 /** Hex bytes of a script's reward (stake) address, for tx3 `Bytes` env. */
 export const rewardAddrHex = (hash: string): string => `f0${hash}`;
 
+/**
+ * The Aiken `Address` **data** pieces of a bech32 address, for tx3 custom
+ * types: `Constr 0 [PaymentCredential, Option<Referenced<Credential>>]`. The
+ * tx3 `Address` primitive serializes as raw address bytes, which a validator
+ * decoding `Address` from data cannot read, so redeemers that carry an address
+ * must build the constructor form explicitly.
+ */
+export function addressParts(address: string): {
+  payment_credential: Record<string, unknown>;
+  stake_credential: Record<string, unknown>;
+} {
+  const a = deserializeAddress(address);
+  const payment =
+    a.pubKeyHash !== ""
+      ? { Key: { hash: bytes(a.pubKeyHash) } }
+      : { Script: { hash: bytes(a.scriptHash) } };
+  const stake =
+    a.stakeCredentialHash !== ""
+      ? {
+          Some: {
+            stake: {
+              Inline: {
+                credential: { Key: { hash: bytes(a.stakeCredentialHash) } },
+              },
+            },
+          },
+        }
+      : a.stakeScriptCredentialHash !== ""
+        ? {
+            Some: {
+              stake: {
+                Inline: {
+                  credential: {
+                    Script: { hash: bytes(a.stakeScriptCredentialHash) },
+                  },
+                },
+              },
+            },
+          }
+        : { None: {} };
+  return { payment_credential: payment, stake_credential: stake };
+}
+
+/** `redeem`'s payout args for a bech32 destination, ready to spread. */
+export function payoutArgs(address: string): {
+  payout_address: string;
+  payout_address_data: Record<string, unknown>;
+} {
+  const { payment_credential, stake_credential } = addressParts(address);
+  return {
+    payout_address: address,
+    payout_address_data: { payment_credential, stake_credential },
+  };
+}
+
 // --------------------------------------------------------------- bond scripts
 
 export interface BondParams {
   registryNodeCs: string;
   paramsPolicy: string;
   issuer: Credential;
-  principalName: string;
-  referenceName: string;
-  schedule: Schedule;
-  scale: number;
+  vaultNftName: string;
+  principal: number;
+  interval: number;
+  amounts: number[];
 }
 
-export interface BondScripts {
-  issuance: PlutusScript;
-  issuanceMint: PlutusScript;
-  cipPolicy: string;
-  transfer: PlutusScript;
-  thirdParty: PlutusScript;
-  transformation: PlutusScript;
-  nativeMint: PlutusScript;
-  nativePolicy: string;
-  finalDeadline: number;
-}
+/**
+ * Apply one bond with the library's `applyBond`, which resolves the dependency
+ * order (transfer / third-party / vault-NFT → vault → minting logic →
+ * `issuance_mint` → coupon policy). It only needs the registry-node policy, the
+ * protocol-params policy, the network id and the raw `issuance_mint` code — all
+ * of which the vendored core bootstrap provides.
+ */
+export function bondScripts(p: BondParams): Bond {
+  const deployment = {
+    config: { networkId: NETWORK_ID },
+    core: { registryNodeCs: p.registryNodeCs, paramsPolicy: p.paramsPolicy },
+    refs: {},
+    issuanceMintCode: issuanceMintCompiledCode,
+  } as unknown as CoreDeployment;
 
-/** Apply the module scripts and the core `issuance_mint` for one bond. */
-export function bondScripts(p: BondParams): BondScripts {
-  const finalDeadline = p.schedule[p.schedule.length - 1].deadline;
-
-  const transfer = transferScript({
-    registryNodeCs: p.registryNodeCs,
-    finalDeadline,
-  });
-  const thirdParty = thirdPartyScript({
-    registryNodeCs: p.registryNodeCs,
-    finalDeadline,
-  });
-  const transformation = transformationScript({
-    referenceName: p.referenceName,
-    schedule: p.schedule,
-  });
-
-  const issuance = issuanceScript({
-    registryNodeCs: p.registryNodeCs,
+  return applyBond(deployment, {
+    principal: p.principal,
+    interval: p.interval,
+    amounts: p.amounts,
     issuer: p.issuer,
-    transferLogic: meshScriptHashOf(transfer),
-    thirdPartyLogic: meshScriptHashOf(thirdParty),
-    transformationScript: meshScriptHashOf(transformation),
-    principalName: p.principalName,
-    referenceName: p.referenceName,
-    schedule: p.schedule,
-    scale: p.scale,
+    vaultNftName: p.vaultNftName,
   });
-
-  const issuanceMint = applyScript(issuanceMintCompiledCode, [
-    credentialToData({ kind: "script", hash: meshScriptHashOf(issuance) }),
-    p.paramsPolicy,
-  ]);
-  const cipPolicy = scriptHashOf(issuanceMint);
-
-  const nativeMint = nativeMintPolicyScript({
-    cipPolicy,
-    principalName: p.principalName,
-    scale: p.scale,
-    schedule: p.schedule,
-  });
-
-  return {
-    issuance,
-    issuanceMint,
-    cipPolicy,
-    transfer,
-    thirdParty,
-    transformation,
-    nativeMint,
-    nativePolicy: meshScriptHashOf(nativeMint),
-    finalDeadline,
-  };
 }

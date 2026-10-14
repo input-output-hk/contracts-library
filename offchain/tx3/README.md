@@ -57,7 +57,9 @@ trix codegen --plugin ts-client
 The event-triggered suite deploys the vendored CIP-113 core itself through the
 protocol's `core_init_*` TEST KIT transactions (registry, issuance template,
 upgrade config and protocol params), then drives the real module validators:
-register + issue, transfer, transformation and both graduation paths.
+create the vault, register the instrument, permissionless unit deposits, the
+transfer and `commit` opt-in paths, owner-signed and issuer-triggered coupon
+claims, burn-to-pay redemptions and both graduation paths.
 
 Then run the suite (from `offchain/tx3`):
 

@@ -636,6 +636,14 @@ export class TrixDevnet {
     );
   }
 
+  /**
+   * Ledger time (POSIX ms) at the start of `slot` — the exact instant a
+   * validator reads for a validity bound on that slot.
+   */
+  slotTimeMs(slot: number): number {
+    return this.slotConfig.zeroTimeMs + slot * this.slotConfig.slotLengthMs;
+  }
+
   /** Poll until the chain's tip time reaches `targetMs` (or throw on timeout). */
   async waitForChainTimeMs(
     targetMs: number,

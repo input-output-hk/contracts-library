@@ -1,9 +1,11 @@
 /**
  * Real-world happy paths for the tokenized bond over the vendored CIP-113 core
  * (cardano-foundation/cip113-programmable-tokens): deploy the core through the
- * tx3 test kit, register + issue the bond through the core registry, then drive
- * the transfer -> transform -> graduate lifecycle — including the
- * third-party (permissionless) graduation — against a trix devnet.
+ * tx3 test kit, create the vault, register the instrument, then drive the
+ * deposit -> claim -> redeem -> graduate lifecycle on both the owner path
+ * (transfer / owner-signed claim and graduation) and the issuer path
+ * (opt-in `commit` / issuer-triggered claim and graduation) against a trix
+ * devnet.
  *
  * Single-signer discipline: the tx signer must be the credential the protocol
  * requires, so each step rebinds the generated client's `Signer` party.
@@ -11,6 +13,8 @@
 
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { type TxBuilder } from "tx3-sdk";
+
+import { couponName, stepName, type Bond } from "@contracts-library/meshjs";
 
 import {
   DEVNET_POLL,
@@ -21,15 +25,14 @@ import {
 } from "../../devnet/utils";
 import { Client } from "../codegen/ts-client/tokenized-bond/protocol";
 import {
-  type BondScripts,
   type CoreScripts,
   applyCoreScripts,
-  baseAddr,
   bondScripts,
   bytes,
   hexOf,
   issuanceMintCompiledCode,
   issuanceTemplate,
+  payoutArgs,
   plbAddr,
   refIndexOf,
   refParts,
@@ -42,10 +45,11 @@ import {
 
 const ADA = 1_000_000n;
 
-const PRINCIPAL = "424f4e44"; // "BOND"
-const REFERENCE = "524546"; // "REF"
-const SCALE = 1000;
-const QUANTITY = 1000n;
+const PRINCIPAL = 1000;
+const INTERVAL = 10_000;
+const AMOUNTS = [1040];
+const VAULT_NFT_NAME = "5630"; // "V0"
+const VAULT_ADA = 5n * ADA;
 const SENTINEL_NEXT = "ff".repeat(30);
 const MAX_INLINE_DATUM_BYTES = 1024;
 const ALWAYS_FAIL_NONCE = "ab".repeat(32);
@@ -141,17 +145,20 @@ function bootstrapEnv(): Record<string, unknown> {
     // Per-instrument placeholders (unused by the bootstrap txs).
     cip_policy: "00".repeat(28),
     cip_policy_script: "00",
-    native_policy: "00".repeat(28),
-    native_mint_script: "00",
     issuance_script_ref: "00#0",
     issuance_script_address: "00",
     transfer_logic_script_ref: "00#0",
     transfer_logic_script_address: "00",
     third_party_logic_script_ref: "00#0",
     third_party_logic_script_address: "00",
-    transformation_script_ref: "00#0",
-    transformation_script_address: "00",
     issuance_hash: "00".repeat(28),
+    coupon_policy: "00".repeat(28),
+    coupon_script: "00",
+    vault_script: "00",
+    vault_nft_policy: "00".repeat(28),
+    vault_nft_script: "00",
+    vault_nft_name: "00",
+    vault_principal: 0,
     // Core wiring. tx3 hashes the exact bytes it is handed, so the vendored
     // e2e scripts (single-CBOR) are stripped to their flat program here; the
     // hashes above are MeshJS ledger hashes of that flat program.
@@ -159,8 +166,6 @@ function bootstrapEnv(): Record<string, unknown> {
     node_policy_script: unwrapCborBytes(core.registry.code),
     plb_script: unwrapCborBytes(core.programmableLogicBase.code),
     protocol_params_ref: "00#0",
-    principal_name: PRINCIPAL,
-    reference_name: REFERENCE,
     plb_global_script_ref: "00#0",
     plb_global_script_address: "00",
     core_transfer_script_ref: "00#0",
@@ -373,32 +378,25 @@ interface InstrumentRefs {
   issuance: string;
   transfer: string;
   thirdParty: string;
-  transformation: string;
 }
 
 interface Instrument {
   issuer: DevnetWallet;
-  holder: DevnetWallet;
-  bond: BondScripts;
+  bond: Bond;
   refs: InstrumentRefs;
   env: Record<string, unknown>;
   plbHash: string;
   nodeRef: string;
-  principalRef: string;
-  principalAddress: string;
-  referenceRef: string;
-  referenceAddress: string;
-  schedule: { deadline: number; value: number }[];
-  finalValue: number;
+  vaultRef: string;
+  vaultAddress: string;
 }
 
 interface InstrumentOptions {
   issuer: DevnetWallet;
   holder: DevnetWallet;
-  beneficiary: DevnetWallet;
 }
 
-/** Apply one bond's scripts, fund the actors, and atomically register + issue. */
+/** Apply one bond, publish its scripts, create its vault and register it. */
 async function setupInstrument(o: InstrumentOptions): Promise<Instrument> {
   const { issuer, holder } = o;
 
@@ -411,35 +409,18 @@ async function setupInstrument(o: InstrumentOptions): Promise<Instrument> {
     }
   }
 
-  // The schedule is baked into every module script, so it is fixed before
-  // funding/registration/publishing. The lead leaves room for that setup to
-  // complete before the first deadline (and before d4, the transform's gate).
-  const scheduleStart = (await devnet.tip()).timeMs + 120_000;
-  const schedule = [
-    { deadline: scheduleStart + 10_000, value: 1040 },
-    { deadline: scheduleStart + 20_000, value: 1081 },
-    { deadline: scheduleStart + 30_000, value: 1124 },
-    { deadline: scheduleStart + 40_000, value: 1169 },
-  ];
-  const finalValue = schedule[schedule.length - 1].value;
-
   const bond = bondScripts({
     registryNodeCs: core.registryNodeCs,
     paramsPolicy: core.paramsPolicy,
     issuer: { kind: "key", hash: issuer.keyHash },
-    principalName: PRINCIPAL,
-    referenceName: REFERENCE,
-    schedule,
-    scale: SCALE,
+    vaultNftName: VAULT_NFT_NAME,
+    principal: PRINCIPAL,
+    interval: INTERVAL,
+    amounts: AMOUNTS,
   });
 
   // Register this bond's withdraw-0 credentials, then publish its scripts.
-  for (const script of [
-    bond.issuance,
-    bond.transfer,
-    bond.thirdParty,
-    bond.transformation,
-  ]) {
+  for (const script of bond.withdrawCredentials) {
     await devnet.registerScriptStakeCredential(
       registrant,
       scriptHashOf(script),
@@ -451,17 +432,12 @@ async function setupInstrument(o: InstrumentOptions): Promise<Instrument> {
     thirdParty: await deployReferenceScript(
       unwrapCborBytes(bond.thirdParty.code),
     ),
-    transformation: await deployReferenceScript(
-      unwrapCborBytes(bond.transformation.code),
-    ),
   };
 
   const env: Record<string, unknown> = {
     ...coreEnv(),
     cip_policy: bond.cipPolicy,
     cip_policy_script: unwrapCborBytes(bond.issuanceMint.code),
-    native_policy: bond.nativePolicy,
-    native_mint_script: unwrapCborBytes(bond.nativeMint.code),
     issuance_script_ref: refs.issuance,
     issuance_script_address: rewardAddrHex(scriptHashOf(bond.issuance)),
     transfer_logic_script_ref: refs.transfer,
@@ -470,14 +446,30 @@ async function setupInstrument(o: InstrumentOptions): Promise<Instrument> {
     third_party_logic_script_address: rewardAddrHex(
       scriptHashOf(bond.thirdParty),
     ),
-    transformation_script_ref: refs.transformation,
-    transformation_script_address: rewardAddrHex(
-      scriptHashOf(bond.transformation),
-    ),
     issuance_hash: scriptHashOf(bond.issuance),
-    reference_name: REFERENCE,
+    coupon_policy: bond.cntPolicy,
+    coupon_script: unwrapCborBytes(bond.couponPolicy.code),
+    vault_script: unwrapCborBytes(bond.vault.code),
+    vault_nft_policy: bond.vaultNftCs,
+    vault_nft_script: unwrapCborBytes(bond.vaultNft.code),
+    vault_nft_name: VAULT_NFT_NAME,
+    vault_principal: PRINCIPAL,
   };
 
+  // ---- create the vault (§3.1) ------------------------------------------
+  const vaultAddress = scriptAddr(bond.vaultHash);
+  const beforeVault = await snapshot(vaultAddress);
+  await confirm(
+    clientFor(issuer)
+      .createVault({
+        vault_address: vaultAddress,
+        vault_ada: Number(VAULT_ADA),
+      } as unknown as Parameters<Client["createVault"]>[0])
+      .env(env),
+  );
+  const vault = one(await addedSince(vaultAddress, beforeVault), "vault");
+
+  // ---- register (§4.1) ----------------------------------------------------
   // Registry linked list: cover the greatest key below the new policy.
   const covering = registryNodes
     .filter((n) => hexOf(n.datum.key as Uint8Array) < bond.cipPolicy)
@@ -506,112 +498,90 @@ async function setupInstrument(o: InstrumentOptions): Promise<Instrument> {
     global_state_cs: new Uint8Array(0),
   };
 
-  const plbHash = core.programmableLogicBaseCred.hash;
-  const beneficiaryAddress = plbAddr(plbHash, o.beneficiary.keyHash, false);
-  const referenceAddress = plbAddr(
-    plbHash,
-    scriptHashOf(bond.transformation),
-    true,
-  );
-
-  const registerRefs = sortRefs([
-    paramsRef,
-    cborHexRef,
-    refs.issuance,
-    coreRefs.coreIssuance,
-  ]);
-  const paramsIdx = refIndexOf(registerRefs, paramsRef);
-
-  const beforePrincipal = await snapshot(beneficiaryAddress);
-  const beforeReference = await snapshot(referenceAddress);
-
   const registerHash = await confirm(
     clientFor(issuer)
-      .registerIssue({
-        quantity: Number(QUANTITY),
+      .register({
         node_datum: nodeDatum,
-        reference_datum: referenceDatum(bond, schedule, SCALE),
-        beneficiary_address: beneficiaryAddress,
-        reference_address: referenceAddress,
         covering_ref: covering.ref,
         covering_address: registryAddr,
         covering_datum: coveringDatum,
-        params_idx: paramsIdx,
-        new_node_ix: 1,
-      } as unknown as Parameters<Client["registerIssue"]>[0])
+      } as unknown as Parameters<Client["register"]>[0])
       .env(env),
   );
 
-  // The template emits the covering continuation first and the new node
-  // second (the same layout `new_node_ix` names).
-  const coveringAfterRef = `${registerHash}#0`;
+  // The template emits the covering continuation first and the new node second.
   const newNodeRef = `${registerHash}#1`;
-  const principal = one(
-    await addedSince(beneficiaryAddress, beforePrincipal),
-    "principal",
-  );
-  const referenceToken = one(
-    await addedSince(referenceAddress, beforeReference),
-    "reference token",
-  );
-
-  covering.ref = coveringAfterRef;
+  covering.ref = `${registerHash}#0`;
   covering.datum = coveringDatum;
   registryNodes.push({ ref: newNodeRef, datum: nodeDatum });
 
   return {
     issuer,
-    holder,
     bond,
     refs,
     env,
-    plbHash,
+    plbHash: core.programmableLogicBaseCred.hash,
     nodeRef: newNodeRef,
-    principalRef: principal.ref,
-    principalAddress: beneficiaryAddress,
-    referenceRef: referenceToken.ref,
-    referenceAddress,
-    schedule,
-    finalValue,
+    vaultRef: vault.ref,
+    vaultAddress,
   };
-}
-
-function referenceDatum(
-  bond: BondScripts,
-  schedule: { deadline: number; value: number }[],
-  value: number,
-): Record<string, unknown> {
-  return {
-    metadata: new Uint8Array(0),
-    version: 1,
-    extra: {
-      schedule: schedule.map((s) => ({ deadline: s.deadline, value: s.value })),
-      value,
-      native_policy: bytes(bond.nativePolicy),
-    },
-  };
-}
-
-function lookup(
-  schedule: { deadline: number; value: number }[],
-  now: number,
-): number {
-  return schedule.reduce((v, s) => (s.deadline <= now ? s.value : v), 0);
 }
 
 // ------------------------------------------------------------------- owner path
 
-test("registers, transfers, transforms, and graduates on the owner path", async () => {
-  const issuer = devnet.wallet("owner/issuer");
-  const holder = devnet.wallet("owner/holder");
-  const inst = await setupInstrument({
-    issuer,
-    holder,
-    beneficiary: issuer,
-  });
+test("deposits, transfers, claims, redeems and graduates on the owner path", async () => {
+  const issuer = devnet.wallet("holder/issuer");
+  const holder = devnet.wallet("holder/holder");
+  const couponOwner = devnet.wallet("holder/coupon");
+  const inst = await setupInstrument({ issuer, holder });
   const { bond } = inst;
+  for (const ada of [10, 5]) {
+    await devnet.payTo(couponOwner.address, BigInt(ada) * ADA);
+  }
 
-  // ---- transfer (T2, owner path) ---------------------------------------
+  // ---- deposit (§4.2): the issuer deposits; the certificate starts at the
+  // issuer's PLB-custodied address ----------------------------------------
+  const tip0 = await devnet.tip();
+  const untilSlot = tip0.slot + 30;
+  const start = devnet.slotTimeMs(untilSlot);
+  const depositorAddress = plbAddr(inst.plbHash, issuer.keyHash, false);
+  const depositRefs = sortRefs([
+    paramsRef,
+    inst.nodeRef,
+    inst.refs.issuance,
+    coreRefs.coreIssuance,
+  ]);
+  const beforeDeposit = await snapshot(depositorAddress);
+  await confirm(
+    clientFor(issuer)
+      .deposit({
+        vault_address: inst.vaultAddress,
+        vault_ref: inst.vaultRef,
+        vault_datum: { cnt_policy: bytes(bond.cntPolicy) },
+        certificate_address: depositorAddress,
+        step_name: bytes(stepName(0)),
+        start,
+        until_slot: untilSlot,
+        params_idx: refIndexOf(depositRefs, paramsRef),
+        node_idx: refIndexOf(depositRefs, inst.nodeRef),
+        node_ref: inst.nodeRef,
+      } as unknown as Parameters<Client["deposit"]>[0])
+      .env(inst.env),
+  );
+  // The instrument has exactly one vault UTxO: take it from its address.
+  let vaultRef = one(await devnet.utxosOf(inst.vaultAddress), "vault").ref;
+  const certificate = one(
+    await addedSince(depositorAddress, beforeDeposit),
+    "certificate",
+  );
+  expect(
+    (await devnet.assetsOf(depositorAddress))[bond.cipPolicy + stepName(0)],
+  ).toBe(1n);
+  expect((await devnet.lovelaceBalanceOf(inst.vaultAddress)).lovelace).toBe(
+    VAULT_ADA + BigInt(PRINCIPAL),
+  );
+
+  // ---- transfer (§4.3): owner change clears `commit` ----------------------
   const holderAddress = plbAddr(inst.plbHash, holder.keyHash, false);
   const transferRefs = sortRefs([
     paramsRef,
@@ -629,221 +599,387 @@ test("registers, transfers, transforms, and graduates on the owner path", async 
   await confirm(
     clientFor(issuer)
       .transfer({
-        token_address: inst.principalAddress,
-        token_ref: inst.principalRef,
+        certificate_address: depositorAddress,
+        certificate_ref: certificate.ref,
+        recipient_address: holderAddress,
+        certificate_datum: {
+          start,
+          commit: { None: {} },
+          cnt_policy: bytes(bond.cntPolicy),
+        },
         params_idx: refIndexOf(transferRefs, paramsRef),
+        node_idx: refIndexOf(transferRefs, inst.nodeRef),
         wdrl_idx: withdrawalIndexOf(
           transferWdrls,
           core.programmableLogicGlobalHash,
         ),
-        node_idx: refIndexOf(transferRefs, inst.nodeRef),
         node_ref: inst.nodeRef,
-        recipient_address: holderAddress,
       } as unknown as Parameters<Client["transfer"]>[0])
       .env(inst.env),
   );
-  const holderPrincipal = one(
+  const heldCertificate = one(
     await addedSince(holderAddress, beforeHolder),
-    "holder principal",
+    "moved certificate",
   );
+  expect(
+    (await devnet.assetsOf(depositorAddress))[bond.cipPolicy + stepName(0)],
+  ).toBeUndefined();
 
-  // ---- transform (T3) ---------------------------------------------------
-  await devnet.waitForChainTimeMs(inst.schedule[0].deadline + 1_000);
-  const tip = await devnet.tip();
-  const transformRefs = sortRefs([...transferRefs, inst.refs.transformation]);
-  const transformWdrls = [...transferWdrls, scriptHashOf(bond.transformation)];
-  const beforeTransformReference = await snapshot(inst.referenceAddress);
-  await confirm(
-    clientFor(issuer)
-      .transform({
-        reference_ref: inst.referenceRef,
-        reference_address: inst.referenceAddress,
-        params_idx: refIndexOf(transformRefs, paramsRef),
-        wdrl_idx: withdrawalIndexOf(
-          transformWdrls,
-          core.programmableLogicGlobalHash,
-        ),
-        node_idx: refIndexOf(transformRefs, inst.nodeRef),
-        node_ref: inst.nodeRef,
-        reference_datum: referenceDatum(
-          bond,
-          inst.schedule,
-          lookup(inst.schedule, tip.timeMs),
-        ),
-        since_slot: tip.slot,
-      } as unknown as Parameters<Client["transform"]>[0])
-      .env(inst.env),
-  );
-  // The transformation rewrites the reference token in place: track the
-  // continuation, which graduation must reference.
-  const transformedReference = one(
-    await addedSince(inst.referenceAddress, beforeTransformReference),
-    "reference token continuation",
-  );
-
-  // ---- graduate (T4, owner path) ---------------------------------------
-  await devnet.waitForChainTimeMs(
-    inst.schedule[inst.schedule.length - 1].deadline + 1_000,
-    300,
-  );
-  const tip4 = await devnet.tip();
-  const graduateRefs = sortRefs([
-    paramsRef,
-    inst.nodeRef,
-    transformedReference.ref,
-    coreRefs.plbGlobal,
-    coreRefs.coreTransfer,
-    inst.refs.transfer,
+  // ---- claim the coupon, step 1 (§4.5) ------------------------------------
+  const deadline = start + INTERVAL;
+  await devnet.waitForChainTimeMs(deadline + 1_000, 120);
+  const tip1 = await devnet.tip();
+  const claimRefs = sortRefs([
+    ...transferRefs,
     inst.refs.issuance,
     coreRefs.coreIssuance,
   ]);
-  const graduateWdrls = [
-    core.programmableLogicGlobalHash,
-    core.transferHash,
-    scriptHashOf(bond.transfer),
+  const claimWdrls = [
+    ...transferWdrls,
     scriptHashOf(bond.issuance),
     core.issuanceLogicHash,
   ];
-  const nativeQuantity = Number(
-    (QUANTITY * BigInt(inst.finalValue)) / BigInt(SCALE),
+  const beforeAdvance = await snapshot(holderAddress);
+  const beforeCoupon = await snapshot(couponOwner.address);
+  await confirm(
+    clientFor(holder)
+      .claimOwner({
+        certificate_address: holderAddress,
+        certificate_ref: heldCertificate.ref,
+        old_name: bytes(stepName(0)),
+        new_name: bytes(stepName(1)),
+        coupon_name: bytes(couponName(AMOUNTS[0])),
+        coupon_address: couponOwner.address,
+        params_idx: refIndexOf(claimRefs, paramsRef),
+        node_idx: refIndexOf(claimRefs, inst.nodeRef),
+        wdrl_idx: withdrawalIndexOf(
+          claimWdrls,
+          core.programmableLogicGlobalHash,
+        ),
+        node_ref: inst.nodeRef,
+        since_slot: tip1.slot,
+      } as unknown as Parameters<Client["claimOwner"]>[0])
+      .env(inst.env),
   );
-  const payoutAddress = baseAddr(holder.keyHash, holder.keyHash);
+  const advancedCertificate = one(
+    await addedSince(holderAddress, beforeAdvance),
+    "advanced certificate",
+  );
+  const coupon = one(
+    await addedSince(couponOwner.address, beforeCoupon),
+    "coupon",
+  );
+  expect(
+    (await devnet.assetsOf(holderAddress))[bond.cipPolicy + stepName(1)],
+  ).toBe(1n);
+  expect(
+    (await devnet.assetsOf(couponOwner.address))[
+      bond.cntPolicy + couponName(AMOUNTS[0])
+    ],
+  ).toBe(1n);
 
+  // ---- redeem the coupon (§4.6) -------------------------------------------
+  await confirm(
+    clientFor(couponOwner)
+      .redeem({
+        coupon_ref: coupon.ref,
+        coupon_name: bytes(couponName(AMOUNTS[0])),
+        coupon_quantity: 1,
+        vault_address: inst.vaultAddress,
+        vault_ref: vaultRef,
+        vault_datum: { cnt_policy: bytes(bond.cntPolicy) },
+        ...payoutArgs(holder.address),
+        payout_amount: AMOUNTS[0],
+        payout_lovelace: Number(2n * ADA),
+      } as unknown as Parameters<Client["redeem"]>[0])
+      .env(inst.env),
+  );
+  vaultRef = one(await devnet.utxosOf(inst.vaultAddress), "vault").ref;
+  expect((await devnet.lovelaceBalanceOf(inst.vaultAddress)).lovelace).toBe(
+    VAULT_ADA + BigInt(PRINCIPAL) - BigInt(AMOUNTS[0]),
+  );
+
+  // ---- graduate (§4.7, owner path) ----------------------------------------
+  const tip2 = await devnet.tip();
+  const beforePrincipal = await snapshot(couponOwner.address);
   await confirm(
     clientFor(holder)
       .graduateOwner({
-        token_address: holderAddress,
-        token_ref: holderPrincipal.ref,
-        params_idx: refIndexOf(graduateRefs, paramsRef),
+        certificate_address: holderAddress,
+        certificate_ref: advancedCertificate.ref,
+        final_name: bytes(stepName(1)),
+        principal_coupon_name: bytes(couponName(PRINCIPAL)),
+        coupon_address: couponOwner.address,
+        params_idx: refIndexOf(claimRefs, paramsRef),
+        node_idx: refIndexOf(claimRefs, inst.nodeRef),
         wdrl_idx: withdrawalIndexOf(
-          graduateWdrls,
+          claimWdrls,
           core.programmableLogicGlobalHash,
         ),
-        node_idx: refIndexOf(graduateRefs, inst.nodeRef),
         node_ref: inst.nodeRef,
-        reference_ref: transformedReference.ref,
-        quantity: Number(QUANTITY),
-        native_quantity: nativeQuantity,
-        payout_address: payoutAddress,
-        since_slot: tip4.slot,
+        since_slot: tip2.slot,
       } as unknown as Parameters<Client["graduateOwner"]>[0])
       .env(inst.env),
   );
+  expect((await devnet.utxosOf(holderAddress)).length).toBe(0);
+  const principalCoupon = one(
+    await addedSince(couponOwner.address, beforePrincipal),
+    "principal coupon",
+  );
+  expect(
+    (await devnet.assetsOf(couponOwner.address))[
+      bond.cntPolicy + couponName(PRINCIPAL)
+    ],
+  ).toBe(1n);
 
-  const nativeHeld =
-    (await devnet.assetsOf(payoutAddress))[bond.nativePolicy + PRINCIPAL] ?? 0n;
-  expect(nativeHeld).toBe(BigInt(nativeQuantity));
-  const principalHeld =
-    (await devnet.assetsOf(holderAddress))[bond.cipPolicy + PRINCIPAL] ?? 0n;
-  expect(principalHeld).toBe(0n);
+  // ---- redeem the principal (§4.6) ----------------------------------------
+  await confirm(
+    clientFor(couponOwner)
+      .redeem({
+        coupon_ref: principalCoupon.ref,
+        coupon_name: bytes(couponName(PRINCIPAL)),
+        coupon_quantity: 1,
+        vault_address: inst.vaultAddress,
+        vault_ref: vaultRef,
+        vault_datum: { cnt_policy: bytes(bond.cntPolicy) },
+        ...payoutArgs(holder.address),
+        payout_amount: PRINCIPAL,
+        payout_lovelace: Number(2n * ADA),
+      } as unknown as Parameters<Client["redeem"]>[0])
+      .env(inst.env),
+  );
+  expect((await devnet.lovelaceBalanceOf(inst.vaultAddress)).lovelace).toBe(
+    VAULT_ADA + BigInt(PRINCIPAL) - BigInt(AMOUNTS[0]) - BigInt(PRINCIPAL),
+  );
 }, 300_000);
 
-// ------------------------------------------------------------- third-party path
+// ------------------------------------------------------------------ issuer path
 
-test("graduates through the permissionless third-party path", async () => {
-  const issuer = devnet.wallet("third/issuer");
-  const holder = devnet.wallet("third/holder");
-  const payout = devnet.wallet("third/payout");
-  const submitter = devnet.wallet("third/submitter");
-  await devnet.payTo(submitter.address, 10n * ADA);
-  await devnet.payTo(submitter.address, 5n * ADA);
+test("triggers claims and retirement on the issuer path", async () => {
+  const issuer = devnet.wallet("issuer/issuer");
+  const holder = devnet.wallet("issuer/holder");
+  const payout = devnet.wallet("issuer/payout");
+  await devnet.payTo(payout.address, 10n * ADA);
+  await devnet.payTo(payout.address, 5n * ADA);
 
-  const inst = await setupInstrument({
-    issuer,
-    holder,
-    beneficiary: holder,
-  });
+  const inst = await setupInstrument({ issuer, holder });
   const { bond } = inst;
-  const holderAddress = plbAddr(inst.plbHash, holder.keyHash, false);
 
-  // ---- register payout key (T2b) ---------------------------------------
-  const payoutKeyWdrls = [
-    core.programmableLogicGlobalHash,
-    core.transferHash,
-    scriptHashOf(bond.transfer),
-  ];
-  const payoutRefs = sortRefs([
+  // ---- deposit (§4.2): the holder deposits --------------------------------
+  const tip0 = await devnet.tip();
+  const untilSlot = tip0.slot + 30;
+  const start = devnet.slotTimeMs(untilSlot);
+  const holderAddress = plbAddr(inst.plbHash, holder.keyHash, false);
+  const depositRefs = sortRefs([
+    paramsRef,
+    inst.nodeRef,
+    inst.refs.issuance,
+    coreRefs.coreIssuance,
+  ]);
+  const beforeDeposit = await snapshot(holderAddress);
+  await confirm(
+    clientFor(holder)
+      .deposit({
+        vault_address: inst.vaultAddress,
+        vault_ref: inst.vaultRef,
+        vault_datum: { cnt_policy: bytes(bond.cntPolicy) },
+        certificate_address: holderAddress,
+        step_name: bytes(stepName(0)),
+        start,
+        until_slot: untilSlot,
+        params_idx: refIndexOf(depositRefs, paramsRef),
+        node_idx: refIndexOf(depositRefs, inst.nodeRef),
+        node_ref: inst.nodeRef,
+      } as unknown as Parameters<Client["deposit"]>[0])
+      .env(inst.env),
+  );
+  // The instrument has exactly one vault UTxO: take it from its address.
+  let vaultRef = one(await devnet.utxosOf(inst.vaultAddress), "vault").ref;
+  const certificate = one(
+    await addedSince(holderAddress, beforeDeposit),
+    "certificate",
+  );
+
+  // ---- authorize (§4.4): commit the payout key ----------------------------
+  const transferRefs = sortRefs([
     paramsRef,
     inst.nodeRef,
     coreRefs.plbGlobal,
     coreRefs.coreTransfer,
     inst.refs.transfer,
   ]);
-  const beforeHolder = await snapshot(holderAddress);
+  const transferWdrls = [
+    core.programmableLogicGlobalHash,
+    core.transferHash,
+    scriptHashOf(bond.transfer),
+  ];
+  const beforeCommitted = await snapshot(holderAddress);
   await confirm(
     clientFor(holder)
-      .registerPayoutKey({
-        token_address: holderAddress,
-        token_ref: inst.principalRef,
-        params_idx: refIndexOf(payoutRefs, paramsRef),
+      .authorize({
+        certificate_address: holderAddress,
+        certificate_ref: certificate.ref,
+        payout_credential: {
+          Some: { credential: { Key: { hash: bytes(payout.keyHash) } } },
+        },
+        params_idx: refIndexOf(transferRefs, paramsRef),
+        node_idx: refIndexOf(transferRefs, inst.nodeRef),
         wdrl_idx: withdrawalIndexOf(
-          payoutKeyWdrls,
+          transferWdrls,
           core.programmableLogicGlobalHash,
         ),
-        node_idx: refIndexOf(payoutRefs, inst.nodeRef),
         node_ref: inst.nodeRef,
-        payout_credential: { Key: { hash: bytes(payout.keyHash) } },
-      } as unknown as Parameters<Client["registerPayoutKey"]>[0])
+      } as unknown as Parameters<Client["authorize"]>[0])
       .env(inst.env),
   );
   const committed = one(
-    await addedSince(holderAddress, beforeHolder),
-    "committed principal",
+    await addedSince(holderAddress, beforeCommitted),
+    "committed certificate",
   );
 
-  // ---- graduate (T4, third-party path) ---------------------------------
-  await devnet.waitForChainTimeMs(
-    inst.schedule[inst.schedule.length - 1].deadline + 1_000,
-    300,
-  );
-  const tip = await devnet.tip();
-  const graduateRefs = sortRefs([
+  // ---- claim_issuer (§4.5): the issuer triggers the advance ---------------
+  const deadline = start + INTERVAL;
+  await devnet.waitForChainTimeMs(deadline + 1_000, 120);
+  const tip1 = await devnet.tip();
+  const thirdPartyRefs = sortRefs([
     paramsRef,
     inst.nodeRef,
-    inst.referenceRef,
     coreRefs.plbGlobal,
     coreRefs.coreThirdParty,
     inst.refs.thirdParty,
-    inst.refs.issuance,
-    coreRefs.coreIssuance,
   ]);
-  const graduateWdrls = [
+  const thirdPartyWdrls = [
     core.programmableLogicGlobalHash,
     core.thirdPartyHash,
     scriptHashOf(bond.thirdParty),
+  ];
+  const claimRefs = sortRefs([
+    ...thirdPartyRefs,
+    inst.refs.issuance,
+    coreRefs.coreIssuance,
+  ]);
+  const claimWdrls = [
+    ...thirdPartyWdrls,
     scriptHashOf(bond.issuance),
     core.issuanceLogicHash,
   ];
-  const nativeQuantity = Number(
-    (QUANTITY * BigInt(inst.finalValue)) / BigInt(SCALE),
-  );
-  const payoutAddress = baseAddr(payout.keyHash, holder.keyHash);
-
+  const beforeTriggeredCoupon = await snapshot(payout.address);
+  const beforeAdvance = await snapshot(holderAddress);
   await confirm(
-    clientFor(submitter)
-      .graduateThirdParty({
-        token_address: holderAddress,
-        token_ref: committed.ref,
-        params_idx: refIndexOf(graduateRefs, paramsRef),
+    clientFor(issuer)
+      .claimIssuer({
+        certificate_address: holderAddress,
+        certificate_ref: committed.ref,
+        old_name: bytes(stepName(0)),
+        new_name: bytes(stepName(1)),
+        coupon_name: bytes(couponName(AMOUNTS[0])),
+        pay_address: payout.address,
+        params_idx: refIndexOf(claimRefs, paramsRef),
+        node_idx: refIndexOf(claimRefs, inst.nodeRef),
         wdrl_idx: withdrawalIndexOf(
-          graduateWdrls,
+          claimWdrls,
           core.programmableLogicGlobalHash,
         ),
-        node_idx: refIndexOf(graduateRefs, inst.nodeRef),
         node_ref: inst.nodeRef,
-        outputs_start_idx: 1,
-        reference_ref: inst.referenceRef,
-        quantity: Number(QUANTITY),
-        native_quantity: nativeQuantity,
-        payout_address: payoutAddress,
-        since_slot: tip.slot,
-      } as unknown as Parameters<Client["graduateThirdParty"]>[0])
+        since_slot: tip1.slot,
+      } as unknown as Parameters<Client["claimIssuer"]>[0])
       .env(inst.env),
   );
+  const advancedCertificate = one(
+    await addedSince(holderAddress, beforeAdvance),
+    "advanced certificate",
+  );
+  const triggeredCoupon = one(
+    await addedSince(payout.address, beforeTriggeredCoupon),
+    "triggered coupon",
+  );
+  expect(
+    (await devnet.assetsOf(payout.address))[
+      bond.cntPolicy + couponName(AMOUNTS[0])
+    ],
+  ).toBe(1n);
+  expect(
+    (await devnet.assetsOf(holderAddress))[bond.cipPolicy + stepName(1)],
+  ).toBe(1n);
 
-  const nativeHeld =
-    (await devnet.assetsOf(payoutAddress))[bond.nativePolicy + PRINCIPAL] ?? 0n;
-  expect(nativeHeld).toBe(BigInt(nativeQuantity));
-  // The ghost continuation stays at the owner's PLB address.
-  expect((await devnet.utxosOf(holderAddress)).length).toBe(1);
+  // ---- redeem the coupon (the committed payout wallet holds it) -----------
+  await confirm(
+    clientFor(payout)
+      .redeem({
+        coupon_ref: triggeredCoupon.ref,
+        coupon_name: bytes(couponName(AMOUNTS[0])),
+        coupon_quantity: 1,
+        vault_address: inst.vaultAddress,
+        vault_ref: vaultRef,
+        vault_datum: { cnt_policy: bytes(bond.cntPolicy) },
+        ...payoutArgs(holder.address),
+        payout_amount: AMOUNTS[0],
+        payout_lovelace: Number(2n * ADA),
+      } as unknown as Parameters<Client["redeem"]>[0])
+      .env(inst.env),
+  );
+  vaultRef = one(await devnet.utxosOf(inst.vaultAddress), "vault").ref;
+  expect((await devnet.lovelaceBalanceOf(inst.vaultAddress)).lovelace).toBe(
+    VAULT_ADA + BigInt(PRINCIPAL) - BigInt(AMOUNTS[0]),
+  );
+
+  // ---- graduate_issuer (§4.7): ghost shell + principal coupon -------------
+  const tip2 = await devnet.tip();
+  const beforeShell = await snapshot(holderAddress);
+  const beforePrincipal = await snapshot(payout.address);
+  await confirm(
+    clientFor(issuer)
+      .graduateIssuer({
+        certificate_address: holderAddress,
+        certificate_ref: advancedCertificate.ref,
+        final_name: bytes(stepName(1)),
+        principal_coupon_name: bytes(couponName(PRINCIPAL)),
+        pay_address: payout.address,
+        params_idx: refIndexOf(claimRefs, paramsRef),
+        node_idx: refIndexOf(claimRefs, inst.nodeRef),
+        wdrl_idx: withdrawalIndexOf(
+          claimWdrls,
+          core.programmableLogicGlobalHash,
+        ),
+        node_ref: inst.nodeRef,
+        since_slot: tip2.slot,
+      } as unknown as Parameters<Client["graduateIssuer"]>[0])
+      .env(inst.env),
+  );
+  // The paired shell is the first output; it preserves the address and datum
+  // and carries no certificate.
+  const shell = one(await addedSince(holderAddress, beforeShell), "shell");
+  expect(
+    (await devnet.assetsOf(holderAddress))[bond.cipPolicy + stepName(1)],
+  ).toBeUndefined();
+  const principalCoupon = one(
+    await addedSince(payout.address, beforePrincipal),
+    "principal coupon",
+  );
+  expect(
+    (await devnet.assetsOf(payout.address))[
+      bond.cntPolicy + couponName(PRINCIPAL)
+    ],
+  ).toBe(1n);
+  expect(shell.lovelace).toBe(2n * ADA);
+
+  // ---- redeem the principal (§4.6) ----------------------------------------
+  await confirm(
+    clientFor(payout)
+      .redeem({
+        coupon_ref: principalCoupon.ref,
+        coupon_name: bytes(couponName(PRINCIPAL)),
+        coupon_quantity: 1,
+        vault_address: inst.vaultAddress,
+        vault_ref: vaultRef,
+        vault_datum: { cnt_policy: bytes(bond.cntPolicy) },
+        ...payoutArgs(holder.address),
+        payout_amount: PRINCIPAL,
+        payout_lovelace: Number(2n * ADA),
+      } as unknown as Parameters<Client["redeem"]>[0])
+      .env(inst.env),
+  );
+  expect((await devnet.lovelaceBalanceOf(inst.vaultAddress)).lovelace).toBe(
+    VAULT_ADA + BigInt(PRINCIPAL) - BigInt(AMOUNTS[0]) - BigInt(PRINCIPAL),
+  );
 }, 300_000);
