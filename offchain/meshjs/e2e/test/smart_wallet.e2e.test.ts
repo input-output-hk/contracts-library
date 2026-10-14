@@ -22,11 +22,20 @@ import {
   spendingLimitScript,
   spendingWindowScript,
   spendingWindowStateToData,
+  fullRecipientAllowListScript,
+  fullRecipientDenyListScript,
+  paymentStakingAllowListScript,
+  paymentStakingDenyListScript,
+  assetAllowListScript,
+  assetDenyListScript,
+  assetDepositAllowListScript,
+  assetDepositDenyListScript,
   walletConfigToData,
   SETTINGS_TOKEN_NAME,
   settingsScript,
   settingsScriptAddress,
   buildLaunchTx,
+  type Credential,
   type SettingsDatum,
   type SettingsParams,
   type WalletConfig,
@@ -35,6 +44,8 @@ import {
   type SpendingWindowState,
 } from "@contracts-library/meshjs";
 import {
+  deserializeAddress,
+  mConStr0,
   resolveScriptHash,
   unixTimeToEnclosingSlot,
   type Asset,
@@ -609,3 +620,519 @@ describe.skipIf(!reachable)("smart wallet spender scripts e2e", () => {
     ).rejects.toThrow();
   });
 });
+
+describe.skipIf(!reachable)(
+  "smart wallet recipient & asset scripts e2e",
+  () => {
+    let provider: ReturnType<typeof makeProvider>;
+
+    beforeAll(async () => {
+      provider = makeProvider();
+    });
+
+    type Ctx = Awaited<ReturnType<typeof setup>>;
+
+    /** A test token minted under the always-true policy. */
+    const TOKEN_NAME = "544f4b"; // hex("TOK")
+    const TOKEN_QTY = 100n;
+    const tokenPolicy = resolveScriptHash(ALWAYS_TRUE.cbor, "V3");
+    const tokenUnit = tokenPolicy + TOKEN_NAME;
+    const OTHER_POLICY = "ff".repeat(28);
+
+    async function mintToken(account: Account): Promise<void> {
+      const col = (await account.wallet.getCollateral())[0];
+      const mintTx = await newTxBuilder(provider)
+        .mintPlutusScriptV3()
+        .mint(TOKEN_QTY.toString(), tokenPolicy, TOKEN_NAME)
+        .mintRedeemerValue(mConStr0([]))
+        .mintingScript(ALWAYS_TRUE.cbor)
+        .txInCollateral(
+          col.input.txHash,
+          col.input.outputIndex,
+          col.output.amount,
+          col.output.address,
+        )
+        .changeAddress(account.address)
+        .selectUtxosFrom(await account.wallet.getUtxos())
+        .complete();
+      await waitForTx(provider, await signAndSubmit(account, mintTx));
+    }
+
+    function statelessSpender(scriptHash: string): WalletDatum {
+      return { spenders: [{ scriptHash, data: 0 }], depositors: [] };
+    }
+
+    function statelessDepositor(scriptHash: string): WalletDatum {
+      return { spenders: [], depositors: [{ scriptHash, data: 0 }] };
+    }
+
+    async function mintWallet(
+      ctx: Ctx,
+      datum: WalletDatum,
+      registerScripts: PlutusScript[],
+    ): Promise<UTxO> {
+      const mintTx = await buildWalletMintTx({
+        txBuilder: newTxBuilder(provider),
+        script: ctx.script,
+        walletTokenName: WALLET_TOKEN_NAME,
+        seedUtxo: ctx.walletSeed,
+        datum,
+        outputIndex: 0,
+        utxos: await ctx.admin.wallet.getUtxos(),
+        changeAddress: ctx.admin.address,
+        collateralUtxo: await collateralOf(ctx.admin),
+        admin: { kind: "key", hash: ctx.admin.keyHash },
+        registerScripts,
+      });
+      const hash = await signAndSubmit(ctx.admin, mintTx);
+      await waitForTx(provider, hash);
+      return await scriptOutputOf(provider, hash, ctx.scriptAddr);
+    }
+
+    async function buildDeposit(
+      ctx: Ctx,
+      walletUtxo: UTxO,
+      datum: WalletDatum,
+      deposit: Asset[],
+      depositorScripts?: PlutusScript[],
+    ): Promise<string> {
+      return buildWalletDepositTx({
+        txBuilder: newTxBuilder(provider),
+        script: ctx.script,
+        walletUtxo,
+        datum,
+        deposit,
+        outputIndex: 0,
+        utxos: await ctx.depositor.wallet.getUtxos(),
+        changeAddress: ctx.depositor.address,
+        collateralUtxo: await collateralOf(ctx.depositor),
+        depositorScripts,
+      });
+    }
+
+    async function okDeposit(
+      ctx: Ctx,
+      walletUtxo: UTxO,
+      datum: WalletDatum,
+      deposit: Asset[],
+      depositorScripts?: PlutusScript[],
+    ): Promise<UTxO> {
+      const tx = await buildDeposit(
+        ctx,
+        walletUtxo,
+        datum,
+        deposit,
+        depositorScripts,
+      );
+      const hash = await signAndSubmit(ctx.depositor, tx);
+      await waitForTx(provider, hash);
+      return await scriptOutputOf(provider, hash, ctx.scriptAddr);
+    }
+
+    async function buildSpendAsync(
+      ctx: Ctx,
+      walletUtxo: UTxO,
+      datum: WalletDatum,
+      payoutAddress: string,
+      payoutAmount: Asset[],
+      changeAmount: Asset[],
+      spenderScripts: PlutusScript[],
+    ): Promise<string> {
+      return buildWalletSpendTx({
+        txBuilder: newTxBuilder(provider),
+        script: ctx.script,
+        walletUtxo,
+        settingsUtxo: ctx.settingsUtxo,
+        datum,
+        payoutAddress,
+        payoutAmount,
+        changeAmount,
+        outputIndex: 0,
+        utxos: await ctx.member.wallet.getUtxos(),
+        changeAddress: ctx.member.address,
+        collateralUtxo: await collateralOf(ctx.member),
+        signers: [ctx.member.keyHash],
+        spenderScripts,
+      });
+    }
+
+    async function okSpend(
+      ctx: Ctx,
+      walletUtxo: UTxO,
+      datum: WalletDatum,
+      payoutAddress: string,
+      payoutAmount: Asset[],
+      changeAmount: Asset[],
+      spenderScripts: PlutusScript[],
+    ): Promise<UTxO> {
+      const tx = await buildSpendAsync(
+        ctx,
+        walletUtxo,
+        datum,
+        payoutAddress,
+        payoutAmount,
+        changeAmount,
+        spenderScripts,
+      );
+      const hash = await signAndSubmit(ctx.member, tx);
+      await waitForTx(provider, hash);
+      return await scriptOutputOf(provider, hash, ctx.scriptAddr);
+    }
+
+    /** Remove `removed` from `amount`, dropping non-positive entries. */
+    function moveOut(amount: Asset[], removed: Asset[]): Asset[] {
+      const out = amount.map((a) => ({ ...a }));
+      for (const r of removed) {
+        const e = out.find((a) => a.unit === r.unit);
+        if (e)
+          e.quantity = (BigInt(e.quantity) - BigInt(r.quantity)).toString();
+      }
+      return out.filter((a) => BigInt(a.quantity) > 0n);
+    }
+
+    const payoutAda = ADA;
+
+    // ------------------------------------------------- recipient scripts
+
+    it("full_recipient_allow_list: listed recipient ok, unlisted rejected", async () => {
+      const ctx = await setup(provider);
+      const script = fullRecipientAllowListScript({
+        wallet: { kind: "script", hash: ctx.walletHash },
+        allowed: [ctx.member.address],
+      });
+      const datum = statelessSpender(
+        resolveScriptHash(script.code, script.version),
+      );
+
+      let w = await mintWallet(ctx, datum, [script]);
+      w = await okDeposit(ctx, w, datum, [
+        { unit: "lovelace", quantity: (10n * ADA).toString() },
+      ]);
+
+      const payout = [{ unit: "lovelace", quantity: payoutAda.toString() }];
+      w = await okSpend(
+        ctx,
+        w,
+        datum,
+        ctx.member.address,
+        payout,
+        minusLovelace(w.output.amount, payoutAda),
+        [script],
+      );
+
+      await expect(
+        buildSpendAsync(
+          ctx,
+          w,
+          datum,
+          ctx.depositor.address,
+          payout,
+          minusLovelace(w.output.amount, payoutAda),
+          [script],
+        ),
+      ).rejects.toThrow();
+    });
+
+    it("full_recipient_deny_list: denied recipient rejected, other ok", async () => {
+      const ctx = await setup(provider);
+      const script = fullRecipientDenyListScript({
+        wallet: { kind: "script", hash: ctx.walletHash },
+        denied: [ctx.depositor.address],
+      });
+      const datum = statelessSpender(
+        resolveScriptHash(script.code, script.version),
+      );
+
+      let w = await mintWallet(ctx, datum, [script]);
+      w = await okDeposit(ctx, w, datum, [
+        { unit: "lovelace", quantity: (10n * ADA).toString() },
+      ]);
+      const payout = [{ unit: "lovelace", quantity: payoutAda.toString() }];
+
+      await expect(
+        buildSpendAsync(
+          ctx,
+          w,
+          datum,
+          ctx.depositor.address,
+          payout,
+          minusLovelace(w.output.amount, payoutAda),
+          [script],
+        ),
+      ).rejects.toThrow();
+
+      await okSpend(
+        ctx,
+        w,
+        datum,
+        ctx.member.address,
+        payout,
+        minusLovelace(w.output.amount, payoutAda),
+        [script],
+      );
+    });
+
+    it("payment_staking_allow_list: listed payment+stake ok, unlisted rejected", async () => {
+      const ctx = await setup(provider);
+      const m = deserializeAddress(ctx.member.address);
+      const script = paymentStakingAllowListScript({
+        wallet: { kind: "script", hash: ctx.walletHash },
+        allowedPayments: [{ kind: "key", hash: m.pubKeyHash }],
+        allowedStakings: [{ kind: "key", hash: m.stakeCredentialHash }],
+      });
+      const datum = statelessSpender(
+        resolveScriptHash(script.code, script.version),
+      );
+
+      let w = await mintWallet(ctx, datum, [script]);
+      w = await okDeposit(ctx, w, datum, [
+        { unit: "lovelace", quantity: (10n * ADA).toString() },
+      ]);
+      const payout = [{ unit: "lovelace", quantity: payoutAda.toString() }];
+
+      w = await okSpend(
+        ctx,
+        w,
+        datum,
+        ctx.member.address,
+        payout,
+        minusLovelace(w.output.amount, payoutAda),
+        [script],
+      );
+
+      await expect(
+        buildSpendAsync(
+          ctx,
+          w,
+          datum,
+          ctx.depositor.address,
+          payout,
+          minusLovelace(w.output.amount, payoutAda),
+          [script],
+        ),
+      ).rejects.toThrow();
+    });
+
+    it("payment_staking_deny_list: denied payment/staking rejected", async () => {
+      const ctx = await setup(provider);
+      const d = deserializeAddress(ctx.depositor.address);
+      const script = paymentStakingDenyListScript({
+        wallet: { kind: "script", hash: ctx.walletHash },
+        deniedPayments: [{ kind: "key", hash: d.pubKeyHash }],
+        deniedStakings: [],
+      });
+      const datum = statelessSpender(
+        resolveScriptHash(script.code, script.version),
+      );
+
+      let w = await mintWallet(ctx, datum, [script]);
+      w = await okDeposit(ctx, w, datum, [
+        { unit: "lovelace", quantity: (10n * ADA).toString() },
+      ]);
+      const payout = [{ unit: "lovelace", quantity: payoutAda.toString() }];
+
+      await expect(
+        buildSpendAsync(
+          ctx,
+          w,
+          datum,
+          ctx.depositor.address,
+          payout,
+          minusLovelace(w.output.amount, payoutAda),
+          [script],
+        ),
+      ).rejects.toThrow();
+
+      await okSpend(
+        ctx,
+        w,
+        datum,
+        ctx.member.address,
+        payout,
+        minusLovelace(w.output.amount, payoutAda),
+        [script],
+      );
+    });
+
+    // ------------------------------------------------- asset scripts
+
+    async function walletWithToken(
+      ctx: Ctx,
+      script: PlutusScript,
+      datum: WalletDatum,
+      registerScripts: PlutusScript[],
+    ): Promise<UTxO> {
+      let w = await mintWallet(ctx, datum, registerScripts);
+      w = await okDeposit(ctx, w, datum, [
+        { unit: "lovelace", quantity: (5n * ADA).toString() },
+        { unit: tokenUnit, quantity: TOKEN_QTY.toString() },
+      ]);
+      return w;
+    }
+
+    it("asset_allow_list: listed policy moves out, unlisted rejected", async () => {
+      const ctx = await setup(provider);
+      await mintToken(ctx.depositor);
+
+      const allowed = assetAllowListScript({
+        wallet: { kind: "script", hash: ctx.walletHash },
+        allowed: [[tokenPolicy, []]],
+      });
+      const allowedDatum = statelessSpender(
+        resolveScriptHash(allowed.code, allowed.version),
+      );
+      let w = await walletWithToken(ctx, allowed, allowedDatum, [allowed]);
+
+      const moved = [
+        { unit: tokenUnit, quantity: TOKEN_QTY.toString() },
+        { unit: "lovelace", quantity: payoutAda.toString() },
+      ];
+      await okSpend(
+        ctx,
+        w,
+        allowedDatum,
+        ctx.member.address,
+        moved,
+        moveOut(w.output.amount, moved),
+        [allowed],
+      );
+
+      // A wallet whose allow list omits the token's policy rejects the move.
+      const ctx2 = await setup(provider);
+      await mintToken(ctx2.depositor);
+      const disallowed = assetAllowListScript({
+        wallet: { kind: "script", hash: ctx2.walletHash },
+        allowed: [[OTHER_POLICY, []]],
+      });
+      const disallowedDatum = statelessSpender(
+        resolveScriptHash(disallowed.code, disallowed.version),
+      );
+      const w2 = await walletWithToken(ctx2, disallowed, disallowedDatum, [
+        disallowed,
+      ]);
+      await expect(
+        buildSpendAsync(
+          ctx2,
+          w2,
+          disallowedDatum,
+          ctx2.member.address,
+          moved,
+          moveOut(w2.output.amount, moved),
+          [disallowed],
+        ),
+      ).rejects.toThrow();
+    });
+
+    it("asset_deny_list: denied policy rejected, lovelace-only ok", async () => {
+      const ctx = await setup(provider);
+      await mintToken(ctx.depositor);
+      const script = assetDenyListScript({
+        wallet: { kind: "script", hash: ctx.walletHash },
+        denied: [[tokenPolicy, []]],
+      });
+      const datum = statelessSpender(
+        resolveScriptHash(script.code, script.version),
+      );
+      const w = await walletWithToken(ctx, script, datum, [script]);
+
+      const moved = [
+        { unit: tokenUnit, quantity: TOKEN_QTY.toString() },
+        { unit: "lovelace", quantity: payoutAda.toString() },
+      ];
+      await expect(
+        buildSpendAsync(
+          ctx,
+          w,
+          datum,
+          ctx.member.address,
+          moved,
+          moveOut(w.output.amount, moved),
+          [script],
+        ),
+      ).rejects.toThrow();
+
+      // Moving only lovelace (the token stays put) is allowed.
+      await okSpend(
+        ctx,
+        w,
+        datum,
+        ctx.member.address,
+        [{ unit: "lovelace", quantity: payoutAda.toString() }],
+        minusLovelace(w.output.amount, payoutAda),
+        [script],
+      );
+    });
+
+    it("asset_deposit_allow_list: listed deposit ok, unlisted rejected", async () => {
+      const ctx = await setup(provider);
+      await mintToken(ctx.depositor);
+      const script = assetDepositAllowListScript({
+        wallet: { kind: "script", hash: ctx.walletHash },
+        allowed: [[tokenPolicy, []]],
+      });
+      const datum = statelessDepositor(
+        resolveScriptHash(script.code, script.version),
+      );
+      const w = await mintWallet(ctx, datum, [script]);
+
+      const withToken = [
+        { unit: "lovelace", quantity: ADA.toString() },
+        { unit: tokenUnit, quantity: TOKEN_QTY.toString() },
+      ];
+      await okDeposit(ctx, w, datum, withToken, [script]);
+
+      // A wallet whose allow list omits the token's policy rejects the deposit.
+      const ctx2 = await setup(provider);
+      await mintToken(ctx2.depositor);
+      const disallowed = assetDepositAllowListScript({
+        wallet: { kind: "script", hash: ctx2.walletHash },
+        allowed: [[OTHER_POLICY, []]],
+      });
+      const disallowedDatum = statelessDepositor(
+        resolveScriptHash(disallowed.code, disallowed.version),
+      );
+      const w2 = await mintWallet(ctx2, disallowedDatum, [disallowed]);
+      await expect(
+        okDeposit(ctx2, w2, disallowedDatum, withToken, [disallowed]),
+      ).rejects.toThrow();
+
+      // A lovelace-only deposit is unaffected by the asset list.
+      await okDeposit(
+        ctx2,
+        w2,
+        disallowedDatum,
+        [{ unit: "lovelace", quantity: ADA.toString() }],
+        [disallowed],
+      );
+    });
+
+    it("asset_deposit_deny_list: denied deposit rejected, lovelace-only ok", async () => {
+      const ctx = await setup(provider);
+      await mintToken(ctx.depositor);
+      const script = assetDepositDenyListScript({
+        wallet: { kind: "script", hash: ctx.walletHash },
+        denied: [[tokenPolicy, []]],
+      });
+      const datum = statelessDepositor(
+        resolveScriptHash(script.code, script.version),
+      );
+      const w = await mintWallet(ctx, datum, [script]);
+
+      const withToken = [
+        { unit: "lovelace", quantity: ADA.toString() },
+        { unit: tokenUnit, quantity: TOKEN_QTY.toString() },
+      ];
+      await expect(
+        okDeposit(ctx, w, datum, withToken, [script]),
+      ).rejects.toThrow();
+
+      await okDeposit(
+        ctx,
+        w,
+        datum,
+        [{ unit: "lovelace", quantity: ADA.toString() }],
+        [script],
+      );
+    });
+  },
+);

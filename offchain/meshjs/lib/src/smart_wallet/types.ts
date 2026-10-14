@@ -55,3 +55,54 @@ export interface SpendingWindowParams {
 export interface SpendingWindowState {
   lastSpend: number;
 }
+
+/**
+ * An asset list: `Pairs<PolicyId, List<AssetName>>` on-chain — an association
+ * list of `[policyId, assetNames]`. An empty `names` list means "any name of
+ * that policy".
+ */
+export type AssetList = Array<[policy: string, names: string[]]>;
+
+/** `full_recipient_allow_list` parameters (bech32 recipient addresses). */
+export interface FullRecipientAllowListParams {
+  wallet: Credential;
+  allowed: string[];
+}
+
+/** `full_recipient_deny_list` parameters (bech32 recipient addresses). */
+export interface FullRecipientDenyListParams {
+  wallet: Credential;
+  denied: string[];
+}
+
+/** `payment_staking_allow_list` parameters. */
+export interface PaymentStakingAllowListParams {
+  wallet: Credential;
+  allowedPayments: Credential[];
+  allowedStakings: Credential[];
+}
+
+/** `payment_staking_deny_list` parameters. */
+export interface PaymentStakingDenyListParams {
+  wallet: Credential;
+  deniedPayments: Credential[];
+  deniedStakings: Credential[];
+}
+
+/** `asset_allow_list` parameters. */
+export interface AssetAllowListParams {
+  wallet: Credential;
+  allowed: AssetList;
+}
+
+/** `asset_deny_list` parameters. */
+export interface AssetDenyListParams {
+  wallet: Credential;
+  denied: AssetList;
+}
+
+/** `asset_deposit_allow_list` parameters (depositor side; same shape). */
+export type AssetDepositAllowListParams = AssetAllowListParams;
+
+/** `asset_deposit_deny_list` parameters (depositor side; same shape). */
+export type AssetDepositDenyListParams = AssetDenyListParams;

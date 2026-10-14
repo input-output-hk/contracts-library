@@ -21,12 +21,42 @@ import {
 import { Serialization } from "@meshsdk/core-cst";
 
 import {
+  assetAllowListCode,
+  assetDenyListCode,
+  assetDepositAllowListCode,
+  assetDepositDenyListCode,
+  fullRecipientAllowListCode,
+  fullRecipientDenyListCode,
+  paymentStakingAllowListCode,
+  paymentStakingDenyListCode,
   plutusVersion,
   spendingLimitCode,
   spendingWindowCode,
 } from "./blueprint";
-import { spendingLimitParamsToData, spendingWindowParamsToData } from "./datum";
-import type { SpendingLimitParams, SpendingWindowParams } from "./types";
+import {
+  assetAllowListParamsToData,
+  assetDenyListParamsToData,
+  assetDepositAllowListParamsToData,
+  assetDepositDenyListParamsToData,
+  fullRecipientAllowListParamsToData,
+  fullRecipientDenyListParamsToData,
+  paymentStakingAllowListParamsToData,
+  paymentStakingDenyListParamsToData,
+  spendingLimitParamsToData,
+  spendingWindowParamsToData,
+} from "./datum";
+import type {
+  AssetAllowListParams,
+  AssetDenyListParams,
+  AssetDepositAllowListParams,
+  AssetDepositDenyListParams,
+  FullRecipientAllowListParams,
+  FullRecipientDenyListParams,
+  PaymentStakingAllowListParams,
+  PaymentStakingDenyListParams,
+  SpendingLimitParams,
+  SpendingWindowParams,
+} from "./types";
 
 /**
  * Stake-address deposit written into `reg_cert` / refund written into
@@ -138,6 +168,116 @@ export function spendingWindowScript(
     code: applyParamsToScript(
       spendingWindowCode,
       spendingWindowParamsToData(params),
+      "Mesh",
+    ),
+    version: plutusVersion,
+  };
+}
+
+/** Parameterized `full_recipient_allow_list` script (spender). */
+export function fullRecipientAllowListScript(
+  params: FullRecipientAllowListParams,
+): PlutusScript {
+  return {
+    code: applyParamsToScript(
+      fullRecipientAllowListCode,
+      fullRecipientAllowListParamsToData(params),
+      "Mesh",
+    ),
+    version: plutusVersion,
+  };
+}
+
+/** Parameterized `full_recipient_deny_list` script (spender). */
+export function fullRecipientDenyListScript(
+  params: FullRecipientDenyListParams,
+): PlutusScript {
+  return {
+    code: applyParamsToScript(
+      fullRecipientDenyListCode,
+      fullRecipientDenyListParamsToData(params),
+      "Mesh",
+    ),
+    version: plutusVersion,
+  };
+}
+
+/** Parameterized `payment_staking_allow_list` script (spender). */
+export function paymentStakingAllowListScript(
+  params: PaymentStakingAllowListParams,
+): PlutusScript {
+  return {
+    code: applyParamsToScript(
+      paymentStakingAllowListCode,
+      paymentStakingAllowListParamsToData(params),
+      "Mesh",
+    ),
+    version: plutusVersion,
+  };
+}
+
+/** Parameterized `payment_staking_deny_list` script (spender). */
+export function paymentStakingDenyListScript(
+  params: PaymentStakingDenyListParams,
+): PlutusScript {
+  return {
+    code: applyParamsToScript(
+      paymentStakingDenyListCode,
+      paymentStakingDenyListParamsToData(params),
+      "Mesh",
+    ),
+    version: plutusVersion,
+  };
+}
+
+/** Parameterized `asset_allow_list` script (spender). */
+export function assetAllowListScript(
+  params: AssetAllowListParams,
+): PlutusScript {
+  return {
+    code: applyParamsToScript(
+      assetAllowListCode,
+      assetAllowListParamsToData(params),
+      "Mesh",
+    ),
+    version: plutusVersion,
+  };
+}
+
+/** Parameterized `asset_deny_list` script (spender). */
+export function assetDenyListScript(params: AssetDenyListParams): PlutusScript {
+  return {
+    code: applyParamsToScript(
+      assetDenyListCode,
+      assetDenyListParamsToData(params),
+      "Mesh",
+    ),
+    version: plutusVersion,
+  };
+}
+
+/** Parameterized `asset_deposit_allow_list` script (depositor). */
+export function assetDepositAllowListScript(
+  params: AssetDepositAllowListParams,
+): PlutusScript {
+  return {
+    code: applyParamsToScript(
+      assetDepositAllowListCode,
+      assetDepositAllowListParamsToData(params),
+      "Mesh",
+    ),
+    version: plutusVersion,
+  };
+}
+
+/** Parameterized `asset_deposit_deny_list` script (depositor). */
+export function assetDepositDenyListScript(
+  params: AssetDepositDenyListParams,
+): PlutusScript {
+  return {
+    code: applyParamsToScript(
+      assetDepositDenyListCode,
+      assetDepositDenyListParamsToData(params),
       "Mesh",
     ),
     version: plutusVersion,
