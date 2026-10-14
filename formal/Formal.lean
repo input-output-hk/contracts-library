@@ -2,4 +2,5 @@
 -- contract specifications under `../docs/<contract>`. Import every contract's aggregator
 -- here so `lake build` checks all of them.
 import Formal.Common
+import Formal.Universal
 import Formal.Vesting.Linear
