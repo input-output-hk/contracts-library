@@ -9,6 +9,7 @@
     "catalogue:test": "node --test test/check-catalogue.test.mjs",
     "format": "biome format --write .",
     "format:check": "biome format .",
+    "catalogue:axioms:test": "node --test test/check-property-axioms.test.mjs",
     "prepare": "husky"
   },
   "devDependencies": {

@@ -61,3 +61,18 @@ The check validates both schemas and every `properties.json` and
 `validator-metadata.json` under `formal/Formal/`. Tests include invalid inputs
 and synthetic metadata, not real validator snapshots. These checks establish
 structure only, not source provenance, CBOR correctness, or proof results.
+
+For a selected property set, run `node scripts/check-property-axioms.mjs Universal`
+with the pinned Lean toolchain and solver available. This builds the selected
+module and inspects the listed theorems' direct and indirect axiom dependencies.
+
+Standard Lean axioms are allowed. Blaster's SMT trust dependency is allowed and
+reported separately. `sorryAx` or any other unapproved axiom fails the check;
+existing-library exceptions require explicit review. Unrelated library warnings
+do not fail it.
+
+Empty theorem lists mean no proofs were inspected. This check does not establish
+ledger-model correspondence or IO acceptance.
+
+Run `npm run catalogue:axioms:test` with the same Lean toolchain to test process
+handling and the axiom policy, including direct and indirect admissions.
