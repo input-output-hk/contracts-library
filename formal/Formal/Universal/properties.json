@@ -43,7 +43,7 @@
     "id": "U-005",
     "title": "In the V3 model, ada in equals ada out plus fee",
     "category": "universal",
-    "summary": "For every transaction accepted by the V3 model, input ada equals output ada plus the fee, so ada strictly decreases. This is the model's rule, not the chain's: on chain, withdrawals, refunds, deposits and donations also move ada. The model's rule matches the chain's for transactions with none of these.",
+    "summary": "For every transaction accepted by the V3 model, input ada equals output ada plus the fee, so outputs contain less ada than inputs. This is a model result; correspondence with Cardano ledger validation is not established here.",
     "theorems": [
       "Formal.Universal.Ledger.ada_balanced",
       "Formal.Universal.Ledger.ada_decreases",

@@ -1,12 +1,12 @@
 # Universal properties
 
-Properties that hold for every validator, with machine-checked Lean proofs. They
-form the first entries of the property catalogue.
+Validator-independent properties of the CEK evaluator and V3 ledger model.
+They form the first entries of the property catalogue.
 
 | File | Contents |
 | --- | --- |
-| `Evaluator.lean` | Properties of the CEK evaluator, for any program and Plutus version |
-| `Ledger.lean` | Properties of every transaction the V3 ledger model (`validTxInfo`) accepts |
+| `Evaluator.lean` | CEK-model fuel stability and success/error properties |
+| `Ledger.lean` | Properties assuming V3 `validTxInfo ctx = true` |
 | `properties.json` | The catalogue entries |
 | [property.schema.json](../../../docs/property-catalogue/property.schema.json) | Shared entry schema (JSON Schema 2020-12) |
 
@@ -49,13 +49,14 @@ theorem names. It does not inspect axioms or check that theorem statements match
 the property summaries.
 
 The evaluator proofs are checked by the Lean kernel. The ledger proofs use
-`blaster`, so they are checked by Z3 (4.15.2 on `PATH`) and reported as
-SMT-verified with no proof term.
+`blaster` for `fee_pos`, `ada_balanced`, and `ada_decreases`; the other four use
+ordinary Lean proofs. Z3 (4.15.2 on `PATH`) reports those three as SMT-verified,
+without a proof term.
 
 ## Proposed Universal property: U-001
 
-**Statement.** If a program halts within `n` CEK steps on some arguments, then for
-any `m ≥ n` it halts in the same final state:
+**Statement.** If execution in the CEK model succeeds with fuel `n`, any fuel
+`m ≥ n` returns the same final state:
 
 ```lean
 theorem cekExecuteProgram_eq_of_success
@@ -65,24 +66,24 @@ theorem cekExecuteProgram_eq_of_success
   cekExecuteProgram prog args m = cekExecuteProgram prog args n
 ```
 
-**Why it matters.** Contract proofs decide acceptance by running the compiled
-validator with a fixed step budget (`Formal.Common.validatorAccepts`). This
-property shows an acceptance cannot be overturned by a larger budget: the run ends
-in the same state and returns the same value.
+**Why it matters.** The model predicate `Formal.Common.validatorAccepts` requires
+a unit-valued halt at a fixed fuel budget. Preserving the final state preserves
+that outcome with more fuel.
 
-**Scope.** Every program, every argument list, every Plutus version. No ledger
-assumptions.
+**Scope.** Programs and arguments in the imported CEK model, under the displayed
+hypotheses. The program-level theorem uses default builtin semantics;
+`runSteps_eq_of_halt` covers all builtin semantic variants. No ledger-validity
+assumption is required.
 
-**Limit.** Failure is not preserved. Running out of steps ends in the same `Error`
-state as a genuine failure, so a rejection at one budget says nothing about a
-larger one. Rejection results depend on the budget being large enough.
+**Limit.** The theorem assumes a successful halt. Fuel exhaustion produces
+`Error`, as runtime failures do. An `Error` result at one budget does not by itself
+establish rejection at a larger budget.
 
 **Proof.** Induction on the step count (`runSteps_eq_of_halt`), kernel-checked.
 
 ## Caveats on the ledger properties
 
-The ledger properties are about the V3 model, not the chain itself. U-003 and
-U-004 and U-006 also hold on chain. U-005 is the model's balance rule (input ada =
-output ada + fee); the chain also counts withdrawals, refunds, deposits and
-donations, so transactions with those are outside what the model accepts.
-`ada_balanced_of_simple_tx` states the scope where the two rules agree.
+All ledger entries assume V3 `validTxInfo ctx = true`. They prove properties of
+the model, not correspondence with Cardano ledger validation.
+`ada_balanced_of_simple_tx` adds context restrictions and still concludes the
+same model balance equation.

@@ -47,8 +47,7 @@ theorem tokens_conserved_of_no_mint
       cases v <;> simp [merge, CardanoLedgerApi.V1.Value.merge.cs_visit]
     simp_all [validTxInfo, isBalanced]
 
-/-- The model's ada rule: input ada = output ada + fee. On chain, withdrawals,
-refunds, deposits and donations also move ada; the model ignores them. -/
+/-- The V3 model's ada balance rule: input ada = output ada + fee. -/
 theorem ada_balanced
   (ctx : ScriptContext)
   (hValid : validTxInfo ctx = true) :
@@ -63,9 +62,8 @@ theorem ada_decreases
     simp_all [validTxInfo, isBalanced]
     blaster
 
-/-- `ada_balanced` restricted to transactions with no withdrawals, certificates,
-proposals or donation: the scope where the model's rule matches the chain's. The
-extra hypotheses state that scope; the proof does not need them. -/
+/-- `ada_balanced` with additional restrictions on the model context.
+This theorem does not establish correspondence with Cardano's ledger rules. -/
 theorem ada_balanced_of_simple_tx (ctx : ScriptContext)
     (hValid : validTxInfo ctx = true)
     (_hNoWdrl : ctx.scriptContextTxInfo.txInfoWdrl = [])
