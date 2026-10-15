@@ -380,8 +380,12 @@ participates through two handlers:
   requires the wallet **output** datum to record the new state; a stateful
   deposit script does the same on a `Deposit`.
 
-The reference validators are `spending_limit` and `spending_window`. Both are
-parameterized by the **wallet's payment credential**, so one script instance
+The reference validators are `spending_limit`, `spending_window`,
+`spending_period_limit`, the recipient lists (`full_recipient_allow_list` /
+`full_recipient_deny_list`, `payment_staking_allow_list` /
+`payment_staking_deny_list`) and the asset lists (`asset_allow_list` /
+`asset_deny_list`, `asset_deposit_allow_list` / `asset_deposit_deny_list`). All
+are parameterized by the **wallet's payment credential**, so one script instance
 works with exactly one wallet.
 
 ### `spending_limit`
@@ -455,6 +459,157 @@ const nextDatum = {
 
 `startMs(slot)` is the slot's start in POSIX ms; the state must use the same
 slot-start convention the validator reads from the validity range lower bound.
+
+### `spending_period_limit`
+
+Stateful: caps the wallet's cumulative lovelace outflow to `max_spend` per fixed
+`interval`-millisecond period (e.g. a day or a week). Periods are anchored to
+fixed multiples of `interval` on the POSIX-ms grid, so the window never slips
+when nothing is spent early in a cycle. The state is
+`SpendingPeriodState { period, acc_spend }`: `period` is the current period's end
+(a multiple of `interval`; `0` = none) and `acc_spend` the lovelace spent so far.
+The initial state is `{ period: 0, acc_spend: 0 }`, validated on registration.
+
+On each spend, `tx_spend` is the wallet's net lovelace outflow (`input - output`
+at the wallet credential). Within a period the accumulator is checked and
+advanced (`acc_spend + tx_spend <= max_spend`); once `now` passes `period` the
+period rolls over to the next fixed boundary and the accumulator restarts at
+`tx_spend`.
+
+```ts
+import {
+  spendingPeriodLimitScript,
+  spendingPeriodStateToData,
+} from "@contracts-library/meshjs";
+import { unixTimeToEnclosingSlot } from "@meshsdk/core";
+
+const interval = 604_800_000; // one week, in ms
+const maxSpend = 100_000_000; // 100 ADA per period
+const script = spendingPeriodLimitScript({
+  wallet: { kind: "script", hash: walletHash },
+  interval,
+  maxSpend,
+});
+const scriptHash = resolveScriptHash(script.code, script.version);
+
+// Initial state, at mint:
+const initialDatum = {
+  spenders: [
+    { scriptHash, data: spendingPeriodStateToData({ period: 0, accSpend: 0 }) },
+  ],
+  depositors: [],
+};
+
+// On each spend, carry the advanced state and set the validity lower bound to
+// the same instant the state uses:
+const startMs = (slot: number) =>
+  slotConfig.zeroTime + (slot - slotConfig.zeroSlot) * slotConfig.slotLength;
+const slot = unixTimeToEnclosingSlot(nowMs, slotConfig);
+const now = startMs(slot);
+const rolled = now > current.period;             // crossed the period boundary?
+const nextState = {
+  period: rolled ? (Math.floor(now / interval) + 1) * interval : current.period,
+  accSpend: (rolled ? 0 : current.accSpend) + txSpend,
+};
+// buildWalletSpendTx({ ..., datum: { ...initialDatum,
+//   spenders: [{ scriptHash, data: spendingPeriodStateToData(nextState) }] },
+//   invalidBeforeSlot: slot, ... })
+```
+
+> Fixed-length periods only: "one day" / "one week" / "30 days" map cleanly onto
+> the grid; calendar months do not (their length varies), so they are not
+> expressible this way.
+
+### `full_recipient_allow_list` / `full_recipient_deny_list`
+
+Match the **full recipient address** (payment *and* staking credential) of every
+payout output. The allow list accepts only the listed addresses; the deny list
+rejects them. Matching is on the exact `Address` (the network id is not part of
+the on-chain representation), and outputs at the wallet's payment credential
+(the continuation) are exempt. Parameterized by the wallet credential and a list
+of bech32 addresses. Both are stateless (`data: 0`).
+
+```ts
+import { fullRecipientAllowListScript } from "@contracts-library/meshjs";
+
+const allow = fullRecipientAllowListScript({
+  wallet: { kind: "script", hash: walletHash },
+  allowed: [memberBech32],                    // only these may receive funds
+});
+const allowHash = resolveScriptHash(allow.code, allow.version);
+// datum: { spenders: [{ scriptHash: allowHash, data: 0 }], depositors: [] }
+```
+
+`full_recipient_deny_list` is identical with `denied: string[]`.
+
+### `payment_staking_allow_list` / `payment_staking_deny_list`
+
+Match the recipient's **payment credential** and **staking credential**
+independently. On a payout, the allow list requires a listed payment credential
+*and* a listed inline staking credential; the deny list requires neither a
+listed payment nor a listed staking credential. An empty list leaves its
+dimension unrestricted; with a non-empty `allowedStakings`, a payout without an
+inline staking credential is rejected. Credentials use the library's
+`Credential` shape.
+
+```ts
+import {
+  paymentStakingAllowListScript,
+  paymentStakingDenyListScript,
+} from "@contracts-library/meshjs";
+
+const allow = paymentStakingAllowListScript({
+  wallet: { kind: "script", hash: walletHash },
+  allowedPayments: [{ kind: "key", hash: paymentKeyHash }],
+  allowedStakings: [{ kind: "key", hash: stakeKeyHash }],
+});
+const deny = paymentStakingDenyListScript({
+  wallet: { kind: "script", hash: walletHash },
+  deniedPayments: [{ kind: "key", hash: paymentKeyHash }],
+  deniedStakings: [],
+});
+```
+
+### `asset_allow_list` / `asset_deny_list`
+
+Constrain the **asset classes that move**. The on-chain diff compares the
+wallet's summed input and output values and flags every class whose quantity
+changed; the magnitude is ignored (partial moves are still caught), ADA is
+ignored, and the wallet NFT is unchanged so it is never flagged. Parameters are
+a `Pairs<PolicyId, List<AssetName>>` association list — an empty name list means
+"any name of that policy" (allow) or "every name of that policy" (deny).
+
+```ts
+import { assetAllowListScript } from "@contracts-library/meshjs";
+
+const allow = assetAllowListScript({
+  wallet: { kind: "script", hash: walletHash },
+  allowed: [
+    [policyId, []],                            // any name of this policy
+    [otherPolicy, ["544f4b"]],                 // only this name
+  ],
+});
+const allowHash = resolveScriptHash(allow.code, allow.version);
+// datum: { spenders: [{ scriptHash: allowHash, data: 0 }], depositors: [] }
+```
+
+`asset_deny_list` takes `denied` instead of `allowed`.
+
+### `asset_deposit_allow_list` / `asset_deposit_deny_list`
+
+Depositor-side counterparts (the `depositors` map): the same asset checks, run
+on a `Deposit`, so they gate assets **entering** the wallet. Register them on
+`Mint`/`UpdatePermissions` and invoke them via `depositorScripts`.
+
+```ts
+import { assetDepositAllowListScript } from "@contracts-library/meshjs";
+
+const allow = assetDepositAllowListScript({
+  wallet: { kind: "script", hash: walletHash },
+  allowed: [[policyId, []]],
+});
+// datum: { spenders: [], depositors: [{ scriptHash, data: 0 }] }
+```
 
 For custom scripts and hand-assembled transactions, the library exports
 `registerWithdrawalScript`, `deregisterWithdrawalScript`, and
