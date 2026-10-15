@@ -10,6 +10,13 @@ toolchain, build, and general `blaster` notes, see the
 For the milestone 1.2 review scope and checklist, see
 [issue #12](https://github.com/no-witness-labs/contracts-library/issues/12).
 
+## Validator snapshot
+
+[`validator-metadata.json`](validator-metadata.json) records the upstream source
+snapshot. The CBOR and compiler details come from `onchain/plutus.json` at the
+recorded commit. This record does not establish a reproduced build or a match
+with the Lean `.flat` proof artifact.
+
 ## Modules
 
 - `Spec.lean` — the pure model (`vested`/`required`, datum/redeemer encoding,
