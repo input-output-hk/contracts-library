@@ -21,6 +21,15 @@ As raw malicious transactions (built with `MeshTxBuilder` + the library's public
 - Cancel before `recovery_time`;
 - Cancel by a non-locker.
 
+### Event-triggered assets (tokenized bond)
+
+The core (CIP-113 programmable tokens) is deployed once, then each scenario applies its own bond and drives the real builders:
+
+- **Owner path** — vault creation, registration, permissionless deposit, transfer to a new owner, commit/revoke opt-in, coupon claim, burn-to-pay redemption, and owner graduation + principal redemption;
+- **Issuer path** — the committed (`authorize`) certificate is advanced and retired by the issuer (`claim_issuer` / `graduate_issuer`), with the certificate-less ghost shell, and the payouts land at the committed payment credential;
+- **Several vaults** with distinct coupon terms inside one instrument: each certificate binds to its vault's `cnt_policy`, claims against its own terms and redeems only at its own vault (a cross-vault redemption fails closed);
+- **Invariant negatives**, each asserted rejected: a claim before its step deadline (I3), a payout above the burned value (I4), retiring before maturity (I5), an owner change that keeps `commit` (I7), and an issuer trigger without a commitment (I9).
+
 ## Running locally
 
 ```sh
