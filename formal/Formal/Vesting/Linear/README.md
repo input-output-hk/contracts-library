@@ -7,6 +7,9 @@ on-chain types [`types.ak`](../../../../onchain/lib/vesting/types.ak). For the
 toolchain, build, and general `blaster` notes, see the
 [`formal/` README](../../../README.md).
 
+For the milestone 1.2 review scope and checklist, see
+[issue #12](https://github.com/no-witness-labs/contracts-library/issues/12).
+
 ## Modules
 
 - `Spec.lean` — the pure model (`vested`/`required`, datum/redeemer encoding,
