@@ -56,6 +56,23 @@ export interface SpendingWindowState {
   lastSpend: number;
 }
 
+/** `spending_period_limit` withdrawal script parameters. */
+export interface SpendingPeriodLimitParams {
+  wallet: Credential;
+  /** Fixed period length in POSIX ms (e.g. 604_800_000 = one week). */
+  interval: number;
+  /** Lovelace cap per period. */
+  maxSpend: number;
+}
+
+/** `spending_period_limit` mutable state (stored in the wallet datum). */
+export interface SpendingPeriodState {
+  /** End of the current period (POSIX ms, a multiple of `interval`); 0 = none. */
+  period: number;
+  /** Lovelace spent so far in the current period. */
+  accSpend: number;
+}
+
 /**
  * An asset list: `Pairs<PolicyId, List<AssetName>>` on-chain — an association
  * list of `[policyId, assetNames]`. An empty `names` list means "any name of

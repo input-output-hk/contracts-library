@@ -22,6 +22,8 @@ import {
   spendingLimitScript,
   spendingWindowScript,
   spendingWindowStateToData,
+  spendingPeriodLimitScript,
+  spendingPeriodStateToData,
   fullRecipientAllowListScript,
   fullRecipientDenyListScript,
   paymentStakingAllowListScript,
@@ -619,6 +621,120 @@ describe.skipIf(!reachable)("smart wallet spender scripts e2e", () => {
       }),
     ).rejects.toThrow();
   });
+
+  it("spending_period_limit: under the cap ok, over the cap rejected in-period", async () => {
+    const ctx = await setup(provider);
+
+    const interval = 604_800_000; // one week, fixed grid
+    const maxSpend = 1_500_000n; // 1.5 ADA per period
+    const script = spendingPeriodLimitScript({
+      wallet: { kind: "script", hash: ctx.walletHash },
+      interval,
+      maxSpend: Number(maxSpend),
+    });
+    const scriptHash = resolveScriptHash(script.code, script.version);
+
+    function datumWith(state: {
+      period: number;
+      accSpend: number;
+    }): WalletDatum {
+      return {
+        spenders: [{ scriptHash, data: spendingPeriodStateToData(state) }],
+        depositors: [],
+      };
+    }
+
+    const startMs = (slot: number) =>
+      slotConfig.zeroTime +
+      (slot - slotConfig.zeroSlot) * slotConfig.slotLength;
+
+    // 1. Mint with the initial state (no period, nothing spent).
+    const initialDatum = datumWith({ period: 0, accSpend: 0 });
+    const mintTx = await buildWalletMintTx({
+      txBuilder: newTxBuilder(provider),
+      script: ctx.script,
+      walletTokenName: WALLET_TOKEN_NAME,
+      seedUtxo: ctx.walletSeed,
+      datum: initialDatum,
+      outputIndex: 0,
+      utxos: await ctx.admin.wallet.getUtxos(),
+      changeAddress: ctx.admin.address,
+      collateralUtxo: await collateralOf(ctx.admin),
+      admin: { kind: "key", hash: ctx.admin.keyHash },
+      registerScripts: [script],
+    });
+    const mintHash = await signAndSubmit(ctx.admin, mintTx);
+    await waitForTx(provider, mintHash);
+    const minted = await scriptOutputOf(provider, mintHash, ctx.scriptAddr);
+
+    // 2. Deposit so the wallet holds enough for a payout.
+    const depositTx = await buildWalletDepositTx({
+      txBuilder: newTxBuilder(provider),
+      script: ctx.script,
+      walletUtxo: minted,
+      datum: initialDatum,
+      deposit: [{ unit: "lovelace", quantity: (5n * ADA).toString() }],
+      outputIndex: 0,
+      utxos: await ctx.admin.wallet.getUtxos(),
+      changeAddress: ctx.admin.address,
+      collateralUtxo: await collateralOf(ctx.admin),
+    });
+    const depositHash = await signAndSubmit(ctx.admin, depositTx);
+    await waitForTx(provider, depositHash);
+    const deposited = await scriptOutputOf(
+      provider,
+      depositHash,
+      ctx.scriptAddr,
+    );
+
+    // 3. First spend (1 ADA) rolls the period over to the next fixed boundary.
+    const now1Ms = await chainNowMs();
+    const slot1 = unixTimeToEnclosingSlot(now1Ms, slotConfig);
+    const period1 = (Math.floor(startMs(slot1) / interval) + 1) * interval;
+    const firstTx = await buildWalletSpendTx({
+      txBuilder: newTxBuilder(provider),
+      script: ctx.script,
+      walletUtxo: deposited,
+      settingsUtxo: ctx.settingsUtxo,
+      datum: datumWith({ period: period1, accSpend: Number(ADA) }),
+      payoutAddress: ctx.member.address,
+      payoutAmount: [{ unit: "lovelace", quantity: ADA.toString() }],
+      changeAmount: minusLovelace(deposited.output.amount, ADA),
+      outputIndex: 0,
+      utxos: await ctx.member.wallet.getUtxos(),
+      changeAddress: ctx.member.address,
+      collateralUtxo: await collateralOf(ctx.member),
+      signers: [ctx.member.keyHash],
+      spenderScripts: [script],
+      invalidBeforeSlot: slot1,
+    });
+    const firstHash = await signAndSubmit(ctx.member, firstTx);
+    await waitForTx(provider, firstHash);
+    const spentOnce = await scriptOutputOf(provider, firstHash, ctx.scriptAddr);
+
+    // 4. A second 1 ADA spend in the same period would exceed the 1.5 ADA cap.
+    const now2Ms = await chainNowMs();
+    const slot2 = unixTimeToEnclosingSlot(now2Ms, slotConfig);
+    await expect(
+      buildWalletSpendTx({
+        txBuilder: newTxBuilder(provider),
+        script: ctx.script,
+        walletUtxo: spentOnce,
+        settingsUtxo: ctx.settingsUtxo,
+        datum: datumWith({ period: period1, accSpend: Number(ADA) }),
+        payoutAddress: ctx.member.address,
+        payoutAmount: [{ unit: "lovelace", quantity: ADA.toString() }],
+        changeAmount: minusLovelace(spentOnce.output.amount, ADA),
+        outputIndex: 0,
+        utxos: await ctx.member.wallet.getUtxos(),
+        changeAddress: ctx.member.address,
+        collateralUtxo: await collateralOf(ctx.member),
+        signers: [ctx.member.keyHash],
+        spenderScripts: [script],
+        invalidBeforeSlot: slot2,
+      }),
+    ).rejects.toThrow();
+  });
 });
 
 describe.skipIf(!reachable)(
@@ -943,6 +1059,49 @@ describe.skipIf(!reachable)(
         ),
       ).rejects.toThrow();
 
+      await okSpend(
+        ctx,
+        w,
+        datum,
+        ctx.member.address,
+        payout,
+        minusLovelace(w.output.amount, payoutAda),
+        [script],
+      );
+    });
+
+    it("payment_staking_deny_list: denied staking rejected", async () => {
+      const ctx = await setup(provider);
+      const d = deserializeAddress(ctx.depositor.address);
+      const script = paymentStakingDenyListScript({
+        wallet: { kind: "script", hash: ctx.walletHash },
+        deniedPayments: [],
+        deniedStakings: [{ kind: "key", hash: d.stakeCredentialHash }],
+      });
+      const datum = statelessSpender(
+        resolveScriptHash(script.code, script.version),
+      );
+
+      let w = await mintWallet(ctx, datum, [script]);
+      w = await okDeposit(ctx, w, datum, [
+        { unit: "lovelace", quantity: (10n * ADA).toString() },
+      ]);
+      const payout = [{ unit: "lovelace", quantity: payoutAda.toString() }];
+
+      // The depositor's staking credential is denied: a payout to it is rejected.
+      await expect(
+        buildSpendAsync(
+          ctx,
+          w,
+          datum,
+          ctx.depositor.address,
+          payout,
+          minusLovelace(w.output.amount, payoutAda),
+          [script],
+        ),
+      ).rejects.toThrow();
+
+      // A payout to the member (staking not denied) is allowed.
       await okSpend(
         ctx,
         w,

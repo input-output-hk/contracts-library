@@ -10,11 +10,14 @@ import {
   fullRecipientDenyListParamsToData,
   paymentStakingAllowListParamsToData,
   paymentStakingDenyListParamsToData,
+  spendingPeriodLimitParamsToData,
+  spendingPeriodStateToData,
 } from "../../src/smart_wallet/datum";
 import type { AssetList, Credential } from "../../src/smart_wallet/types";
 import {
   assetDepositDenyListScript,
   fullRecipientAllowListScript,
+  spendingPeriodLimitScript,
 } from "../../src/smart_wallet/withdrawal_scripts";
 
 /** MeshJS `Data` constructor variant, for structural assertions. */
@@ -169,6 +172,32 @@ describe("withdrawal script constructors", () => {
       wallet: { kind: "script", hash: "cc".repeat(28) },
       denied: [["dd".repeat(28), []]],
     });
+    expect(script.version).toBe("V3");
+    expect(script.code.length).toBeGreaterThan(0);
+  });
+});
+
+describe("spending_period_limit encoders", () => {
+  const wallet: Credential = { kind: "script", hash: "cc".repeat(28) };
+  const interval = 604_800_000; // one week
+  const maxSpend = 100_000_000;
+
+  it("spendingPeriodStateToData: Constr0 [period, accSpend]", () => {
+    expect(
+      asConstr(
+        spendingPeriodStateToData({ period: interval, accSpend: 5_000_000 }),
+      ),
+    ).toEqual({ alternative: 0, fields: [interval, 5_000_000] });
+  });
+
+  it("spendingPeriodLimitParamsToData: [wallet, interval, maxSpend]", () => {
+    expect(
+      spendingPeriodLimitParamsToData({ wallet, interval, maxSpend }),
+    ).toEqual([{ alternative: 1, fields: [wallet.hash] }, interval, maxSpend]);
+  });
+
+  it("spendingPeriodLimitScript parameterizes the raw script", () => {
+    const script = spendingPeriodLimitScript({ wallet, interval, maxSpend });
     expect(script.version).toBe("V3");
     expect(script.code.length).toBeGreaterThan(0);
   });

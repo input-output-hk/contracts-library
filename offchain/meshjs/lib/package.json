@@ -35,6 +35,7 @@
     "smart_wallet": "02feb41e13bf37943981cbd51590bc6c04def3073474ca166c4a44fa",
     "smart_wallet.spending_limit": "1a355a0a2814405759c6bbc140d3223e0ed5b11eeb136ae5299f44c0",
     "smart_wallet.spending_window": "c3be7e5b9032f17d882429548bc28f08644b722d6c36c6f9fa5cb593",
+    "smart_wallet.spending_period_limit": "076e05b135e0bd6276dc7d9c6c71646e4b38cd96ac1285eeb81c3312",
     "smart_wallet.full_recipient_allow_list": "5f2334bf067f54720ee2ef3fd3477f4f9fe23d9dd0eee5b249e76e13",
     "smart_wallet.full_recipient_deny_list": "658bbf6b33c3546e4171a81caf4b767e28915791e76ed3ebc07c038b",
     "smart_wallet.payment_staking_allow_list": "fc4a63e91c93f142c68fa53b701eb0e3aadfa136e36ef5b5375b10e3",

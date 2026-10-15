@@ -31,6 +31,7 @@ import {
   paymentStakingDenyListCode,
   plutusVersion,
   spendingLimitCode,
+  spendingPeriodLimitCode,
   spendingWindowCode,
 } from "./blueprint";
 import {
@@ -43,6 +44,7 @@ import {
   paymentStakingAllowListParamsToData,
   paymentStakingDenyListParamsToData,
   spendingLimitParamsToData,
+  spendingPeriodLimitParamsToData,
   spendingWindowParamsToData,
 } from "./datum";
 import type {
@@ -55,6 +57,7 @@ import type {
   PaymentStakingAllowListParams,
   PaymentStakingDenyListParams,
   SpendingLimitParams,
+  SpendingPeriodLimitParams,
   SpendingWindowParams,
 } from "./types";
 
@@ -168,6 +171,20 @@ export function spendingWindowScript(
     code: applyParamsToScript(
       spendingWindowCode,
       spendingWindowParamsToData(params),
+      "Mesh",
+    ),
+    version: plutusVersion,
+  };
+}
+
+/** Parameterized `spending_period_limit` script: `max_spend` per `interval`. */
+export function spendingPeriodLimitScript(
+  params: SpendingPeriodLimitParams,
+): PlutusScript {
+  return {
+    code: applyParamsToScript(
+      spendingPeriodLimitCode,
+      spendingPeriodLimitParamsToData(params),
       "Mesh",
     ),
     version: plutusVersion,

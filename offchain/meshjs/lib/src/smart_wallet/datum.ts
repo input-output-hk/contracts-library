@@ -34,6 +34,8 @@ import type {
   PaymentStakingAllowListParams,
   PaymentStakingDenyListParams,
   SpendingLimitParams,
+  SpendingPeriodLimitParams,
+  SpendingPeriodState,
   SpendingWindowParams,
   SpendingWindowState,
   WalletConfig,
@@ -57,6 +59,10 @@ export function walletConfigToData(c: WalletConfig): Data {
 
 export function spendingWindowStateToData(s: SpendingWindowState): Data {
   return mConStr0([s.lastSpend]);
+}
+
+export function spendingPeriodStateToData(s: SpendingPeriodState): Data {
+  return mConStr0([s.period, s.accSpend]);
 }
 
 // ------------------------------------------------------------ redeemers
@@ -103,6 +109,12 @@ export function spendingLimitParamsToData(p: SpendingLimitParams): Data[] {
 
 export function spendingWindowParamsToData(p: SpendingWindowParams): Data[] {
   return [credentialToData(p.wallet), p.window];
+}
+
+export function spendingPeriodLimitParamsToData(
+  p: SpendingPeriodLimitParams,
+): Data[] {
+  return [credentialToData(p.wallet), p.interval, p.maxSpend];
 }
 
 // ------------------------------------------------- recipient / asset params
