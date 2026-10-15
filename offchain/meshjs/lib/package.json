@@ -16,10 +16,12 @@
     "test": "vitest run"
   },
   "peerDependencies": {
-    "@meshsdk/core": "^1.8.0"
+    "@meshsdk/core": "^1.8.0",
+    "@meshsdk/core-cst": "^1.8.0"
   },
   "devDependencies": {
     "@meshsdk/core": "^1.8.0",
+    "@meshsdk/core-cst": "^1.8.0",
     "typescript": "^5.5.0",
     "vitest": "^4.1.10"
   },
@@ -30,6 +32,18 @@
     "dao.vote": "159c194c38c731f22357da05d3f7ddd1078e80067222340a55789bf1",
     "settings": "2404b296676c4ab96a657c873a5bf58d01c77c6021f380a481a9a0bd",
     "settings_typed": "df77ce7f7d573025b2176af1efaa36ac27bfd324fd68be775c11c04a",
-    "compiler": "aiken-v1.1.22"
+    "smart_wallet": "02feb41e13bf37943981cbd51590bc6c04def3073474ca166c4a44fa",
+    "smart_wallet.spending_limit": "1a355a0a2814405759c6bbc140d3223e0ed5b11eeb136ae5299f44c0",
+    "smart_wallet.spending_window": "c3be7e5b9032f17d882429548bc28f08644b722d6c36c6f9fa5cb593",
+    "smart_wallet.spending_period_limit": "076e05b135e0bd6276dc7d9c6c71646e4b38cd96ac1285eeb81c3312",
+    "smart_wallet.full_recipient_allow_list": "5f2334bf067f54720ee2ef3fd3477f4f9fe23d9dd0eee5b249e76e13",
+    "smart_wallet.full_recipient_deny_list": "658bbf6b33c3546e4171a81caf4b767e28915791e76ed3ebc07c038b",
+    "smart_wallet.payment_staking_allow_list": "fc4a63e91c93f142c68fa53b701eb0e3aadfa136e36ef5b5375b10e3",
+    "smart_wallet.payment_staking_deny_list": "163c06bbed6638d2e0571878d7b0e7f93b5b913def4d360f1b33dd27",
+    "smart_wallet.asset_allow_list": "a7429017159f3d3fe857cba282762c81e092cbf18ba6ad1f4f104e47",
+    "smart_wallet.asset_deny_list": "9bb7f6fafcbb058234009865763c619c33610a872e0b7561d564b020",
+    "smart_wallet.asset_deposit_allow_list": "52c70569ce7aa5569b7b7117052c4e0482bde5e492b6905a99dce122",
+    "smart_wallet.asset_deposit_deny_list": "cceda883fda41534bfbe2992130e00dd0408e444f640b8d487dbce87",
+    "compiler": "aiken-v1.1.24+bacbeb3"
   }
 }

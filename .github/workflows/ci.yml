@@ -86,9 +86,6 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Install Yaci DevKit
-        run: npm install -g @bloxbean/yaci-devkit
-
       - name: Build library
         working-directory: offchain/meshjs/lib
         run: npm ci && npm run build

@@ -19,6 +19,7 @@ import {
   type SlotConfig,
   type UTxO,
 } from "@meshsdk/core";
+import { Serialization } from "@meshsdk/core-cst";
 
 // `INDEXER_URL` is the convention used by the shared devnet lifecycle script.
 export const STORE_URL =
@@ -50,6 +51,63 @@ function describeError(err: unknown): string {
   }
 }
 
+/** The yaci store's `Utxo` shape accepted by `utils/txs/evaluate/utxos`. */
+interface StoreUtxo {
+  tx_hash: string;
+  output_index: number;
+  address: string;
+  amount: Array<{
+    unit: string;
+    quantity: number;
+    policy_id: string | null;
+    asset_name: string;
+  }>;
+  inline_datum?: string;
+  data_hash?: string;
+}
+
+/** Convert a MeshJS `UTxO` into the yaci store's `Utxo` JSON shape. */
+function toStoreUtxo(utxo: UTxO): StoreUtxo {
+  const out: Record<string, unknown> = {
+    tx_hash: utxo.input.txHash,
+    output_index: utxo.input.outputIndex,
+    address: utxo.output.address,
+    amount: (utxo.output.amount ?? []).map((a) => ({
+      unit: a.unit,
+      policy_id: (a as unknown as { policyId?: string }).policyId ?? null,
+      asset_name:
+        (a as unknown as { assetName?: string }).assetName ??
+        (a.unit === "lovelace" ? "lovelace" : a.unit.slice(56)),
+      quantity: Number(a.quantity),
+    })),
+  };
+  if (utxo.output.plutusData !== undefined) {
+    out.inline_datum = String(utxo.output.plutusData);
+  }
+  return out as unknown as StoreUtxo;
+}
+
+/**
+ * Resolve the inputs a transaction references back into full UTxOs (with their
+ * on-chain values and inline datums) so the evaluator sees the correct script
+ * context.
+ */
+async function resolveInputUtxos(
+  txHex: string,
+  provider: YaciProvider,
+): Promise<StoreUtxo[]> {
+  const tx = Serialization.Transaction.fromCbor(txHex);
+  const inputs = tx.body().inputs();
+  const resolved: StoreUtxo[] = [];
+  for (const input of inputs.values()) {
+    const { txId, index } = input.toCore();
+    const utxos = await provider.fetchUTxOs(txId);
+    const utxo = utxos.find((u) => u.input.outputIndex === index);
+    if (utxo) resolved.push(toStoreUtxo(utxo));
+  }
+  return resolved;
+}
+
 export function makeProvider(): YaciProvider {
   const provider = new YaciProvider(STORE_URL, ADMIN_URL);
   // YaciProvider surfaces ledger rejections as terse axios errors; rethrow with
@@ -59,16 +117,61 @@ export function makeProvider(): YaciProvider {
     string,
     (...args: unknown[]) => Promise<unknown>
   >;
-  for (const method of ["evaluateTx", "submitTx"] as const) {
-    const original = patch[method].bind(provider);
-    patch[method] = async (...args: unknown[]) => {
-      try {
-        return await original(...args);
-      } catch (err) {
-        throw new Error(`${method} rejected: ${describeError(err)}`);
+
+  // `YaciProvider.evaluateTx` posts to `utils/txs/evaluate`, which resolves
+  // input UTxOs from the store's own index and gets their values wrong for
+  // scripts that read `self.inputs`. Post to the UTxO-aware variant instead,
+  // resolving each referenced input back to its on-chain UTxO first.
+  patch.evaluateTx = async (...args: unknown[]) => {
+    try {
+      const txHex = args[0] as string;
+      const additionalUtxoSet = await resolveInputUtxos(txHex, provider);
+
+      const res = await fetch(`${STORE_URL}utils/txs/evaluate/utxos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cbor: txHex, additionalUtxoSet }),
+      });
+      const data = (await res.json()) as {
+        result?: {
+          EvaluationResult?: Record<string, { memory: number; steps: number }>;
+        };
+      };
+      const evaluationResult = data.result?.EvaluationResult;
+      if (res.status === 202 && evaluationResult) {
+        const tagMap: Record<string, string> = {
+          spend: "SPEND",
+          mint: "MINT",
+          certificate: "CERT",
+          publish: "CERT",
+          reward: "REWARD",
+          vote: "VOTE",
+        };
+        return Object.keys(evaluationResult).map((key) => {
+          const [tagKey, index] = key.split(":");
+          const { memory, steps } = evaluationResult[key];
+          return {
+            tag: tagMap[tagKey],
+            index: Number(index),
+            budget: { mem: memory, steps },
+          };
+        });
       }
-    };
-  }
+      throw new Error(JSON.stringify(data));
+    } catch (err) {
+      throw new Error(`evaluateTx rejected: ${describeError(err)}`);
+    }
+  };
+
+  const submit = patch.submitTx.bind(provider);
+  patch.submitTx = async (...args: unknown[]) => {
+    try {
+      return await submit(...args);
+    } catch (err) {
+      throw new Error(`submitTx rejected: ${describeError(err)}`);
+    }
+  };
+
   return provider;
 }
 

@@ -53,7 +53,10 @@ trix codegen --plugin ts-client
 Then run the suite (from `offchain/tx3`):
 
 ```bash
-npm run test:devnet      # or: npx vitest run settings/tests/devnet.test.ts
+npm run test:devnet      # all protocols
+npm run test:settings    # or: npx vitest run settings/tests/devnet.test.ts
+npm run test:dao         # or: npx vitest run dao/tests/devnet.test.ts
+npm run test:smart-wallet # or: npx vitest run smart_wallet/tests/devnet.test.ts
 ```
 
 A single test by name:
