@@ -16,6 +16,7 @@
     "@meshsdk/core": "^1.9.0"
   },
   "devDependencies": {
+    "@bloxbean/yaci-devkit": "0.10.6",
     "@types/node": "^20.0.0",
     "typescript": "^5.5.0",
     "vitest": "^2.0.0"

@@ -3,7 +3,8 @@
   "scripts": {
     "test:settings": "vitest run settings/tests/devnet.test.ts",
     "test:dao": "vitest run dao/tests/devnet.test.ts",
-    "test:devnet": "vitest run settings/tests/devnet.test.ts dao/tests/devnet.test.ts",
+    "test:event-triggered": "vitest run event-triggered-assets/tests/devnet.test.ts",
+    "test:devnet": "vitest run settings/tests/devnet.test.ts dao/tests/devnet.test.ts event-triggered-assets/tests/devnet.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
