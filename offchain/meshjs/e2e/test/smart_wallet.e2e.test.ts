@@ -906,7 +906,51 @@ describe.skipIf(!reachable)(
       return out.filter((a) => BigInt(a.quantity) > 0n);
     }
 
-    const payoutAda = ADA;
+    /**
+     * The address(es) a member-funded spend emits outputs to: the member's
+     * change/collateral-return address, the addresses its funding UTxOs live on,
+     * and `@cardano-sdk/input-selection`'s fixed change placeholder
+     * (`stubMaxSizeAddress`).
+     *
+     * MeshJS's `MeshTxBuilder.complete()` runs input selection, and the CSDK
+     * selector builds a provisional change output at that placeholder and
+     * evaluates the scripts against that skeleton — the change address is only
+     * rewritten to the real one *after* fee estimation
+     * (`RoundRobinRandomImprove/index.js`). A strict recipient allow-list
+     * therefore has to authorise the placeholder, even though the final
+     * transaction uses the real change address. It is not a real recipient.
+     */
+    const FEE_ESTIMATION_CHANGE_ADDRESS =
+      "addr_test1qqydn46r6mhge0kfpqmt36m6q43knzsd9ga32n96m89px3nuzcjqw982pcftgx53fu5527z2cj2tkx2h8ux2vxsg475qypp3m9";
+
+    async function memberSpendAddresses(ctx: Ctx): Promise<string[]> {
+      const utxos = await ctx.member.wallet.getUtxos();
+      return [
+        ...new Set([
+          ctx.member.address,
+          ...utxos.map((u) => u.output.address),
+          FEE_ESTIMATION_CHANGE_ADDRESS,
+        ]),
+      ];
+    }
+
+    function paymentCredential(addr: string): Credential {
+      const d = deserializeAddress(addr);
+      return d.scriptHash
+        ? { kind: "script", hash: d.scriptHash }
+        : { kind: "key", hash: d.pubKeyHash };
+    }
+
+    function stakingCredential(addr: string): Credential | undefined {
+      const d = deserializeAddress(addr);
+      if (d.stakeCredentialHash)
+        return { kind: "key", hash: d.stakeCredentialHash };
+      if (d.stakeScriptCredentialHash)
+        return { kind: "script", hash: d.stakeScriptCredentialHash };
+      return undefined;
+    }
+
+    const payoutAda = 2n * ADA;
 
     // ------------------------------------------------- recipient scripts
 
@@ -914,7 +958,7 @@ describe.skipIf(!reachable)(
       const ctx = await setup(provider);
       const script = fullRecipientAllowListScript({
         wallet: { kind: "script", hash: ctx.walletHash },
-        allowed: [ctx.member.address],
+        allowed: await memberSpendAddresses(ctx),
       });
       const datum = statelessSpender(
         resolveScriptHash(script.code, script.version),
@@ -990,11 +1034,13 @@ describe.skipIf(!reachable)(
 
     it("payment_staking_allow_list: listed payment+stake ok, unlisted rejected", async () => {
       const ctx = await setup(provider);
-      const m = deserializeAddress(ctx.member.address);
+      const addrs = await memberSpendAddresses(ctx);
       const script = paymentStakingAllowListScript({
         wallet: { kind: "script", hash: ctx.walletHash },
-        allowedPayments: [{ kind: "key", hash: m.pubKeyHash }],
-        allowedStakings: [{ kind: "key", hash: m.stakeCredentialHash }],
+        allowedPayments: addrs.map(paymentCredential),
+        allowedStakings: addrs
+          .map(stakingCredential)
+          .filter((c): c is Credential => c !== undefined),
       });
       const datum = statelessSpender(
         resolveScriptHash(script.code, script.version),
