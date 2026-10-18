@@ -37,10 +37,10 @@ npm run catalogue:test
 These checks validate JSON structure against the shared schemas. They do not
 build Lean modules, verify theorem names, or inspect proof axioms.
 
-For the scoped Lean check, with the pinned toolchain and Z3 on `PATH`:
+For the scoped Lean check, with the pinned toolchain and Z3 on `PATH`, run from `formal`:
 
 ```sh
-bash formal/check_properties.sh Universal
+./check_properties.sh Universal
 ```
 
 Pass a module name without `Formal.`; use dots for nested modules. This command
