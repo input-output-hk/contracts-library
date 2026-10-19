@@ -24,7 +24,12 @@ value `h_delegate` is the script that currently governs it. Registry changes
 reuse the settings protocol's `Propose` / `Apply` split, its `apply_delay`
 timelock, and its pluggable `propose_auth` / `apply_auth` authorization.
 
-= Launch registry instance
+The registry is a settings value: launching it, proposing a change, and applying
+a change are the *settings* protocol's own transactions (#20), reproduced here
+for completeness — see `../settings/design.typ` for the full lifecycle. Only the
+value is registry-shaped. The mechanism-specific transactions follow.
+
+= Registry launch (settings protocol)
 
 _Creates the settings UTxO that holds the registry. One instance governs any
 number of protocols._
@@ -63,8 +68,8 @@ number of protocols._
       delegate script hash.
     - `settingsNFT` uniquely identifies the instance; minting requires spending
       the one-shot `seed_utxo`, so at most one instance exists.
-    - `validate_datum(R)` must hold. The reference settings validator accepts any
-      value; the `settings_registry` fork admits only registry-shaped maps.
+    - The reference settings validator accepts any value; consumers reject a
+      malformed registry at spend time (`decode_registry`).
   ],
 )
 
@@ -72,7 +77,7 @@ number of protocols._
 
 #pagebreak()
 
-= Propose registry change
+= Registry change — Propose (settings protocol)
 
 _Stages a new registry behind the apply delay. A new proposal supersedes any
 pending one._
@@ -121,7 +126,7 @@ pending one._
 
 #pagebreak()
 
-= Apply registry change (upgrade)
+= Registry change — Apply (upgrade, settings protocol)
 
 _Commits a matured proposal after the timelock. This is the only transaction that
 changes a protocol's behaviour._
