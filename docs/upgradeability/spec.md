@@ -35,7 +35,7 @@ This document specifies the reusable predicates (`onchain/lib/upgradeability/`) 
 | Opt-in consent | **Enforced natively in V1** | A malicious registry repoint can change migration rules but never move funds without the user's signature. |
 | Forwarding check | **Exact script hash invoked as a withdrawal** | O(1), NFT-authenticated, not spoofable. |
 | Logic/migration scope | **Validate every forwarded input** | Prevents validating a benign input while another is drained. |
-| Registry datum | **Optional typed fork (`settings_registry`)** | Stops governance bricking the instance with a malformed value. |
+| Registry datum | **Any `Data`; consumers decode** | The reference settings validator accepts any value; `decode_registry` rejects a malformed registry at spend time. |
 
 ### Limitations
 
@@ -66,7 +66,7 @@ The **forwarder hash** is `hash(forwarder_validator(settings_policy, settings_to
 
 A `Registry` is a `Map` from 28-byte script hashes to 28-byte script hashes, stored as the settings UTxO's `current` value.
 
-- **Well-formedness.** `decode_registry` fails on any value that is not a map of byte arrays to byte arrays. The optional `settings_registry` fork additionally requires each key and value to be exactly 28 bytes (`validate_registry_datum`).
+- **Well-formedness.** `decode_registry` fails on any value that is not a map of byte arrays to byte arrays; a consumer therefore rejects a malformed registry. The reference settings validator does not constrain the shape on-chain.
 - **Authenticity.** The registry is read from the settings UTxO identified by the settings NFT (`has_nft_strict`), so it is unique and one-shot (settings spec §3.c).
 
 ### 3.d Validators
@@ -81,7 +81,7 @@ Four reusable predicates, all in `onchain/lib/upgradeability/`.
 | `lookup(registry, own_hash)` | The delegate registered for `own_hash`, if any. |
 | `own_script_hash(inputs, own_ref)` | The script hash owning the input at `own_ref`. |
 | `forwarded_inputs(inputs, registry, logic_hash)` | Every input whose address maps to `logic_hash`. |
-| `decode_registry(data)` / `validate_registry_datum(data)` | Registry decoding / settings-fork predicate. |
+| `decode_registry(data)` | Decode the registry from the settings value; fails on a malformed shape. |
 
 **`forward.validate_forward(settings_policy, settings_token_name, own_ref, self)`** — forced forwarder:
 
@@ -146,13 +146,14 @@ Attacks the protocol defends against, each backed by the invariants of §6.b:
 - **Forwarding spoofing.** The forwarder requires the *exact* registered script hash; the hash comes from the NFT-authenticated settings UTxO and is compared by withdrawal credential, so it cannot be forged. (I4)
 - **Partial forwarding validation.** A logic/migration script validates **all** inputs mapped to it, so a benign input cannot shield a malicious one. (I5)
 - **Migration re-creation / double spend.** The migration script binds each forwarded input to the `Upgrade` action and a `v2_address` continuation; a UTxO is spent once, and a migrated V1 UTxO cannot be re-created under a normal action. (I6)
-- **Registry bricking.** The optional `settings_registry` fork rejects non-registry-shaped values. (I7)
+- **Malformed registry.** A malformed registry value makes every consumer reject (a liveness hazard), but it cannot be acted on. Governance is trusted to write well-formed maps. (I7)
 - **Fake registry.** The registry is read only from the settings UTxO carrying the settings NFT; a look-alike UTxO without the NFT is not accepted. (I8)
 
 ### 6.a Assumptions / out of scope
 
 - **The logic / migration script is trusted once registered.** `validate_forward` guarantees only that the registered script ran; the script itself carries the protocol's safety. For forced, a malicious repoint installs arbitrary logic — that is the inherent trust cost of beacon indirection.
 - **Forced repoints need a timelock and bounded governance.** `apply_delay` is the users' only window to react; a negative or tiny delay, or unbounded governance, weakens the guarantee (settings spec §6.a).
+- **The reference settings validator does not constrain the registry shape.** Any `Data` is admissible; consumers reject a malformed value at spend time, but governance can still write one (a liveness, not a safety, hazard). A deployer who wants to constrain it can fork settings with their own `validate_datum`.
 - **No global migration completeness.** On eUTxO each UTxO migrates independently; there is no all-or-nothing across the protocol, and no on-chain way to force a user off an opt-in V1.
 - **`versioned_counter` batching.** The demo finds the first output at the target address, so it supports one continuation per target per transaction. Production protocols should tag continuations (e.g. a `prev_input` datum field or a per-UTxO NFT).
 - **The protocol state's meaning is delegated.** The upgradeability predicates treat a forwarder's datum opaquely; the logic script defines it.
@@ -166,7 +167,7 @@ Attacks the protocol defends against, each backed by the invariants of §6.b:
 - **I4 — Forwarding integrity.** `validate_forward` returns `True` only if the exact registered delegate's withdrawal is present.
 - **I5 — Full forwarded validation.** A logic/migration script applies its checks to every input in `forwarded_inputs(...)`.
 - **I6 — Migration binding.** A migrated V1 input must have been spent with `Upgrade` and must reappear at `v2_address`.
-- **I7 — Registry well-formedness.** `settings_registry` admits only maps of 28-byte hashes.
+- **I7 — Registry decodability.** A registry that is not a map of byte arrays to byte arrays is rejected by `decode_registry`; consumers never act on a malformed registry.
 - **I8 — Registry authenticity.** The registry is read only from the settings UTxO identified by the settings NFT.
 - **I9 — Composability.** The predicates assert only about their own input, the settings reference input, and the withdrawal key set (plus, for migration, the explicit `v2_address` continuation). They never assert total input/output counts, total value, or unrelated UTxOs (`ARCHITECTURE.md` §1.1).
 
