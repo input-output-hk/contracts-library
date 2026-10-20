@@ -5,14 +5,14 @@ use upgradeability/counter.{
 }
 use upgradeability/migrate.{validate_upgrade}
 
-/// Opt-in V1 of the versioned counter demo.
+/// Opt-in V1 of the counter demo.
 ///
 /// Ordinary ticks use the native counter logic. The dedicated `Upgrade` path
 /// requires the UTxO owner's authorization (native consent) **and** the
 /// migration script registered for this script's own hash, so a governance
 /// repoint of the migration script can never move a user's funds without that
 /// user's signature.
-validator versioned_counter_v1(
+validator counter_v1(
   settings_policy: PolicyId,
   settings_token_name: AssetName,
 ) {

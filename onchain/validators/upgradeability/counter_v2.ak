@@ -3,10 +3,10 @@ use upgradeability/counter.{
   CounterRedeemer, Tick, Upgrade, validate_counter_tick,
 }
 
-/// V2 of the versioned counter demo: a plain, native counter with no upgrade
+/// V2 of the counter demo: a plain, native counter with no upgrade
 /// path. Users reach it by opting in to a V1 → V2 migration; their state then
 /// lives under this new, immutable script.
-validator versioned_counter_v2 {
+validator counter_v2 {
   spend(
     _datum: Option<Data>,
     redeemer: CounterRedeemer,
