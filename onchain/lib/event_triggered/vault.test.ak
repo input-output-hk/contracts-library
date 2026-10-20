@@ -224,3 +224,177 @@ test redeem_rejects_two_vaults() {
     },
   )
 }
+
+// --------------------------------------------------- payout accounting
+//
+// Payouts are aggregated per address and matched against the aggregate ADA
+// paid to that address, excluding the vault continuation; every payout and
+// the redeemed total are positive; and the vault's non-ADA assets are
+// carried through unchanged.
+
+const recipient_key =
+  #"77777777777777777777777777777777777777777777777777777777"
+
+const stray_policy = #"88888888888888888888888888888888888888888888888888888888"
+
+fn pay(key: ByteArray, amount: Int) -> Payout {
+  Payout { address: from_verification_key(key), amount }
+}
+
+fn paid_to(key: ByteArray, ada: Int) -> Output {
+  Output {
+    address: from_verification_key(key),
+    value: assets.from_lovelace(ada),
+    datum: NoDatum,
+    reference_script: None,
+  }
+}
+
+fn burn(amount: Int) -> assets.Value {
+  assets.from_asset(cnt_policy, schedule.encode_amount(amount), -1)
+}
+
+fn with_stray(output: Output) -> Output {
+  Output {
+    ..output,
+    value: output.value |> assets.add(stray_policy, "stray", 1),
+  }
+}
+
+// Sanity: a split payout to two distinct addresses is admitted.
+test redeem_ok_split_between_two_addresses() {
+  check(
+    Redeem { payouts: [pay(holder_key, 600), pay(recipient_key, 400)] },
+    Transaction {
+      ..placeholder,
+      inputs: [vault_input(0, 10_000_000, True)],
+      outputs: [
+        vault_output(10_000_000 - 1000, True),
+        paid_to(holder_key, 600),
+        paid_to(recipient_key, 400),
+      ],
+      mint: burn(1000),
+    },
+  )
+}
+
+// Two payouts to the same address must be met by 1000 in aggregate, not by
+// one 500 output counted twice.
+test redeem_rejects_duplicate_payouts_sharing_one_output() {
+  !check(
+    Redeem { payouts: [pay(recipient_key, 500), pay(recipient_key, 500)] },
+    Transaction {
+      ..placeholder,
+      inputs: [vault_input(0, 10_000_000, True)],
+      outputs: [
+        vault_output(10_000_000 - 1000, True),
+        paid_to(recipient_key, 500),
+        paid_to(holder_key, 500),
+      ],
+      mint: burn(1000),
+    },
+  )
+}
+
+// A payout naming the vault's own address must not be satisfied by the
+// vault continuation.
+test redeem_rejects_payout_met_by_vault_continuation() {
+  !check(
+    Redeem {
+      payouts: [Payout { address: from_script(vault_script), amount: 1000 }],
+    },
+    Transaction {
+      ..placeholder,
+      inputs: [vault_input(0, 10_000_000, True)],
+      outputs: [vault_output(10_000_000 - 1000, True), wallet_output(1000)],
+      mint: burn(1000),
+    },
+  )
+}
+
+// Negative entries must not offset an inflated payout.
+test redeem_rejects_non_positive_payout() {
+  !check(
+    Redeem { payouts: [pay(holder_key, 1500), pay(recipient_key, -500)] },
+    Transaction {
+      ..placeholder,
+      inputs: [vault_input(0, 10_000_000, True)],
+      outputs: [
+        vault_output(10_000_000 - 1000, True),
+        paid_to(holder_key, 1500),
+        paid_to(recipient_key, 2_000_000),
+      ],
+      mint: burn(1000),
+    },
+  )
+}
+
+// A redemption must redeem something.
+test redeem_rejects_zero_value() {
+  !check(
+    Redeem { payouts: [] },
+    Transaction {
+      ..placeholder,
+      inputs: [vault_input(0, 10_000_000, True)],
+      outputs: [vault_output(10_000_000, True)],
+    },
+  )
+}
+
+// ------------------------------------------------- non-ADA preservation
+
+test redeem_rejects_removing_native_asset() {
+  !check(
+    Redeem { payouts: [pay(holder_key, 1000)] },
+    Transaction {
+      ..placeholder,
+      inputs: [
+        Input {
+          ..vault_input(0, 10_000_000, True),
+          output: with_stray(vault_input(0, 10_000_000, True).output),
+        },
+      ],
+      outputs: [
+        vault_output(10_000_000 - 1000, True),
+        with_stray(paid_to(holder_key, 1000)),
+      ],
+      mint: burn(1000),
+    },
+  )
+}
+
+test redeem_ok_preserving_native_asset() {
+  check(
+    Redeem { payouts: [pay(holder_key, 1000)] },
+    Transaction {
+      ..placeholder,
+      inputs: [
+        Input {
+          ..vault_input(0, 10_000_000, True),
+          output: with_stray(vault_input(0, 10_000_000, True).output),
+        },
+      ],
+      outputs: [
+        with_stray(vault_output(10_000_000 - 1000, True)),
+        paid_to(holder_key, 1000),
+      ],
+      mint: burn(1000),
+    },
+  )
+}
+
+test deposit_rejects_removing_native_asset() {
+  !check(
+    VaultDeposit,
+    Transaction {
+      ..placeholder,
+      inputs: [
+        Input {
+          ..vault_input(0, 5_000_000, True),
+          output: with_stray(vault_input(0, 5_000_000, True).output),
+        },
+      ],
+      outputs: [vault_output(5_000_000 + principal, True)],
+    },
+  )
+}

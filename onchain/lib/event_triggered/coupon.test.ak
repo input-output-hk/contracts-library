@@ -2,7 +2,7 @@
 // §4.7 graduation, burns).
 
 use aiken/interval
-use cardano/address.{Address, from_script, with_delegation_key}
+use cardano/address.{Address, VerificationKey, from_script, with_delegation_key}
 use cardano/assets
 use cardano/transaction.{
   InlineDatum, Input, Output, OutputReference, Transaction, placeholder,
@@ -172,6 +172,149 @@ test rejects_two_positive_names() {
     Transaction {
       ..placeholder,
       mint: coupon(1040) |> assets.merge(coupon(1081)),
+    },
+  )
+}
+
+// ------------------------------------------- certificate/policy binding
+//
+// A positive coupon mint is admitted only for a certificate whose datum
+// selects this policy (`cnt_policy == own_policy`). Without that binding a
+// certificate of vault A, advanced or retired legitimately under A's policy,
+// also authorizes coupons under every other vault's policy whose schedule
+// conditions happen to hold, and those coupons redeem at the other vault.
+
+const foreign_policy =
+  #"cccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+
+const issuer_pay_key =
+  #"55555555555555555555555555555555555555555555555555555555"
+
+/// A certificate UTxO selecting `selects` as its coupon policy.
+fn cert_for(k: Int, selects: ByteArray, commit) -> Output {
+  Output {
+    address: plb(),
+    value: cert_value(k),
+    datum: InlineDatum(
+      CertificateDatum { start: 2000, commit, cnt_policy: selects },
+    ),
+    reference_script: None,
+  }
+}
+
+fn input_of(index: Int, output: Output) -> Input {
+  Input {
+    output_reference: OutputReference {
+      transaction_id: tx_id,
+      output_index: index,
+    },
+    output,
+  }
+}
+
+fn foreign_coupon(amount: Int) -> assets.Value {
+  assets.from_asset(foreign_policy, schedule.encode_amount(amount), 1)
+}
+
+/// Advance `0 -> 1` of a certificate selecting `selects`, minting step 1's
+/// coupon under this policy plus `extra`.
+fn advance_for(selects: ByteArray, commit, extra: assets.Value) -> Transaction {
+  Transaction {
+    ..placeholder,
+    inputs: [input_of(0, cert_for(0, selects, commit))],
+    outputs: [cert_for(1, selects, commit)],
+    mint: coupon(1040)
+      |> assets.merge(extra)
+      |> assets.merge(assets.from_asset(cip_policy, schedule.step_name(0), -1))
+      |> assets.merge(assets.from_asset(cip_policy, schedule.step_name(1), 1)),
+    validity_range: interval.after(3000),
+  }
+}
+
+/// Retirement at the final step of a certificate selecting `selects`,
+/// minting the principal coupon under this policy plus `extra`.
+fn retire_for(selects: ByteArray, commit, extra: assets.Value) -> Transaction {
+  Transaction {
+    ..placeholder,
+    inputs: [input_of(0, cert_for(4, selects, commit))],
+    outputs: [],
+    mint: coupon(principal)
+      |> assets.merge(extra)
+      |> assets.merge(assets.from_asset(cip_policy, schedule.step_name(4), -1)),
+    validity_range: interval.after(6000),
+  }
+}
+
+// Sanity: the same shapes pass when the certificate selects this policy.
+
+test scheduled_ok_for_own_certificate() {
+  check(advance_for(cnt_policy, None, assets.zero))
+}
+
+test graduation_ok_for_own_certificate() {
+  check(retire_for(cnt_policy, None, assets.zero))
+}
+
+// Owner-path claims.
+
+test scheduled_rejects_certificate_of_another_policy() {
+  !check(advance_for(foreign_policy, None, assets.zero))
+}
+
+test graduation_rejects_certificate_of_another_policy() {
+  !check(retire_for(foreign_policy, None, assets.zero))
+}
+
+// The realistic shape: the certificate's own coupon (under its policy) is
+// minted as the issuance logic requires, and a second coupon is piggybacked
+// under this policy in the same transaction.
+
+test scheduled_rejects_piggyback_on_foreign_claim() {
+  !check(advance_for(foreign_policy, None, foreign_coupon(1040)))
+}
+
+test graduation_rejects_piggyback_on_foreign_retirement() {
+  !check(retire_for(foreign_policy, None, foreign_coupon(principal)))
+}
+
+// Issuer-triggered claims (the certificate commits a payment credential).
+
+test scheduled_rejects_foreign_certificate_issuer_triggered() {
+  !check(
+    advance_for(
+      foreign_policy,
+      Some(VerificationKey(issuer_pay_key)),
+      foreign_coupon(1040),
+    ),
+  )
+}
+
+test graduation_rejects_foreign_certificate_issuer_triggered() {
+  !check(
+    retire_for(
+      foreign_policy,
+      Some(VerificationKey(issuer_pay_key)),
+      foreign_coupon(principal),
+    ),
+  )
+}
+
+// Burns stay unrestricted: a foreign certificate in the transaction does not
+// block redeeming this policy's coupons.
+
+test burns_admitted_alongside_foreign_certificate() {
+  check(
+    Transaction {
+      ..placeholder,
+      inputs: [input_of(0, cert_for(0, foreign_policy, None))],
+      outputs: [cert_for(1, foreign_policy, None)],
+      mint: assets.from_asset(cnt_policy, schedule.encode_amount(1040), -1)
+        |> assets.merge(foreign_coupon(1040))
+        |> assets.merge(
+            assets.from_asset(cip_policy, schedule.step_name(0), -1),
+          )
+        |> assets.merge(assets.from_asset(cip_policy, schedule.step_name(1), 1)),
+      validity_range: interval.after(3000),
     },
   )
 }
