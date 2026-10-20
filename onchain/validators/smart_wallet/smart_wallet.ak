@@ -110,6 +110,8 @@ fn validate_config_update(
     assets.lovelace_of(continuation.value) >= assets.lovelace_of(
       own_input.output.value,
     ),
+    checks.keys_unique(new_datum.spenders),
+    checks.keys_unique(new_datum.depositors),
     checks.withdrawals_added_published(
       old_datum.spenders,
       new_datum.spenders,

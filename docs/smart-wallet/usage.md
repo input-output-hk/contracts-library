@@ -131,7 +131,10 @@ Launch the settings instance with `buildLaunchTx` (see the
 `Spend` reads the config — `Deposit`, `UpdatePermissions`, and `Close` do not
 require the settings UTxO. Changing members/threshold through the settings
 protocol takes effect for the next spend immediately (no snapshot). A
-malformed or missing `current` halts spending until fixed.
+malformed or missing `current` halts spending until fixed. `members` is treated
+as a set (duplicates count once) and the threshold must satisfy
+`0 < threshold <= distinct member count`. The `spenders` and `depositors` maps
+must have unique keys.
 
 The settings instance is the **reference configuration source, not a fixed
 part of the mechanism**. The floor itself is a pure predicate
@@ -399,6 +402,9 @@ The reference validators are `spending_limit`, `spending_window`,
 `asset_deny_list`, `asset_deposit_allow_list` / `asset_deposit_deny_list`). All
 are parameterized by the **wallet's payment credential** and the **asset name of
 its identifying NFT**, so one script instance works with exactly one wallet.
+Stateless scripts use the canonical marker `data: 0`: the reference validators
+reject any other value at registration and require it to remain `0` on every
+spend/deposit, so it cannot be rewritten or used to bloat the datum.
 
 ### `spending_limit`
 
@@ -791,8 +797,9 @@ tests use a 1-of-1 wallet.
   address is rejected; only `Close` destroys the wallet.
 - **The settings config is trusted.** The wallet reads `members`/`threshold`
   from the settings `current` without validating the settings contract; whoever
-  controls the settings instance controls spend authority. A malformed
-  `current` (or `threshold > members` count) makes every spend fail.
+  controls the settings instance controls spend authority. `members` is treated
+  as a set, and a threshold outside `0 < threshold <= distinct members` makes
+  every spend fail.
 - **Deposits run the deposit scripts, not the spenders.** Every `depositors`
   script must be invoked as a withdraw-0 (with an empty map, deposits are
   open). `spenders` must come back byte-identical and the `depositors` keys

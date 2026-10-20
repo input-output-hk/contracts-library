@@ -8,7 +8,8 @@ use cardano/transaction.{
 use smart_wallet/types.{WalletDatum}
 use smart_wallet/withdrawal.{
   own_depositor_data, own_depositor_data_in, own_depositor_removed,
-  own_withdrawal_data, own_withdrawal_removed,
+  own_depositor_stateless_unchanged, own_withdrawal_data, own_withdrawal_removed,
+  own_withdrawal_stateless_unchanged, stateless_data_valid,
 }
 
 const a = #"11111111111111111111111111111111111111111111111111111111"
@@ -244,4 +245,68 @@ test depositor_removed_rejects_when_kept() fail {
 
 test depositor_removed_rejects_without_wallet_input() fail {
   own_depositor_removed(placeholder, Script(a), wallet_token, a)
+}
+
+// ------------------------------------------------------ stateless data marker
+
+test stateless_data_accepts_zero() {
+  let data: Data = 0
+  stateless_data_valid(data)
+}
+
+test stateless_data_rejects_nonzero() fail {
+  let data: Data = 1
+  stateless_data_valid(data)
+}
+
+test stateless_data_unchanged_accepts_zero() {
+  let data: Data = 0
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [wallet_input_at([Pair(a, data)])],
+    outputs: [wallet_output_at([Pair(a, data)])],
+  }
+  own_withdrawal_stateless_unchanged(tx, Script(a), wallet_token, a)
+}
+
+test stateless_data_unchanged_rejects_rewrite() fail {
+  let zero: Data = 0
+  let junk: Data = 1
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [wallet_input_at([Pair(a, zero)])],
+    outputs: [wallet_output_at([Pair(a, junk)])],
+  }
+  own_withdrawal_stateless_unchanged(tx, Script(a), wallet_token, a)
+}
+
+test stateless_data_unchanged_rejects_noncanonical() fail {
+  let junk: Data = 1
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [wallet_input_at([Pair(a, junk)])],
+    outputs: [wallet_output_at([Pair(a, junk)])],
+  }
+  own_withdrawal_stateless_unchanged(tx, Script(a), wallet_token, a)
+}
+
+test depositor_stateless_data_unchanged_accepts_zero() {
+  let data: Data = 0
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [wallet_input_at_depositors([Pair(a, data)])],
+    outputs: [wallet_output_at_depositors([Pair(a, data)])],
+  }
+  own_depositor_stateless_unchanged(tx, Script(a), wallet_token, a)
+}
+
+test depositor_stateless_data_unchanged_rejects_rewrite() fail {
+  let zero: Data = 0
+  let junk: Data = 1
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [wallet_input_at_depositors([Pair(a, zero)])],
+    outputs: [wallet_output_at_depositors([Pair(a, junk)])],
+  }
+  own_depositor_stateless_unchanged(tx, Script(a), wallet_token, a)
 }

@@ -123,6 +123,12 @@ test publish_register_script_credential() {
   publish(RegisterCredential { credential: Script(a), deposit: Never }, tx)
 }
 
+test publish_rejects_noncanonical_data() fail {
+  let data: Data = 1
+  let tx = wallet_tx([Pair(a, data)])
+  publish(RegisterCredential { credential: Script(a), deposit: Never }, tx)
+}
+
 test publish_rejects_register_not_listed() fail {
   let data: Data = 0
   let tx = wallet_tx([Pair(a, data)])

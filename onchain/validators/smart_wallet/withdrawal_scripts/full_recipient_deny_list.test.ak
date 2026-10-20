@@ -71,7 +71,11 @@ fn wallet_input(spenders: Pairs<ScriptHash, Data>) -> Input {
 }
 
 fn wallet_tx(spenders: Pairs<ScriptHash, Data>) -> Transaction {
-  Transaction { ..placeholder, outputs: [wallet_output(spenders)] }
+  Transaction {
+    ..placeholder,
+    inputs: [wallet_input(spenders)],
+    outputs: [wallet_output(spenders)],
+  }
 }
 
 fn removal_tx(spenders: Pairs<ScriptHash, Data>) -> Transaction {
@@ -103,6 +107,7 @@ fn spend_tx(address: Address) -> Transaction {
   let data: Data = 0
   Transaction {
     ..placeholder,
+    inputs: [wallet_input([Pair(a, data)])],
     outputs: [wallet_output([Pair(a, data)]), payout(address)],
   }
 }

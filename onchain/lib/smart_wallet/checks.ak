@@ -34,18 +34,31 @@ pub fn signed_m_of_n(
 /// Pure M-of-N predicate: at least `threshold` of `members` appear in
 /// `extra_signatories`.
 ///
-/// Signatures from non-members are ignored, and a member counts at most once
-/// even if it appears twice in `extra_signatories`.
+/// `members` is treated as a set: a duplicate member counts once, and the
+/// threshold must satisfy `0 < threshold <= distinct member count`. Signatures
+/// from non-members are ignored, and a member counts at most once even if it
+/// appears twice in `extra_signatories`.
 pub fn members_signed(
   members: List<VerificationKeyHash>,
   threshold: Int,
   extra_signatories: List<VerificationKeyHash>,
 ) -> Bool {
+  let unique_members = list.unique(members)
+  let valid_threshold = threshold > 0 && threshold <= list.length(
+    unique_members,
+  )
   let signed = list.count(
-    members,
+    unique_members,
     fn(member) { list.has(extra_signatories, member) },
   )
-  signed >= threshold
+  valid_threshold && signed >= threshold
+}
+
+/// Whether every key in a delegated-script map is unique. `same_keys` and
+/// `withdrawals_equal` rely on key uniqueness to compare maps as sets.
+pub fn keys_unique(scripts: Pairs<ScriptHash, Data>) -> Bool {
+  let keys = pairs.keys(scripts)
+  list.length(keys) == list.length(list.unique(keys))
 }
 
 /// Delegation check: every script in `required` keys a reward withdrawal in
@@ -206,6 +219,8 @@ pub fn validate_spend_continuation(
       expect InlineDatum(raw) = output.datum
       expect new_datum: WalletDatum = raw
       and {
+        keys_unique(new_datum.spenders),
+        keys_unique(new_datum.depositors),
         withdrawals_equal(old_datum.depositors, new_datum.depositors),
         same_keys(old_datum.spenders, new_datum.spenders),
         value_contains(old_value, output.value),
@@ -271,6 +286,8 @@ pub fn validate_deposit(
   and {
     withdrawals_invoked(datum.depositors, self.withdrawals),
     continuation.address == own_input.output.address,
+    keys_unique(cont_datum.spenders),
+    keys_unique(cont_datum.depositors),
     withdrawals_equal(datum.spenders, cont_datum.spenders),
     same_keys(datum.depositors, cont_datum.depositors),
     value_contains(continuation.value, own_input.output.value),
@@ -282,11 +299,18 @@ fn withdrawals_equal(
   old: Pairs<ScriptHash, Data>,
   new: Pairs<ScriptHash, Data>,
 ) -> Bool {
-  list.length(old) == list.length(new) && list.all(
-    old,
-    fn(pair) {
-      when pairs.get_first(new, pair.1st) is {
-        Some(new_data) -> cbor.serialise(pair.2nd) == cbor.serialise(new_data)
+  let old_keys = list.unique(pairs.keys(old))
+  let new_keys = list.unique(pairs.keys(new))
+  list.length(old_keys) == list.length(new_keys) && list.all(
+    old_keys,
+    fn(hash) {
+      when pairs.get_first(old, hash) is {
+        Some(old_data) ->
+          when pairs.get_first(new, hash) is {
+            Some(new_data) ->
+              cbor.serialise(old_data) == cbor.serialise(new_data)
+            None -> False
+          }
         None -> False
       }
     },
@@ -296,9 +320,11 @@ fn withdrawals_equal(
 /// Two script maps have the same key set, regardless of order. Keys are unique,
 /// so equal length plus containment is set equality.
 fn same_keys(old: Pairs<ScriptHash, Data>, new: Pairs<ScriptHash, Data>) -> Bool {
-  list.length(old) == list.length(new) && list.all(
-    pairs.keys(old),
-    fn(hash) { pairs.has_key(new, hash) },
+  let old_keys = list.unique(pairs.keys(old))
+  let new_keys = list.unique(pairs.keys(new))
+  list.length(old_keys) == list.length(new_keys) && list.all(
+    old_keys,
+    fn(hash) { list.has(new_keys, hash) },
   )
 }
 

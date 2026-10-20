@@ -13,6 +13,7 @@
 //// rely on its own entry only, and accept `UnregisterCredential` when leaving —
 //// a script that refuses to unregister blocks `Close` and removal.
 
+use aiken/cbor
 use aiken/collection/list
 use aiken/collection/pairs
 use aiken/crypto.{ScriptHash}
@@ -78,6 +79,44 @@ pub fn own_withdrawal_removed(
     wallet_token_name,
     own_hash,
     fn(datum) { datum.spenders },
+  )
+}
+
+/// The canonical `Data` marker stored by stateless delegated scripts (`0`).
+pub fn stateless_data_valid(data: Data) -> Bool {
+  let canonical: Data = 0
+  cbor.serialise(data) == cbor.serialise(canonical)
+}
+
+/// Whether a stateless spender script's own `Data` is still the canonical
+/// marker on both the wallet input and output, i.e. no one rewrote it on a
+/// spend.
+pub fn own_withdrawal_stateless_unchanged(
+  self: Transaction,
+  wallet: Credential,
+  wallet_token_name: AssetName,
+  own_hash: ScriptHash,
+) -> Bool {
+  stateless_data_valid(
+    own_withdrawal_data_in(self, wallet, wallet_token_name, own_hash),
+  ) && stateless_data_valid(
+    own_withdrawal_data(self, wallet, wallet_token_name, own_hash),
+  )
+}
+
+/// Whether a stateless deposit script's own `Data` is still the canonical
+/// marker on both the wallet input and output, i.e. no one rewrote it on a
+/// deposit.
+pub fn own_depositor_stateless_unchanged(
+  self: Transaction,
+  wallet: Credential,
+  wallet_token_name: AssetName,
+  own_hash: ScriptHash,
+) -> Bool {
+  stateless_data_valid(
+    own_depositor_data_in(self, wallet, wallet_token_name, own_hash),
+  ) && stateless_data_valid(
+    own_depositor_data(self, wallet, wallet_token_name, own_hash),
   )
 }
 

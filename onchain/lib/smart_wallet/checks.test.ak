@@ -6,9 +6,9 @@ use cardano/transaction.{
   DatumHash, InlineDatum, NoDatum, Output, Publish, Transaction, placeholder,
 }
 use smart_wallet/checks.{
-  members_signed, validate_spend_continuation, withdrawals_added_published,
-  withdrawals_invoked, withdrawals_kept_unchanged, withdrawals_published,
-  withdrawals_removed_unregistered,
+  keys_unique, members_signed, validate_spend_continuation,
+  withdrawals_added_published, withdrawals_invoked, withdrawals_kept_unchanged,
+  withdrawals_published, withdrawals_removed_unregistered,
 }
 use smart_wallet/types.{WalletDatum}
 
@@ -45,6 +45,34 @@ test m_of_n_below_threshold() fail {
 test m_of_n_ignores_non_members() {
   // `c` is not a member, so only `a` counts — enough for a threshold of 1.
   members_signed([a, b], 1, [a, c])
+}
+
+test m_of_n_duplicate_member_counts_once() fail {
+  members_signed([a, a], 2, [a])
+}
+
+test m_of_n_zero_threshold_rejected() fail {
+  members_signed([a], 0, [])
+}
+
+test m_of_n_negative_threshold_rejected() fail {
+  members_signed([a], -1, [])
+}
+
+test m_of_n_threshold_above_members_rejected() fail {
+  members_signed([a], 2, [a])
+}
+
+// --------------------------------------------------------------- keys_unique
+
+test keys_unique_accepts_distinct_keys() {
+  let data: Data = 0
+  keys_unique([Pair(a, data), Pair(b, data)])
+}
+
+test keys_unique_rejects_duplicates() fail {
+  let data: Data = 0
+  keys_unique([Pair(a, data), Pair(a, data)])
 }
 
 // --------------------------------------------------------- withdrawals_invoked

@@ -65,8 +65,10 @@ withdraw-0 scripts, and per-script mutable state) before generalizing it.
   deposited (asset allow/denylists, source-address checks, …). Rewritable by the
   admin via `UpdatePermissions`; with an empty map, deposits are open.
 - **Members** (from the external settings config). The base M-of-N floor: at
-  least `threshold` of `members` must sign a `Spend`. A member may itself be a
-  script credential, so the floor can be a multisig, a DAO, etc.
+  least `threshold` of `members` must sign a `Spend`. `members` is treated as a
+  set (a duplicate counts once), and the threshold must satisfy
+  `0 < threshold <= distinct member count`. A member may itself be a script
+  credential, so the floor can be a multisig, a DAO, etc.
 - **Delegated spender scripts** (the `spenders` map). Each must run and
   approve on every `Spend`; they carry the restrictions that specialize a wallet
   beyond its floor.
@@ -84,8 +86,10 @@ at the wallet address (payment credential `Script(wallet_hash)`), where
 | `spenders` | `Pairs<ScriptHash, Data>` | The delegated withdraw-0 scripts that must run on every `Spend`, keyed by script hash. The `Data` value is that script's own mutable state. |
 | `depositors` | `Pairs<ScriptHash, Data>` | The delegated withdraw-0 scripts that must run on every `Deposit`, keyed by script hash. The `Data` value is that script's own configuration or mutable state (e.g. an asset allow/denylist, or a deposit counter). |
 
-The datum is **inline** (datum hashes are rejected). Both maps are
-per-UTxO: different wallet UTxOs may carry different restriction sets.
+The datum is **inline** (datum hashes are rejected). Keys in both maps are
+unique; the wallet rejects duplicate entries at mint, on updates, and in
+`Spend`/`Deposit` continuations. Both maps are per-UTxO: different wallet UTxOs
+may carry different restriction sets.
 
 ### 4.2 Identity & one-shot mint
 
@@ -157,7 +161,7 @@ unchanged, its `spenders` key set fixed, and a value no greater than the input's
 | **Outputs** | One continuation at `out_ix`: same address, every **non-ADA asset exactly preserved** (including the NFT), inline datum with the new config. Lovelace may only increase — an explicit top-up exception (see below). |
 | **Redeemer** | `UpdatePermissions { out_ix }`. |
 | **Authorization** | `admin`. |
-| **Constraints** | The old and new `spenders` and `depositors` maps are diffed: every script *added* must be **published** here (`RegisterCredential` **and its matching `Publish` redeemer**); every script *removed* must be **unregistered** (`UnregisterCredential`); every script *kept* must carry unchanged `Data`. |
+| **Constraints** | The new `spenders` and `depositors` maps must have unique keys. The old and new maps are diffed: every script *added* must be **published** here (`RegisterCredential` **and its matching `Publish` redeemer**); every script *removed* must be **unregistered** (`UnregisterCredential`); every script *kept* must carry unchanged `Data`. |
 
 Funds cannot move except for the explicit ADA top-up: the continuation sits at
 the same address with every non-ADA asset unchanged and lovelace at least the
@@ -220,14 +224,17 @@ treated as the wallet, so a decoy cannot supply another state or permission
 map.
 
 The `Data` value in `spenders[script_hash]` is that script's mutable state:
-stateless scripts store a trivial marker (e.g. `spending_limit`, whose `bound` is
-a compile-time parameter); stateful scripts store and advance real state (e.g.
-`spending_window`, which tracks the upper bound of the last spend's validity
-range to limit spends per window).
+stateless scripts store the canonical marker `0` (e.g. `spending_limit`, whose
+`bound` is a compile-time parameter) and the reference validators reject any
+other value on registration and require it to remain `0` on every spend;
+stateful scripts store and advance real state (e.g. `spending_window`, which
+tracks the upper bound of the last spend's validity range to limit spends per
+window).
 `depositors[script_hash]` works the same way on the deposit side: stateless
-deposit scripts store static configuration (e.g. an asset allow/denylist), while
-stateful ones advance real state on each `Deposit` (e.g. a deposit cap per
-window), enforcing their own input→output transition.
+deposit scripts store the canonical marker `0` and require it to stay `0`,
+while stateful ones advance real state on each `Deposit` (e.g. a deposit cap per
+window), enforcing their own input→output transition. Stateless deposit scripts
+therefore cannot be used to bloat the datum.
 
 > **Well-formed delegated scripts (trust).** A delegated script is the sole
 > authority over its own `Data`: the core enforces the `spenders` key set and
@@ -285,6 +292,10 @@ window), enforcing their own input→output transition.
   whole map unchanged; its values advance only through deposit scripts on
   `Deposit`. Neither a spend nor moving the NFT out and back can alter deposit
   validation.
+- **I10 — Configuration validity.** `members` is treated as a set and the
+  threshold satisfies `0 < threshold <= distinct member count`. Keys in
+  `spenders` and `depositors` are unique at mint/update and remain unique in
+  every `Spend`/`Deposit` continuation.
 
 ## 8. Threat model & assumptions
 

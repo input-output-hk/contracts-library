@@ -146,13 +146,17 @@ forward unchanged._
       wallets.
     - base M-of-N floor: the wallet's configuration supplies `members` and
       `threshold`, and the spend requires at least `threshold` of `members`
-      present in `extra_signatories`. A member may itself be a script
+      present in `extra_signatories`. `members` is treated as a set (duplicates
+      count once), and the threshold must satisfy
+      `0 < threshold <= distinct members`. A member may itself be a script
       credential, so the floor can be another multisig, a DAO, and so on. This
       design is agnostic of how that configuration is sourced.
     - delegated authorizations: every `ScriptHash` key in the wallet UTxO's
       `spenders` datum field is a withdraw-0 staking script that must run in
       this transaction; the `Data` value carries that script's own mutable
-      state. The `Spend` redeemer asserts the conjunction — the M-of-N floor
+      state. Keys in both delegated maps are unique. Stateless scripts store the
+      canonical marker `0` and must keep it on every spend/deposit; stateful
+      scripts enforce their own transition. The `Spend` redeemer asserts the conjunction — the M-of-N floor
       *and* all delegated checks — so no restriction can be silently omitted.
       The map is per-UTxO, so different wallet UTxOs may carry different
       restriction sets.

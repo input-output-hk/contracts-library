@@ -25,17 +25,15 @@ validator payment_staking_allow_list(
 ) {
   publish(_redeemer: Data, certificate: Certificate, self: Transaction) {
     when certificate is {
-      RegisterCredential { credential: Script(own_hash), .. } -> {
-        // stateless: only confirm this script is listed in the wallet datum; a
-        // stateful script would additionally validate its initial `Data` here.
-        expect _: Data = withdrawal.own_withdrawal_data(
-          self,
-          wallet,
-          wallet_token_name,
-          own_hash,
+      RegisterCredential { credential: Script(own_hash), .. } ->
+        withdrawal.stateless_data_valid(
+          withdrawal.own_withdrawal_data(
+            self,
+            wallet,
+            wallet_token_name,
+            own_hash,
+          ),
         )
-        True
-      }
       UnregisterCredential { credential: Script(own_hash), .. } ->
         // only allow unregistration when this script is leaving a wallet, so it
         // cannot be unregistered out of band (which would brick the wallet).
@@ -49,8 +47,17 @@ validator payment_staking_allow_list(
     }
   }
 
-  withdraw(_redeemer: Data, _account: Credential, self: Transaction) {
-    only_allowed_recipients(self, wallet, allowed_payments, allowed_stakings)
+  withdraw(_redeemer: Data, account: Credential, self: Transaction) {
+    expect Script(own_hash) = account
+    and {
+      withdrawal.own_withdrawal_stateless_unchanged(
+        self,
+        wallet,
+        wallet_token_name,
+        own_hash,
+      ),
+      only_allowed_recipients(self, wallet, allowed_payments, allowed_stakings),
+    }
   }
 
   else(_) {

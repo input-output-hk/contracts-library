@@ -55,6 +55,8 @@ pub fn validate_mint(
   let correct_datum = {
     expect WalletDatum { spenders, depositors } = datum
     and {
+      checks.keys_unique(spenders),
+      checks.keys_unique(depositors),
       checks.withdrawals_published(spenders, self),
       checks.withdrawals_published(depositors, self),
     }

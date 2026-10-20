@@ -576,14 +576,13 @@ test update_permissions_rejects_value_decrease() fail {
 
 // ---------------------------------------------- configuration validity
 
-// KNOWN ISSUE: a duplicated member counts twice toward the threshold.
+// Fixed: members are treated as a set, so the duplicate counts once.
 test duplicate_members_count_once() fail {
   checks.members_signed([member, member], 2, [member])
 }
 
-// KNOWN ISSUE: duplicate keys in `spenders` are accepted at mint (and break
-// the uniqueness `same_keys` relies on). The `Publish` redeemer is included so
-// the rejection must come from the duplicate, not from finding 5.
+// Fixed: duplicate keys are rejected at mint. The `Publish` redeemer is included
+// so the rejection comes from the duplicate, not from missing publication.
 test mint_rejects_duplicate_spender_keys() fail {
   let cert = register(sl)
   let tx = Transaction {
@@ -599,8 +598,28 @@ test mint_rejects_duplicate_spender_keys() fail {
   core_mint(0, tx)
 }
 
-// KNOWN ISSUE: a stateless depositor's `Data` is not pinned, so any depositor
-// (no signature) can replace it with arbitrary bytes, bloating the datum.
+test mint_rejects_duplicate_depositor_keys() fail {
+  let cert = register(adal)
+  let tx = Transaction {
+    ..admin_tx(),
+    inputs: [seed_input()],
+    outputs: [
+      wallet_out(
+        nft_value(2 * ada),
+        [],
+        [Pair(adal, unit()), Pair(adal, unit())],
+      ),
+    ],
+    mint: assets.from_asset(wallet_hash, wallet_token, 1),
+    certificates: [cert],
+    redeemers: [Pair(Publish { at: 0, certificate: cert }, unit())],
+  }
+  core_mint(0, tx)
+}
+
+// Fixed: stateless scripts pin their canonical `Data = 0` on every spend.
+// Fixed: the stateless depositor pins `Data = 0`, so an unprivileged depositor
+// cannot replace it with arbitrary bytes.
 test deposit_cannot_rewrite_stateless_depositor_data() fail {
   let datum = WalletDatum { spenders: [], depositors: [Pair(adal, unit())] }
   let junk: Data = #"deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
@@ -611,6 +630,18 @@ test deposit_cannot_rewrite_stateless_depositor_data() fail {
     withdrawals: [Pair(Script(adal), 0)],
   }
   core_spend(datum, Deposit { out_ix: 0 }, tx) && adal_withdraw(tx)
+}
+
+test spend_rejects_stateless_spender_data_rewrite() fail {
+  let datum = WalletDatum { spenders: [Pair(sl, unit())], depositors: [] }
+  let junk: Data = #"deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+  let tx = Transaction {
+    ..member_tx(),
+    inputs: [wallet_in(wallet_out(nft_value(100 * ada), datum.spenders, []))],
+    outputs: [wallet_out(nft_value(100 * ada), [Pair(sl, junk)], [])],
+    withdrawals: [Pair(Script(sl), 0)],
+  }
+  core_spend(datum, Spend, tx) && sl_withdraw(tx)
 }
 
 // Passes today, contradicting `usage.md`: removing and re-adding a script in
