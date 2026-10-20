@@ -534,7 +534,7 @@ describe.skipIf(!reachable)("smart wallet spender scripts e2e", () => {
     const startMs = (slot: number) =>
       slotConfig.zeroTime +
       (slot - slotConfig.zeroSlot) * slotConfig.slotLength;
-    const upperSlot = (slot: number) => slot + 1_000;
+    const upperSlot = (slot: number) => slot + 30;
 
     // 1. Mint with initial state `lastUpper = 0`.
     const initialDatum = datumWith({ lastUpper: 0 });
