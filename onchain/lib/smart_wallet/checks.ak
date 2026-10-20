@@ -9,7 +9,9 @@ use authorization
 use cardano/address.{Credential, Script}
 use cardano/assets.{AssetName, Lovelace, PolicyId, Value}
 use cardano/certificate.{RegisterCredential, UnregisterCredential}
-use cardano/transaction.{InlineDatum, OutputReference, Transaction, find_input}
+use cardano/transaction.{
+  InlineDatum, OutputReference, Publish, Transaction, find_input,
+}
 use smart_wallet/types.{WalletDatum}
 use smart_wallet/utils
 
@@ -61,20 +63,22 @@ pub fn withdrawals_invoked(
 }
 
 /// Publication check: every script in `scripts` was published in this
-/// transaction, i.e. its stake credential was registered via a
-/// `RegisterCredential` certificate, which runs the script's `publish` handler.
-/// The handler itself reads and validates its initial `Data` from the wallet
-/// output's datum, so the wallet only asserts the registration here.
+/// transaction. That requires both a `RegisterCredential` certificate for its
+/// stake credential and the matching `Publish` redeemer (the CIP-69 script
+/// witness), so the script's `publish` handler actually ran and validated its
+/// initial `Data`. A bare certificate — notably a legacy registration that needs
+/// no witness — is not enough.
 pub fn withdrawals_published(
   scripts: Pairs<ScriptHash, Data>,
   self: Transaction,
 ) -> Bool {
-  list.all(scripts, fn(pair) { registered_in_tx(pair.1st, self) })
+  list.all(scripts, fn(pair) { published_in_tx(pair.1st, self) })
 }
 
 /// Update check: every script *added* by `new` (a hash absent from `old`) was
-/// published in this transaction. Scripts present in `old` are assumed already
-/// registered and are skipped here.
+/// published in this transaction, i.e. registered **and** witnessed by its
+/// matching `Publish` redeemer. Scripts present in `old` are assumed already
+/// published and are skipped here.
 pub fn withdrawals_added_published(
   old: Pairs<ScriptHash, Data>,
   new: Pairs<ScriptHash, Data>,
@@ -86,7 +90,7 @@ pub fn withdrawals_added_published(
       if pairs.has_key(old, pair.1st) {
         True
       } else {
-        registered_in_tx(pair.1st, self)
+        published_in_tx(pair.1st, self)
       }
     },
   )
@@ -139,16 +143,27 @@ pub fn withdrawals_kept_unchanged(
   )
 }
 
-/// A single script was published in this transaction: a `RegisterCredential`
-/// certificate for its stake credential, which runs the script's `publish`
-/// handler. The handler reads and validates its own initial `Data` from the
-/// wallet output's datum.
-fn registered_in_tx(hash: ScriptHash, self: Transaction) -> Bool {
+/// A single script was published in this transaction: its stake credential was
+/// registered via a `RegisterCredential` certificate **and** the transaction
+/// carries a matching `Publish` redeemer at that certificate's index. The
+/// redeemer is the CIP-69 script witness, so its presence proves the script's
+/// `publish` handler ran; a legacy registration certificate has no such
+/// redeemer.
+fn published_in_tx(hash: ScriptHash, self: Transaction) -> Bool {
   list.any(
-    self.certificates,
-    fn(certificate) {
-      when certificate is {
-        RegisterCredential { credential: Script(h), .. } -> h == hash
+    self.redeemers,
+    fn(redeemer) {
+      when redeemer.1st is {
+        Publish { at, certificate } ->
+          when certificate is {
+            RegisterCredential { credential: Script(h), .. } ->
+              h == hash && when list.at(self.certificates, at) is {
+                Some(RegisterCredential { credential: Script(cert_hash), .. }) ->
+                  cert_hash == hash
+                _ -> False
+              }
+            _ -> False
+          }
         _ -> False
       }
     },

@@ -3,7 +3,7 @@ use cardano/address.{Script, from_script}
 use cardano/assets.{Value}
 use cardano/certificate.{RegisterCredential, UnregisterCredential}
 use cardano/transaction.{
-  DatumHash, InlineDatum, NoDatum, Output, Transaction, placeholder,
+  DatumHash, InlineDatum, NoDatum, Output, Publish, Transaction, placeholder,
 }
 use smart_wallet/checks.{
   members_signed, validate_spend_continuation, withdrawals_added_published,
@@ -74,9 +74,12 @@ test withdrawals_published_empty() {
 
 test withdrawals_published_all_present() {
   let data: Data = 0
+  let cert = RegisterCredential { credential: Script(a), deposit: Never }
+  let redeemer: Data = 0
   let tx = Transaction {
     ..placeholder,
-    certificates: [RegisterCredential { credential: Script(a), deposit: Never }],
+    certificates: [cert],
+    redeemers: [Pair(Publish { at: 0, certificate: cert }, redeemer)],
   }
   withdrawals_published([Pair(a, data)], tx)
 }
@@ -88,9 +91,33 @@ test withdrawals_published_missing() fail {
 
 test withdrawals_published_wrong_certificate() fail {
   let data: Data = 0
+  let cert = RegisterCredential { credential: Script(b), deposit: Never }
+  let redeemer: Data = 0
   let tx = Transaction {
     ..placeholder,
-    certificates: [RegisterCredential { credential: Script(b), deposit: Never }],
+    certificates: [cert],
+    redeemers: [Pair(Publish { at: 0, certificate: cert }, redeemer)],
+  }
+  withdrawals_published([Pair(a, data)], tx)
+}
+
+test withdrawals_published_rejects_certificate_without_redeemer() fail {
+  let data: Data = 0
+  let tx = Transaction {
+    ..placeholder,
+    certificates: [RegisterCredential { credential: Script(a), deposit: Never }],
+  }
+  withdrawals_published([Pair(a, data)], tx)
+}
+
+test withdrawals_published_rejects_wrong_redeemer_index() fail {
+  let data: Data = 0
+  let cert = RegisterCredential { credential: Script(a), deposit: Never }
+  let redeemer: Data = 0
+  let tx = Transaction {
+    ..placeholder,
+    certificates: [cert],
+    redeemers: [Pair(Publish { at: 1, certificate: cert }, redeemer)],
   }
   withdrawals_published([Pair(a, data)], tx)
 }
@@ -99,9 +126,12 @@ test withdrawals_published_wrong_certificate() fail {
 
 test added_published_requires_publish_for_new() {
   let data: Data = 0
+  let cert = RegisterCredential { credential: Script(a), deposit: Never }
+  let redeemer: Data = 0
   let tx = Transaction {
     ..placeholder,
-    certificates: [RegisterCredential { credential: Script(a), deposit: Never }],
+    certificates: [cert],
+    redeemers: [Pair(Publish { at: 0, certificate: cert }, redeemer)],
   }
   withdrawals_added_published([], [Pair(a, data)], tx)
 }

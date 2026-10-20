@@ -70,7 +70,8 @@ script's own policy — into a fresh wallet UTxO at the wallet address. The
     - the new wallet UTxO carries the NFT, an inline datum with `spenders` and
       `depositors` maps, and no reference script. Every script in both maps must
       be registered in this same transaction — a `RegisterCredential` certificate
-      for its stake credential, which runs the script's `publish` handler. The
+      for its stake credential **and the matching `Publish` redeemer** (the
+      CIP-69 script witness) — which runs the script's `publish` handler. The
       handler reads its own initial `Data` from this output's datum and validates
       it, so a wallet may be created already carrying delegated restrictions or
       deposit validations, but only ones that self-validated their initial state.
@@ -235,13 +236,16 @@ untouched: same address, same value — only the config changes._
       for subsequent spends and deposits of this UTxO; other wallet UTxOs are
       unaffected (the config is per-UTxO).
     - the update diffs the old and new maps (both `spenders` and `depositors`):
-      every script *added* must be registered here (`RegisterCredential`, running
-      its `publish` handler, which reads the script's initial `Data` from the
-      continuation datum and validates it); every script *removed* must be
-      unregistered (`UnregisterCredential`, whose `publish` handler only accepts
-      the unregister when it sees the script leaving the wallet); every script
-      *kept* must carry unchanged `Data`. This ensures each entry's `Data` was
-      self-validated at registration and stays coherent across updates.
+      every script *added* must be registered here (`RegisterCredential` and its
+      matching `Publish` redeemer, running its `publish` handler, which reads the
+      script's initial `Data` from the continuation datum and validates it);
+      every script *removed* must be unregistered (`UnregisterCredential`, whose
+      `publish` handler only accepts the unregister when it sees the script
+      leaving the wallet); every script *kept* must carry unchanged `Data`. This
+      ensures each entry's `Data` was self-validated at registration and stays
+      coherent across updates. A credential registered before this transaction
+      cannot be added: the ledger rejects a second registration, so it must be
+      unregistered first.
   ],
 )
 

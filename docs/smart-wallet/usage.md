@@ -317,8 +317,9 @@ await buildWalletUpdatePermissionsTx({
 });
 ```
 
-Every script *added* must be registered here; every script *removed* must be
-unregistered; every script *kept* (in either map) must carry
+Every script *added* must be registered here with its matching `Publish`
+redeemer (`registerWithdrawalScript` supplies both); every script *removed* must
+be unregistered; every script *kept* (in either map) must carry
 **byte-identical** `Data` (change a script's state by removing and re-adding
 it).
 
@@ -374,11 +375,14 @@ participates through two handlers:
 - **`publish`** — runs on `RegisterCredential` / `UnregisterCredential`
   certificates. On registration it reads its initial `Data` from the
   **NFT-bearing** wallet **output** datum and validates it, so a wallet cannot
-  delegate a script without the script self-validating its starting state. On
-  unregistration it only accepts the removal when it is actually leaving the
-  wallet — an out-of-band unregister (which would brick the wallet) is rejected.
-  It identifies the wallet UTxO by both the wallet payment credential and the
-  wallet NFT, so an NFT-less decoy output at the same address is ignored.
+  delegate a script without the script self-validating its starting state. The
+  wallet requires the matching `Publish` redeemer (the CIP-69 script witness),
+  so a bare certificate — notably a legacy registration that needs no witness —
+  is not accepted. On unregistration it only accepts the removal when it is
+  actually leaving the wallet — an out-of-band unregister (which would brick the
+  wallet) is rejected. It identifies the wallet UTxO by both the wallet payment
+  credential and the wallet NFT, so an NFT-less decoy output at the same address
+  is ignored.
 - **`withdraw`** — runs as a reward withdrawal required on every `Spend`
   (spenders) or `Deposit` (depositors). A stateful spender script reads its
   current `Data` from the **NFT-bearing** wallet **input** datum, validates the
@@ -799,6 +803,12 @@ tests use a 1-of-1 wallet.
   size or semantics: a buggy or malicious script can bloat the datum, rewrite
   its own state, or refuse to unregister (blocking `Close`/removal). Vet scripts
   before delegating them — see [`spec.md`](spec.md) §6.
+- **Pre-registered credentials cannot be added.** A stake credential registered
+  before the wallet adds its script (for example with a legacy certificate that
+  needs no witness) cannot be registered again, and the wallet requires a
+  `Publish` witness for additions. Unregister it first — the reference
+  `publish` handlers may refuse an out-of-band unregistration — and always add
+  scripts through `Mint` / `UpdatePermissions`.
 - **Kept scripts must be byte-identical.** `UpdatePermissions` compares each kept
   script's `Data` by CBOR serialization; changing state means removing
   (unregistering) and re-adding (re-registering) the script in the same

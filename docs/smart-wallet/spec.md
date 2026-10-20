@@ -132,7 +132,7 @@ via a **reward withdrawal** in the same transaction (withdraw-0 pattern).
 | **Mint** | Exactly one token under `wallet_hash` with the parameterized name, quantity `1`. |
 | **Redeemer** | `Mint { out_ix }`. |
 | **Authorization** | `admin`. |
-| **Constraints** | Every script in the initial `spenders` and `depositors` maps must be **published** in this same transaction (see §6): a `RegisterCredential` certificate for its stake credential, whose `publish` handler validates the script's initial `Data`. |
+| **Constraints** | Every script in the initial `spenders` and `depositors` maps must be **published** in this same transaction (see §6): a `RegisterCredential` certificate for its stake credential **and the matching `Publish` redeemer**, so the `publish` handler runs and validates the script's initial `Data`. |
 
 ### 5.2 Spend
 
@@ -157,7 +157,7 @@ unchanged, its `spenders` key set fixed, and a value no greater than the input's
 | **Outputs** | One continuation at `out_ix`: same address, same value (NFT preserved), inline datum with the new config. |
 | **Redeemer** | `UpdatePermissions { out_ix }`. |
 | **Authorization** | `admin`. |
-| **Constraints** | The old and new `spenders` and `depositors` maps are diffed: every script *added* must be **published** here (`RegisterCredential`); every script *removed* must be **unregistered** (`UnregisterCredential`); every script *kept* must carry unchanged `Data`. |
+| **Constraints** | The old and new `spenders` and `depositors` maps are diffed: every script *added* must be **published** here (`RegisterCredential` **and its matching `Publish` redeemer**); every script *removed* must be **unregistered** (`UnregisterCredential`); every script *kept* must carry unchanged `Data`. |
 
 Funds cannot move: the continuation sits at the same address with value `>=` the
 input (in fact, only ADA may change, to cover fees).
@@ -200,7 +200,10 @@ map; it participates through two script purposes:
   actually **leaving** the wallet (listed in the NFT-bearing wallet *input* datum,
   absent from the NFT-bearing *output* datum, or no NFT-bearing output at all on
   `Close`); this prevents unregistering a script out of band, which would brick
-  any wallet still delegating to it.
+  any wallet still delegating to it. For additions, the wallet requires the
+  matching `Publish` redeemer (the CIP-69 script witness), so a bare
+  registration certificate — including a legacy registration that needs no
+  witness — does not satisfy publication.
 
 - **`withdraw`** (a reward withdrawal, required by `Spend` for spender scripts
   and by `Deposit` for deposit scripts). The handler enforces the script's own
@@ -255,9 +258,10 @@ window), enforcing their own input→output transition.
 - **I3 — Config-only updates.** `UpdatePermissions` preserves address and value; only
   `spenders` and `depositors` may change, and only by the `admin`.
 - **I4 — Published additions.** A script may appear in `spenders` or `depositors`
-  only if it was registered (its `publish` handler validated its initial `Data`)
-  in the same transaction — at `Mint` or on `UpdatePermissions`. A `Spend` may
-  not add one: it keeps the `spenders` key set fixed.
+  only if it was registered **and its matching `Publish` redeemer is present**
+  (so its `publish` handler validated its initial `Data`) in the same
+  transaction — at `Mint` or on `UpdatePermissions`. A `Spend` may not add one:
+  it keeps the `spenders` key set fixed.
 - **I5 — Unregistered removals.** A script leaving `spenders` or `depositors` (on
   `UpdatePermissions` or `Close`) must be unregistered in the same transaction. A
   `Spend` may not remove one.
@@ -323,7 +327,8 @@ window), enforcing their own input→output transition.
   restrictions. The reference value-accounting scripts also count only
   NFT-bearing wallet UTxOs.
 - **Unvalidated script state.** A script enters `spenders` or `depositors` only
-  after its own `publish` handler validates its initial `Data` (I4); stateful
+  after its own `publish` handler validates its initial `Data` (I4), proven by
+  the matching `Publish` redeemer rather than a bare certificate; stateful
   transitions are enforced by the script on every spend or deposit (I7).
 
 ### Assumptions / out of scope
@@ -344,6 +349,13 @@ window), enforcing their own input→output transition.
   scripts before delegating them.
 - **The wallet is a single UTxO.** The one-shot NFT guarantees one identity; the
   protocol does not model a multi-UTxO wallet.
+- **Pre-registered credentials.** A stake credential registered before the wallet
+  adds its script (for example through a legacy certificate that needs no script
+  witness) cannot be registered again. Because the wallet requires a `Publish`
+  witness for additions, such a credential cannot be added until it is
+  unregistered; the reference `publish` handlers may refuse an out-of-band
+  unregistration, so this is a griefing limitation, not a theft vector. Add
+  scripts through the wallet's `Mint`/`UpdatePermissions` flow.
 - **Time.** The core wallet does not read a clock. Stateful scripts that need
   time require **finite** validity bounds. `spending_window` reads the lower
   bound as the current time and records the transaction's upper bound as the
