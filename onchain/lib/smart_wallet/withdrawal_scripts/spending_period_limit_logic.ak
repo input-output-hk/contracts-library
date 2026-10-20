@@ -2,8 +2,9 @@
 ////
 //// A delegated withdraw-0 script that caps the wallet's cumulative lovelace
 //// outflow per fixed time period: at most `max_spend` lovelace per `interval`
-//// milliseconds. Periods are anchored to fixed multiples of `interval` (POSIX
-//// ms), so the window never slips when nothing is spent early in a cycle.
+//// milliseconds. Periods are `[start, end)` buckets anchored to fixed
+//// multiples of `interval` (POSIX ms), so the window never slips when nothing
+//// is spent early in a cycle.
 ////
 //// Like `spending_window`, this script carries mutable state (the current
 //// period boundary and the amount spent so far) in the wallet datum's
@@ -17,9 +18,10 @@ use cardano/assets.{AssetName, Lovelace, Value}
 use cardano/transaction.{Output, Transaction}
 use smart_wallet/withdrawal
 
-/// Mutable state: `period` is the end (POSIX ms) of the current period, a fixed
+/// Mutable state: `period` is the end (POSIX ms) of the charged period, a fixed
 /// multiple of the script's `interval`; `0` means no period has started yet.
-/// `acc_spend` is the lovelace spent so far in that period.
+/// Periods are `[start, end)` buckets; `acc_spend` is the lovelace spent so far
+/// in that period.
 pub type SpendingPeriodState {
   period: Int,
   acc_spend: Int,
@@ -35,15 +37,21 @@ pub fn initial_state_valid(data: Data) -> Bool {
   }
 }
 
-/// Validate one `Spend`: enforces the per-period budget and the exact state
-/// transition. Reads the current state from the wallet input datum and the next
-/// state from the wallet output datum, so the transition is enforced end-to-end
-/// by this script.
+/// Whether the script parameters are usable: a positive period length and a
+/// non-negative budget.
+pub fn params_valid(interval: Int, max_spend: Lovelace) -> Bool {
+  interval > 0 && max_spend >= 0
+}
+
+/// Validate one `Spend`: both validity bounds must be finite and lie in the
+/// same `[start, end)` period, so the charged period contains the transaction's
+/// whole validity interval. Within the stored period the outflow accumulates; a
+/// later period rolls over; a historical period is rejected. Reads the current
+/// state from the wallet input datum and the next state from the wallet output
+/// datum, so the transition is enforced end-to-end by this script.
 ///
 /// `tx_spend` is the wallet's net lovelace outflow (`input - output` summed at
-/// the wallet credential). Within a period it is added to the accumulator; once
-/// `now` passes the stored boundary the period rolls over to the next fixed
-/// multiple of `interval` and the accumulator restarts at `tx_spend`.
+/// the wallet credential).
 pub fn validate_withdraw(
   self: Transaction,
   wallet: Credential,
@@ -52,7 +60,8 @@ pub fn validate_withdraw(
   interval: Int,
   max_spend: Lovelace,
 ) -> Bool {
-  expect Finite(now) = self.validity_range.lower_bound.bound_type
+  expect Finite(lower) = self.validity_range.lower_bound.bound_type
+  expect Finite(upper) = self.validity_range.upper_bound.bound_type
   expect current: SpendingPeriodState = withdrawal.own_withdrawal_data_in(
     self,
     wallet,
@@ -65,34 +74,42 @@ pub fn validate_withdraw(
     wallet_token_name,
     own_hash,
   )
-  let tx_spend = net_outflow(self, wallet)
-  let within_period = now <= current.period
-  let within_cap = if within_period {
-    current.acc_spend + tx_spend <= max_spend
+  if params_valid(interval, max_spend) {
+    let tx_spend = net_outflow(self, wallet)
+    let period = period_end(lower, interval)
+    let same_period = if self.validity_range.upper_bound.is_inclusive {
+      upper < period
+    } else {
+      upper <= period
+    }
+    let same_as_current = current.period == period
+    let within_cap = if same_as_current {
+      current.acc_spend + tx_spend <= max_spend
+    } else {
+      tx_spend <= max_spend
+    }
+    let expected_acc = if same_as_current {
+      current.acc_spend + tx_spend
+    } else {
+      tx_spend
+    }
+    and {
+      same_period,
+      period > 0,
+      period >= current.period,
+      within_cap,
+      next.period == period,
+      next.acc_spend == expected_acc,
+    }
   } else {
-    tx_spend <= max_spend
-  }
-  let expected_period = if within_period {
-    current.period
-  } else {
-    next_period_boundary(now, interval)
-  }
-  let expected_acc = if within_period {
-    current.acc_spend + tx_spend
-  } else {
-    tx_spend
-  }
-  and {
-    within_cap,
-    next.period == expected_period,
-    next.acc_spend == expected_acc,
+    False
   }
 }
 
-/// The end of the fixed-grid period containing `now`: the next multiple of
-/// `interval` strictly greater than `now`.
-fn next_period_boundary(now: Int, interval: Int) -> Int {
-  ( now / interval + 1 ) * interval
+/// The end of the `[start, end)` period containing `time`: the next multiple of
+/// `interval` strictly greater than `time`.
+fn period_end(time: Int, interval: Int) -> Int {
+  ( time / interval + 1 ) * interval
 }
 
 /// Net lovelace outflow at the wallet credential: the summed input value minus

@@ -140,7 +140,7 @@ test withdraw_same_period_under_cap() {
     ..placeholder,
     inputs: [wallet_input(assets.from_lovelace(100), state(2000, 30))],
     outputs: [wallet_output(assets.from_lovelace(60), state(2000, 70))],
-    validity_range: interval.after(1500),
+    validity_range: interval.between(1500, 1999),
   }
   withdraw(Script(a), tx)
 }
@@ -150,7 +150,7 @@ test withdraw_rollover_resets() {
     ..placeholder,
     inputs: [wallet_input(assets.from_lovelace(100), state(2000, 90))],
     outputs: [wallet_output(assets.from_lovelace(60), state(3000, 40))],
-    validity_range: interval.after(2500),
+    validity_range: interval.between(2500, 2999),
   }
   withdraw(Script(a), tx)
 }
@@ -160,7 +160,7 @@ test withdraw_over_cap_rejected() fail {
     ..placeholder,
     inputs: [wallet_input(assets.from_lovelace(100), state(2000, 61))],
     outputs: [wallet_output(assets.from_lovelace(60), state(2000, 101))],
-    validity_range: interval.after(1500),
+    validity_range: interval.between(1500, 1999),
   }
   withdraw(Script(a), tx)
 }

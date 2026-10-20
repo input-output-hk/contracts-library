@@ -474,18 +474,22 @@ stored safely, so the spend is rejected.
 ### `spending_period_limit`
 
 Stateful: caps the wallet's cumulative lovelace outflow to `max_spend` per fixed
-`interval`-millisecond period (e.g. a day or a week). Periods are anchored to
-fixed multiples of `interval` on the POSIX-ms grid, so the window never slips
-when nothing is spent early in a cycle. The state is
-`SpendingPeriodState { period, acc_spend }`: `period` is the current period's end
-(a multiple of `interval`; `0` = none) and `acc_spend` the lovelace spent so far.
-The initial state is `{ period: 0, acc_spend: 0 }`, validated on registration.
+`interval`-millisecond period (e.g. a day or a week). Periods are `[start, end)`
+buckets anchored to fixed multiples of `interval` on the POSIX-ms grid, so the
+window never slips when nothing is spent early in a cycle. The state is
+`SpendingPeriodState { period, acc_spend }`: `period` is the end of the charged
+period (a multiple of `interval`; `0` = none) and `acc_spend` the lovelace spent
+so far. The initial state is `{ period: 0, acc_spend: 0 }`, validated on
+registration.
 
-On each spend, `tx_spend` is the wallet's net lovelace outflow (`input - output`
-at the wallet credential). Within a period the accumulator is checked and
-advanced (`acc_spend + tx_spend <= max_spend`); once `now` passes `period` the
-period rolls over to the next fixed boundary and the accumulator restarts at
-`tx_spend`.
+On each spend, both validity bounds must be finite and fall inside the **same**
+fixed period; that `[start, end)` bucket is the charged period. If it equals the
+stored period, the accumulator is checked and advanced
+(`acc_spend + tx_spend <= max_spend`); if it is later, the period rolls over and
+the accumulator restarts at `tx_spend`; an earlier (historical) period is
+rejected. A validity interval that crosses a period boundary is rejected too, so
+a member cannot claim a historical budget with a backdated lower bound.
+`interval` must be positive and `max_spend` non-negative.
 
 ```ts
 import {
@@ -512,21 +516,26 @@ const initialDatum = {
   depositors: [],
 };
 
-// On each spend, carry the advanced state and set the validity lower bound to
-// the same instant the state uses:
+// On each spend, set both validity bounds inside the same period and carry the
+// period end in the state:
 const startMs = (slot: number) =>
   slotConfig.zeroTime + (slot - slotConfig.zeroSlot) * slotConfig.slotLength;
 const slot = unixTimeToEnclosingSlot(nowMs, slotConfig);
+const slotUpper = slot + 100;                  // must stay in the same period
 const now = startMs(slot);
-const rolled = now > current.period;             // crossed the period boundary?
+const period = (Math.floor(now / interval) + 1) * interval;
+const samePeriod = current.period === period;
 const nextState = {
-  period: rolled ? (Math.floor(now / interval) + 1) * interval : current.period,
-  accSpend: (rolled ? 0 : current.accSpend) + txSpend,
+  period,
+  accSpend: (samePeriod ? current.accSpend : 0) + txSpend,
 };
 // buildWalletSpendTx({ ..., datum: { ...initialDatum,
 //   spenders: [{ scriptHash, data: spendingPeriodStateToData(nextState) }] },
-//   invalidBeforeSlot: slot, ... })
+//   invalidBeforeSlot: slot, invalidHereafterSlot: slotUpper, ... })
 ```
+
+Pick `slotUpper` so its start time is inside the current period (or exactly at
+the period's exclusive upper boundary); otherwise the spend is rejected.
 
 > Fixed-length periods only: "one day" / "one week" / "30 days" map cleanly onto
 > the grid; calendar months do not (their length varies), so they are not

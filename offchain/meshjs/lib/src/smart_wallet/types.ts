@@ -75,7 +75,7 @@ export interface SpendingPeriodLimitParams extends WalletScriptParams {
 
 /** `spending_period_limit` mutable state (stored in the wallet datum). */
 export interface SpendingPeriodState {
-  /** End of the current period (POSIX ms, a multiple of `interval`); 0 = none. */
+  /** End of the charged `[start, end)` period (POSIX ms, multiple of `interval`); 0 = none. */
   period: number;
   /** Lovelace spent so far in the current period. */
   accSpend: number;

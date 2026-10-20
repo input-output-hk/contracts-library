@@ -632,7 +632,7 @@ describe.skipIf(!reachable)("smart wallet spender scripts e2e", () => {
   it("spending_period_limit: under the cap ok, over the cap rejected in-period", async () => {
     const ctx = await setup(provider);
 
-    const interval = 604_800_000; // one week, fixed grid
+    const interval = Math.round(1_000_000 * slotConfig.slotLength); // fixed grid
     const maxSpend = 1_500_000n; // 1.5 ADA per period
     const script = spendingPeriodLimitScript({
       wallet: { kind: "script", hash: ctx.walletHash },
@@ -695,9 +695,10 @@ describe.skipIf(!reachable)("smart wallet spender scripts e2e", () => {
       ctx.scriptAddr,
     );
 
-    // 3. First spend (1 ADA) rolls the period over to the next fixed boundary.
+    // 3. First spend (1 ADA) opens the period containing the validity range.
     const now1Ms = await chainNowMs();
     const slot1 = unixTimeToEnclosingSlot(now1Ms, slotConfig);
+    const slot1Upper = slot1 + 100;
     const period1 = (Math.floor(startMs(slot1) / interval) + 1) * interval;
     const firstTx = await buildWalletSpendTx({
       txBuilder: newTxBuilder(provider),
@@ -715,6 +716,7 @@ describe.skipIf(!reachable)("smart wallet spender scripts e2e", () => {
       signers: [ctx.member.keyHash],
       spenderScripts: [script],
       invalidBeforeSlot: slot1,
+      invalidHereafterSlot: slot1Upper,
     });
     const firstHash = await signAndSubmit(ctx.member, firstTx);
     await waitForTx(provider, firstHash);
@@ -723,6 +725,7 @@ describe.skipIf(!reachable)("smart wallet spender scripts e2e", () => {
     // 4. A second 1 ADA spend in the same period would exceed the 1.5 ADA cap.
     const now2Ms = await chainNowMs();
     const slot2 = unixTimeToEnclosingSlot(now2Ms, slotConfig);
+    const slot2Upper = slot2 + 100;
     await expect(
       buildWalletSpendTx({
         txBuilder: newTxBuilder(provider),
@@ -740,6 +743,7 @@ describe.skipIf(!reachable)("smart wallet spender scripts e2e", () => {
         signers: [ctx.member.keyHash],
         spenderScripts: [script],
         invalidBeforeSlot: slot2,
+        invalidHereafterSlot: slot2Upper,
       }),
     ).rejects.toThrow();
   });

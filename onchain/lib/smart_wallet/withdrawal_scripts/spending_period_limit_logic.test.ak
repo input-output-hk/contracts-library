@@ -6,7 +6,7 @@ use cardano/transaction.{
 }
 use smart_wallet/types.{WalletDatum}
 use smart_wallet/withdrawal_scripts/spending_period_limit_logic.{
-  SpendingPeriodState, initial_state_valid, validate_withdraw,
+  SpendingPeriodState, initial_state_valid, params_valid, validate_withdraw,
 }
 
 const own_hash = #"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -52,10 +52,10 @@ fn wallet_input(value: Value, period_state: SpendingPeriodState) -> Input {
   }
 }
 
-fn spend_tx(
+fn spend_tx_with(
   input: Int,
   output: Int,
-  now: Int,
+  validity_range: interval.Interval,
   current: SpendingPeriodState,
   next: SpendingPeriodState,
 ) -> Transaction {
@@ -63,24 +63,43 @@ fn spend_tx(
     ..placeholder,
     inputs: [wallet_input(assets.from_lovelace(input), current)],
     outputs: [wallet_output(assets.from_lovelace(output), next)],
-    validity_range: interval.after(now),
+    validity_range,
   }
 }
 
-fn validate(
-  input: Int,
-  output: Int,
-  now: Int,
-  current: SpendingPeriodState,
-  next: SpendingPeriodState,
-) -> Bool {
+fn validate_tx(tx: Transaction) -> Bool {
   validate_withdraw(
-    spend_tx(input, output, now, current, next),
+    tx,
     Script(wallet_policy),
     wallet_token,
     own_hash,
     interval_ms,
     max_spend,
+  )
+}
+
+fn validate(
+  input: Int,
+  output: Int,
+  at: Int,
+  current: SpendingPeriodState,
+  next: SpendingPeriodState,
+) -> Bool {
+  validate_tx(
+    spend_tx_with(input, output, interval.between(at, at), current, next),
+  )
+}
+
+fn validate_range(
+  input: Int,
+  output: Int,
+  lower: Int,
+  upper: Int,
+  current: SpendingPeriodState,
+  next: SpendingPeriodState,
+) -> Bool {
+  validate_tx(
+    spend_tx_with(input, output, interval.between(lower, upper), current, next),
   )
 }
 
@@ -107,6 +126,24 @@ test initial_state_rejects_nonzero_spend() fail {
   initial_state_valid(state_data(state(0, 1)))
 }
 
+// -------------------------------------------------------------- params_valid
+
+test params_accept_valid() {
+  params_valid(interval_ms, 0)
+}
+
+test params_reject_zero_interval() fail {
+  params_valid(0, max_spend)
+}
+
+test params_reject_negative_interval() fail {
+  params_valid(-1, max_spend)
+}
+
+test params_reject_negative_max_spend() fail {
+  params_valid(interval_ms, -1)
+}
+
 // ------------------------------------------------------------ same period
 
 test same_period_under_cap() {
@@ -124,9 +161,9 @@ test same_period_over_cap_rejected() fail {
   validate(100, 60, 1500, state(2000, 61), state(2000, 101))
 }
 
-test boundary_now_equals_period_is_same_period() {
-  // `now <= period`: at the exact boundary it is still the current period.
-  validate(100, 60, 2000, state(2000, 30), state(2000, 70))
+test lower_at_period_end_starts_next_period() {
+  // `[start, end)`: 2000 belongs to the period ending at 3000.
+  validate(100, 60, 2000, state(2000, 30), state(3000, 40))
 }
 
 test same_period_wrong_next_rejected() fail {
@@ -140,7 +177,7 @@ test same_period_zero_outflow_unchanged() {
 // --------------------------------------------------------------- rollover
 
 test rollover_under_cap() {
-  // now 2500 > 2000 -> next boundary 3000, accumulator restarts at tx_spend.
+  // 2500 is in the period ending at 3000; accumulator restarts at tx_spend.
   validate(100, 60, 2500, state(2000, 30), state(3000, 40))
 }
 
@@ -168,4 +205,54 @@ test first_spend_from_zero_period() {
 
 test rollover_zero_outflow_advances_period() {
   validate(100, 100, 2500, state(0, 0), state(3000, 0))
+}
+
+// -------------------------------------------------------- validity interval
+
+test interval_spanning_periods_rejected() fail {
+  validate_range(100, 60, 1500, 2500, state(2000, 30), state(3000, 40))
+}
+
+test historical_period_rejected() fail {
+  validate_range(100, 60, 500, 999, state(2000, 0), state(1000, 40))
+}
+
+test exclusive_upper_at_period_end_allowed() {
+  validate_tx(
+    spend_tx_with(
+      100,
+      60,
+      interval.entirely_between(1500, 2000),
+      state(2000, 30),
+      state(2000, 70),
+    ),
+  )
+}
+
+test inclusive_upper_at_period_end_rejected() fail {
+  validate_range(100, 60, 1500, 2000, state(2000, 30), state(2000, 70))
+}
+
+test infinite_upper_rejected() fail {
+  validate_tx(
+    spend_tx_with(
+      100,
+      60,
+      interval.after(1500),
+      state(2000, 30),
+      state(2000, 70),
+    ),
+  )
+}
+
+test infinite_lower_rejected() fail {
+  validate_tx(
+    spend_tx_with(
+      100,
+      60,
+      interval.before(1999),
+      state(2000, 30),
+      state(2000, 70),
+    ),
+  )
 }

@@ -313,6 +313,10 @@ window), enforcing their own input→output transition.
   upper bound, not its lower bound, so a member cannot backdate a spend's lower
   bound to squeeze multiple spends into one elapsed window (see the time
   assumption above).
+- **Backdated period budgets.** `spending_period_limit` requires the whole
+  validity interval to lie inside one `[start, end)` period, so a transaction
+  valid now cannot be charged to a historical period. The charged period only
+  rolls forward, never back.
 - **Unvalidated script state.** A script enters `spenders` or `depositors` only
   after its own `publish` handler validates its initial `Data` (I4); stateful
   transitions are enforced by the script on every spend or deposit (I7).
@@ -342,4 +346,6 @@ window), enforcing their own input→output transition.
   `lower_bound <= real_time <= upper_bound`, requiring the next transaction's
   lower bound to be at least the recorded upper bound plus `window` guarantees
   that consecutive spends are at least `window` apart — a backdated lower bound
-  cannot compress the window.
+  cannot compress the window. `spending_period_limit` similarly requires both
+  bounds to be finite and to fall inside the same fixed period, so the charged
+  period is the one containing the actual execution time.

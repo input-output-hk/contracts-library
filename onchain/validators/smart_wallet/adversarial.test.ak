@@ -432,9 +432,8 @@ test spending_window_rejects_backdated_burst() fail {
 
 // ------------------------------------ 3. spending_period_limit: time bounds
 
-// KNOWN ISSUE: backdating the lower bound into older periods rolls the
-// accumulator over, so two full budgets are spent while both transactions are
-// valid at the same instant in day 100.
+// Fixed: both validity intervals span multiple periods, so neither can be
+// charged to a single period and both spends are rejected.
 test spending_period_limit_rejects_historical_budgets() fail {
   let s0 = [Pair(spl, period_state(0, 0))]
   let s1 = [Pair(spl, period_state(51 * day, 10 * ada))]

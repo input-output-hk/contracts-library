@@ -10,7 +10,7 @@ use cardano/certificate.{Certificate, RegisterCredential, UnregisterCredential}
 use cardano/transaction.{Transaction}
 use smart_wallet/withdrawal
 use smart_wallet/withdrawal_scripts/spending_period_limit_logic.{
-  initial_state_valid, validate_withdraw,
+  initial_state_valid, params_valid, validate_withdraw,
 }
 
 validator spending_period_limit(
@@ -22,7 +22,7 @@ validator spending_period_limit(
   publish(_redeemer: Data, certificate: Certificate, self: Transaction) {
     when certificate is {
       RegisterCredential { credential: Script(own_hash), .. } ->
-        initial_state_valid(
+        params_valid(interval, max_spend) && initial_state_valid(
           withdrawal.own_withdrawal_data(
             self,
             wallet,
