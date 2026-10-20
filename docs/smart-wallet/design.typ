@@ -159,17 +159,19 @@ forward unchanged._
       locks, recipient allow-lists, oracle attestations, … each is an
       independent withdrawal script observed here, none known to the spending
       script.
-    - wallet survival: the transaction must recreate the wallet — an NFT-bearing
-      output at the wallet address carrying the inline datum and a value that is
-      a subset of the input's (a spend only removes value; additions belong to
-      `Deposit`). Its `depositors` map must equal the input's and the `spenders`
-      key set must stay fixed (only `UpdatePermissions` may change either), while
-      spender `Data` may change: each spender script enforces its own transition.
-      The NFT can therefore only leave the wallet on `Close`.
+    - wallet survival: the transaction must recreate the wallet — the only output
+      at the wallet address must be NFT-bearing, carry the inline datum, and have
+      a value that is a subset of the input's (a spend only removes value;
+      additions belong to `Deposit`). Any NFT-less output at the wallet address is
+      rejected, since it would be unspendable forever. Its `depositors` map must
+      equal the input's and the `spenders` key set must stay fixed (only
+      `UpdatePermissions` may change either), while spender `Data` may change:
+      each spender script enforces its own transition. The NFT can therefore only
+      leave the wallet on `Close`.
     - composability: the spend asserts only its own input, the required spenders,
       and the surviving wallet with unchanged `depositors`, a fixed `spenders`
       key set, and a value no greater than the input's — never the total input or
-      output counts, nor unrelated UTxOs. Payout outputs are otherwise
+      output counts, nor unrelated UTxOs. Payout outputs elsewhere are otherwise
       unconstrained.
   ],
 )

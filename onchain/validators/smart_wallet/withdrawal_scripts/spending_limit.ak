@@ -44,7 +44,7 @@ validator spending_limit(
   }
 
   withdraw(_redeemer: Data, _account: Credential, self: Transaction) {
-    within_spending_limit(self, wallet, bound)
+    within_spending_limit(self, wallet, wallet_token_name, bound)
   }
 
   else(_) {

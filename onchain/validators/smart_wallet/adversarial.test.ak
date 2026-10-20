@@ -457,8 +457,9 @@ test spending_period_limit_rejects_historical_budgets() fail {
 
 // ------------------------------ 4. value accounting: stray wallet outputs
 
-// KNOWN ISSUE: 98 ADA leave the real wallet for an NFT-less output at the
-// wallet address; `spending_limit` sums both outputs and sees zero outflow.
+// Fixed: `spending_limit` sums only the NFT-bearing continuation, so the 98 ADA
+// moved to the NFT-less output are counted as outflow; the core also rejects the
+// stray output outright.
 test spending_limit_counts_only_authenticated_continuation() fail {
   let datum = WalletDatum { spenders: [Pair(sl, unit())], depositors: [] }
   let tx = Transaction {
@@ -473,8 +474,9 @@ test spending_limit_counts_only_authenticated_continuation() fail {
   core_spend(datum, Spend, tx) && sl_withdraw(tx)
 }
 
-// KNOWN ISSUE: a token leaves the real wallet for a stray output; the
-// address-wide total is unchanged, so an empty allow list sees no movement.
+// Fixed: the asset list sums only the NFT-bearing continuation, so the token
+// moved to the stray output is seen as leaving the wallet; the core also rejects
+// the stray output outright.
 test asset_allow_list_counts_only_authenticated_continuation() fail {
   let datum = WalletDatum { spenders: [Pair(aal, unit())], depositors: [] }
   let tx = Transaction {

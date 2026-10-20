@@ -13,8 +13,8 @@
 use aiken/collection/list
 use aiken/crypto.{ScriptHash}
 use aiken/interval.{Finite}
-use cardano/address.{Credential}
-use cardano/assets.{AssetName, Lovelace, Value}
+use cardano/address.{Credential, Script}
+use cardano/assets.{AssetName, Lovelace, Value, has_nft}
 use cardano/transaction.{Output, Transaction}
 use smart_wallet/withdrawal
 
@@ -75,7 +75,7 @@ pub fn validate_withdraw(
     own_hash,
   )
   if params_valid(interval, max_spend) {
-    let tx_spend = net_outflow(self, wallet)
+    let tx_spend = net_outflow(self, wallet, wallet_token_name)
     let period = period_end(lower, interval)
     let same_period = if self.validity_range.upper_bound.is_inclusive {
       upper < period
@@ -112,24 +112,40 @@ fn period_end(time: Int, interval: Int) -> Int {
   ( time / interval + 1 ) * interval
 }
 
-/// Net lovelace outflow at the wallet credential: the summed input value minus
-/// the summed output value across the UTxOs sitting at `wallet`.
-fn net_outflow(self: Transaction, wallet: Credential) -> Lovelace {
+/// Net lovelace outflow at the wallet: the summed input value minus the summed
+/// output value across the NFT-bearing UTxOs sitting at `wallet`. NFT-less
+/// outputs at the wallet address are not wallet funds and are ignored.
+fn net_outflow(
+  self: Transaction,
+  wallet: Credential,
+  wallet_token_name: AssetName,
+) -> Lovelace {
   let input = sum_at_credential(
     list.map(self.inputs, fn(input) { input.output }),
     wallet,
+    wallet_token_name,
   )
-  let output = sum_at_credential(self.outputs, wallet)
+  let output = sum_at_credential(self.outputs, wallet, wallet_token_name)
   assets.lovelace_of(input) - assets.lovelace_of(output)
 }
 
-/// Aggregate value across `outputs` whose payment credential is `credential`.
-fn sum_at_credential(outputs: List<Output>, credential: Credential) -> Value {
+/// Aggregate value across `outputs` that sit at `credential` and carry the
+/// wallet's NFT.
+fn sum_at_credential(
+  outputs: List<Output>,
+  credential: Credential,
+  wallet_token_name: AssetName,
+) -> Value {
+  expect Script(wallet_hash) = credential
   list.foldl(
     outputs,
     assets.zero,
     fn(output, acc) {
-      if output.address.payment_credential == credential {
+      if output.address.payment_credential == credential && has_nft(
+        output.value,
+        wallet_hash,
+        wallet_token_name,
+      ) {
         assets.merge(acc, output.value)
       } else {
         acc

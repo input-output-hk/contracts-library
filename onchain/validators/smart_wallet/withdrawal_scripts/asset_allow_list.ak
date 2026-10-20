@@ -46,7 +46,7 @@ validator asset_allow_list(
   }
 
   withdraw(_redeemer: Data, _account: Credential, self: Transaction) {
-    only_allowed_assets_moved(self, wallet, allowed)
+    only_allowed_assets_moved(self, wallet, wallet_token_name, allowed)
   }
 
   else(_) {

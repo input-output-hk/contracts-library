@@ -2,7 +2,7 @@ use aiken/interval
 use cardano/address.{Script, from_script}
 use cardano/assets.{Value}
 use cardano/transaction.{
-  InlineDatum, Input, Output, OutputReference, Transaction, placeholder,
+  InlineDatum, Input, NoDatum, Output, OutputReference, Transaction, placeholder,
 }
 use smart_wallet/types.{WalletDatum}
 use smart_wallet/withdrawal_scripts/spending_period_limit_logic.{
@@ -243,6 +243,24 @@ test infinite_upper_rejected() fail {
       state(2000, 70),
     ),
   )
+}
+
+test stray_output_does_not_hide_outflow() fail {
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [wallet_input(assets.from_lovelace(100), state(2000, 30))],
+    outputs: [
+      wallet_output(assets.from_lovelace(60), state(2000, 30)),
+      Output {
+        address: from_script(wallet_policy),
+        value: assets.from_lovelace(40),
+        datum: NoDatum,
+        reference_script: None,
+      },
+    ],
+    validity_range: interval.between(1500, 1999),
+  }
+  validate_tx(tx)
 }
 
 test infinite_lower_rejected() fail {

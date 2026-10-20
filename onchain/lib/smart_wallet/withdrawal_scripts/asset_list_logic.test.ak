@@ -21,12 +21,18 @@ const name_y = "Y"
 const tx_id =
   #"0000000000000000000000000000000000000000000000000000000000000000"
 
+const wallet_token = "wallet"
+
+fn nft() -> Value {
+  assets.from_asset(wallet_policy, wallet_token, 1)
+}
+
 fn wallet_input(value: Value) -> Input {
   Input {
     output_reference: OutputReference { transaction_id: tx_id, output_index: 0 },
     output: Output {
       address: from_script(wallet_policy),
-      value,
+      value: assets.merge(value, nft()),
       datum: NoDatum,
       reference_script: None,
     },
@@ -34,6 +40,16 @@ fn wallet_input(value: Value) -> Input {
 }
 
 fn wallet_output(value: Value) -> Output {
+  Output {
+    address: from_script(wallet_policy),
+    value: assets.merge(value, nft()),
+    datum: NoDatum,
+    reference_script: None,
+  }
+}
+
+/// An NFT-less output at the wallet address: not authenticated wallet value.
+fn stray_output(value: Value) -> Output {
   Output {
     address: from_script(wallet_policy),
     value,
@@ -82,6 +98,7 @@ test allow_listed_policy_any_name() {
   only_allowed_assets_moved(
     tx(holding(policy_a, name_x, 10), lovelace(2_000_000)),
     Script(wallet_policy),
+    wallet_token,
     allow_any(policy_a),
   )
 }
@@ -90,6 +107,7 @@ test allow_listed_policy_listed_name() {
   only_allowed_assets_moved(
     tx(holding(policy_a, name_x, 10), lovelace(2_000_000)),
     Script(wallet_policy),
+    wallet_token,
     allow_only(policy_a, [name_x]),
   )
 }
@@ -98,6 +116,7 @@ test allow_rejects_unlisted_policy() fail {
   only_allowed_assets_moved(
     tx(holding(policy_a, name_x, 10), lovelace(2_000_000)),
     Script(wallet_policy),
+    wallet_token,
     allow_any(policy_b),
   )
 }
@@ -106,6 +125,7 @@ test allow_rejects_unlisted_name() fail {
   only_allowed_assets_moved(
     tx(holding(policy_a, name_x, 10), lovelace(2_000_000)),
     Script(wallet_policy),
+    wallet_token,
     allow_only(policy_a, [name_y]),
   )
 }
@@ -114,6 +134,7 @@ test allow_rejects_partial_move_of_unlisted() fail {
   only_allowed_assets_moved(
     tx(holding(policy_a, name_x, 10), holding(policy_a, name_x, 4)),
     Script(wallet_policy),
+    wallet_token,
     allow_any(policy_b),
   )
 }
@@ -122,6 +143,7 @@ test allow_ignores_unchanged_holding() {
   only_allowed_assets_moved(
     tx(holding(policy_a, name_x, 10), holding(policy_a, name_x, 10)),
     Script(wallet_policy),
+    wallet_token,
     none(),
   )
 }
@@ -130,6 +152,7 @@ test allow_rejects_added_asset() fail {
   only_allowed_assets_moved(
     tx(lovelace(2_000_000), holding(policy_a, name_x, 5)),
     Script(wallet_policy),
+    wallet_token,
     allow_any(policy_b),
   )
 }
@@ -138,6 +161,7 @@ test allow_empty_list_rejects_any_move() fail {
   only_allowed_assets_moved(
     tx(holding(policy_a, name_x, 10), lovelace(2_000_000)),
     Script(wallet_policy),
+    wallet_token,
     none(),
   )
 }
@@ -146,6 +170,7 @@ test allow_ignores_lovelace_only_change() {
   only_allowed_assets_moved(
     tx(lovelace(2_000_000), lovelace(1_500_000)),
     Script(wallet_policy),
+    wallet_token,
     none(),
   )
 }
@@ -154,6 +179,7 @@ test allow_deposit_listed() {
   only_allowed_assets_moved(
     tx(lovelace(2_000_000), holding(policy_a, name_x, 5)),
     Script(wallet_policy),
+    wallet_token,
     allow_any(policy_a),
   )
 }
@@ -174,8 +200,31 @@ test allow_ignores_non_wallet_outputs() {
       ],
     },
     Script(wallet_policy),
+    wallet_token,
     none(),
   )
+}
+
+test allow_ignores_stray_when_authenticated_value_unchanged() {
+  let authentic = holding(policy_a, name_x, 10)
+  let stray = lovelace(2_000_000) |> assets.add(policy_b, name_y, 5)
+  Transaction {
+    ..placeholder,
+    inputs: [wallet_input(authentic)],
+    outputs: [wallet_output(authentic), stray_output(stray)],
+  }
+    |> only_allowed_assets_moved(Script(wallet_policy), wallet_token, none())
+}
+
+test allow_rejects_move_hidden_in_stray_output() fail {
+  let input = holding(policy_a, name_x, 10)
+  let stray = lovelace(2_000_000) |> assets.add(policy_a, name_x, 10)
+  Transaction {
+    ..placeholder,
+    inputs: [wallet_input(input)],
+    outputs: [wallet_output(lovelace(2_000_000)), stray_output(stray)],
+  }
+    |> only_allowed_assets_moved(Script(wallet_policy), wallet_token, none())
 }
 
 // -------------------------------------------------- no_denied_assets_moved
@@ -184,6 +233,7 @@ test deny_rejects_denied_policy_any_name() fail {
   no_denied_assets_moved(
     tx(holding(policy_a, name_x, 10), lovelace(2_000_000)),
     Script(wallet_policy),
+    wallet_token,
     allow_any(policy_a),
   )
 }
@@ -192,6 +242,7 @@ test deny_rejects_denied_name() fail {
   no_denied_assets_moved(
     tx(holding(policy_a, name_x, 10), lovelace(2_000_000)),
     Script(wallet_policy),
+    wallet_token,
     allow_only(policy_a, [name_x]),
   )
 }
@@ -200,6 +251,7 @@ test deny_allows_other_name_same_policy() {
   no_denied_assets_moved(
     tx(holding(policy_a, name_x, 10), lovelace(2_000_000)),
     Script(wallet_policy),
+    wallet_token,
     allow_only(policy_a, [name_y]),
   )
 }
@@ -208,6 +260,7 @@ test deny_rejects_partial_move() fail {
   no_denied_assets_moved(
     tx(holding(policy_a, name_x, 10), holding(policy_a, name_x, 4)),
     Script(wallet_policy),
+    wallet_token,
     allow_any(policy_a),
   )
 }
@@ -216,6 +269,7 @@ test deny_allows_unlisted_policy() {
   no_denied_assets_moved(
     tx(holding(policy_a, name_x, 10), lovelace(2_000_000)),
     Script(wallet_policy),
+    wallet_token,
     allow_any(policy_b),
   )
 }
@@ -224,6 +278,7 @@ test deny_ignores_unchanged_holding() {
   no_denied_assets_moved(
     tx(holding(policy_a, name_x, 10), holding(policy_a, name_x, 10)),
     Script(wallet_policy),
+    wallet_token,
     allow_any(policy_a),
   )
 }
@@ -232,6 +287,7 @@ test deny_empty_list_allows_all() {
   no_denied_assets_moved(
     tx(holding(policy_a, name_x, 10), lovelace(2_000_000)),
     Script(wallet_policy),
+    wallet_token,
     none(),
   )
 }
@@ -240,6 +296,7 @@ test deny_rejects_added_asset() fail {
   no_denied_assets_moved(
     tx(lovelace(2_000_000), holding(policy_a, name_x, 5)),
     Script(wallet_policy),
+    wallet_token,
     allow_any(policy_a),
   )
 }
@@ -248,6 +305,7 @@ test deny_ignores_lovelace_only_change() {
   no_denied_assets_moved(
     tx(lovelace(2_000_000), lovelace(1_500_000)),
     Script(wallet_policy),
+    wallet_token,
     allow_any(policy_a),
   )
 }

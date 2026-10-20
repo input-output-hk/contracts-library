@@ -162,8 +162,10 @@ fn registered_in_tx(hash: ScriptHash, self: Transaction) -> Bool {
 /// continuation's value is a subset of the input's — a spend only removes value;
 /// additions belong to `Deposit`. The transaction must recreate the wallet: an
 /// NFT-bearing output at the wallet's payment credential carrying an inline
-/// `WalletDatum` meeting those conditions. Spender `Data` may change: each
-/// spender script enforces its own transition.
+/// `WalletDatum` meeting those conditions. Any other output at the wallet's
+/// payment credential is rejected: without the NFT it could never be spent and
+/// would permanently lock funds. Spender `Data` may change: each spender script
+/// enforces its own transition.
 pub fn validate_spend_continuation(
   old_datum: WalletDatum,
   old_value: Value,
@@ -171,17 +173,19 @@ pub fn validate_spend_continuation(
   wallet_token_name: AssetName,
   self: Transaction,
 ) -> Bool {
-  let continuations = list.filter(
+  let wallet_outputs = list.filter(
     self.outputs,
+    fn(output) { output.address.payment_credential == Script(wallet_policy) },
+  )
+  let continuations = list.filter(
+    wallet_outputs,
     fn(output) {
-      output.address.payment_credential == Script(wallet_policy) && assets.has_nft(
-        output.value,
-        wallet_policy,
-        wallet_token_name,
-      )
+      assets.has_nft(output.value, wallet_policy, wallet_token_name)
     },
   )
-  !list.is_empty(continuations) && list.all(
+  !list.is_empty(continuations) && list.length(wallet_outputs) == list.length(
+    continuations,
+  ) && list.all(
     continuations,
     fn(output) {
       expect InlineDatum(raw) = output.datum

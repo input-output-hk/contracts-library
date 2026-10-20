@@ -69,7 +69,9 @@ stateDiagram-v2
   script in `spenders` must be invoked as a withdraw-0 and approve, and the
   wallet must survive: an NFT-bearing continuation with `depositors` unchanged,
   the `spenders` key set fixed, and no value gained. A partial spend keeps the
-  NFT in a change output at the wallet address.
+  NFT in a change output at the wallet address. Any other output at the wallet
+  address without the NFT is rejected by `Spend`, because it could never be
+  spent again.
 - **updatePermissions** — the admin rewrites `spenders` and/or `depositors` in
   place: same address, a continuation value no smaller than the input's (no
   asset may decrease), inline datum with the new config.
@@ -393,9 +395,11 @@ its identifying NFT**, so one script instance works with exactly one wallet.
 
 ### `spending_limit`
 
-Bounds the wallet's net ADA outflow: sums the lovelace held at the wallet
-credential across inputs and outputs and requires
-`input - output < bound` (strict). Its state is a trivial marker (`0`):
+Bounds the wallet's net ADA outflow: sums the lovelace held by the
+**NFT-bearing** wallet UTxOs across inputs and outputs and requires
+`input - output < bound` (strict). NFT-less outputs at the wallet address are
+not wallet funds: the reference script ignores them, and the core rejects them
+on a `Spend`. Its state is a trivial marker (`0`):
 
 ```ts
 import {
@@ -482,7 +486,9 @@ period (a multiple of `interval`; `0` = none) and `acc_spend` the lovelace spent
 so far. The initial state is `{ period: 0, acc_spend: 0 }`, validated on
 registration.
 
-On each spend, both validity bounds must be finite and fall inside the **same**
+On each spend, `tx_spend` is the wallet's net lovelace outflow (`input - output`
+across the NFT-bearing UTxOs at the wallet credential). Both validity bounds
+must be finite and fall inside the **same**
 fixed period; that `[start, end)` bucket is the charged period. If it equals the
 stored period, the accumulator is checked and advanced
 (`acc_spend + tx_spend <= max_spend`); if it is later, the period rolls over and
@@ -547,8 +553,10 @@ Match the **full recipient address** (payment *and* staking credential) of every
 payout output. The allow list accepts only the listed addresses; the deny list
 rejects them. Matching is on the exact `Address` (the network id is not part of
 the on-chain representation), and outputs at the wallet's payment credential
-(the continuation) are exempt. Parameterized by the wallet credential and a list
-of bech32 addresses. Both are stateless (`data: 0`).
+(the authenticated continuation) are exempt; the core rejects any other output
+at the wallet address, so a stray output cannot bypass the recipient filter.
+Parameterized by the wallet credential and a list of bech32 addresses. Both are
+stateless (`data: 0`).
 
 ```ts
 import { fullRecipientAllowListScript } from "@contracts-library/meshjs";
@@ -597,9 +605,11 @@ const deny = paymentStakingDenyListScript({
 ### `asset_allow_list` / `asset_deny_list`
 
 Constrain the **asset classes that move**. The on-chain diff compares the
-wallet's summed input and output values and flags every class whose quantity
-changed; the magnitude is ignored (partial moves are still caught), ADA is
-ignored, and the wallet NFT is unchanged so it is never flagged. Parameters are
+summed values of the **NFT-bearing** wallet UTxOs and flags every class whose
+quantity changed; the magnitude is ignored (partial moves are still caught), ADA
+is ignored, and the wallet NFT is unchanged so it is never flagged. NFT-less
+outputs at the wallet address are not wallet funds and are ignored (the core
+also rejects them on a `Spend`). Parameters are
 a `Pairs<PolicyId, List<AssetName>>` association list — an empty name list means
 "any name of that policy" (allow) or "every name of that policy" (deny).
 
@@ -770,7 +780,8 @@ tests use a 1-of-1 wallet.
 - **The wallet must survive a spend.** `Spend` requires an NFT-bearing
   continuation at the wallet address, with `depositors` unchanged, the
   `spenders` key set fixed, and a value no greater than the input's. Removing
-  the NFT or adding value is rejected; only `Close` destroys the wallet.
+  the NFT, adding value, or creating any other NFT-less output at the wallet
+  address is rejected; only `Close` destroys the wallet.
 - **The settings config is trusted.** The wallet reads `members`/`threshold`
   from the settings `current` without validating the settings contract; whoever
   controls the settings instance controls spend authority. A malformed

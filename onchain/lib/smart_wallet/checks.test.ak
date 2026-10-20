@@ -265,7 +265,7 @@ test spend_rejects_removed_spender() fail {
   )
 }
 
-test spend_ignores_non_nft_outputs_at_wallet_address() {
+test spend_rejects_non_nft_outputs_at_wallet_address() fail {
   let data: Data = 0
   let extra = Output {
     address: from_script(wallet_policy),

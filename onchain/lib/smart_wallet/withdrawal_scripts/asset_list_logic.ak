@@ -14,8 +14,8 @@
 
 use aiken/collection/list
 use aiken/collection/pairs
-use cardano/address.{Credential}
-use cardano/assets.{AssetName, PolicyId, Value}
+use cardano/address.{Credential, Script}
+use cardano/assets.{AssetName, PolicyId, Value, has_nft}
 use cardano/transaction.{Output, Transaction}
 
 /// Allow check: every asset class that moves must be authorised by `allowed`.
@@ -24,10 +24,11 @@ use cardano/transaction.{Output, Transaction}
 pub fn only_allowed_assets_moved(
   self: Transaction,
   wallet: Credential,
+  wallet_token_name: AssetName,
   allowed: Pairs<PolicyId, List<AssetName>>,
 ) -> Bool {
-  let input = wallet_value(input_outputs(self), wallet)
-  let output = wallet_value(self.outputs, wallet)
+  let input = wallet_value(input_outputs(self), wallet, wallet_token_name)
+  let output = wallet_value(self.outputs, wallet, wallet_token_name)
   classes_ok(input, output, allowed) && classes_ok(output, input, allowed)
 }
 
@@ -37,10 +38,11 @@ pub fn only_allowed_assets_moved(
 pub fn no_denied_assets_moved(
   self: Transaction,
   wallet: Credential,
+  wallet_token_name: AssetName,
   denied: Pairs<PolicyId, List<AssetName>>,
 ) -> Bool {
-  let input = wallet_value(input_outputs(self), wallet)
-  let output = wallet_value(self.outputs, wallet)
+  let input = wallet_value(input_outputs(self), wallet, wallet_token_name)
+  let output = wallet_value(self.outputs, wallet, wallet_token_name)
   classes_not_denied(input, output, denied) && classes_not_denied(
     output,
     input,
@@ -113,13 +115,23 @@ fn denied_class(
   }
 }
 
-/// Sum of the values of `outputs` sitting at the wallet's payment credential.
-fn wallet_value(outputs: List<Output>, wallet: Credential) -> Value {
+/// Sum of the values of NFT-bearing `outputs` sitting at the wallet's payment
+/// credential.
+fn wallet_value(
+  outputs: List<Output>,
+  wallet: Credential,
+  wallet_token_name: AssetName,
+) -> Value {
+  expect Script(wallet_hash) = wallet
   list.foldl(
     outputs,
     assets.zero,
     fn(output, acc) {
-      if output.address.payment_credential == wallet {
+      if output.address.payment_credential == wallet && has_nft(
+        output.value,
+        wallet_hash,
+        wallet_token_name,
+      ) {
         assets.merge(acc, output.value)
       } else {
         acc

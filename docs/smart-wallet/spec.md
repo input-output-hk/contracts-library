@@ -139,7 +139,7 @@ via a **reward withdrawal** in the same transaction (withdraw-0 pattern).
 | | |
 |---|---|
 | **Inputs** | One wallet UTxO carrying the NFT. |
-| **Outputs** | Must include a **wallet continuation**: an NFT-bearing output at the wallet's payment credential carrying an inline `WalletDatum` with the same `depositors` map and `spenders` keys as the input, and a value that is a **subset** of the input's (every asset, including lovelace, in at most the same quantity). Payout outputs are otherwise unconstrained. |
+| **Outputs** | Must include a **wallet continuation**: an NFT-bearing output at the wallet's payment credential carrying an inline `WalletDatum` with the same `depositors` map and `spenders` keys as the input, and a value that is a **subset** of the input's (every asset, including lovelace, in at most the same quantity). No other output may sit at the wallet's payment credential: an NFT-less output there would be unspendable forever. Payout outputs elsewhere are otherwise unconstrained. |
 | **Redeemer** | `Spend`. |
 | **Authorization** | At least `threshold` of `members` sign (read from the settings UTxO), **and** every script in `spenders` is invoked as a reward withdrawal and approves. |
 | **Constraints** | The wallet UTxO carries its NFT; the delegated spender scripts' `withdraw` handlers run and each enforces its own restriction; the wallet survives with `depositors` unchanged, the `spenders` key set fixed (adding or removing delegated scripts is reserved for `UpdatePermissions`, while spender `Data` may change — each script enforces its own transition), and a continuation value no greater than the input's (a spend only removes value: additions belong to `Deposit`). |
@@ -317,6 +317,11 @@ window), enforcing their own input→output transition.
   validity interval to lie inside one `[start, end)` period, so a transaction
   valid now cannot be charged to a historical period. The charged period only
   rolls forward, never back.
+- **Stray wallet outputs.** `Spend` rejects any output at the wallet's payment
+  credential that does not carry the NFT, so a member cannot park funds in an
+  unspendable output to bypass delegated value, period, or recipient
+  restrictions. The reference value-accounting scripts also count only
+  NFT-bearing wallet UTxOs.
 - **Unvalidated script state.** A script enters `spenders` or `depositors` only
   after its own `publish` handler validates its initial `Data` (I4); stateful
   transitions are enforced by the script on every spend or deposit (I7).

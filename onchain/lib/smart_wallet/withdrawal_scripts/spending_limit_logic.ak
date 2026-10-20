@@ -2,8 +2,8 @@
 //// wallet's net lovelace outflow to a fixed `bound`.
 
 use aiken/collection/list
-use cardano/address.{Credential}
-use cardano/assets.{Lovelace, Value}
+use cardano/address.{Credential, Script}
+use cardano/assets.{AssetName, Lovelace, Value, has_nft}
 use cardano/transaction.{Output, Transaction}
 
 /// Spending-limit check: the net lovelace outflow `input - output` stays
@@ -20,29 +20,42 @@ pub fn value_delta_below_bound(
   assets.lovelace_of(input) - assets.lovelace_of(output) < bound
 }
 
-/// Whole-transaction spending-limit check: sums the value on UTxOs at `wallet`
-/// across the inputs and outputs and bounds the net outflow with
-/// `value_delta_below_bound`.
+/// Whole-transaction spending-limit check: sums the value on NFT-bearing UTxOs
+/// at `wallet` across the inputs and outputs and bounds the net outflow with
+/// `value_delta_below_bound`. NFT-less outputs at the wallet address are not
+/// wallet funds and are ignored.
 pub fn within_spending_limit(
   self: Transaction,
   wallet: Credential,
+  wallet_token_name: AssetName,
   bound: Lovelace,
 ) -> Bool {
   let input = sum_at_credential(
     list.map(self.inputs, fn(input) { input.output }),
     wallet,
+    wallet_token_name,
   )
-  let output = sum_at_credential(self.outputs, wallet)
+  let output = sum_at_credential(self.outputs, wallet, wallet_token_name)
   value_delta_below_bound(input, output, bound)
 }
 
-/// Aggregate value across `outputs` whose payment credential is `credential`.
-fn sum_at_credential(outputs: List<Output>, credential: Credential) -> Value {
+/// Aggregate value across `outputs` that sit at `credential` and carry the
+/// wallet's NFT.
+fn sum_at_credential(
+  outputs: List<Output>,
+  credential: Credential,
+  wallet_token_name: AssetName,
+) -> Value {
+  expect Script(wallet_hash) = credential
   list.foldl(
     outputs,
     assets.zero,
     fn(output, acc) {
-      if output.address.payment_credential == credential {
+      if output.address.payment_credential == credential && has_nft(
+        output.value,
+        wallet_hash,
+        wallet_token_name,
+      ) {
         assets.merge(acc, output.value)
       } else {
         acc

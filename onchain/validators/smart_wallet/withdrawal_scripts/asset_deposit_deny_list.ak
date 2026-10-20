@@ -46,7 +46,7 @@ validator asset_deposit_deny_list(
   }
 
   withdraw(_redeemer: Data, _account: Credential, self: Transaction) {
-    no_denied_assets_moved(self, wallet, denied)
+    no_denied_assets_moved(self, wallet, wallet_token_name, denied)
   }
 
   else(_) {
