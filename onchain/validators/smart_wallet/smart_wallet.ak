@@ -86,8 +86,10 @@ validator smart_wallet(
 
 /// Authorized rewrite of a wallet UTxO's config (`spenders` and `depositors`):
 /// the script's `admin` parameter must approve, and the continuation at `out_ix`
-/// must sit at the same address with the same value — only the config may
-/// change, so an update cannot move funds.
+/// must sit at the same address. All non-ADA assets are preserved exactly; ADA
+/// may only increase, an explicit top-up exception so the admin can cover a
+/// larger datum/min-UTxO. Apart from that top-up, only the config may change, so
+/// an update cannot remove funds or add other assets.
 fn validate_config_update(
   admin: Credential,
   out_ix: Int,
@@ -104,7 +106,10 @@ fn validate_config_update(
   expect old_datum: WalletDatum = old_raw
   and {
     continuation.address == own_input.output.address,
-    assets.match(continuation.value, own_input.output.value, >=),
+    assets.match_assets(continuation.value, own_input.output.value),
+    assets.lovelace_of(continuation.value) >= assets.lovelace_of(
+      own_input.output.value,
+    ),
     checks.withdrawals_added_published(
       old_datum.spenders,
       new_datum.spenders,

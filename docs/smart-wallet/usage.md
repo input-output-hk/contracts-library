@@ -73,8 +73,8 @@ stateDiagram-v2
   address without the NFT is rejected by `Spend`, because it could never be
   spent again.
 - **updatePermissions** — the admin rewrites `spenders` and/or `depositors` in
-  place: same address, a continuation value no smaller than the input's (no
-  asset may decrease), inline datum with the new config.
+  place: same address, every non-ADA asset exactly unchanged, inline datum with
+  the new config. ADA may only increase, as an explicit top-up exception.
 - **close** — the admin spends the wallet UTxO, releases the remaining funds,
   burns the NFT, and unregisters every delegated script. Closing is
   irreversible: the seed nonce is spent, so the wallet can never be relaunched
@@ -295,8 +295,10 @@ rejected.
 
 ### 4. Update permissions
 
-The admin rewrites `spenders` and/or `depositors`. Funds cannot move: the
-builder reuses the input's value and address:
+The admin rewrites `spenders` and/or `depositors`. Non-ADA assets cannot move:
+the builder reuses the input's value and address by default. Pass
+`topUpLovelace` to add ADA explicitly (for example to cover a larger datum);
+without it, the value is preserved exactly.
 
 ```ts
 import { buildWalletUpdatePermissionsTx } from "@contracts-library/meshjs";
@@ -313,6 +315,7 @@ await buildWalletUpdatePermissionsTx({
   admin: { kind: "key", hash: adminKeyHash },
   registerScripts: [],                        // scripts added by this update (either map)
   deregisterScripts: [],                      // scripts removed by this update (either map)
+  topUpLovelace: 0n,                          // optional: add ADA; other assets stay identical
   network: "preprod",
 });
 ```
@@ -809,6 +812,9 @@ tests use a 1-of-1 wallet.
   `Publish` witness for additions. Unregister it first — the reference
   `publish` handlers may refuse an out-of-band unregistration — and always add
   scripts through `Mint` / `UpdatePermissions`.
+- **UpdatePermissions may top up ADA only.** Every non-ADA asset (including the
+  NFT) must remain exactly the same. `topUpLovelace` is an explicit exception:
+  the added ADA does not pass through the `depositors`, unlike a `Deposit`.
 - **Kept scripts must be byte-identical.** `UpdatePermissions` compares each kept
   script's `Data` by CBOR serialization; changing state means removing
   (unregistering) and re-adding (re-registering) the script in the same

@@ -534,16 +534,42 @@ test mint_requires_publish_execution() fail {
   core_mint(0, tx)
 }
 
-// ----------------------------------------- 6. UpdatePermissions keeps value
+// ------------------------------- 6. UpdatePermissions: only ADA top-ups
 
-// KNOWN ISSUE: `assets.match(.., >=)` lets the admin add ADA on an update,
-// bypassing the deposit scripts, while the spec says "same value".
-test update_permissions_preserves_value() fail {
+// Fixed: ADA may be topped up explicitly on an update; non-ADA assets must stay
+// exactly unchanged.
+test control_update_permissions_allows_ada_top_up() {
   let datum = WalletDatum { spenders: [], depositors: [] }
   let tx = Transaction {
     ..admin_tx(),
     inputs: [wallet_in(wallet_out(nft_value(10 * ada), [], []))],
     outputs: [wallet_out(nft_value(12 * ada), [], [])],
+  }
+  core_spend(datum, UpdatePermissions { out_ix: 0 }, tx)
+}
+
+test update_permissions_rejects_asset_top_up() fail {
+  let datum = WalletDatum { spenders: [], depositors: [] }
+  let tx = Transaction {
+    ..admin_tx(),
+    inputs: [wallet_in(wallet_out(nft_value(10 * ada), [], []))],
+    outputs: [
+      wallet_out(
+        nft_value(10 * ada) |> assets.add(token_policy, "x", 1),
+        [],
+        [],
+      ),
+    ],
+  }
+  core_spend(datum, UpdatePermissions { out_ix: 0 }, tx)
+}
+
+test update_permissions_rejects_value_decrease() fail {
+  let datum = WalletDatum { spenders: [], depositors: [] }
+  let tx = Transaction {
+    ..admin_tx(),
+    inputs: [wallet_in(wallet_out(nft_value(10 * ada), [], []))],
+    outputs: [wallet_out(nft_value(9 * ada), [], [])],
   }
   core_spend(datum, UpdatePermissions { out_ix: 0 }, tx)
 }

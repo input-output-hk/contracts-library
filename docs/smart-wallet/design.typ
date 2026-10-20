@@ -183,8 +183,9 @@ forward unchanged._
 
 = Update config (per-UTxO)
 _An authorized admin credential — a parameter of the spending script — rewrites
-a wallet UTxO's config (`spenders` and `depositors`) in place. Funds are
-untouched: same address, same value — only the config changes._
+a wallet UTxO's config (`spenders` and `depositors`) in place. Non-ADA assets
+are untouched: same address, same tokens — only the config changes. ADA may be
+topped up explicitly._
 
 #let update_config_tx = vanilla_transaction(
   "Update config",
@@ -208,7 +209,7 @@ untouched: same address, same value — only the config changes._
       name: "Wallet UTxO",
       address: "wallet_addr",
       value: (
-        "ada": "x",
+        "ada": "x + top-up",
         "wallet_nft": "1",
       ),
       datum: (
@@ -228,10 +229,12 @@ untouched: same address, same value — only the config changes._
     - the `admin` credential (a script parameter) must be satisfied: a key admin
       signs; a script admin authorizes by a withdraw-0 invocation (the same
       pluggable mechanism used elsewhere).
-    - the continuation must sit at the same `wallet_addr` and carry the *same
-      value* — including the NFT — so an update cannot move funds, only swap the
-      config. The admin is fixed in the script parameter, so control cannot be
-      handed off.
+    - the continuation must sit at the same `wallet_addr` and preserve every
+      non-ADA asset exactly, including the NFT. Lovelace may only increase: this
+      explicit top-up lets the admin cover a larger datum/min-UTxO but bypasses
+      the deposit scripts for that ADA. Apart from the top-up, an update cannot
+      move funds, only swap the config. The admin is fixed in the script
+      parameter, so control cannot be handed off.
     - `spenders'` / `depositors'`: the new config. It takes effect immediately
       for subsequent spends and deposits of this UTxO; other wallet UTxOs are
       unaffected (the config is per-UTxO).

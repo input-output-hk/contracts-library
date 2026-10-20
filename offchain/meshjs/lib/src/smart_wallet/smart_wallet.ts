@@ -335,6 +335,11 @@ export interface WalletUpdatePermissionsParams {
   registerScripts?: PlutusScript[];
   /** Scripts removed by this update, in either map (unregistered here). */
   deregisterScripts?: PlutusScript[];
+  /**
+   * Optional ADA added to the continuation as an explicit top-up. All non-ADA
+   * assets are preserved; omit or pass `0n` to keep the input value exactly.
+   */
+  topUpLovelace?: bigint;
   network?: Network;
 }
 
@@ -343,6 +348,16 @@ export async function buildWalletUpdatePermissionsTx(
 ): Promise<string> {
   const networkId = networkIdOf(p.network ?? "preprod");
   const scriptAddr = smartWalletScriptAddress(p.script, networkId);
+  const topUp = p.topUpLovelace ?? 0n;
+  if (topUp < 0n) {
+    throw new Error("topUpLovelace must be non-negative");
+  }
+  const continuationValue =
+    topUp === 0n
+      ? p.walletUtxo.output.amount
+      : addAssets(p.walletUtxo.output.amount, [
+          { unit: "lovelace", quantity: topUp.toString() },
+        ]);
 
   applyAuthorization(p.txBuilder, p.admin, p.authorizer, networkId);
   for (const script of p.registerScripts ?? []) {
@@ -363,7 +378,7 @@ export async function buildWalletUpdatePermissionsTx(
     .txInInlineDatumPresent()
     .txInRedeemerValue(walletUpdatePermissionsRedeemer(p.outputIndex))
     .txInScript(p.script.code)
-    .txOut(scriptAddr, p.walletUtxo.output.amount)
+    .txOut(scriptAddr, continuationValue)
     .txOutInlineDatumValue(walletDatumToData(p.newDatum))
     .txInCollateral(
       p.collateralUtxo.input.txHash,

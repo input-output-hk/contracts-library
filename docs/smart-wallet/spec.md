@@ -154,13 +154,15 @@ unchanged, its `spenders` key set fixed, and a value no greater than the input's
 | | |
 |---|---|
 | **Inputs** | The wallet UTxO. |
-| **Outputs** | One continuation at `out_ix`: same address, same value (NFT preserved), inline datum with the new config. |
+| **Outputs** | One continuation at `out_ix`: same address, every **non-ADA asset exactly preserved** (including the NFT), inline datum with the new config. Lovelace may only increase — an explicit top-up exception (see below). |
 | **Redeemer** | `UpdatePermissions { out_ix }`. |
 | **Authorization** | `admin`. |
 | **Constraints** | The old and new `spenders` and `depositors` maps are diffed: every script *added* must be **published** here (`RegisterCredential` **and its matching `Publish` redeemer**); every script *removed* must be **unregistered** (`UnregisterCredential`); every script *kept* must carry unchanged `Data`. |
 
-Funds cannot move: the continuation sits at the same address with value `>=` the
-input (in fact, only ADA may change, to cover fees).
+Funds cannot move except for the explicit ADA top-up: the continuation sits at
+the same address with every non-ADA asset unchanged and lovelace at least the
+input's. The admin may add only ADA (for example to cover a larger datum); that
+top-up bypasses `depositors`, unlike an ordinary `Deposit`.
 
 ### 5.4 Deposit
 
@@ -255,7 +257,8 @@ window), enforcing their own input→output transition.
   met, every script in `spenders` is invoked and approves, the wallet survives
   with its permission set intact, and the continuation's value is a subset of the
   input's (a spend only removes value).
-- **I3 — Config-only updates.** `UpdatePermissions` preserves address and value; only
+- **I3 — Config-only updates.** `UpdatePermissions` preserves the address and every
+  non-ADA asset; lovelace may only increase as an explicit top-up exception. Only
   `spenders` and `depositors` may change, and only by the `admin`.
 - **I4 — Published additions.** A script may appear in `spenders` or `depositors`
   only if it was registered **and its matching `Publish` redeemer is present**
@@ -339,6 +342,9 @@ window), enforcing their own input→output transition.
   external settings UTxO; the wallet does not validate that contract.
 - **Min-ada / surplus value.** A wallet UTxO may hold ADA beyond what restrictions
   reference; only the delegated scripts' own checks (if any) constrain it.
+- **UpdatePermissions ADA top-up.** The `admin` may add ADA in a config update;
+  this bypasses deposit validation for that ADA only. Non-ADA assets remain
+  exactly preserved, and no funds can be removed.
 - **Open deposits.** A wallet with an empty `depositors` map accepts deposits from
   anyone; the core only preserves the spend side and the `depositors` key set and
   requires added value. Use deposit scripts to gate who and what may be deposited.
