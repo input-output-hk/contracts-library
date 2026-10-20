@@ -18,12 +18,18 @@ const wallet_policy =
 const tx_id =
   #"0000000000000000000000000000000000000000000000000000000000000000"
 
+const wallet_token = "wallet"
+
+fn nft() -> assets.Value {
+  assets.from_asset(wallet_policy, wallet_token, 1)
+}
+
 const window = 3_600_000
 
 fn wallet_output(spenders: Pairs<ScriptHash, Data>) -> Output {
   Output {
     address: from_script(wallet_policy),
-    value: assets.zero,
+    value: nft(),
     datum: InlineDatum(WalletDatum { spenders, depositors: [] }),
     reference_script: None,
   }
@@ -39,6 +45,7 @@ fn wallet_input(spenders: Pairs<ScriptHash, Data>) -> Input {
 fn publish(redeemer: Data, certificate: Certificate, tx: Transaction) -> Bool {
   spending_window.spending_window.publish(
     Script(wallet_policy),
+    wallet_token,
     window,
     redeemer,
     certificate,
@@ -49,6 +56,7 @@ fn publish(redeemer: Data, certificate: Certificate, tx: Transaction) -> Bool {
 fn withdraw(account: Credential, tx: Transaction) -> Bool {
   spending_window.spending_window.withdraw(
     Script(wallet_policy),
+    wallet_token,
     window,
     0,
     account,

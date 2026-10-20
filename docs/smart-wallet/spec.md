@@ -194,18 +194,25 @@ map; it participates through two script purposes:
 
 - **`publish`** (triggered by a delegation certificate referencing the script's
   stake credential). On `RegisterCredential`, the handler reads its own initial
-  `Data` from the wallet **output** datum and validates it — so a script cannot be
-  delegated without self-validating its starting state. On
+  `Data` from the **NFT-bearing** wallet **output** datum and validates it — so a
+  script cannot be delegated without self-validating its starting state. On
   `UnregisterCredential`, the handler accepts the removal only if the script is
-  actually **leaving** the wallet (listed in the wallet *input* datum, absent from
-  the *output* datum, or no output at all on `Close`); this prevents unregistering
-  a script out of band, which would brick any wallet still delegating to it.
+  actually **leaving** the wallet (listed in the NFT-bearing wallet *input* datum,
+  absent from the NFT-bearing *output* datum, or no NFT-bearing output at all on
+  `Close`); this prevents unregistering a script out of band, which would brick
+  any wallet still delegating to it.
 
 - **`withdraw`** (a reward withdrawal, required by `Spend` for spender scripts
   and by `Deposit` for deposit scripts). The handler enforces the script's own
   requirement. A **stateful spender** script reads its current `Data` from the
-  wallet *input* datum, computes the transition, and requires the wallet *output*
-  datum to record the new state.
+  NFT-bearing wallet *input* datum, computes the transition, and requires the
+  NFT-bearing wallet *output* datum to record the new state.
+
+All delegated readers identify the wallet UTxO by **both** the wallet payment
+credential and the wallet NFT (policy id and asset name, both compile-time
+parameters). An output or input at the wallet address without that NFT is never
+treated as the wallet, so a decoy cannot supply another state or permission
+map.
 
 The `Data` value in `spenders[script_hash]` is that script's mutable state:
 stateless scripts store a trivial marker (e.g. `spending_limit`, whose `bound` is

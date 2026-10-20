@@ -16,6 +16,7 @@ use smart_wallet/withdrawal_scripts/asset_list_logic.{no_denied_assets_moved}
 /// class that moves in the transaction to be listed in `denied`.
 validator asset_deposit_deny_list(
   wallet: Credential,
+  wallet_token_name: AssetName,
   denied: Pairs<PolicyId, List<AssetName>>,
 ) {
   publish(_redeemer: Data, certificate: Certificate, self: Transaction) {
@@ -23,13 +24,23 @@ validator asset_deposit_deny_list(
       RegisterCredential { credential: Script(own_hash), .. } -> {
         // stateless: only confirm this script is listed in the wallet datum; a
         // stateful script would additionally validate its initial `Data` here.
-        expect _: Data = withdrawal.own_depositor_data(self, wallet, own_hash)
+        expect _: Data = withdrawal.own_depositor_data(
+          self,
+          wallet,
+          wallet_token_name,
+          own_hash,
+        )
         True
       }
       UnregisterCredential { credential: Script(own_hash), .. } ->
         // only allow unregistration when this script is leaving a wallet, so it
         // cannot be unregistered out of band (which would brick the wallet).
-        withdrawal.own_depositor_removed(self, wallet, own_hash)
+        withdrawal.own_depositor_removed(
+          self,
+          wallet,
+          wallet_token_name,
+          own_hash,
+        )
       _ -> fail
     }
   }

@@ -379,19 +379,21 @@ time), this script carries mutable state — the last spend time — in the wall
 datum's `spenders` map, and enforces its own state transition on every
 spend._
 
-The script is parameterized by `wallet` and `window` (milliseconds), and its
-state is a single timestamp: `SpendingWindowState { last_spend: Int }` (POSIX ms;
-`0` means never spent).
+The script is parameterized by `wallet`, the wallet NFT's asset name, and
+`window` (milliseconds), and its state is a single timestamp:
+`SpendingWindowState { last_spend: Int }` (POSIX ms; `0` means never spent).
 
 - *Publishing* (`RegisterCredential`): the `publish` handler reads its initial
-  `Data` from the wallet output datum and requires `last_spend == 0` — an
-  unspent wallet. Unregistering is only accepted while leaving the wallet (the
-  same input/output presence check as `spending_limit`).
+  `Data` from the NFT-bearing wallet output datum and requires
+  `last_spend == 0` — an unspent wallet. Unregistering is only accepted while
+  leaving the wallet (the same NFT-bearing input/output presence check as
+  `spending_limit`).
 - *Withdraw* (runs on every `Spend`): the handler reads its current state from
-  the wallet *input* datum and the next state from the wallet *output* datum,
-  takes `now` from the validity range's lower bound, and requires that the
-  cooldown elapsed (`now - last_spend >= window`, or it is the first spend) and
-  that the output state records exactly this spend (`next.last_spend == now`).
+  the NFT-bearing wallet *input* datum and the next state from the NFT-bearing
+  wallet *output* datum, takes `now` from the validity range's lower bound, and
+  requires that the cooldown elapsed (`now - last_spend >= window`, or it is the
+  first spend) and that the output state records exactly this spend
+  (`next.last_spend == now`).
 - Because the wallet's `Spend` branch doesn't constrain the continuation datum,
   the script enforces its own transition end-to-end: the builder must produce a
   continuation carrying the updated state, or the withdrawal fails and the

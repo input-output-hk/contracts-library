@@ -21,10 +21,20 @@ const interval_ms = 1_000
 
 const max_spend = 100
 
+const wallet_token = "wallet"
+
+fn nft() -> Value {
+  assets.from_asset(wallet_policy, wallet_token, 1)
+}
+
+fn wallet_value(value: Value) -> Value {
+  assets.merge(value, nft())
+}
+
 fn wallet_output(value: Value, period_state: SpendingPeriodState) -> Output {
   Output {
     address: from_script(wallet_policy),
-    value,
+    value: wallet_value(value),
     datum: InlineDatum(
       WalletDatum {
         spenders: [Pair(own_hash, state_data(period_state))],
@@ -67,6 +77,7 @@ fn validate(
   validate_withdraw(
     spend_tx(input, output, now, current, next),
     Script(wallet_policy),
+    wallet_token,
     own_hash,
     interval_ms,
     max_spend,

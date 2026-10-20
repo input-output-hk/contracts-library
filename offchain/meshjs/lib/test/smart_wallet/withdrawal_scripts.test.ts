@@ -99,61 +99,80 @@ describe("assetListToData", () => {
 
 describe("recipient / asset param encoders", () => {
   const wallet: Credential = { kind: "script", hash: "cc".repeat(28) };
+  const walletTokenName = "57414c4c4554";
   const paymentKey: Credential = { kind: "key", hash: "11".repeat(28) };
   const stakeKey: Credential = { kind: "key", hash: "22".repeat(28) };
 
-  it("full_recipient_allow_list: [wallet, [address]]", () => {
+  it("full_recipient_allow_list: [wallet, token, [address]]", () => {
     const data = fullRecipientAllowListParamsToData({
       wallet,
+      walletTokenName,
       allowed: [BASE_ADDRESS],
     });
-    expect(data).toHaveLength(2);
+    expect(data).toHaveLength(3);
     expect(asConstr(data[0])).toEqual({
       alternative: 1,
       fields: [wallet.hash],
     });
-    expect(data[1]).toEqual([addressToData(BASE_ADDRESS)]);
+    expect(data[1]).toBe(walletTokenName);
+    expect(data[2]).toEqual([addressToData(BASE_ADDRESS)]);
   });
 
-  it("full_recipient_deny_list: [wallet, [address]]", () => {
+  it("full_recipient_deny_list: [wallet, token, [address]]", () => {
     const data = fullRecipientDenyListParamsToData({
       wallet,
+      walletTokenName,
       denied: [BASE_ADDRESS],
     });
-    expect(data).toHaveLength(2);
-    expect(data[1]).toEqual([addressToData(BASE_ADDRESS)]);
+    expect(data).toHaveLength(3);
+    expect(data[1]).toBe(walletTokenName);
+    expect(data[2]).toEqual([addressToData(BASE_ADDRESS)]);
   });
 
-  it("payment_staking_allow_list: [wallet, payments, stakings]", () => {
+  it("payment_staking_allow_list: [wallet, token, payments, stakings]", () => {
     const data = paymentStakingAllowListParamsToData({
       wallet,
+      walletTokenName,
       allowedPayments: [paymentKey],
       allowedStakings: [stakeKey],
     });
-    expect(data).toHaveLength(3);
-    expect(data[1]).toEqual([{ alternative: 0, fields: [paymentKey.hash] }]);
-    expect(data[2]).toEqual([{ alternative: 0, fields: [stakeKey.hash] }]);
+    expect(data).toHaveLength(4);
+    expect(data[1]).toBe(walletTokenName);
+    expect(data[2]).toEqual([{ alternative: 0, fields: [paymentKey.hash] }]);
+    expect(data[3]).toEqual([{ alternative: 0, fields: [stakeKey.hash] }]);
   });
 
-  it("payment_staking_deny_list: [wallet, payments, stakings]", () => {
+  it("payment_staking_deny_list: [wallet, token, payments, stakings]", () => {
     const data = paymentStakingDenyListParamsToData({
       wallet,
+      walletTokenName,
       deniedPayments: [paymentKey],
       deniedStakings: [stakeKey],
     });
-    expect(data).toHaveLength(3);
-    expect(data[1]).toEqual([{ alternative: 0, fields: [paymentKey.hash] }]);
-    expect(data[2]).toEqual([{ alternative: 0, fields: [stakeKey.hash] }]);
+    expect(data).toHaveLength(4);
+    expect(data[1]).toBe(walletTokenName);
+    expect(data[2]).toEqual([{ alternative: 0, fields: [paymentKey.hash] }]);
+    expect(data[3]).toEqual([{ alternative: 0, fields: [stakeKey.hash] }]);
   });
 
-  it("asset_allow_list / asset_deny_list: [wallet, map]", () => {
+  it("asset_allow_list / asset_deny_list: [wallet, token, map]", () => {
     const list: AssetList = [["dd".repeat(28), ["41"]]];
-    const allowed = assetAllowListParamsToData({ wallet, allowed: list });
-    const denied = assetDenyListParamsToData({ wallet, denied: list });
-    expect(allowed).toHaveLength(2);
-    expect(denied).toHaveLength(2);
-    expect(allowed[1]).toBeInstanceOf(Map);
-    expect(denied[1]).toBeInstanceOf(Map);
+    const allowed = assetAllowListParamsToData({
+      wallet,
+      walletTokenName,
+      allowed: list,
+    });
+    const denied = assetDenyListParamsToData({
+      wallet,
+      walletTokenName,
+      denied: list,
+    });
+    expect(allowed).toHaveLength(3);
+    expect(denied).toHaveLength(3);
+    expect(allowed[1]).toBe(walletTokenName);
+    expect(denied[1]).toBe(walletTokenName);
+    expect(allowed[2]).toBeInstanceOf(Map);
+    expect(denied[2]).toBeInstanceOf(Map);
   });
 });
 
@@ -161,6 +180,7 @@ describe("withdrawal script constructors", () => {
   it("parameterize the raw script", () => {
     const script = fullRecipientAllowListScript({
       wallet: { kind: "script", hash: "cc".repeat(28) },
+      walletTokenName: "57414c4c4554",
       allowed: [BASE_ADDRESS],
     });
     expect(script.version).toBe("V3");
@@ -171,6 +191,7 @@ describe("withdrawal script constructors", () => {
   it("depositor asset scripts reuse the asset param encoding", () => {
     const script = assetDepositDenyListScript({
       wallet: { kind: "script", hash: "cc".repeat(28) },
+      walletTokenName: "57414c4c4554",
       denied: [["dd".repeat(28), []]],
     });
     expect(script.version).toBe("V3");
@@ -189,6 +210,7 @@ describe("withdrawalScriptAddress", () => {
 
 describe("spending_period_limit encoders", () => {
   const wallet: Credential = { kind: "script", hash: "cc".repeat(28) };
+  const walletTokenName = "57414c4c4554";
   const interval = 604_800_000; // one week
   const maxSpend = 100_000_000;
 
@@ -200,14 +222,29 @@ describe("spending_period_limit encoders", () => {
     ).toEqual({ alternative: 0, fields: [interval, 5_000_000] });
   });
 
-  it("spendingPeriodLimitParamsToData: [wallet, interval, maxSpend]", () => {
+  it("spendingPeriodLimitParamsToData: [wallet, token, interval, maxSpend]", () => {
     expect(
-      spendingPeriodLimitParamsToData({ wallet, interval, maxSpend }),
-    ).toEqual([{ alternative: 1, fields: [wallet.hash] }, interval, maxSpend]);
+      spendingPeriodLimitParamsToData({
+        wallet,
+        walletTokenName,
+        interval,
+        maxSpend,
+      }),
+    ).toEqual([
+      { alternative: 1, fields: [wallet.hash] },
+      walletTokenName,
+      interval,
+      maxSpend,
+    ]);
   });
 
   it("spendingPeriodLimitScript parameterizes the raw script", () => {
-    const script = spendingPeriodLimitScript({ wallet, interval, maxSpend });
+    const script = spendingPeriodLimitScript({
+      wallet,
+      walletTokenName,
+      interval,
+      maxSpend,
+    });
     expect(script.version).toBe("V3");
     expect(script.code.length).toBeGreaterThan(0);
   });

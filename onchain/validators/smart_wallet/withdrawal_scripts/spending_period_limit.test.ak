@@ -20,6 +20,16 @@ const wallet_policy =
 const tx_id =
   #"0000000000000000000000000000000000000000000000000000000000000000"
 
+const wallet_token = "wallet"
+
+fn nft() -> assets.Value {
+  assets.from_asset(wallet_policy, wallet_token, 1)
+}
+
+fn wallet_value(value: assets.Value) -> assets.Value {
+  assets.merge(value, nft())
+}
+
 const interval_ms = 1_000
 
 const max_spend = 100
@@ -36,7 +46,7 @@ fn state_data(s: SpendingPeriodState) -> Data {
 fn wallet_output_with(value: Value, spenders: Pairs<ScriptHash, Data>) -> Output {
   Output {
     address: from_script(wallet_policy),
-    value,
+    value: wallet_value(value),
     datum: InlineDatum(WalletDatum { spenders, depositors: [] }),
     reference_script: None,
   }
@@ -60,6 +70,7 @@ fn wallet_input(value: Value, period_state: SpendingPeriodState) -> Input {
 fn publish(redeemer: Data, certificate: Certificate, tx: Transaction) -> Bool {
   spending_period_limit.spending_period_limit.publish(
     Script(wallet_policy),
+    wallet_token,
     interval_ms,
     max_spend,
     redeemer,
@@ -71,6 +82,7 @@ fn publish(redeemer: Data, certificate: Certificate, tx: Transaction) -> Bool {
 fn withdraw(account: Credential, tx: Transaction) -> Bool {
   spending_period_limit.spending_period_limit.withdraw(
     Script(wallet_policy),
+    wallet_token,
     interval_ms,
     max_spend,
     0,

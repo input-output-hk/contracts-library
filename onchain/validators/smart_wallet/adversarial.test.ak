@@ -212,6 +212,7 @@ fn core_mint(out_ix: Int, tx: Transaction) -> Bool {
 fn sw_withdraw(tx: Transaction) -> Bool {
   spending_window.spending_window.withdraw(
     Script(wallet_hash),
+    wallet_token,
     hour,
     0,
     Script(sw),
@@ -222,6 +223,7 @@ fn sw_withdraw(tx: Transaction) -> Bool {
 fn spl_withdraw(tx: Transaction) -> Bool {
   spending_period_limit.spending_period_limit.withdraw(
     Script(wallet_hash),
+    wallet_token,
     day,
     max_spend,
     0,
@@ -233,6 +235,7 @@ fn spl_withdraw(tx: Transaction) -> Bool {
 fn sl_withdraw(tx: Transaction) -> Bool {
   spending_limit.spending_limit.withdraw(
     Script(wallet_hash),
+    wallet_token,
     bound,
     0,
     Script(sl),
@@ -243,6 +246,7 @@ fn sl_withdraw(tx: Transaction) -> Bool {
 fn sl_publish(certificate: Certificate, tx: Transaction) -> Bool {
   spending_limit.spending_limit.publish(
     Script(wallet_hash),
+    wallet_token,
     bound,
     0,
     certificate,
@@ -253,6 +257,7 @@ fn sl_publish(certificate: Certificate, tx: Transaction) -> Bool {
 fn aal_withdraw(tx: Transaction) -> Bool {
   asset_allow_list.asset_allow_list.withdraw(
     Script(wallet_hash),
+    wallet_token,
     [],
     0,
     Script(aal),
@@ -263,6 +268,7 @@ fn aal_withdraw(tx: Transaction) -> Bool {
 fn adal_withdraw(tx: Transaction) -> Bool {
   asset_deposit_allow_list.asset_deposit_allow_list.withdraw(
     Script(wallet_hash),
+    wallet_token,
     [],
     0,
     Script(adal),
@@ -334,9 +340,8 @@ test control_honest_period_spend() {
 
 // ------------------------------------------ 1. delegated state: decoy outputs
 
-// KNOWN ISSUE: `spending_window` reads its next state from the first output at
-// the wallet credential (an NFT-less decoy), while the real continuation keeps
-// `last_spend = 0`, so the cooldown never starts.
+// Fixed: the NFT-less decoy is not the wallet UTxO, so `spending_window` reads
+// `last_spend = 0` from the real continuation and rejects the second spend.
 test decoy_output_cannot_spoof_spending_window_state() fail {
   let datum = WalletDatum {
     spenders: [Pair(sw, window_state(0))],
@@ -359,8 +364,8 @@ test decoy_output_cannot_spoof_spending_window_state() fail {
   core_spend(datum, Spend, tx) && sw_withdraw(tx)
 }
 
-// KNOWN ISSUE: same with `spending_period_limit`: the decoy carries the
-// advanced accumulator, the real continuation keeps an unspent budget.
+// Fixed: the decoy is not the wallet UTxO, so `spending_period_limit` reads the
+// real continuation's old accumulator and rejects the repeated budget.
 test decoy_output_cannot_freeze_spending_period_state() fail {
   let datum = WalletDatum {
     spenders: [Pair(spl, period_state(0, 0))],
@@ -383,11 +388,9 @@ test decoy_output_cannot_freeze_spending_period_state() fail {
   core_spend(datum, Spend, tx) && spl_withdraw(tx)
 }
 
-// KNOWN ISSUE: unprivileged DoS. Anyone runs `Deposit` (no depositors, so no
-// approval needed), keeps the spender in the real continuation, and puts an
-// empty-spender decoy first: `own_withdrawal_removed` accepts the
-// unregistration. The wallet now requires a withdrawal from an unregistered
-// credential, and the attacker collects the stake deposit refund.
+// Fixed: the empty-spender decoy is not the wallet UTxO, so
+// `own_withdrawal_removed` sees the spender still present in the real
+// continuation and rejects the unregistration.
 test unprivileged_deposit_cannot_unregister_spender() fail {
   let datum = WalletDatum { spenders: [Pair(sl, unit())], depositors: [] }
   let tx = Transaction {

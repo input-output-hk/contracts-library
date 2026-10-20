@@ -21,6 +21,12 @@ const stranger = #"44444444444444444444444444444444444444444444444444444444"
 const tx_id =
   #"0000000000000000000000000000000000000000000000000000000000000000"
 
+const wallet_token = "wallet"
+
+fn nft() -> assets.Value {
+  assets.from_asset(b, wallet_token, 1)
+}
+
 fn denied() -> List<Address> {
   [from_verification_key(recipient)]
 }
@@ -29,6 +35,7 @@ fn publish(certificate: Certificate, tx: Transaction) -> Bool {
   let redeemer: Data = 0
   full_recipient_deny_list.full_recipient_deny_list.publish(
     Script(b),
+    wallet_token,
     denied(),
     redeemer,
     certificate,
@@ -39,6 +46,7 @@ fn publish(certificate: Certificate, tx: Transaction) -> Bool {
 fn withdraw(denied: List<Address>, tx: Transaction) -> Bool {
   full_recipient_deny_list.full_recipient_deny_list.withdraw(
     Script(b),
+    wallet_token,
     denied,
     0,
     Script(a),
@@ -49,7 +57,7 @@ fn withdraw(denied: List<Address>, tx: Transaction) -> Bool {
 fn wallet_output(spenders: Pairs<ScriptHash, Data>) -> Output {
   Output {
     address: from_script(b),
-    value: assets.zero,
+    value: nft(),
     datum: InlineDatum(WalletDatum { spenders, depositors: [] }),
     reference_script: None,
   }

@@ -39,15 +39,23 @@ export interface WalletParams {
   admin: Credential;
 }
 
-/** `spending_limit` withdrawal script parameters (wallet = its payment credential). */
-export interface SpendingLimitParams {
+/**
+ * Common parameters for wallet-pinned delegated withdrawal scripts: the
+ * wallet's payment credential and the asset name of its identifying NFT.
+ */
+export interface WalletScriptParams {
   wallet: Credential;
+  /** Asset name of the wallet's identifying NFT (hex). */
+  walletTokenName: string;
+}
+
+/** `spending_limit` withdrawal script parameters. */
+export interface SpendingLimitParams extends WalletScriptParams {
   bound: number;
 }
 
-/** `spending_window` withdrawal script parameters (wallet = its payment credential). */
-export interface SpendingWindowParams {
-  wallet: Credential;
+/** `spending_window` withdrawal script parameters. */
+export interface SpendingWindowParams extends WalletScriptParams {
   window: number;
 }
 
@@ -57,8 +65,7 @@ export interface SpendingWindowState {
 }
 
 /** `spending_period_limit` withdrawal script parameters. */
-export interface SpendingPeriodLimitParams {
-  wallet: Credential;
+export interface SpendingPeriodLimitParams extends WalletScriptParams {
   /** Fixed period length in POSIX ms (e.g. 604_800_000 = one week). */
   interval: number;
   /** Lovelace cap per period. */
@@ -81,40 +88,34 @@ export interface SpendingPeriodState {
 export type AssetList = Array<[policy: string, names: string[]]>;
 
 /** `full_recipient_allow_list` parameters (bech32 recipient addresses). */
-export interface FullRecipientAllowListParams {
-  wallet: Credential;
+export interface FullRecipientAllowListParams extends WalletScriptParams {
   allowed: string[];
 }
 
 /** `full_recipient_deny_list` parameters (bech32 recipient addresses). */
-export interface FullRecipientDenyListParams {
-  wallet: Credential;
+export interface FullRecipientDenyListParams extends WalletScriptParams {
   denied: string[];
 }
 
 /** `payment_staking_allow_list` parameters. */
-export interface PaymentStakingAllowListParams {
-  wallet: Credential;
+export interface PaymentStakingAllowListParams extends WalletScriptParams {
   allowedPayments: Credential[];
   allowedStakings: Credential[];
 }
 
 /** `payment_staking_deny_list` parameters. */
-export interface PaymentStakingDenyListParams {
-  wallet: Credential;
+export interface PaymentStakingDenyListParams extends WalletScriptParams {
   deniedPayments: Credential[];
   deniedStakings: Credential[];
 }
 
 /** `asset_allow_list` parameters. */
-export interface AssetAllowListParams {
-  wallet: Credential;
+export interface AssetAllowListParams extends WalletScriptParams {
   allowed: AssetList;
 }
 
 /** `asset_deny_list` parameters. */
-export interface AssetDenyListParams {
-  wallet: Credential;
+export interface AssetDenyListParams extends WalletScriptParams {
   denied: AssetList;
 }
 

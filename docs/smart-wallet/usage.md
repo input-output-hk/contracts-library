@@ -369,24 +369,26 @@ lives in the wallet datum's `spenders` map (run on every `Spend`) or
 participates through two handlers:
 
 - **`publish`** — runs on `RegisterCredential` / `UnregisterCredential`
-  certificates. On registration it reads its initial `Data` from the wallet
-  **output** datum and validates it, so a wallet cannot delegate a script
-  without the script self-validating its starting state. On unregistration it
-  only accepts the removal when it is actually leaving the wallet — an
-  out-of-band unregister (which would brick the wallet) is rejected.
+  certificates. On registration it reads its initial `Data` from the
+  **NFT-bearing** wallet **output** datum and validates it, so a wallet cannot
+  delegate a script without the script self-validating its starting state. On
+  unregistration it only accepts the removal when it is actually leaving the
+  wallet — an out-of-band unregister (which would brick the wallet) is rejected.
+  It identifies the wallet UTxO by both the wallet payment credential and the
+  wallet NFT, so an NFT-less decoy output at the same address is ignored.
 - **`withdraw`** — runs as a reward withdrawal required on every `Spend`
   (spenders) or `Deposit` (depositors). A stateful spender script reads its
-  current `Data` from the wallet **input** datum, validates the transition, and
-  requires the wallet **output** datum to record the new state; a stateful
-  deposit script does the same on a `Deposit`.
+  current `Data` from the **NFT-bearing** wallet **input** datum, validates the
+  transition, and requires the **NFT-bearing** wallet **output** datum to record
+  the new state; a stateful deposit script does the same on a `Deposit`.
 
 The reference validators are `spending_limit`, `spending_window`,
 `spending_period_limit`, the recipient lists (`full_recipient_allow_list` /
 `full_recipient_deny_list`, `payment_staking_allow_list` /
 `payment_staking_deny_list`) and the asset lists (`asset_allow_list` /
 `asset_deny_list`, `asset_deposit_allow_list` / `asset_deposit_deny_list`). All
-are parameterized by the **wallet's payment credential**, so one script instance
-works with exactly one wallet.
+are parameterized by the **wallet's payment credential** and the **asset name of
+its identifying NFT**, so one script instance works with exactly one wallet.
 
 ### `spending_limit`
 
@@ -403,6 +405,7 @@ import { resolveScriptHash } from "@meshsdk/core";
 
 const limit = spendingLimitScript({
   wallet: { kind: "script", hash: walletHash },
+  walletTokenName: WALLET_TOKEN_NAME,         // the wallet's identifying NFT
   bound: 5_000_000,                           // net outflow must stay below 5 ADA
 });
 const limitHash = resolveScriptHash(limit.code, limit.version);
@@ -433,6 +436,7 @@ import { unixTimeToEnclosingSlot } from "@meshsdk/core";
 
 const window = spendingWindowScript({
   wallet: { kind: "script", hash: walletHash },
+  walletTokenName: WALLET_TOKEN_NAME,
   window: 3_600_000,                          // one hour, in ms
 });
 const windowHash = resolveScriptHash(window.code, window.version);
@@ -487,6 +491,7 @@ const interval = 604_800_000; // one week, in ms
 const maxSpend = 100_000_000; // 100 ADA per period
 const script = spendingPeriodLimitScript({
   wallet: { kind: "script", hash: walletHash },
+  walletTokenName: WALLET_TOKEN_NAME,
   interval,
   maxSpend,
 });
@@ -534,6 +539,7 @@ import { fullRecipientAllowListScript } from "@contracts-library/meshjs";
 
 const allow = fullRecipientAllowListScript({
   wallet: { kind: "script", hash: walletHash },
+  walletTokenName: WALLET_TOKEN_NAME,
   allowed: [memberBech32],                    // only these may receive funds
 });
 const allowHash = resolveScriptHash(allow.code, allow.version);
@@ -560,11 +566,13 @@ import {
 
 const allow = paymentStakingAllowListScript({
   wallet: { kind: "script", hash: walletHash },
+  walletTokenName: WALLET_TOKEN_NAME,
   allowedPayments: [{ kind: "key", hash: paymentKeyHash }],
   allowedStakings: [{ kind: "key", hash: stakeKeyHash }],
 });
 const deny = paymentStakingDenyListScript({
   wallet: { kind: "script", hash: walletHash },
+  walletTokenName: WALLET_TOKEN_NAME,
   deniedPayments: [{ kind: "key", hash: paymentKeyHash }],
   deniedStakings: [],
 });
@@ -584,6 +592,7 @@ import { assetAllowListScript } from "@contracts-library/meshjs";
 
 const allow = assetAllowListScript({
   wallet: { kind: "script", hash: walletHash },
+  walletTokenName: WALLET_TOKEN_NAME,
   allowed: [
     [policyId, []],                            // any name of this policy
     [otherPolicy, ["544f4b"]],                 // only this name
@@ -606,6 +615,7 @@ import { assetDepositAllowListScript } from "@contracts-library/meshjs";
 
 const allow = assetDepositAllowListScript({
   wallet: { kind: "script", hash: walletHash },
+  walletTokenName: WALLET_TOKEN_NAME,
   allowed: [[policyId, []]],
 });
 // datum: { spenders: [], depositors: [{ scriptHash, data: 0 }] }
@@ -732,10 +742,10 @@ tests use a 1-of-1 wallet.
   `List<VerificationKeyHash>` and `Spend` counts required signers, so the
   design's aspiration that a member may itself be a script credential is not
   implemented. A floor of script credentials needs a custom fork.
-- **Wallet-parameterized scripts cannot be shared.** Each `spending_limit` /
-  `spending_window` instance pins one wallet credential in its hash, so its
-  mutable state belongs to exactly one wallet. Sharing one script instance
-  across wallets is on the roadmap, not implemented.
+- **Wallet-parameterized scripts cannot be shared.** Each delegated script
+  instance pins one wallet payment credential *and* the asset name of that
+  wallet's NFT in its hash, so its state belongs to exactly one wallet. Sharing
+  one script instance across wallets is on the roadmap, not implemented.
 - **One wallet per script address.** The one-shot seed mints a single NFT ever;
   parameterizing a fresh deployment with the same seed produces the same script
   hash and cannot mint a second wallet.

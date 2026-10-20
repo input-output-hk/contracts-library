@@ -20,10 +20,16 @@ const tx_id =
 
 const window = 3_600_000
 
+const wallet_token = "wallet"
+
+fn wallet_value() -> assets.Value {
+  assets.from_asset(wallet_policy, wallet_token, 1)
+}
+
 fn wallet_output(spenders: Pairs<ScriptHash, Data>) -> Output {
   Output {
     address: from_script(wallet_policy),
-    value: assets.zero,
+    value: wallet_value(),
     datum: InlineDatum(WalletDatum { spenders, depositors: [] }),
     reference_script: None,
   }
@@ -52,7 +58,7 @@ fn spend_tx(
 }
 
 fn validate(tx: Transaction) -> Bool {
-  validate_withdraw(tx, Script(wallet_policy), own_hash, window)
+  validate_withdraw(tx, Script(wallet_policy), wallet_token, own_hash, window)
 }
 
 // ------------------------------------------------------- initial_state_valid

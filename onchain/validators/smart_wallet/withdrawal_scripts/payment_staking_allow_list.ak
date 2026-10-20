@@ -6,6 +6,7 @@
 //// `only_allowed_recipients` in their own validators.
 
 use cardano/address.{Credential, Script}
+use cardano/assets.{AssetName}
 use cardano/certificate.{Certificate, RegisterCredential, UnregisterCredential}
 use cardano/transaction.{Transaction}
 use smart_wallet/withdrawal
@@ -18,6 +19,7 @@ use smart_wallet/withdrawal_scripts/payment_staking_list_logic.{
 /// carry a listed payment credential and a listed inline staking credential.
 validator payment_staking_allow_list(
   wallet: Credential,
+  wallet_token_name: AssetName,
   allowed_payments: List<Credential>,
   allowed_stakings: List<Credential>,
 ) {
@@ -26,13 +28,23 @@ validator payment_staking_allow_list(
       RegisterCredential { credential: Script(own_hash), .. } -> {
         // stateless: only confirm this script is listed in the wallet datum; a
         // stateful script would additionally validate its initial `Data` here.
-        expect _: Data = withdrawal.own_withdrawal_data(self, wallet, own_hash)
+        expect _: Data = withdrawal.own_withdrawal_data(
+          self,
+          wallet,
+          wallet_token_name,
+          own_hash,
+        )
         True
       }
       UnregisterCredential { credential: Script(own_hash), .. } ->
         // only allow unregistration when this script is leaving a wallet, so it
         // cannot be unregistered out of band (which would brick the wallet).
-        withdrawal.own_withdrawal_removed(self, wallet, own_hash)
+        withdrawal.own_withdrawal_removed(
+          self,
+          wallet,
+          wallet_token_name,
+          own_hash,
+        )
       _ -> fail
     }
   }

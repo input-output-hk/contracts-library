@@ -397,6 +397,7 @@ describe.skipIf(!reachable)("smart wallet spender scripts e2e", () => {
 
     const limit = spendingLimitScript({
       wallet: { kind: "script", hash: ctx.walletHash },
+      walletTokenName: WALLET_TOKEN_NAME,
       bound: 5_000_000,
     });
     const limitHash = resolveScriptHash(limit.code, limit.version);
@@ -516,6 +517,7 @@ describe.skipIf(!reachable)("smart wallet spender scripts e2e", () => {
 
     const window = spendingWindowScript({
       wallet: { kind: "script", hash: ctx.walletHash },
+      walletTokenName: WALLET_TOKEN_NAME,
       window: 3_600_000,
     });
     const windowHash = resolveScriptHash(window.code, window.version);
@@ -629,6 +631,7 @@ describe.skipIf(!reachable)("smart wallet spender scripts e2e", () => {
     const maxSpend = 1_500_000n; // 1.5 ADA per period
     const script = spendingPeriodLimitScript({
       wallet: { kind: "script", hash: ctx.walletHash },
+      walletTokenName: WALLET_TOKEN_NAME,
       interval,
       maxSpend: Number(maxSpend),
     });
@@ -958,6 +961,7 @@ describe.skipIf(!reachable)(
       const ctx = await setup(provider);
       const script = fullRecipientAllowListScript({
         wallet: { kind: "script", hash: ctx.walletHash },
+        walletTokenName: WALLET_TOKEN_NAME,
         allowed: await memberSpendAddresses(ctx),
       });
       const datum = statelessSpender(
@@ -997,6 +1001,7 @@ describe.skipIf(!reachable)(
       const ctx = await setup(provider);
       const script = fullRecipientDenyListScript({
         wallet: { kind: "script", hash: ctx.walletHash },
+        walletTokenName: WALLET_TOKEN_NAME,
         denied: [ctx.depositor.address],
       });
       const datum = statelessSpender(
@@ -1037,6 +1042,7 @@ describe.skipIf(!reachable)(
       const addrs = await memberSpendAddresses(ctx);
       const script = paymentStakingAllowListScript({
         wallet: { kind: "script", hash: ctx.walletHash },
+        walletTokenName: WALLET_TOKEN_NAME,
         allowedPayments: addrs.map(paymentCredential),
         allowedStakings: addrs
           .map(stakingCredential)
@@ -1080,6 +1086,7 @@ describe.skipIf(!reachable)(
       const d = deserializeAddress(ctx.depositor.address);
       const script = paymentStakingDenyListScript({
         wallet: { kind: "script", hash: ctx.walletHash },
+        walletTokenName: WALLET_TOKEN_NAME,
         deniedPayments: [{ kind: "key", hash: d.pubKeyHash }],
         deniedStakings: [],
       });
@@ -1121,6 +1128,7 @@ describe.skipIf(!reachable)(
       const d = deserializeAddress(ctx.depositor.address);
       const script = paymentStakingDenyListScript({
         wallet: { kind: "script", hash: ctx.walletHash },
+        walletTokenName: WALLET_TOKEN_NAME,
         deniedPayments: [],
         deniedStakings: [{ kind: "key", hash: d.stakeCredentialHash }],
       });
@@ -1181,6 +1189,7 @@ describe.skipIf(!reachable)(
 
       const allowed = assetAllowListScript({
         wallet: { kind: "script", hash: ctx.walletHash },
+        walletTokenName: WALLET_TOKEN_NAME,
         allowed: [[tokenPolicy, []]],
       });
       const allowedDatum = statelessSpender(
@@ -1207,6 +1216,7 @@ describe.skipIf(!reachable)(
       await mintToken(ctx2.depositor);
       const disallowed = assetAllowListScript({
         wallet: { kind: "script", hash: ctx2.walletHash },
+        walletTokenName: WALLET_TOKEN_NAME,
         allowed: [[OTHER_POLICY, []]],
       });
       const disallowedDatum = statelessSpender(
@@ -1233,6 +1243,7 @@ describe.skipIf(!reachable)(
       await mintToken(ctx.depositor);
       const script = assetDenyListScript({
         wallet: { kind: "script", hash: ctx.walletHash },
+        walletTokenName: WALLET_TOKEN_NAME,
         denied: [[tokenPolicy, []]],
       });
       const datum = statelessSpender(
@@ -1273,6 +1284,7 @@ describe.skipIf(!reachable)(
       await mintToken(ctx.depositor);
       const script = assetDepositAllowListScript({
         wallet: { kind: "script", hash: ctx.walletHash },
+        walletTokenName: WALLET_TOKEN_NAME,
         allowed: [[tokenPolicy, []]],
       });
       const datum = statelessDepositor(
@@ -1291,6 +1303,7 @@ describe.skipIf(!reachable)(
       await mintToken(ctx2.depositor);
       const disallowed = assetDepositAllowListScript({
         wallet: { kind: "script", hash: ctx2.walletHash },
+        walletTokenName: WALLET_TOKEN_NAME,
         allowed: [[OTHER_POLICY, []]],
       });
       const disallowedDatum = statelessDepositor(
@@ -1316,6 +1329,7 @@ describe.skipIf(!reachable)(
       await mintToken(ctx.depositor);
       const script = assetDepositDenyListScript({
         wallet: { kind: "script", hash: ctx.walletHash },
+        walletTokenName: WALLET_TOKEN_NAME,
         denied: [[tokenPolicy, []]],
       });
       const datum = statelessDepositor(

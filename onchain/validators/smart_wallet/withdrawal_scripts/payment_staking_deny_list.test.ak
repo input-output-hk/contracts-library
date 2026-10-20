@@ -27,6 +27,12 @@ const stranger_stake =
 const tx_id =
   #"0000000000000000000000000000000000000000000000000000000000000000"
 
+const wallet_token = "wallet"
+
+fn nft() -> assets.Value {
+  assets.from_asset(b, wallet_token, 1)
+}
+
 fn denied_payments() -> List<Credential> {
   [VerificationKey(payer)]
 }
@@ -39,6 +45,7 @@ fn publish(certificate: Certificate, tx: Transaction) -> Bool {
   let redeemer: Data = 0
   payment_staking_deny_list.payment_staking_deny_list.publish(
     Script(b),
+    wallet_token,
     denied_payments(),
     denied_stakings(),
     redeemer,
@@ -54,6 +61,7 @@ fn withdraw(
 ) -> Bool {
   payment_staking_deny_list.payment_staking_deny_list.withdraw(
     Script(b),
+    wallet_token,
     denied_payments,
     denied_stakings,
     0,
@@ -65,7 +73,7 @@ fn withdraw(
 fn wallet_output(spenders: Pairs<ScriptHash, Data>) -> Output {
   Output {
     address: from_script(b),
-    value: assets.zero,
+    value: nft(),
     datum: InlineDatum(WalletDatum { spenders, depositors: [] }),
     reference_script: None,
   }

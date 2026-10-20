@@ -16,94 +16,129 @@
 use aiken/collection/list
 use aiken/collection/pairs
 use aiken/crypto.{ScriptHash}
-use cardano/address.{Credential}
+use cardano/address.{Credential, Script}
+use cardano/assets.{AssetName, has_nft}
 use cardano/transaction.{InlineDatum, Output, Transaction}
 use smart_wallet/types.{WalletDatum}
 
-/// The `Data` the wallet's output datum associates with `own_hash` in the
-/// `spenders` map, i.e. a spender script's own initial (or current) mutable
+/// The `Data` the NFT-bearing wallet output datum associates with `own_hash` in
+/// the `spenders` map, i.e. a spender script's own initial (or current) mutable
 /// state. Used by a spender script's `publish` handler to read and validate
 /// its initial `Data` from the wallet UTxO.
 pub fn own_withdrawal_data(
   self: Transaction,
   wallet: Credential,
+  wallet_token_name: AssetName,
   own_hash: ScriptHash,
 ) -> Data {
-  own_data_from(self.outputs, wallet, own_hash, fn(datum) { datum.spenders })
+  own_data_from(
+    self.outputs,
+    wallet,
+    wallet_token_name,
+    own_hash,
+    fn(datum) { datum.spenders },
+  )
 }
 
-/// Like [`own_withdrawal_data`](#own_withdrawal_data) but reads the wallet's
-/// *input* datum (the wallet UTxO being spent), i.e. a spender script's own
-/// *current* mutable state before this transaction. Used by a stateful spender
+/// Like [`own_withdrawal_data`](#own_withdrawal_data) but reads the NFT-bearing
+/// wallet *input* datum (the wallet UTxO being spent), i.e. a spender script's
+/// own *current* mutable state before this transaction. Used by a stateful spender
 /// script's `withdraw` handler to read the state it is transitioning from.
 pub fn own_withdrawal_data_in(
   self: Transaction,
   wallet: Credential,
+  wallet_token_name: AssetName,
   own_hash: ScriptHash,
 ) -> Data {
   own_data_from(
     input_outputs(self),
     wallet,
+    wallet_token_name,
     own_hash,
     fn(datum) { datum.spenders },
   )
 }
 
 /// Whether `own_hash` is being *removed* from the `spenders` map in this
-/// transaction: it is listed in the wallet's input datum but not in its output
-/// datum (or there is no wallet output at all, as on `Close`). Used by a
+/// transaction: it is listed in the NFT-bearing wallet input datum but not in
+/// its NFT-bearing output datum (or there is no NFT-bearing output at all, as on
+/// `Close`). Used by a
 /// spender script's `publish` handler to accept unregistration only when the
 /// script is actually leaving a wallet, so it cannot be unregistered out of
 /// band.
 pub fn own_withdrawal_removed(
   self: Transaction,
   wallet: Credential,
+  wallet_token_name: AssetName,
   own_hash: ScriptHash,
 ) -> Bool {
-  own_removed(self, wallet, own_hash, fn(datum) { datum.spenders })
+  own_removed(
+    self,
+    wallet,
+    wallet_token_name,
+    own_hash,
+    fn(datum) { datum.spenders },
+  )
 }
 
-/// The `Data` the wallet's output datum associates with `own_hash` in the
-/// `depositors` map, i.e. a deposit script's own configuration. Used by a
+/// The `Data` the NFT-bearing wallet output datum associates with `own_hash` in
+/// the `depositors` map, i.e. a deposit script's own configuration. Used by a
 /// deposit script's `publish` handler to read and validate its initial `Data`
 /// from the wallet UTxO.
 pub fn own_depositor_data(
   self: Transaction,
   wallet: Credential,
+  wallet_token_name: AssetName,
   own_hash: ScriptHash,
 ) -> Data {
-  own_data_from(self.outputs, wallet, own_hash, fn(datum) { datum.depositors })
+  own_data_from(
+    self.outputs,
+    wallet,
+    wallet_token_name,
+    own_hash,
+    fn(datum) { datum.depositors },
+  )
 }
 
-/// Like [`own_depositor_data`](#own_depositor_data) but reads the wallet's
-/// *input* datum (the wallet UTxO being spent), i.e. a deposit script's own
-/// current configuration before this transaction. Used by a deposit script's
+/// Like [`own_depositor_data`](#own_depositor_data) but reads the NFT-bearing
+/// wallet *input* datum (the wallet UTxO being spent), i.e. a deposit script's
+/// own current configuration before this transaction. Used by a deposit script's
 /// `withdraw` handler to read the configuration it validates against.
 pub fn own_depositor_data_in(
   self: Transaction,
   wallet: Credential,
+  wallet_token_name: AssetName,
   own_hash: ScriptHash,
 ) -> Data {
   own_data_from(
     input_outputs(self),
     wallet,
+    wallet_token_name,
     own_hash,
     fn(datum) { datum.depositors },
   )
 }
 
 /// Whether `own_hash` is being *removed* from the `depositors` map in this
-/// transaction: it is listed in the wallet's input datum but not in its output
-/// datum (or there is no wallet output at all, as on `Close`). Used by a
+/// transaction: it is listed in the NFT-bearing wallet input datum but not in
+/// its NFT-bearing output datum (or there is no NFT-bearing output at all, as on
+/// `Close`). Used by a
 /// deposit script's `publish` handler to accept unregistration only when the
 /// script is actually leaving a wallet, so it cannot be unregistered out of
 /// band.
 pub fn own_depositor_removed(
   self: Transaction,
   wallet: Credential,
+  wallet_token_name: AssetName,
   own_hash: ScriptHash,
 ) -> Bool {
-  own_removed(self, wallet, own_hash, fn(datum) { datum.depositors })
+  own_removed(
+    self,
+    wallet,
+    wallet_token_name,
+    own_hash,
+    fn(datum) { datum.depositors },
+  )
 }
 
 /// The `Data` the wallet's output datum associates with `own_hash` in the map
@@ -111,10 +146,11 @@ pub fn own_depositor_removed(
 fn own_data_from(
   outputs: List<Output>,
   wallet: Credential,
+  wallet_token_name: AssetName,
   own_hash: ScriptHash,
   select: fn(WalletDatum) -> Pairs<ScriptHash, Data>,
 ) -> Data {
-  expect Some(datum) = wallet_datum(outputs, wallet)
+  expect Some(datum) = wallet_datum(outputs, wallet, wallet_token_name)
   expect Some(data) = pairs.get_first(select(datum), own_hash)
   data
 }
@@ -123,12 +159,19 @@ fn own_data_from(
 fn own_removed(
   self: Transaction,
   wallet: Credential,
+  wallet_token_name: AssetName,
   own_hash: ScriptHash,
   select: fn(WalletDatum) -> Pairs<ScriptHash, Data>,
 ) -> Bool {
-  expect Some(input_datum) = wallet_datum(input_outputs(self), wallet)
+  expect Some(input_datum) = wallet_datum(
+    input_outputs(self),
+    wallet,
+    wallet_token_name,
+  )
   let in_input = pairs.has_key(select(input_datum), own_hash)
-  let in_output = when wallet_datum(self.outputs, wallet) is {
+  let in_output = when
+    wallet_datum(self.outputs, wallet, wallet_token_name)
+  is {
     Some(output_datum) -> pairs.has_key(select(output_datum), own_hash)
     None -> False
   }
@@ -140,15 +183,23 @@ fn input_outputs(self: Transaction) -> List<Output> {
   list.map(self.inputs, fn(input) { input.output })
 }
 
-/// The wallet UTxO's datum at `wallet`, if present among `outputs`.
+/// The NFT-bearing wallet UTxO's datum at `wallet`, if present among `outputs`.
 fn wallet_datum(
   outputs: List<Output>,
   wallet: Credential,
+  wallet_token_name: AssetName,
 ) -> Option<WalletDatum> {
+  expect Script(wallet_hash) = wallet
   when
     list.find(
       outputs,
-      fn(output) { output.address.payment_credential == wallet },
+      fn(output) {
+        output.address.payment_credential == wallet && has_nft(
+          output.value,
+          wallet_hash,
+          wallet_token_name,
+        )
+      },
     )
   is {
     Some(output) -> {

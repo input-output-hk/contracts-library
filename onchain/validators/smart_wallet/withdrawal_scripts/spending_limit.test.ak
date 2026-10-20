@@ -15,10 +15,17 @@ const b = #"22222222222222222222222222222222222222222222222222222222"
 const tx_id =
   #"0000000000000000000000000000000000000000000000000000000000000000"
 
+const wallet_token = "wallet"
+
+fn nft() -> assets.Value {
+  assets.from_asset(b, wallet_token, 1)
+}
+
 fn publish(certificate: Certificate, tx: Transaction) -> Bool {
   let redeemer: Data = 0
   spending_limit.spending_limit.publish(
     Script(b),
+    wallet_token,
     100,
     redeemer,
     certificate,
@@ -29,7 +36,7 @@ fn publish(certificate: Certificate, tx: Transaction) -> Bool {
 fn wallet_output(spenders: Pairs<ScriptHash, Data>) -> Output {
   Output {
     address: from_script(b),
-    value: assets.zero,
+    value: nft(),
     datum: InlineDatum(WalletDatum { spenders, depositors: [] }),
     reference_script: None,
   }

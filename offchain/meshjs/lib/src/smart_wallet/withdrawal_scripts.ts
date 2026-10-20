@@ -5,8 +5,10 @@
  * These are withdraw-0 staking scripts delegated by a smart wallet (spender
  * scripts; depositor scripts use the same mechanism). Their `wallet` parameter
  * is the wallet's payment credential (a `Credential`, normally
- * `{ kind: "script", hash: walletHash }`), which pins a script instance to one
- * wallet — the known limitation noted in the spec's roadmap.
+ * `{ kind: "script", hash: walletHash }`) and `walletTokenName` is the asset
+ * name of the wallet's identifying NFT. Together they pin a script instance to
+ * one wallet and let every delegated read identify the authenticated wallet
+ * UTxO — the known limitation noted in the spec's roadmap.
  */
 
 import {

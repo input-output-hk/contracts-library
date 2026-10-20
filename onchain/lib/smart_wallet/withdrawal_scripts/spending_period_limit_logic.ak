@@ -13,7 +13,7 @@ use aiken/collection/list
 use aiken/crypto.{ScriptHash}
 use aiken/interval.{Finite}
 use cardano/address.{Credential}
-use cardano/assets.{Lovelace, Value}
+use cardano/assets.{AssetName, Lovelace, Value}
 use cardano/transaction.{Output, Transaction}
 use smart_wallet/withdrawal
 
@@ -47,6 +47,7 @@ pub fn initial_state_valid(data: Data) -> Bool {
 pub fn validate_withdraw(
   self: Transaction,
   wallet: Credential,
+  wallet_token_name: AssetName,
   own_hash: ScriptHash,
   interval: Int,
   max_spend: Lovelace,
@@ -55,11 +56,13 @@ pub fn validate_withdraw(
   expect current: SpendingPeriodState = withdrawal.own_withdrawal_data_in(
     self,
     wallet,
+    wallet_token_name,
     own_hash,
   )
   expect next: SpendingPeriodState = withdrawal.own_withdrawal_data(
     self,
     wallet,
+    wallet_token_name,
     own_hash,
   )
   let tx_spend = net_outflow(self, wallet)

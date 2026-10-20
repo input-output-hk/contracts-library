@@ -21,6 +21,16 @@ const token = "TOKEN"
 const tx_id =
   #"0000000000000000000000000000000000000000000000000000000000000000"
 
+const wallet_token = "wallet"
+
+fn nft() -> assets.Value {
+  assets.from_asset(b, wallet_token, 1)
+}
+
+fn wallet_value(value: assets.Value) -> assets.Value {
+  assets.merge(value, nft())
+}
+
 fn denied() -> Pairs<PolicyId, List<AssetName>> {
   let names: List<AssetName> = []
   [Pair(policy_x, names)]
@@ -30,6 +40,7 @@ fn publish(certificate: Certificate, tx: Transaction) -> Bool {
   let redeemer: Data = 0
   asset_deposit_deny_list.asset_deposit_deny_list.publish(
     Script(b),
+    wallet_token,
     denied(),
     redeemer,
     certificate,
@@ -40,6 +51,7 @@ fn publish(certificate: Certificate, tx: Transaction) -> Bool {
 fn withdraw(denied: Pairs<PolicyId, List<AssetName>>, tx: Transaction) -> Bool {
   asset_deposit_deny_list.asset_deposit_deny_list.withdraw(
     Script(b),
+    wallet_token,
     denied,
     0,
     Script(a),
@@ -50,7 +62,7 @@ fn withdraw(denied: Pairs<PolicyId, List<AssetName>>, tx: Transaction) -> Bool {
 fn wallet_output(value: Value, depositors: Pairs<ScriptHash, Data>) -> Output {
   Output {
     address: from_script(b),
-    value,
+    value: wallet_value(value),
     datum: InlineDatum(WalletDatum { spenders: [], depositors }),
     reference_script: None,
   }

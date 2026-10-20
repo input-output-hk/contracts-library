@@ -8,6 +8,7 @@
 use aiken/crypto.{ScriptHash}
 use aiken/interval.{Finite}
 use cardano/address.{Credential}
+use cardano/assets.{AssetName}
 use cardano/transaction.{Transaction}
 use smart_wallet/withdrawal
 
@@ -30,6 +31,7 @@ pub fn initial_state_valid(data: Data) -> Bool {
 pub fn validate_withdraw(
   self: Transaction,
   wallet: Credential,
+  wallet_token_name: AssetName,
   own_hash: ScriptHash,
   window: Int,
 ) -> Bool {
@@ -37,11 +39,13 @@ pub fn validate_withdraw(
   expect current: SpendingWindowState = withdrawal.own_withdrawal_data_in(
     self,
     wallet,
+    wallet_token_name,
     own_hash,
   )
   expect next: SpendingWindowState = withdrawal.own_withdrawal_data(
     self,
     wallet,
+    wallet_token_name,
     own_hash,
   )
   let first_spend = current.last_spend == 0

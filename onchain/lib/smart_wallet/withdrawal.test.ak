@@ -18,38 +18,71 @@ const b = #"22222222222222222222222222222222222222222222222222222222"
 const tx_id =
   #"0000000000000000000000000000000000000000000000000000000000000000"
 
+const wallet_token = "wallet"
+
+fn nft_value() -> assets.Value {
+  assets.from_asset(a, wallet_token, 1)
+}
+
 // ------------------------------------------------------ own_withdrawal_data
 
 test own_data_read_from_wallet_output() {
   let data: Data = 0
   let output = Output {
     address: from_script(a),
-    value: assets.zero,
+    value: nft_value(),
     datum: InlineDatum(
       WalletDatum { spenders: [Pair(a, data)], depositors: [] },
     ),
     reference_script: None,
   }
   let tx = Transaction { ..placeholder, outputs: [output] }
-  cbor.serialise(own_withdrawal_data(tx, Script(a), a)) == cbor.serialise(data)
+  cbor.serialise(own_withdrawal_data(tx, Script(a), wallet_token, a)) == cbor.serialise(
+    data,
+  )
 }
 
 test own_data_missing_script() fail {
   let data: Data = 0
   let output = Output {
     address: from_script(a),
-    value: assets.zero,
+    value: nft_value(),
     datum: InlineDatum(
       WalletDatum { spenders: [Pair(b, data)], depositors: [] },
     ),
     reference_script: None,
   }
   let tx = Transaction { ..placeholder, outputs: [output] }
-  expect _: Data = own_withdrawal_data(tx, Script(a), a)
+  expect _: Data = own_withdrawal_data(tx, Script(a), wallet_token, a)
 }
 
 test own_data_missing_wallet_output() fail {
-  expect _: Data = own_withdrawal_data(placeholder, Script(a), a)
+  expect _: Data = own_withdrawal_data(placeholder, Script(a), wallet_token, a)
+}
+
+test own_data_ignores_nft_less_decoy() {
+  let real: Data = 1
+  let decoy: Data = 2
+  let decoy_output = Output {
+    address: from_script(a),
+    value: assets.zero,
+    datum: InlineDatum(
+      WalletDatum { spenders: [Pair(a, decoy)], depositors: [] },
+    ),
+    reference_script: None,
+  }
+  let real_output = Output {
+    address: from_script(a),
+    value: nft_value(),
+    datum: InlineDatum(
+      WalletDatum { spenders: [Pair(a, real)], depositors: [] },
+    ),
+    reference_script: None,
+  }
+  let tx = Transaction { ..placeholder, outputs: [decoy_output, real_output] }
+  cbor.serialise(own_withdrawal_data(tx, Script(a), wallet_token, a)) == cbor.serialise(
+    real,
+  )
 }
 
 // ---------------------------------------------------- own_withdrawal_removed
@@ -57,7 +90,7 @@ test own_data_missing_wallet_output() fail {
 fn wallet_output_at(spenders: Pairs<ScriptHash, Data>) -> Output {
   Output {
     address: from_script(a),
-    value: assets.zero,
+    value: nft_value(),
     datum: InlineDatum(WalletDatum { spenders, depositors: [] }),
     reference_script: None,
   }
@@ -76,7 +109,7 @@ test removed_with_input_and_no_output() {
     ..placeholder,
     inputs: [wallet_input_at([Pair(a, data)])],
   }
-  own_withdrawal_removed(tx, Script(a), a)
+  own_withdrawal_removed(tx, Script(a), wallet_token, a)
 }
 
 test removed_with_input_and_empty_output() {
@@ -86,7 +119,7 @@ test removed_with_input_and_empty_output() {
     inputs: [wallet_input_at([Pair(a, data)])],
     outputs: [wallet_output_at([])],
   }
-  own_withdrawal_removed(tx, Script(a), a)
+  own_withdrawal_removed(tx, Script(a), wallet_token, a)
 }
 
 test removed_rejects_when_kept() fail {
@@ -96,11 +129,27 @@ test removed_rejects_when_kept() fail {
     inputs: [wallet_input_at([Pair(a, data)])],
     outputs: [wallet_output_at([Pair(a, data)])],
   }
-  own_withdrawal_removed(tx, Script(a), a)
+  own_withdrawal_removed(tx, Script(a), wallet_token, a)
 }
 
 test removed_rejects_without_wallet_input() fail {
-  own_withdrawal_removed(placeholder, Script(a), a)
+  own_withdrawal_removed(placeholder, Script(a), wallet_token, a)
+}
+
+test removed_ignores_nft_less_decoy() fail {
+  let data: Data = 0
+  let decoy_output = Output {
+    address: from_script(a),
+    value: assets.zero,
+    datum: InlineDatum(WalletDatum { spenders: [], depositors: [] }),
+    reference_script: None,
+  }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [wallet_input_at([Pair(a, data)])],
+    outputs: [decoy_output, wallet_output_at([Pair(a, data)])],
+  }
+  own_withdrawal_removed(tx, Script(a), wallet_token, a)
 }
 
 // ------------------------------------------------------- own_depositor_data
@@ -109,28 +158,30 @@ test own_depositor_data_read_from_wallet_output() {
   let data: Data = 0
   let output = Output {
     address: from_script(a),
-    value: assets.zero,
+    value: nft_value(),
     datum: InlineDatum(
       WalletDatum { spenders: [], depositors: [Pair(a, data)] },
     ),
     reference_script: None,
   }
   let tx = Transaction { ..placeholder, outputs: [output] }
-  cbor.serialise(own_depositor_data(tx, Script(a), a)) == cbor.serialise(data)
+  cbor.serialise(own_depositor_data(tx, Script(a), wallet_token, a)) == cbor.serialise(
+    data,
+  )
 }
 
 test own_depositor_data_missing_script() fail {
   let data: Data = 0
   let output = Output {
     address: from_script(a),
-    value: assets.zero,
+    value: nft_value(),
     datum: InlineDatum(
       WalletDatum { spenders: [], depositors: [Pair(b, data)] },
     ),
     reference_script: None,
   }
   let tx = Transaction { ..placeholder, outputs: [output] }
-  expect _: Data = own_depositor_data(tx, Script(a), a)
+  expect _: Data = own_depositor_data(tx, Script(a), wallet_token, a)
 }
 
 test own_depositor_data_in_reads_wallet_input() {
@@ -139,7 +190,7 @@ test own_depositor_data_in_reads_wallet_input() {
     ..placeholder,
     inputs: [wallet_input_at_depositors([Pair(a, data)])],
   }
-  cbor.serialise(own_depositor_data_in(tx, Script(a), a)) == cbor.serialise(
+  cbor.serialise(own_depositor_data_in(tx, Script(a), wallet_token, a)) == cbor.serialise(
     data,
   )
 }
@@ -149,7 +200,7 @@ test own_depositor_data_in_reads_wallet_input() {
 fn wallet_output_at_depositors(depositors: Pairs<ScriptHash, Data>) -> Output {
   Output {
     address: from_script(a),
-    value: assets.zero,
+    value: nft_value(),
     datum: InlineDatum(WalletDatum { spenders: [], depositors }),
     reference_script: None,
   }
@@ -168,7 +219,7 @@ test depositor_removed_with_input_and_no_output() {
     ..placeholder,
     inputs: [wallet_input_at_depositors([Pair(a, data)])],
   }
-  own_depositor_removed(tx, Script(a), a)
+  own_depositor_removed(tx, Script(a), wallet_token, a)
 }
 
 test depositor_removed_with_input_and_empty_output() {
@@ -178,7 +229,7 @@ test depositor_removed_with_input_and_empty_output() {
     inputs: [wallet_input_at_depositors([Pair(a, data)])],
     outputs: [wallet_output_at_depositors([])],
   }
-  own_depositor_removed(tx, Script(a), a)
+  own_depositor_removed(tx, Script(a), wallet_token, a)
 }
 
 test depositor_removed_rejects_when_kept() fail {
@@ -188,9 +239,9 @@ test depositor_removed_rejects_when_kept() fail {
     inputs: [wallet_input_at_depositors([Pair(a, data)])],
     outputs: [wallet_output_at_depositors([Pair(a, data)])],
   }
-  own_depositor_removed(tx, Script(a), a)
+  own_depositor_removed(tx, Script(a), wallet_token, a)
 }
 
 test depositor_removed_rejects_without_wallet_input() fail {
-  own_depositor_removed(placeholder, Script(a), a)
+  own_depositor_removed(placeholder, Script(a), wallet_token, a)
 }

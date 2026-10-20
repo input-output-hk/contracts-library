@@ -104,17 +104,22 @@ export function walletParamsToData(p: WalletParams): Data[] {
 }
 
 export function spendingLimitParamsToData(p: SpendingLimitParams): Data[] {
-  return [credentialToData(p.wallet), p.bound];
+  return [credentialToData(p.wallet), p.walletTokenName, p.bound];
 }
 
 export function spendingWindowParamsToData(p: SpendingWindowParams): Data[] {
-  return [credentialToData(p.wallet), p.window];
+  return [credentialToData(p.wallet), p.walletTokenName, p.window];
 }
 
 export function spendingPeriodLimitParamsToData(
   p: SpendingPeriodLimitParams,
 ): Data[] {
-  return [credentialToData(p.wallet), p.interval, p.maxSpend];
+  return [
+    credentialToData(p.wallet),
+    p.walletTokenName,
+    p.interval,
+    p.maxSpend,
+  ];
 }
 
 // ------------------------------------------------- recipient / asset params
@@ -164,13 +169,21 @@ export function assetListToData(list: AssetList): Data {
 export function fullRecipientAllowListParamsToData(
   p: FullRecipientAllowListParams,
 ): Data[] {
-  return [credentialToData(p.wallet), p.allowed.map(addressToData)];
+  return [
+    credentialToData(p.wallet),
+    p.walletTokenName,
+    p.allowed.map(addressToData),
+  ];
 }
 
 export function fullRecipientDenyListParamsToData(
   p: FullRecipientDenyListParams,
 ): Data[] {
-  return [credentialToData(p.wallet), p.denied.map(addressToData)];
+  return [
+    credentialToData(p.wallet),
+    p.walletTokenName,
+    p.denied.map(addressToData),
+  ];
 }
 
 export function paymentStakingAllowListParamsToData(
@@ -178,6 +191,7 @@ export function paymentStakingAllowListParamsToData(
 ): Data[] {
   return [
     credentialToData(p.wallet),
+    p.walletTokenName,
     p.allowedPayments.map(credentialToData),
     p.allowedStakings.map(credentialToData),
   ];
@@ -188,17 +202,26 @@ export function paymentStakingDenyListParamsToData(
 ): Data[] {
   return [
     credentialToData(p.wallet),
+    p.walletTokenName,
     p.deniedPayments.map(credentialToData),
     p.deniedStakings.map(credentialToData),
   ];
 }
 
 export function assetAllowListParamsToData(p: AssetAllowListParams): Data[] {
-  return [credentialToData(p.wallet), assetListToData(p.allowed)];
+  return [
+    credentialToData(p.wallet),
+    p.walletTokenName,
+    assetListToData(p.allowed),
+  ];
 }
 
 export function assetDenyListParamsToData(p: AssetDenyListParams): Data[] {
-  return [credentialToData(p.wallet), assetListToData(p.denied)];
+  return [
+    credentialToData(p.wallet),
+    p.walletTokenName,
+    assetListToData(p.denied),
+  ];
 }
 
 /** Depositor-side asset scripts share the same parameter encoding. */

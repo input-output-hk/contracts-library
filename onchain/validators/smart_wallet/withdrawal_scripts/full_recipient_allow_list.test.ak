@@ -24,6 +24,12 @@ const stake = #"55555555555555555555555555555555555555555555555555555555"
 const tx_id =
   #"0000000000000000000000000000000000000000000000000000000000000000"
 
+const wallet_token = "wallet"
+
+fn nft() -> assets.Value {
+  assets.from_asset(b, wallet_token, 1)
+}
+
 fn allowed() -> List<Address> {
   [from_verification_key(recipient)]
 }
@@ -32,6 +38,7 @@ fn publish(certificate: Certificate, tx: Transaction) -> Bool {
   let redeemer: Data = 0
   full_recipient_allow_list.full_recipient_allow_list.publish(
     Script(b),
+    wallet_token,
     allowed(),
     redeemer,
     certificate,
@@ -42,6 +49,7 @@ fn publish(certificate: Certificate, tx: Transaction) -> Bool {
 fn withdraw(allowed: List<Address>, tx: Transaction) -> Bool {
   full_recipient_allow_list.full_recipient_allow_list.withdraw(
     Script(b),
+    wallet_token,
     allowed,
     0,
     Script(a),
@@ -52,7 +60,7 @@ fn withdraw(allowed: List<Address>, tx: Transaction) -> Bool {
 fn wallet_output(spenders: Pairs<ScriptHash, Data>) -> Output {
   Output {
     address: from_script(b),
-    value: assets.zero,
+    value: nft(),
     datum: InlineDatum(WalletDatum { spenders, depositors: [] }),
     reference_script: None,
   }
