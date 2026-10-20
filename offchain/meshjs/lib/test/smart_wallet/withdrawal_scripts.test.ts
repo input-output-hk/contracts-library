@@ -18,6 +18,7 @@ import {
   assetDepositDenyListScript,
   fullRecipientAllowListScript,
   spendingPeriodLimitScript,
+  withdrawalScriptAddress,
 } from "../../src/smart_wallet/withdrawal_scripts";
 
 /** MeshJS `Data` constructor variant, for structural assertions. */
@@ -174,6 +175,15 @@ describe("withdrawal script constructors", () => {
     });
     expect(script.version).toBe("V3");
     expect(script.code.length).toBeGreaterThan(0);
+  });
+});
+
+describe("withdrawalScriptAddress", () => {
+  const script = { code: spendingLimitCode, version: "V3" as const };
+
+  it("returns the script's reward (stake) address", () => {
+    expect(withdrawalScriptAddress(script, 0)).toMatch(/^stake_test1/);
+    expect(withdrawalScriptAddress(script, 1)).toMatch(/^stake1/);
   });
 });
 
