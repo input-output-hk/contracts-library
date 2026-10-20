@@ -19,7 +19,7 @@ import {
   type MeshTxBuilder,
   type PlutusScript,
 } from "@meshsdk/core";
-import { Serialization } from "@meshsdk/core-cst";
+import { CredentialType, Serialization } from "@meshsdk/core-cst";
 
 import {
   assetAllowListCode,
@@ -63,28 +63,24 @@ import type {
 } from "./types";
 
 /**
- * Stake-address deposit written into `reg_cert` / refund written into
- * `unreg_cert`. Hardcoded to 2 ADA, matching the `keyDeposit` (a.k.a.
- * `stakeAddressDeposit`) protocol parameter that MeshJS charges/refunds for the
- * legacy cert types.
- */
-const STAKE_ADDRESS_DEPOSIT = 2_000_000n;
-
-/**
- * Rewrite the withdrawal-script certificates in a serialized transaction from
- * the legacy forms MeshJS emits (`stake_registration` / `stake_deregistration`)
- * to the Conway certifying forms:
+ * Rewrite only the wallet's own withdrawal-script certificates in a serialized
+ * transaction from the legacy forms MeshJS emits (`stake_registration` /
+ * `stake_deregistration`) to the Conway certifying forms:
  *
  *   `stake_registration`   -> `reg_cert`    ([7, credential, deposit])
  *   `stake_deregistration` -> `unreg_cert`  ([8, credential, refund])
  *
  * Only the Conway forms trigger the CIP-69 `publish` script purpose; a legacy
  * cert would leave the attached certificate redeemer extraneous and the ledger
- * rejects the transaction. The deposit/refund written into the cert is
- * `STAKE_ADDRESS_DEPOSIT`, matching the `keyDeposit` MeshJS already balances.
- * Transactions without certificates are returned unchanged.
+ * rejects the transaction. Unrelated certificates are left untouched, and the
+ * deposit/refund is the protocol's `keyDeposit`, matching what MeshJS already
+ * charges/refunds for the legacy cert types.
  */
-function swapCertificates(txHex: string): string {
+export function rewriteWithdrawalCertificates(
+  txHex: string,
+  targetScriptHashes: ReadonlySet<string>,
+  keyDeposit: bigint,
+): string {
   const tx = Serialization.Transaction.fromCbor(txHex);
   const body = tx.body();
   const certs = body.certs();
@@ -96,23 +92,21 @@ function swapCertificates(txHex: string): string {
     if (kind === 0) {
       const stake = cert.asStakeRegistration();
       if (!stake) return cert;
+      const credential = stake.stakeCredential();
+      if (!targetScript(credential, targetScriptHashes)) return cert;
       swapped = true;
       return Serialization.Certificate.newRegistrationCert(
-        new Serialization.Registration(
-          stake.stakeCredential(),
-          STAKE_ADDRESS_DEPOSIT,
-        ),
+        new Serialization.Registration(credential, keyDeposit),
       );
     }
     if (kind === 1) {
       const stake = cert.asStakeDeregistration();
       if (!stake) return cert;
+      const credential = stake.stakeCredential();
+      if (!targetScript(credential, targetScriptHashes)) return cert;
       swapped = true;
       return Serialization.Certificate.newUnregistrationCert(
-        new Serialization.Unregistration(
-          stake.stakeCredential(),
-          STAKE_ADDRESS_DEPOSIT,
-        ),
+        new Serialization.Unregistration(credential, keyDeposit),
       );
     }
     return cert;
@@ -126,30 +120,73 @@ function swapCertificates(txHex: string): string {
   return tx.toCbor();
 }
 
-const patchedSerializers = new WeakSet<object>();
+function targetScript(
+  credential: { type: number; hash: string },
+  targetScriptHashes: ReadonlySet<string>,
+): boolean {
+  return (
+    credential.type === CredentialType.ScriptHash &&
+    targetScriptHashes.has(credential.hash.toLowerCase())
+  );
+}
+
+function keyDepositFrom(
+  protocolParams: { keyDeposit?: number } | undefined,
+): bigint {
+  if (protocolParams?.keyDeposit === undefined) {
+    throw new Error(
+      "Protocol parameters with keyDeposit are required to register or deregister withdrawal scripts.",
+    );
+  }
+  return BigInt(protocolParams.keyDeposit);
+}
+
+const serializerTargets = new WeakMap<object, Set<string>>();
 
 /**
  * Wrap a builder's serializer so both of its serialization paths run through
- * `swapCertificates`: the mock serialization used for fee estimation and the
- * final serialization. MeshJS has no public API for the Conway certifying cert
- * forms, so the swap happens right where the builder emits bytes. Applying it
- * to the fee-estimation path as well means the fee accounts for the deposit
- * field; the balance is unaffected because MeshJS already charges/refunds
- * `keyDeposit` for the legacy cert types.
+ * `rewriteWithdrawalCertificates`: the mock serialization used for fee
+ * estimation and the final serialization. The target set accumulates the
+ * scripts registered or deregistered through this builder. MeshJS has no public
+ * API for the Conway certifying cert forms, so the swap happens right where the
+ * builder emits bytes.
  */
-function patchTxBuilderSerializer(txBuilder: MeshTxBuilder): void {
+function patchTxBuilderSerializer(
+  txBuilder: MeshTxBuilder,
+  scriptHash: string,
+): void {
   const serializer = txBuilder.serializer;
-  if (patchedSerializers.has(serializer)) return;
-  patchedSerializers.add(serializer);
+  const existing = serializerTargets.get(serializer);
+  const targets = existing ?? new Set<string>();
+  if (!existing) {
+    serializerTargets.set(serializer, targets);
 
-  const serializeBody = serializer.serializeTxBody.bind(serializer);
-  const serializeMock =
-    serializer.serializeTxBodyWithMockSignatures.bind(serializer);
+    const serializeBody = serializer.serializeTxBody.bind(serializer);
+    const serializeMock =
+      serializer.serializeTxBodyWithMockSignatures.bind(serializer);
 
-  serializer.serializeTxBody = (body, params) =>
-    swapCertificates(serializeBody(body, params));
-  serializer.serializeTxBodyWithMockSignatures = (body, params) =>
-    swapCertificates(serializeMock(body, params));
+    serializer.serializeTxBody = (body, params) =>
+      rewriteWithdrawalCertificates(
+        serializeBody(body, params),
+        targets,
+        keyDepositFrom(
+          params ??
+            (serializer as { protocolParams?: { keyDeposit?: number } })
+              .protocolParams,
+        ),
+      );
+    serializer.serializeTxBodyWithMockSignatures = (body, params) =>
+      rewriteWithdrawalCertificates(
+        serializeMock(body, params),
+        targets,
+        keyDepositFrom(
+          params ??
+            (serializer as { protocolParams?: { keyDeposit?: number } })
+              .protocolParams,
+        ),
+      );
+  }
+  targets.add(scriptHash.toLowerCase());
 }
 
 /** Parameterized `spending_limit` script: net outflow stays below `bound`. */
@@ -326,12 +363,9 @@ export function registerWithdrawalScript(
   script: PlutusScript,
   networkId: 0 | 1 = 0,
 ): void {
-  patchTxBuilderSerializer(txBuilder);
-  const rewardAddress = serializeRewardAddress(
-    resolveScriptHash(script.code, script.version),
-    true,
-    networkId,
-  );
+  const scriptHash = resolveScriptHash(script.code, script.version);
+  patchTxBuilderSerializer(txBuilder, scriptHash);
+  const rewardAddress = serializeRewardAddress(scriptHash, true, networkId);
   txBuilder
     .registerStakeCertificate(rewardAddress)
     .certificateScript(script.code, script.version)
@@ -350,12 +384,9 @@ export function deregisterWithdrawalScript(
   script: PlutusScript,
   networkId: 0 | 1 = 0,
 ): void {
-  patchTxBuilderSerializer(txBuilder);
-  const rewardAddress = serializeRewardAddress(
-    resolveScriptHash(script.code, script.version),
-    true,
-    networkId,
-  );
+  const scriptHash = resolveScriptHash(script.code, script.version);
+  patchTxBuilderSerializer(txBuilder, scriptHash);
+  const rewardAddress = serializeRewardAddress(scriptHash, true, networkId);
   txBuilder
     .deregisterStakeCertificate(rewardAddress)
     .certificateScript(script.code, script.version)
