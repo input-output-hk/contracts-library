@@ -5,7 +5,7 @@ use cardano/transaction.{Transaction}
 use upgradeability/counter.{validate_counter_tick}
 use upgradeability/registry.{forwarded_inputs, get_registry}
 
-/// Forced logic for the versioned counter demo.
+/// Forced logic for the counter demo.
 ///
 /// Runs under the withdraw-0 convention. It validates **every** transaction
 /// input whose address is registered to delegate to this script, applying the
@@ -15,7 +15,7 @@ use upgradeability/registry.{forwarded_inputs, get_registry}
 ///
 /// Upgrading the protocol means deploying a new logic script with this same
 /// parameterization and repointing the registry entry for the forwarder.
-validator versioned_counter_logic(
+validator counter_logic(
   settings_policy: PolicyId,
   settings_token_name: AssetName,
 ) {

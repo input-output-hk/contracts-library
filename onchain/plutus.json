@@ -678,7 +678,7 @@
       "hash": "df77ce7f7d573025b2176af1efaa36ac27bfd324fd68be775c11c04a"
     },
     {
-      "title": "versioned_counter_forwarder.versioned_counter_forwarder.spend",
+      "title": "upgradeability/counter_forwarder.counter_forwarder.spend",
       "datum": {
         "title": "_datum",
         "schema": {
@@ -709,7 +709,7 @@
       "hash": "aab1f9e8bbf9b11b5658792d53a6d574b6fa1d4f8e22d7456eba19e9"
     },
     {
-      "title": "versioned_counter_forwarder.versioned_counter_forwarder.else",
+      "title": "upgradeability/counter_forwarder.counter_forwarder.else",
       "redeemer": {
         "schema": {}
       },
@@ -731,7 +731,7 @@
       "hash": "aab1f9e8bbf9b11b5658792d53a6d574b6fa1d4f8e22d7456eba19e9"
     },
     {
-      "title": "versioned_counter_logic.versioned_counter_logic.withdraw",
+      "title": "upgradeability/counter_logic.counter_logic.withdraw",
       "redeemer": {
         "title": "_redeemer",
         "schema": {
@@ -756,7 +756,7 @@
       "hash": "afeae1c93b98aefd5a1dfa7cf4f99db7593365943c56182cabcf63a6"
     },
     {
-      "title": "versioned_counter_logic.versioned_counter_logic.else",
+      "title": "upgradeability/counter_logic.counter_logic.else",
       "redeemer": {
         "schema": {}
       },
@@ -778,7 +778,7 @@
       "hash": "afeae1c93b98aefd5a1dfa7cf4f99db7593365943c56182cabcf63a6"
     },
     {
-      "title": "versioned_counter_migration.versioned_counter_migration.withdraw",
+      "title": "upgradeability/counter_migration.counter_migration.withdraw",
       "redeemer": {
         "title": "_redeemer",
         "schema": {
@@ -809,7 +809,7 @@
       "hash": "32c2c4c81c12dbcb265da714fa1eb950a6292e7dab6f2af14c8f0a58"
     },
     {
-      "title": "versioned_counter_migration.versioned_counter_migration.else",
+      "title": "upgradeability/counter_migration.counter_migration.else",
       "redeemer": {
         "schema": {}
       },
@@ -837,7 +837,7 @@
       "hash": "32c2c4c81c12dbcb265da714fa1eb950a6292e7dab6f2af14c8f0a58"
     },
     {
-      "title": "versioned_counter_v1.versioned_counter_v1.spend",
+      "title": "upgradeability/counter_v1.counter_v1.spend",
       "datum": {
         "title": "datum",
         "schema": {
@@ -868,7 +868,7 @@
       "hash": "fb859d2817a1dded27326c5407086b270a5050f8f007bfcd0730eead"
     },
     {
-      "title": "versioned_counter_v1.versioned_counter_v1.else",
+      "title": "upgradeability/counter_v1.counter_v1.else",
       "redeemer": {
         "schema": {}
       },
@@ -890,7 +890,7 @@
       "hash": "fb859d2817a1dded27326c5407086b270a5050f8f007bfcd0730eead"
     },
     {
-      "title": "versioned_counter_v2.versioned_counter_v2.spend",
+      "title": "upgradeability/counter_v2.counter_v2.spend",
       "datum": {
         "title": "_datum",
         "schema": {
@@ -907,7 +907,7 @@
       "hash": "3e021596f538533b8939c8bc57460b87a3541707bde2281bbb375517"
     },
     {
-      "title": "versioned_counter_v2.versioned_counter_v2.else",
+      "title": "upgradeability/counter_v2.counter_v2.else",
       "redeemer": {
         "schema": {}
       },
@@ -1720,7 +1720,7 @@
     },
     "upgradeability/counter/CounterDatum": {
       "title": "CounterDatum",
-      "description": "State of the demo versioned counter used to exercise the upgradeability\n pattern end to end.\n\n - `count` is the counter value.\n - `owner` gates the opt-in `Upgrade` path (per-UTxO consent).\n\n The demo assumes at most one counter UTxO per script address and one\n continuation per target address per transaction. A production protocol\n would tag continuations (e.g. a `prev_input` datum field or a per-UTxO NFT)\n to support batching; that is orthogonal to the upgradeability mechanics this\n demo exercises.",
+      "description": "State of the demo counter used to exercise the upgradeability pattern end to\n end.\n\n - `count` is the counter value.\n - `owner` gates the opt-in `Upgrade` path (per-UTxO consent).\n\n The demo assumes at most one counter UTxO per script address and one\n continuation per target address per transaction. A production protocol\n would tag continuations (e.g. a `prev_input` datum field or a per-UTxO NFT)\n to support batching; that is orthogonal to the upgradeability mechanics this\n demo exercises.",
       "anyOf": [
         {
           "title": "CounterDatum",

@@ -19,7 +19,7 @@ Registry : Map<ScriptHash, ScriptHash>
 
 The two mechanisms differ only in **which redeemer paths forward**: a **forced** validator forwards every path (the value is the protocol's logic); an **opt-in** validator forwards only its `Upgrade` path (the value is the migration script).
 
-This document specifies the reusable predicates (`onchain/lib/upgradeability/`) and their trust model. The `versioned_counter` validators are a non-normative reference protocol used to exercise the mechanics.
+This document specifies the reusable predicates (`onchain/lib/upgradeability/`) and their trust model. The `counter_*` reference validators are a non-normative demo used to exercise the mechanics.
 
 > **Scope note.** This spec builds on the settings spec (#20) and does not re-specify config storage, propose/apply, timelock, or authorization. Governance is delegated to the pluggable `Credential` (#11 / DAO #12 / Agora / multisig #11). CIP-112 (Observe Script Type) is not available on-chain today, so forwarding uses the withdraw-zero staking-validator convention.
 
@@ -39,7 +39,7 @@ This document specifies the reusable predicates (`onchain/lib/upgradeability/`) 
 
 ### Limitations
 
-The reference predicates delegate the *meaning* of a forwarder's state and of a migration to the protocol's own logic / migration script; they validate only that the correct delegate runs. The `versioned_counter` demo assumes one continuation output per target address per transaction (no batched ticks/migrations; §6.a). Nothing here validates the *content* of a protocol's logic beyond its registered hash.
+The reference predicates delegate the *meaning* of a forwarder's state and of a migration to the protocol's own logic / migration script; they validate only that the correct delegate runs. The `counter_*` demo assumes one continuation output per target address per transaction (no batched ticks/migrations; §6.a). Nothing here validates the *content* of a protocol's logic beyond its registered hash.
 
 ## 3. Glossary
 
@@ -101,7 +101,7 @@ As specified in the settings spec §4.a. Its `current` value is a well-formed re
 
 ### 4.b Protocol UTxO
 
-The state a forwarder (forced) or V1 (opt-in) holds. Its shape is protocol-defined; the upgradeability predicates treat it as opaque. The `versioned_counter` demo uses `CounterDatum { count: Int, owner: Credential }`.
+The state a forwarder (forced) or V1 (opt-in) holds. Its shape is protocol-defined; the upgradeability predicates treat it as opaque. The `counter_*` demo uses `CounterDatum { count: Int, owner: Credential }`.
 
 ## 5. Transactions
 
@@ -155,7 +155,7 @@ Attacks the protocol defends against, each backed by the invariants of §6.b:
 - **Forced repoints need a timelock and bounded governance.** `apply_delay` is the users' only window to react; a negative or tiny delay, or unbounded governance, weakens the guarantee (settings spec §6.a).
 - **The reference settings validator does not constrain the registry shape.** Any `Data` is admissible; consumers reject a malformed value at spend time, but governance can still write one (a liveness, not a safety, hazard). A deployer who wants to constrain it can fork settings with their own `validate_datum`.
 - **No global migration completeness.** On eUTxO each UTxO migrates independently; there is no all-or-nothing across the protocol, and no on-chain way to force a user off an opt-in V1.
-- **`versioned_counter` batching.** The demo finds the first output at the target address, so it supports one continuation per target per transaction. Production protocols should tag continuations (e.g. a `prev_input` datum field or a per-UTxO NFT).
+- **`counter_*` batching.** The demo finds the first output at the target address, so it supports one continuation per target per transaction. Production protocols should tag continuations (e.g. a `prev_input` datum field or a per-UTxO NFT).
 - **The protocol state's meaning is delegated.** The upgradeability predicates treat a forwarder's datum opaquely; the logic script defines it.
 - **Off-chain is out of scope in this pass.**
 

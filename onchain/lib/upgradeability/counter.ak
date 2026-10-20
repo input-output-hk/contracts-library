@@ -6,8 +6,8 @@ use cardano/transaction.{
   InlineDatum, Output, OutputReference, Spend, Transaction, find_input,
 }
 
-/// State of the demo versioned counter used to exercise the upgradeability
-/// pattern end to end.
+/// State of the demo counter used to exercise the upgradeability pattern end to
+/// end.
 ///
 /// - `count` is the counter value.
 /// - `owner` gates the opt-in `Upgrade` path (per-UTxO consent).

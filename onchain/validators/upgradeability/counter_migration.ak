@@ -5,13 +5,13 @@ use cardano/transaction.{Transaction}
 use upgradeability/counter.{spent_with_upgrade, validate_counter_migrate}
 use upgradeability/registry.{forwarded_inputs, get_registry}
 
-/// Opt-in migration script for the versioned counter demo.
+/// Opt-in migration script for the counter demo.
 ///
 /// Runs under the withdraw-0 convention when a V1 UTxO is upgraded. It
 /// validates every V1 input registered to delegate to this script: each must
 /// have been spent with the `Upgrade` action and must reappear, with its state
 /// preserved, at `v2_address`.
-validator versioned_counter_migration(
+validator counter_migration(
   settings_policy: PolicyId,
   settings_token_name: AssetName,
   v2_address: Address,
