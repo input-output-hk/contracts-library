@@ -217,7 +217,8 @@ map.
 The `Data` value in `spenders[script_hash]` is that script's mutable state:
 stateless scripts store a trivial marker (e.g. `spending_limit`, whose `bound` is
 a compile-time parameter); stateful scripts store and advance real state (e.g.
-`spending_window`, which tracks the last spend time to limit spends per window).
+`spending_window`, which tracks the upper bound of the last spend's validity
+range to limit spends per window).
 `depositors[script_hash]` works the same way on the deposit side: stateless
 deposit scripts store static configuration (e.g. an asset allow/denylist), while
 stateful ones advance real state on each `Deposit` (e.g. a deposit cap per
@@ -308,6 +309,10 @@ window), enforcing their own input→output transition.
   silently shrug off a restriction or leave a stake credential registered without
   a map entry. Removing a spender requires `UpdatePermissions` and its
   unregistration certificate.
+- **Backdated spending windows.** `spending_window` stores the validity range's
+  upper bound, not its lower bound, so a member cannot backdate a spend's lower
+  bound to squeeze multiple spends into one elapsed window (see the time
+  assumption above).
 - **Unvalidated script state.** A script enters `spenders` or `depositors` only
   after its own `publish` handler validates its initial `Data` (I4); stateful
   transitions are enforced by the script on every spend or deposit (I7).
@@ -330,7 +335,11 @@ window), enforcing their own input→output transition.
   scripts before delegating them.
 - **The wallet is a single UTxO.** The one-shot NFT guarantees one identity; the
   protocol does not model a multi-UTxO wallet.
-- **Time.** The core wallet does not read a clock. Stateful scripts that need time
-  (e.g. `spending_window`) read `now` as the **lower bound of the validity
-  range**, and the ledger's guarantee `real_slot >= lower_bound` is an axiom for
-  their soundness.
+- **Time.** The core wallet does not read a clock. Stateful scripts that need
+  time require **finite** validity bounds. `spending_window` reads the lower
+  bound as the current time and records the transaction's upper bound as the
+  latest possible execution time. Because the ledger guarantees
+  `lower_bound <= real_time <= upper_bound`, requiring the next transaction's
+  lower bound to be at least the recorded upper bound plus `window` guarantees
+  that consecutive spends are at least `window` apart — a backdated lower bound
+  cannot compress the window.

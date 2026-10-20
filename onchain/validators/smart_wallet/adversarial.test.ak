@@ -153,8 +153,8 @@ fn admin_tx() -> Transaction {
   Transaction { ..placeholder, extra_signatories: [admin_key] }
 }
 
-fn window_state(last_spend: Int) -> Data {
-  let state: Data = SpendingWindowState { last_spend }
+fn window_state(last_upper: Int) -> Data {
+  let state: Data = SpendingWindowState { last_upper }
   state
 }
 
@@ -341,7 +341,7 @@ test control_honest_period_spend() {
 // ------------------------------------------ 1. delegated state: decoy outputs
 
 // Fixed: the NFT-less decoy is not the wallet UTxO, so `spending_window` reads
-// `last_spend = 0` from the real continuation and rejects the second spend.
+// `last_upper = 0` from the real continuation and rejects the second spend.
 test decoy_output_cannot_spoof_spending_window_state() fail {
   let datum = WalletDatum {
     spenders: [Pair(sw, window_state(0))],
@@ -407,14 +407,13 @@ test unprivileged_deposit_cannot_unregister_spender() fail {
 
 // ------------------------------------------- 2. spending_window: time bounds
 
-// KNOWN ISSUE: `now` is the author-chosen lower bound. Two sequential spends
-// whose validity intervals both contain [3h, 3h + 1s] are accepted, i.e. two
-// spends within one second under a one-hour window.
+// Fixed: the first spend records the validity upper bound, so the second spend
+// cannot backdate its lower bound into the same instant.
 test spending_window_rejects_backdated_burst() fail {
   let s0 = [Pair(sw, window_state(hour))]
-  let s1 = [Pair(sw, window_state(2 * hour))]
-  let s2 = [Pair(sw, window_state(3 * hour))]
   let upper = 3 * hour + 1_000
+  let s1 = [Pair(sw, window_state(upper))]
+  let s2 = [Pair(sw, window_state(upper))]
   let tx1 = Transaction {
     ..member_tx(),
     inputs: [wallet_in(wallet_out(nft_value(100 * ada), s0, []))],

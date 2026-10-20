@@ -257,8 +257,10 @@ export interface WalletSpendParams {
   signers: string[];
   /** Delegated spender scripts (invoked as withdraw-0 on this spend). */
   spenderScripts?: PlutusScript[];
-  /** Validity-range lower bound slot (for stateful scripts that read `now`). */
+  /** Validity-range lower bound slot (for stateful scripts that read time). */
   invalidBeforeSlot?: number;
+  /** Validity-range upper bound slot; stateful scripts require it to be finite. */
+  invalidHereafterSlot?: number;
   network?: Network;
 }
 
@@ -278,6 +280,9 @@ export async function buildWalletSpendTx(
   }
   if (p.invalidBeforeSlot !== undefined) {
     p.txBuilder.invalidBefore(p.invalidBeforeSlot);
+  }
+  if (p.invalidHereafterSlot !== undefined) {
+    p.txBuilder.invalidHereafter(p.invalidHereafterSlot);
   }
 
   p.txBuilder

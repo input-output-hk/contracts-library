@@ -61,7 +61,8 @@ export interface SpendingWindowParams extends WalletScriptParams {
 
 /** `spending_window` mutable state (stored in the wallet datum). */
 export interface SpendingWindowState {
-  lastSpend: number;
+  /** Upper bound (POSIX ms) of the previous spend's validity range; 0 = never spent. */
+  lastUpper: number;
 }
 
 /** `spending_period_limit` withdrawal script parameters. */

@@ -45,7 +45,8 @@ fn wallet_input(spenders: Pairs<ScriptHash, Data>) -> Input {
 fn spend_tx(
   current: SpendingWindowState,
   next: SpendingWindowState,
-  now: Int,
+  lower: Int,
+  upper: Int,
 ) -> Transaction {
   let cur: Data = current
   let nxt: Data = next
@@ -53,7 +54,7 @@ fn spend_tx(
     ..placeholder,
     inputs: [wallet_input([Pair(own_hash, cur)])],
     outputs: [wallet_output([Pair(own_hash, nxt)])],
-    validity_range: interval.after(now),
+    validity_range: interval.between(lower, upper),
   }
 }
 
@@ -76,9 +77,10 @@ test initial_state_rejects_nonzero() fail {
 test first_spend_allowed() {
   validate(
     spend_tx(
-      SpendingWindowState { last_spend: 0 },
-      SpendingWindowState { last_spend: 1000 },
+      SpendingWindowState { last_upper: 0 },
+      SpendingWindowState { last_upper: 2000 },
       1000,
+      2000,
     ),
   )
 }
@@ -86,9 +88,10 @@ test first_spend_allowed() {
 test cooldown_elapsed_allowed() {
   validate(
     spend_tx(
-      SpendingWindowState { last_spend: 500 },
-      SpendingWindowState { last_spend: 3_600_500 },
+      SpendingWindowState { last_upper: 500 },
+      SpendingWindowState { last_upper: 3_700_000 },
       3_600_500,
+      3_700_000,
     ),
   )
 }
@@ -96,9 +99,10 @@ test cooldown_elapsed_allowed() {
 test cooldown_not_elapsed_rejected() fail {
   validate(
     spend_tx(
-      SpendingWindowState { last_spend: 500 },
-      SpendingWindowState { last_spend: 3_000_000 },
+      SpendingWindowState { last_upper: 500 },
+      SpendingWindowState { last_upper: 3_000_100 },
       3_000_000,
+      3_000_100,
     ),
   )
 }
@@ -106,14 +110,61 @@ test cooldown_not_elapsed_rejected() fail {
 test wrong_next_state_rejected() fail {
   validate(
     spend_tx(
-      SpendingWindowState { last_spend: 500 },
-      SpendingWindowState { last_spend: 3_600_500 },
-      3_600_400,
+      SpendingWindowState { last_upper: 500 },
+      SpendingWindowState { last_upper: 3_600_500 },
+      3_600_500,
+      3_700_000,
     ),
   )
 }
 
-fn state(last_spend: Int) -> Data {
-  let state: Data = SpendingWindowState { last_spend }
+test backdated_first_spend_allowed() {
+  validate(
+    spend_tx(
+      SpendingWindowState { last_upper: window },
+      SpendingWindowState { last_upper: 3 * window + 1_000 },
+      2 * window,
+      3 * window + 1_000,
+    ),
+  )
+}
+
+test backdated_lower_rejected() fail {
+  validate(
+    spend_tx(
+      SpendingWindowState { last_upper: 3_600_500 },
+      SpendingWindowState { last_upper: 3_600_600 },
+      3_600_000,
+      3_600_600,
+    ),
+  )
+}
+
+test infinite_upper_rejected() fail {
+  let current: Data = SpendingWindowState { last_upper: 0 }
+  let next: Data = SpendingWindowState { last_upper: 1000 }
+  Transaction {
+    ..placeholder,
+    inputs: [wallet_input([Pair(own_hash, current)])],
+    outputs: [wallet_output([Pair(own_hash, next)])],
+    validity_range: interval.after(1000),
+  }
+    |> validate
+}
+
+test infinite_lower_rejected() fail {
+  let current: Data = SpendingWindowState { last_upper: 0 }
+  let next: Data = SpendingWindowState { last_upper: 1000 }
+  Transaction {
+    ..placeholder,
+    inputs: [wallet_input([Pair(own_hash, current)])],
+    outputs: [wallet_output([Pair(own_hash, next)])],
+    validity_range: interval.before(1000),
+  }
+    |> validate
+}
+
+fn state(last_upper: Int) -> Data {
+  let state: Data = SpendingWindowState { last_upper }
   state
 }

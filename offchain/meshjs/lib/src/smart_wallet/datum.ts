@@ -4,7 +4,7 @@
  * CBOR constructor layout matching the Aiken blueprint in onchain/plutus.json:
  *   WalletDatum        = Constr 0 [spenders: Pairs<ScriptHash, Data>, depositors: Pairs<ScriptHash, Data>]
  *   WalletConfig       = Constr 0 [members: [VerificationKeyHash], threshold: Int]
- *   SpendingWindowState= Constr 0 [last_spend: Int]
+ *   SpendingWindowState= Constr 0 [last_upper: Int]
  *   SpendRedeemer      = Spend=0 | UpdatePermissions{out_ix}=1 | Deposit{out_ix}=2 | Close=3
  *   MintRedeemer       = Mint{out_ix}=0 | Burn=1
  *
@@ -58,7 +58,7 @@ export function walletConfigToData(c: WalletConfig): Data {
 }
 
 export function spendingWindowStateToData(s: SpendingWindowState): Data {
-  return mConStr0([s.lastSpend]);
+  return mConStr0([s.lastUpper]);
 }
 
 export function spendingPeriodStateToData(s: SpendingPeriodState): Data {

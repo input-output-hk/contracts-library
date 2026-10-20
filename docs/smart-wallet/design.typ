@@ -375,25 +375,27 @@ the burn._
 = Example: stateful spending window (withdrawal script)
 _A stateful delegated withdrawal script that limits the wallet to at most one
 `Spend` per window. Unlike `spending_limit` (whose `bound` is fixed at compile
-time), this script carries mutable state — the last spend time — in the wallet
-datum's `spenders` map, and enforces its own state transition on every
-spend._
+time), this script carries mutable state — the upper bound of the previous
+spend's validity range — in the wallet datum's `spenders` map, and enforces its
+own state transition on every spend._
 
 The script is parameterized by `wallet`, the wallet NFT's asset name, and
 `window` (milliseconds), and its state is a single timestamp:
-`SpendingWindowState { last_spend: Int }` (POSIX ms; `0` means never spent).
+`SpendingWindowState { last_upper: Int }` (POSIX ms; `0` means never spent).
 
 - *Publishing* (`RegisterCredential`): the `publish` handler reads its initial
   `Data` from the NFT-bearing wallet output datum and requires
-  `last_spend == 0` — an unspent wallet. Unregistering is only accepted while
+  `last_upper == 0` — an unspent wallet. Unregistering is only accepted while
   leaving the wallet (the same NFT-bearing input/output presence check as
   `spending_limit`).
-- *Withdraw* (runs on every `Spend`): the handler reads its current state from
-  the NFT-bearing wallet *input* datum and the next state from the NFT-bearing
-  wallet *output* datum, takes `now` from the validity range's lower bound, and
-  requires that the cooldown elapsed (`now - last_spend >= window`, or it is the
-  first spend) and that the output state records exactly this spend
-  (`next.last_spend == now`).
+- *Withdraw* (runs on every `Spend`): the handler requires both validity bounds
+  to be finite, reads its current state from the NFT-bearing wallet *input*
+  datum and the next state from the NFT-bearing wallet *output* datum, and
+  requires the cooldown elapsed (`lower - last_upper >= window`, or it is the
+  first spend) and that the output state records this spend's upper bound
+  (`next.last_upper == upper`). Because execution happens between the lower and
+  upper bounds, storing the upper bound makes the cooldown conservative even if
+  the lower bound is backdated.
 - Because the wallet's `Spend` branch doesn't constrain the continuation datum,
   the script enforces its own transition end-to-end: the builder must produce a
   continuation carrying the updated state, or the withdrawal fails and the

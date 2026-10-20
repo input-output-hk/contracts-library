@@ -34,7 +34,7 @@
     "settings_typed": "df77ce7f7d573025b2176af1efaa36ac27bfd324fd68be775c11c04a",
     "smart_wallet": "02feb41e13bf37943981cbd51590bc6c04def3073474ca166c4a44fa",
     "smart_wallet.spending_limit": "6c615241fd6f55258d215dc23022b11ed52d8e655ab00fb0ee9b3671",
-    "smart_wallet.spending_window": "c33036000c2425d5b5754ff00ee029ab9074eb2864743229c50bb6d8",
+    "smart_wallet.spending_window": "44b22663bbd76e3a6e32f3236c508e288c124a9100625c59920e17cc",
     "smart_wallet.spending_period_limit": "f2d0fe2154c42c1679a1d29d89998eef2d485bf682a2518ea4f1307c",
     "smart_wallet.full_recipient_allow_list": "4cab610c4f8911b3ee171360de685f17656448fabafcd26ac800cf29",
     "smart_wallet.full_recipient_deny_list": "cde8dc38045ca47098ddbe5b19e8ab04e75c663e4c301b87ad9670e3",

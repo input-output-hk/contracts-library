@@ -278,7 +278,8 @@ await buildWalletSpendTx({
   collateralUtxo,
   signers: [memberAKeyHash, memberBKeyHash],  // members satisfying the M-of-N floor
   spenderScripts: [limit],                    // every script in `spenders`
-  invalidBeforeSlot,                          // required by scripts that read `now`
+  invalidBeforeSlot,                          // required by scripts that read time
+  invalidHereafterSlot,                       // finite upper bound for spending_window
   network: "preprod",
 });
 ```
@@ -422,10 +423,12 @@ and close with `deregisterScripts: [limit]`.
 ### `spending_window`
 
 Stateful: allows at most one spend per `window` milliseconds. The state is
-`SpendingWindowState { last_spend }` (POSIX ms; `0` = never spent, validated on
-registration). Its `withdraw` handler reads `now` from the validity range's
-**lower bound** and requires the cooldown elapsed *and* the output state to
-record exactly this spend:
+`SpendingWindowState { last_upper }` (POSIX ms; `0` = never spent, validated on
+registration). It records the **upper bound** of the previous spend's validity
+range — the latest possible execution time of that spend. Its `withdraw` handler
+requires both validity bounds to be finite, the current **lower bound** to be at
+least `last_upper + window` (or it is the first spend), and the output state to
+record the current **upper bound**:
 
 ```ts
 import {
@@ -443,26 +446,30 @@ const windowHash = resolveScriptHash(window.code, window.version);
 
 // Initial state, at mint:
 const initialDatum = {
-  spenders: [{ scriptHash: windowHash, data: spendingWindowStateToData({ lastSpend: 0 }) }],
+  spenders: [{ scriptHash: windowHash, data: spendingWindowStateToData({ lastUpper: 0 }) }],
   depositors: [],
 };
 
-// On each spend, carry the advanced state and set the validity lower bound:
+// On each spend, set both validity bounds and carry the upper bound in the state:
 const startMs = (slot: number) =>
   slotConfig.zeroTime + (slot - slotConfig.zeroSlot) * slotConfig.slotLength;
 const slot = unixTimeToEnclosingSlot(nowMs, slotConfig);
+const slotUpper = slot + 100;                  // finite, comfortably in the future
 const nextDatum = {
   ...initialDatum,
   spenders: [{
     scriptHash: windowHash,
-    data: spendingWindowStateToData({ lastSpend: startMs(slot) }),
+    data: spendingWindowStateToData({ lastUpper: startMs(slotUpper) }),
   }],
 };
-// buildWalletSpendTx({ ..., datum: nextDatum, invalidBeforeSlot: slot, ... })
+// buildWalletSpendTx({ ..., datum: nextDatum,
+//   invalidBeforeSlot: slot, invalidHereafterSlot: slotUpper, ... })
 ```
 
-`startMs(slot)` is the slot's start in POSIX ms; the state must use the same
-slot-start convention the validator reads from the validity range lower bound.
+`startMs(slot)` is the slot's start in POSIX ms; the state stores the upper
+bound's slot start, which the validator reads from the validity range's upper
+bound. Both bounds are mandatory: a missing or infinite upper bound cannot be
+stored safely, so the spend is rejected.
 
 ### `spending_period_limit`
 
@@ -780,10 +787,11 @@ tests use a 1-of-1 wallet.
   payout exactly equal to `bound` is rejected. Sums cover every UTxO at the
   wallet's payment credential on both sides, so a spend that recreates value at
   the wallet address nets it out.
-- **Stateful scripts need the slot convention.** `spending_window` reads `now`
-  from the validity range's lower bound and requires the output state to equal
-  it, so always set `invalidBeforeSlot` (or `invalid_before`) and write the
-  slot's start milliseconds into `lastSpend`.
+- **Stateful scripts need both validity bounds.** `spending_window` reads the
+  lower bound as the current time and requires the output state to record the
+  finite upper bound, so always set `invalidBeforeSlot` and
+  `invalidHereafterSlot` (or `invalid_before` / `invalid_hereafter`) and write
+  the upper slot's start milliseconds into `lastUpper`.
 - **Script credentials need manual wiring (MeshJS).** The builders add required
   signers for key credentials only; to authorize as a script (multisig, DAO,
   smart wallet) as `admin`, pass the `authorizer` option (see

@@ -534,9 +534,10 @@ describe.skipIf(!reachable)("smart wallet spender scripts e2e", () => {
     const startMs = (slot: number) =>
       slotConfig.zeroTime +
       (slot - slotConfig.zeroSlot) * slotConfig.slotLength;
+    const upperSlot = (slot: number) => slot + 1_000;
 
-    // 1. Mint with initial state `lastSpend = 0`.
-    const initialDatum = datumWith({ lastSpend: 0 });
+    // 1. Mint with initial state `lastUpper = 0`.
+    const initialDatum = datumWith({ lastUpper: 0 });
     const mintTx = await buildWalletMintTx({
       txBuilder: newTxBuilder(provider),
       script: ctx.script,
@@ -574,10 +575,11 @@ describe.skipIf(!reachable)("smart wallet spender scripts e2e", () => {
       ctx.scriptAddr,
     );
 
-    // 3. First spend: advances the state to `now`.
+    // 3. First spend: records the finite validity upper bound.
     const now1Ms = await chainNowMs();
     const slot1 = unixTimeToEnclosingSlot(now1Ms, slotConfig);
-    const nextDatum = datumWith({ lastSpend: startMs(slot1) });
+    const slot1Upper = upperSlot(slot1);
+    const nextDatum = datumWith({ lastUpper: startMs(slot1Upper) });
     const firstTx = await buildWalletSpendTx({
       txBuilder: newTxBuilder(provider),
       script: ctx.script,
@@ -594,6 +596,7 @@ describe.skipIf(!reachable)("smart wallet spender scripts e2e", () => {
       signers: [ctx.member.keyHash],
       spenderScripts: [window],
       invalidBeforeSlot: slot1,
+      invalidHereafterSlot: slot1Upper,
     });
     const firstHash = await signAndSubmit(ctx.member, firstTx);
     await waitForTx(provider, firstHash);
@@ -602,7 +605,8 @@ describe.skipIf(!reachable)("smart wallet spender scripts e2e", () => {
     // 4. Second spend within the window must be rejected.
     const now2Ms = await chainNowMs();
     const slot2 = unixTimeToEnclosingSlot(now2Ms, slotConfig);
-    const againDatum = datumWith({ lastSpend: startMs(slot2) });
+    const slot2Upper = upperSlot(slot2);
+    const againDatum = datumWith({ lastUpper: startMs(slot2Upper) });
     await expect(
       buildWalletSpendTx({
         txBuilder: newTxBuilder(provider),
@@ -620,6 +624,7 @@ describe.skipIf(!reachable)("smart wallet spender scripts e2e", () => {
         signers: [ctx.member.keyHash],
         spenderScripts: [window],
         invalidBeforeSlot: slot2,
+        invalidHereafterSlot: slot2Upper,
       }),
     ).rejects.toThrow();
   });
