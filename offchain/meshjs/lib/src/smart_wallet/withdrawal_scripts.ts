@@ -15,7 +15,6 @@ import {
   applyParamsToScript,
   mConStr0,
   resolveScriptHash,
-  serializePlutusScript,
   serializeRewardAddress,
   type MeshTxBuilder,
   type PlutusScript,
@@ -308,7 +307,11 @@ export function withdrawalScriptAddress(
   script: PlutusScript,
   networkId: 0 | 1 = 0,
 ): string {
-  return serializePlutusScript(script, undefined, networkId).address;
+  return serializeRewardAddress(
+    resolveScriptHash(script.code, script.version),
+    true,
+    networkId,
+  );
 }
 
 /**
