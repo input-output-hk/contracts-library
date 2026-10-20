@@ -195,7 +195,6 @@ export async function buildWalletDepositTx(
   p: WalletDepositParams,
 ): Promise<string> {
   const networkId = networkIdOf(p.network ?? "preprod");
-  const scriptAddr = smartWalletScriptAddress(p.script, networkId);
 
   assertScriptsCover(p.depositorScripts ?? [], p.datum.depositors, "depositor");
   for (const script of p.depositorScripts ?? []) {
@@ -215,7 +214,7 @@ export async function buildWalletDepositTx(
     .txInInlineDatumPresent()
     .txInRedeemerValue(walletDepositRedeemer(p.outputIndex))
     .txInScript(p.script.code)
-    .txOut(scriptAddr, contValue)
+    .txOut(p.walletUtxo.output.address, contValue)
     .txOutInlineDatumValue(walletDatumToData(p.datum))
     .txInCollateral(
       p.collateralUtxo.input.txHash,
@@ -347,7 +346,6 @@ export async function buildWalletUpdatePermissionsTx(
   p: WalletUpdatePermissionsParams,
 ): Promise<string> {
   const networkId = networkIdOf(p.network ?? "preprod");
-  const scriptAddr = smartWalletScriptAddress(p.script, networkId);
   const topUp = p.topUpLovelace ?? 0n;
   if (topUp < 0n) {
     throw new Error("topUpLovelace must be non-negative");
@@ -378,7 +376,7 @@ export async function buildWalletUpdatePermissionsTx(
     .txInInlineDatumPresent()
     .txInRedeemerValue(walletUpdatePermissionsRedeemer(p.outputIndex))
     .txInScript(p.script.code)
-    .txOut(scriptAddr, continuationValue)
+    .txOut(p.walletUtxo.output.address, continuationValue)
     .txOutInlineDatumValue(walletDatumToData(p.newDatum))
     .txInCollateral(
       p.collateralUtxo.input.txHash,
