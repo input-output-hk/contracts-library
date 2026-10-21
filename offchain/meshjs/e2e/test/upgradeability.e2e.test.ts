@@ -77,6 +77,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
 
   const APPLY_DELAY = 4_000;
   const TIME_SLACK = 1_100;
+  const SETTINGS_LOVELACE = 5_000_000n;
 
   let governor: Account; // settings proposer + applier; pays stake registrations
   let alice: Account; // owns the counter UTxOs and consents to migrations
@@ -205,6 +206,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
       changeAddress: governor.address,
       collateralUtxo: await collateralOf(governor),
       applyAuth: { kind: "key", hash: governor.keyHash },
+      minUtxoLovelace: SETTINGS_LOVELACE,
     });
     const mintHash = await signAndSubmit(governor, mintTx);
     await waitForTx(provider, mintHash);
