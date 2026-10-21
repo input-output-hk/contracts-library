@@ -11,8 +11,13 @@
  *   - propose/apply → registry change with the timelock, entries carried forward;
  *   - migration → V1 `Upgrade` + owner signature → V2 state preserved;
  *   - no consent → rejected;
+ *   - malicious migrations → tampered state, wrong target, underpayment,
+ *     missing continuation, or a non-`Upgrade` action → rejected;
+ *   - batched forwards → every registered input is validated, so a benign
+ *     input cannot shield a stale one;
  *   - forced repoint → delegation actually switches (a tick routed to the
  *     migration script is rejected on-chain), and back;
+ *   - forged registry → a look-alike without the settings NFT is ignored;
  *   - malformed registry → consumers brick (guarded off-chain) until restored.
  */
 
@@ -30,10 +35,14 @@ import {
   counterV1Script,
   counterV2Script,
   enclosingSlotBound,
+  opaqueRedeemer,
   readRegistry,
   registryToData,
+  settingsDatumToData,
   settingsScript as makeSettingsScript,
   settingsScriptAddress,
+  tickRedeemer,
+  upgradeRedeemer,
   buildCounterTickTx,
   buildForwardTx,
   buildRegistryApplyTx,
@@ -44,7 +53,14 @@ import {
   type SettingsDatum,
   type SettingsRefParams,
 } from "@contracts-library/meshjs";
-import { resolveScriptHash, type PlutusScript, type UTxO } from "@meshsdk/core";
+import {
+  resolveScriptHash,
+  serializeRewardAddress,
+  type Asset,
+  type Data,
+  type PlutusScript,
+  type UTxO,
+} from "@meshsdk/core";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
   chainNowMs,
@@ -78,6 +94,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
   const APPLY_DELAY = 4_000;
   const TIME_SLACK = 1_100;
   const SETTINGS_LOVELACE = 5_000_000n;
+  const COUNTER_LOVELACE: Asset[] = [{ unit: "lovelace", quantity: "3000000" }];
 
   let governor: Account; // settings proposer + applier; pays stake registrations
   let alice: Account; // owns the counter UTxOs and consents to migrations
@@ -274,21 +291,139 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
     };
   }
 
-  /** Lock a counter UTxO (plain lovelace + inline datum) at a script address. */
-  async function lockCounter(
+  /** Lock a UTxO with a raw inline datum (plain lovelace) at a script address. */
+  async function lockDatum(
     addr: string,
-    datum: CounterDatum,
+    datumData: Data,
     owner: Account,
+    lovelace = 3_000_000n,
   ): Promise<UTxO> {
     const tx = await newTxBuilder(provider)
-      .txOut(addr, [{ unit: "lovelace", quantity: "3000000" }])
-      .txOutInlineDatumValue(counterDatumToData(datum))
+      .txOut(addr, [{ unit: "lovelace", quantity: lovelace.toString() }])
+      .txOutInlineDatumValue(datumData)
       .changeAddress(owner.address)
       .selectUtxosFrom(await owner.wallet.getUtxos())
       .complete();
     const hash = await signAndSubmit(owner, tx);
     await waitForTx(provider, hash);
     return await scriptOutputOf(provider, hash, addr);
+  }
+
+  /** Lock a counter UTxO (plain lovelace + inline datum) at a script address. */
+  async function lockCounter(
+    addr: string,
+    datum: CounterDatum,
+    owner: Account,
+  ): Promise<UTxO> {
+    return await lockDatum(addr, counterDatumToData(datum), owner);
+  }
+
+  /**
+   * A raw, possibly-malicious V1 upgrade: spends `inputs` with `redeemer`,
+   * optionally runs the migration script as a withdraw-0, and emits arbitrary
+   * continuation outputs. An attacker chooses the shape; the validators decide.
+   */
+  async function rawUpgradeTx(p: {
+    inputs: UTxO[];
+    redeemer: Data;
+    outputs: { address: string; amount: Asset[]; datum: CounterDatum }[];
+    withdrawMigration: boolean;
+    requiredSigner?: string;
+    settings?: UTxO;
+  }): Promise<string> {
+    const tb = newTxBuilder(provider);
+    for (const utxo of p.inputs) {
+      tb.spendingPlutusScriptV3()
+        .txIn(
+          utxo.input.txHash,
+          utxo.input.outputIndex,
+          utxo.output.amount,
+          utxo.output.address,
+        )
+        .txInInlineDatumPresent()
+        .txInRedeemerValue(p.redeemer)
+        .txInScript(v1Script.code);
+    }
+    if (p.withdrawMigration) {
+      const rewardAddress = serializeRewardAddress(
+        migrationHash,
+        true,
+        NETWORK_ID,
+      );
+      tb.withdrawalPlutusScriptV3()
+        .withdrawal(rewardAddress, "0")
+        .withdrawalScript(migrationScript.code)
+        .withdrawalRedeemerValue(opaqueRedeemer());
+    }
+    const settings = p.settings ?? settingsUtxo!;
+    tb.readOnlyTxInReference(settings.input.txHash, settings.input.outputIndex);
+    for (const out of p.outputs) {
+      tb.txOut(out.address, out.amount).txOutInlineDatumValue(
+        counterDatumToData(out.datum),
+      );
+    }
+    if (p.requiredSigner) tb.requiredSignerHash(p.requiredSigner);
+    const col = await collateralOf(alice);
+    const unsigned = await tb
+      .txInCollateral(
+        col.input.txHash,
+        col.input.outputIndex,
+        col.output.amount,
+        col.output.address,
+      )
+      .changeAddress(alice.address)
+      .selectUtxosFrom(await alice.wallet.getUtxos())
+      .complete();
+    return await signAndSubmit(alice, unsigned);
+  }
+
+  /**
+   * A raw forced tick spending several forwarder UTxOs at once, invoking the
+   * registered logic as a withdraw-0 and emitting arbitrary continuations.
+   */
+  async function rawForwardTick(p: {
+    inputs: UTxO[];
+    outputs: { address: string; amount: Asset[]; datum: CounterDatum }[];
+  }): Promise<string> {
+    const tb = newTxBuilder(provider);
+    for (const utxo of p.inputs) {
+      tb.spendingPlutusScriptV3()
+        .txIn(
+          utxo.input.txHash,
+          utxo.input.outputIndex,
+          utxo.output.amount,
+          utxo.output.address,
+        )
+        .txInInlineDatumPresent()
+        .txInRedeemerValue(opaqueRedeemer())
+        .txInScript(forwarderScript.code);
+    }
+    const rewardAddress = serializeRewardAddress(logicHash, true, NETWORK_ID);
+    tb.withdrawalPlutusScriptV3()
+      .withdrawal(rewardAddress, "0")
+      .withdrawalScript(logicScript.code)
+      .withdrawalRedeemerValue(opaqueRedeemer());
+    tb.readOnlyTxInReference(
+      settingsUtxo!.input.txHash,
+      settingsUtxo!.input.outputIndex,
+    );
+    for (const out of p.outputs) {
+      tb.txOut(out.address, out.amount).txOutInlineDatumValue(
+        counterDatumToData(out.datum),
+      );
+    }
+    const col = await collateralOf(alice);
+    const unsigned = await tb
+      .txInCollateral(
+        col.input.txHash,
+        col.input.outputIndex,
+        col.output.amount,
+        col.output.address,
+      )
+      .changeAddress(alice.address)
+      .selectUtxosFrom(await alice.wallet.getUtxos())
+      .complete();
+    return await signAndSubmit(alice, unsigned);
   }
 
   /** Tick the forwarder: build + submit, and return the continuation UTxO. */
@@ -363,6 +498,166 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
     const registry = readRegistry(settingsUtxo!);
     expect(registry.get(forwarderHash)).toBe(logicHash);
     expect(registry.get(v1Hash)).toBe(migrationHash);
+  });
+
+  it("rejects a migration that tampers with the count", async () => {
+    const v1 = await lockCounter(
+      v1Addr,
+      { count: 1, owner: aliceOwner() },
+      alice,
+    );
+    await expect(
+      rawUpgradeTx({
+        inputs: [v1],
+        redeemer: upgradeRedeemer(),
+        outputs: [
+          {
+            address: v2Addr,
+            amount: COUNTER_LOVELACE,
+            datum: { count: 2, owner: aliceOwner() },
+          },
+        ],
+        withdrawMigration: true,
+        requiredSigner: alice.keyHash,
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("rejects a migration that swaps the state's owner", async () => {
+    const v1 = await lockCounter(
+      v1Addr,
+      { count: 1, owner: aliceOwner() },
+      alice,
+    );
+    await expect(
+      rawUpgradeTx({
+        inputs: [v1],
+        redeemer: upgradeRedeemer(),
+        outputs: [
+          {
+            address: v2Addr,
+            amount: COUNTER_LOVELACE,
+            datum: { count: 1, owner: { kind: "key", hash: bob.keyHash } },
+          },
+        ],
+        withdrawMigration: true,
+        requiredSigner: alice.keyHash,
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("rejects a migration whose continuation stays at the V1 address", async () => {
+    const v1 = await lockCounter(
+      v1Addr,
+      { count: 1, owner: aliceOwner() },
+      alice,
+    );
+    await expect(
+      rawUpgradeTx({
+        inputs: [v1],
+        redeemer: upgradeRedeemer(),
+        outputs: [
+          {
+            address: v1Addr,
+            amount: COUNTER_LOVELACE,
+            datum: { count: 1, owner: aliceOwner() },
+          },
+        ],
+        withdrawMigration: true,
+        requiredSigner: alice.keyHash,
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("rejects a migration that underpays the continuation", async () => {
+    const v1 = await lockCounter(
+      v1Addr,
+      { count: 1, owner: aliceOwner() },
+      alice,
+    );
+    await expect(
+      rawUpgradeTx({
+        inputs: [v1],
+        redeemer: upgradeRedeemer(),
+        outputs: [
+          {
+            address: v2Addr,
+            amount: [{ unit: "lovelace", quantity: "2000000" }],
+            datum: { count: 1, owner: aliceOwner() },
+          },
+        ],
+        withdrawMigration: true,
+        requiredSigner: alice.keyHash,
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("rejects a migration with no V2 continuation", async () => {
+    const v1 = await lockCounter(
+      v1Addr,
+      { count: 1, owner: aliceOwner() },
+      alice,
+    );
+    await expect(
+      rawUpgradeTx({
+        inputs: [v1],
+        redeemer: upgradeRedeemer(),
+        outputs: [],
+        withdrawMigration: true,
+        requiredSigner: alice.keyHash,
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("rejects a V1 spent with Tick while the migration script runs", async () => {
+    const v1 = await lockCounter(
+      v1Addr,
+      { count: 1, owner: aliceOwner() },
+      alice,
+    );
+    await expect(
+      rawUpgradeTx({
+        inputs: [v1],
+        redeemer: tickRedeemer(),
+        outputs: [
+          {
+            address: v1Addr,
+            amount: COUNTER_LOVELACE,
+            datum: { count: 2, owner: aliceOwner() },
+          },
+        ],
+        withdrawMigration: true,
+        requiredSigner: alice.keyHash,
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("rejects a batch migration when one forwarded input is not preserved", async () => {
+    const matching = await lockCounter(
+      v1Addr,
+      { count: 2, owner: aliceOwner() },
+      alice,
+    );
+    const stale = await lockCounter(
+      v1Addr,
+      { count: 5, owner: aliceOwner() },
+      alice,
+    );
+    await expect(
+      rawUpgradeTx({
+        inputs: [matching, stale],
+        redeemer: upgradeRedeemer(),
+        outputs: [
+          {
+            address: v2Addr,
+            amount: [{ unit: "lovelace", quantity: "6000000" }],
+            datum: { count: 2, owner: aliceOwner() },
+          },
+        ],
+        withdrawMigration: true,
+        requiredSigner: alice.keyHash,
+      }),
+    ).rejects.toThrow();
   });
 
   it("migrates a V1 UTxO to V2 with the owner's consent", async () => {
@@ -464,6 +759,58 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
     const continuation = await forwardTick(logicScript.code);
     expect(counterDatumFromUtxo(continuation).count).toBe(3);
     forwarderUtxo = continuation;
+  });
+
+  it("rejects a batch tick when one forwarded input is not preserved", async () => {
+    const matching = await lockCounter(
+      forwarderAddr,
+      { count: 1, owner: aliceOwner() },
+      alice,
+    );
+    const stale = await lockCounter(
+      forwarderAddr,
+      { count: 5, owner: aliceOwner() },
+      alice,
+    );
+    await expect(
+      rawForwardTick({
+        inputs: [matching, stale],
+        outputs: [
+          {
+            address: forwarderAddr,
+            amount: [{ unit: "lovelace", quantity: "6000000" }],
+            datum: { count: 2, owner: aliceOwner() },
+          },
+        ],
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("ignores a forged registry without the settings NFT", async () => {
+    const forged = await lockDatum(
+      settingsAddr,
+      settingsDatumToData({
+        current: registryToData(new Map([[forwarderHash, logicHash]])),
+        next: null,
+        nextApply: null,
+      }),
+      alice,
+    );
+    await expect(
+      (async () => {
+        const tx = await buildForwardTx({
+          txBuilder: newTxBuilder(provider),
+          forwarderScript,
+          logicAuthorizer: { scriptCbor: logicScript.code },
+          forwarderUtxo: forwarderUtxo!,
+          settingsUtxo: forged,
+          utxos: await alice.wallet.getUtxos(),
+          changeAddress: alice.address,
+          collateralUtxo: await collateralOf(alice),
+        });
+        await signAndSubmit(alice, tx);
+      })(),
+    ).rejects.toThrow();
   });
 
   it("a malformed registry bricks consumers until governance restores it", async () => {
