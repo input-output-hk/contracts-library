@@ -13,7 +13,7 @@ export {
   registryFromUtxo,
 } from "./datum";
 export {
-  addressToBytes,
+  addressToData,
   counterScriptAddress,
   counterScriptHash,
   counterForwarderScript,
