@@ -58,8 +58,9 @@ validator smart_wallet(
           self,
         )
       UpdatePermissions { out_ix } ->
-        validate_config_update(admin, out_ix, own_ref, self)
-      Deposit { out_ix } -> checks.validate_deposit(out_ix, own_ref, self)
+        validate_config_update(admin, out_ix, own_ref, wallet_token_name, self)
+      Deposit { out_ix } ->
+        checks.validate_deposit(out_ix, own_ref, wallet_token_name, self)
       Close -> checks.validate_close(admin, own_ref, self)
     }
   }
@@ -89,11 +90,14 @@ validator smart_wallet(
 /// must sit at the same address. All non-ADA assets are preserved exactly; ADA
 /// may only increase, an explicit top-up exception so the admin can cover a
 /// larger datum/min-UTxO. Apart from that top-up, only the config may change, so
-/// an update cannot remove funds or add other assets.
+/// an update cannot remove funds or add other assets. Any other output at the
+/// wallet's payment credential is rejected: without the NFT it could never be
+/// spent and would permanently lock funds.
 fn validate_config_update(
   admin: Credential,
   out_ix: Int,
   own_ref: OutputReference,
+  wallet_token_name: AssetName,
   self: Transaction,
 ) -> Bool {
   expect
@@ -104,8 +108,23 @@ fn validate_config_update(
   expect new_datum: WalletDatum = raw
   expect InlineDatum(old_raw) = own_input.output.datum
   expect old_datum: WalletDatum = old_raw
+  let wallet_credential = own_input.output.address.payment_credential
+  expect Script(wallet_policy) = wallet_credential
+  let wallet_outputs = list.filter(
+    self.outputs,
+    fn(output) { output.address.payment_credential == wallet_credential },
+  )
+  let continuations = list.filter(
+    wallet_outputs,
+    fn(output) {
+      assets.has_nft(output.value, wallet_policy, wallet_token_name)
+    },
+  )
   and {
     continuation.address == own_input.output.address,
+    !list.is_empty(continuations) && list.length(wallet_outputs) == list.length(
+      continuations,
+    ),
     assets.match_assets(continuation.value, own_input.output.value),
     assets.lovelace_of(continuation.value) >= assets.lovelace_of(
       own_input.output.value,

@@ -66,7 +66,7 @@ fn wallet_output_with(value: Value, datum: WalletDatum) -> Output {
 }
 
 fn deposit(tx: Transaction) -> Bool {
-  validate_deposit(0, wallet_ref(), tx)
+  validate_deposit(0, wallet_ref(), wallet_token, tx)
 }
 
 // ---------------------------------------------------------------- deposit
@@ -234,6 +234,23 @@ test rejects_deposit_wrong_address() fail {
       ..placeholder,
       inputs: [wallet_input()],
       outputs: [bad_output],
+    },
+  )
+}
+
+// An NFT-less output at the wallet credential can never be spent again, so a
+// deposit routing funds there would permanently lock them.
+test rejects_deposit_stray_wallet_output() fail {
+  let cont_value = assets.from_lovelace(1_500_000)
+    |> assets.add(wallet_policy, wallet_token, 1)
+  deposit(
+    Transaction {
+      ..placeholder,
+      inputs: [wallet_input()],
+      outputs: [
+        wallet_output(cont_value),
+        wallet_output(assets.from_lovelace(500_000)),
+      ],
     },
   )
 }

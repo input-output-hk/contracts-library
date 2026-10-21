@@ -167,7 +167,7 @@ unchanged, its `spenders` key set fixed, and a value no greater than the input's
 | | |
 |---|---|
 | **Inputs** | The wallet UTxO. |
-| **Outputs** | One continuation at `out_ix`: same address, every **non-ADA asset exactly preserved** (including the NFT), inline datum with the new config. Lovelace may only increase — an explicit top-up exception (see below). |
+| **Outputs** | One continuation at `out_ix`: same address, every **non-ADA asset exactly preserved** (including the NFT), inline datum with the new config. Lovelace may only increase — an explicit top-up exception (see below). No other output may sit at the wallet's payment credential: an NFT-less output there would be unspendable forever. |
 | **Redeemer** | `UpdatePermissions { out_ix }`. |
 | **Authorization** | `admin`. |
 | **Constraints** | The new `spenders` and `depositors` maps must have unique keys. The old and new maps are diffed: every script *added* must be **published** here (`RegisterCredential` **and its matching `Publish` redeemer**); every script *removed* must be **unregistered** (`UnregisterCredential`); every script *kept* must carry unchanged `Data`. |
@@ -187,7 +187,7 @@ transaction; its own `withdraw` transition is the only way its state advances.
 | | |
 |---|---|
 | **Inputs** | The wallet UTxO (plus the depositing party's own funding UTxOs). |
-| **Outputs** | One continuation at `out_ix`: same address, `spenders` unchanged, `depositors` keys unchanged with `Data` possibly advanced, value a **superset** of the input's (every asset, including lovelace and the NFT, present in `>=` quantity). |
+| **Outputs** | One continuation at `out_ix`: same address, `spenders` unchanged, `depositors` keys unchanged with `Data` possibly advanced, value a **superset** of the input's (every asset, including lovelace and the NFT, present in `>=` quantity). No other output may sit at the wallet's payment credential: an NFT-less output there would be unspendable forever, and depositing funds into it locks them. |
 | **Redeemer** | `Deposit { out_ix }`. |
 | **Authorization** | Every script in `depositors` is invoked as a reward withdrawal and approves; with an empty map, no approval is needed. |
 | **Constraints** | The `spenders` map is preserved and the `depositors` key set is fixed; depositor `Data` may advance, with each deposit script enforcing its own transition. The `spenders` scripts do **not** run (there is no outflow to restrict). |
@@ -352,11 +352,12 @@ therefore cannot be used to bloat the datum.
   validity interval to lie inside one `[start, end)` period, so a transaction
   valid now cannot be charged to a historical period. The charged period only
   rolls forward, never back.
-- **Stray wallet outputs.** `Spend` rejects any output at the wallet's payment
-  credential that does not carry the NFT, so a member cannot park funds in an
-  unspendable output to bypass delegated value, period, or recipient
-  restrictions. The reference value-accounting scripts also count only
-  NFT-bearing wallet UTxOs.
+- **Stray wallet outputs.** `Spend`, `Deposit`, and `UpdatePermissions` reject
+  any output at the wallet's payment credential that does not carry the NFT, so
+  no one can park funds in an unspendable output to bypass delegated value,
+  period, or recipient restrictions (or to lock a deposit by routing it to an
+  NFT-less output at the wallet address). The reference value-accounting
+  scripts also count only NFT-bearing wallet UTxOs.
 - **Unvalidated script state.** A script enters `spenders` or `depositors` only
   after its own `publish` handler validates its initial `Data` (I4), proven by
   the matching `Publish` redeemer rather than a bare certificate; stateful

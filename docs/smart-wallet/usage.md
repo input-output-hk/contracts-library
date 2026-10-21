@@ -74,7 +74,8 @@ stateDiagram-v2
   spent again.
 - **updatePermissions** — the admin rewrites `spenders` and/or `depositors` in
   place: same address, every non-ADA asset exactly unchanged, inline datum with
-  the new config. ADA may only increase, as an explicit top-up exception.
+  the new config. ADA may only increase, as an explicit top-up exception. Like
+  `Spend`, no other output at the wallet address without the NFT is accepted.
 - **close** — the admin spends the wallet UTxO, releases the remaining funds,
   burns the NFT, and unregisters every delegated script. Closing is
   irreversible: the seed nonce is spent, so the wallet can never be relaunched
@@ -240,7 +241,9 @@ action.
 
 Adds assets without spending or reconfiguring. `spenders` must be passed back
 unchanged and `depositors` must keep the same keys (their `data` may advance);
-every `depositors` entry must be invoked. With an empty `depositors` map,
+every `depositors` entry must be invoked. Like `Spend`, the deposit rejects any
+other output at the wallet address without the NFT — funds routed there could
+never be spent again. With an empty `depositors` map,
 deposits are open:
 
 ```ts

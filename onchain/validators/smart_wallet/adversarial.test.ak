@@ -574,6 +574,21 @@ test update_permissions_rejects_value_decrease() fail {
   core_spend(datum, UpdatePermissions { out_ix: 0 }, tx)
 }
 
+// Fixed: like `Spend`, an update rejects a second, NFT-less output at the
+// wallet credential; funds routed there could never be spent again.
+test update_permissions_rejects_stray_wallet_output() fail {
+  let datum = WalletDatum { spenders: [], depositors: [] }
+  let tx = Transaction {
+    ..admin_tx(),
+    inputs: [wallet_in(wallet_out(nft_value(12 * ada), [], []))],
+    outputs: [
+      wallet_out(nft_value(12 * ada), [], []),
+      wallet_out(assets.from_lovelace(2 * ada), [], []),
+    ],
+  }
+  core_spend(datum, UpdatePermissions { out_ix: 0 }, tx)
+}
+
 // ---------------------------------------------- configuration validity
 
 // Fixed: members are treated as a set, so the duplicate counts once.

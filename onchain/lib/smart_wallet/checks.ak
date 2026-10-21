@@ -269,10 +269,13 @@ pub fn validate_close(
 /// (both are `UpdatePermissions`-only), while depositor `Data` may advance —
 /// each deposit script enforces its own transition. A deposit can only add
 /// funds, never spend them or change the permission set. With an empty
-/// `depositors` map, a deposit needs no approval.
+/// `depositors` map, a deposit needs no approval. Any other output at the
+/// wallet's payment credential is rejected: without the NFT it could never be
+/// spent and would permanently lock funds.
 pub fn validate_deposit(
   out_ix: Int,
   own_ref: OutputReference,
+  wallet_token_name: AssetName,
   self: Transaction,
 ) -> Bool {
   expect Some(own_input) = find_input(self.inputs, own_ref)
@@ -283,9 +286,24 @@ pub fn validate_deposit(
   expect InlineDatum(cont_raw) = continuation.datum
   expect cont_datum: WalletDatum = cont_raw
 
+  let wallet_credential = own_input.output.address.payment_credential
+  expect Script(wallet_policy) = wallet_credential
+  let wallet_outputs = list.filter(
+    self.outputs,
+    fn(output) { output.address.payment_credential == wallet_credential },
+  )
+  let continuations = list.filter(
+    wallet_outputs,
+    fn(output) {
+      assets.has_nft(output.value, wallet_policy, wallet_token_name)
+    },
+  )
   and {
     withdrawals_invoked(datum.depositors, self.withdrawals),
     continuation.address == own_input.output.address,
+    !list.is_empty(continuations) && list.length(wallet_outputs) == list.length(
+      continuations,
+    ),
     keys_unique(cont_datum.spenders),
     keys_unique(cont_datum.depositors),
     withdrawals_equal(datum.spenders, cont_datum.spenders),
