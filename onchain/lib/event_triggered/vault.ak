@@ -16,12 +16,20 @@
 ////   * `Redeem` (§4.6): burn-to-pay — the vault loses exactly the sum decoded
 ////     from the burned coupon names, paid to the addresses the redeemer names.
 ////
+//// On every path the vault's non-ADA assets are carried through unchanged, so
+//// neither a deposit nor a redemption can strip the vault. A redemption must
+//// burn a positive value, its payouts must be positive and are aggregated per
+//// address against the ADA paid to that address (the vault continuation never
+//// counts as a payout), so several payouts cannot share one output and the
+//// vault's own continuation cannot satisfy one.
+////
 //// Owner custody (draining or topping up the vault) is the instrument's
 //// central assumption and lives off-chain (§7); the owner funds the vault by
 //// sending ADA to its address, which runs no validator.
 
 use aiken/collection/list
-use cardano/assets.{quantity_of}
+use cardano/address.{Address}
+use cardano/assets.{quantity_of, without_lovelace}
 use cardano/transaction.{Output, OutputReference, Transaction}
 use event_triggered/schedule
 use event_triggered/types.{
@@ -61,6 +69,8 @@ pub fn validate(
             // Address and datum are carried byte-for-byte.
             vin.output.address == vout.address,
             vin.output.datum == vout.datum,
+            // Non-ADA assets (including the vault NFT) never leave the vault.
+            without_lovelace(vin.output.value) == without_lovelace(vout.value),
             when redeemer is {
               VaultDeposit -> delta(vin.output, vout) == params.principal
               Redeem { payouts } -> {
@@ -69,13 +79,16 @@ pub fn validate(
                   cnt_policy,
                 )
                 and {
+                  // A redemption must redeem something.
+                  burned > 0,
                   // Burn-to-pay exactness (I4): the vault loses exactly the
                   // redeemed value, no more and no less.
                   delta(vin.output, vout) == 0 - burned,
-                  // The redeemer names the payouts and their total is the
-                  // burned value.
+                  // Every payout is positive and their total is the burned
+                  // value.
+                  payouts_positive(payouts),
                   payouts_total(payouts) == burned,
-                  payouts_present(self.outputs, payouts),
+                  payouts_present(self.outputs, payouts, params.vault_nft_cs),
                 }
               }
             },
@@ -91,6 +104,10 @@ fn delta(input: Output, output: Output) -> Int {
   quantity_of(output.value, #"", #"") - quantity_of(input.value, #"", #"")
 }
 
+fn payouts_positive(payouts: List<Payout>) -> Bool {
+  list.all(payouts, fn(payout: Payout) { payout.amount > 0 })
+}
+
 fn payouts_total(payouts: List<Payout>) -> Int {
   list.foldl(
     payouts,
@@ -99,21 +116,45 @@ fn payouts_total(payouts: List<Payout>) -> Int {
   )
 }
 
-/// Every named payout lands at its address with at least the named amount.
-fn payouts_present(outputs: List<Output>, payouts: List<Payout>) -> Bool {
+/// Every named payout is covered by the ADA paid to its address, excluding the
+/// vault continuation. Payouts are aggregated per address, so several payouts
+/// cannot be satisfied by the same output.
+fn payouts_present(outputs: List<Output>, payouts: List<Payout>, nft_cs) -> Bool {
+  let paid = list.filter(outputs, fn(output) { nft_of(output, nft_cs) == None })
   list.all(
     payouts,
     fn(payout: Payout) {
-      list.any(
-        outputs,
-        fn(output: Output) {
-          output.address == payout.address && quantity_of(
-            output.value,
-            #"",
-            #"",
-          ) >= payout.amount
-        },
-      )
+      paid_to(paid, payout.address) >= payouts_to(payouts, payout.address)
+    },
+  )
+}
+
+/// The ADA paid to `address` across `outputs`.
+fn paid_to(outputs: List<Output>, address: Address) -> Int {
+  list.foldl(
+    outputs,
+    0,
+    fn(output: Output, total: Int) {
+      if output.address == address {
+        total + quantity_of(output.value, #"", #"")
+      } else {
+        total
+      }
+    },
+  )
+}
+
+/// The total amount named for `address` across `payouts`.
+fn payouts_to(payouts: List<Payout>, address: Address) -> Int {
+  list.foldl(
+    payouts,
+    0,
+    fn(payout: Payout, total: Int) {
+      if payout.address == address {
+        total + payout.amount
+      } else {
+        total
+      }
     },
   )
 }
