@@ -8,6 +8,8 @@
       "!**/*.tsbuildinfo",
       "!**/package-lock.json",
       "!offchain/tx3/devnet/genesis/**",
+      "!offchain/tx3/*/codegen/**",
+      "!offchain/tx3/**/.tx3/**",
       "!onchain/**",
       "!formal/**",
       "!logs/**",
