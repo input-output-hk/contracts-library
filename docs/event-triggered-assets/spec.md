@@ -59,7 +59,7 @@ Three postures make the instrument legible:
 | Transfer | **Freely transferable, name-monotone** | Ownership moves with the token; the transfer logic preserves the name, `start` and `cnt_policy`, so a certificate cannot be rewound to re-claim. |
 | Earnings | **`cNt` coupon tokens, amount in the name** | One native asset per step; the name is the amount, so the vault needs no external oracle or schedule. |
 | Coupon claim | **Name-anchored; owner-signed or issuer-triggered** | The claim burns the current name and mints the next, so no step can be claimed twice per certificate; a committed certificate may be claimed by the issuer. |
-| Redemption | **Burn-to-pay at the vault** | Burning a coupon releases exactly `decode(name) × burned` ADA; double redemption is impossible (the coupon is destroyed). |
+| Redemption | **Burn-to-pay at the vault** | Burning a coupon releases exactly `decode(name) × burned` ADA while the vault holds the liquidity; double redemption is impossible (the coupon is destroyed). |
 | Graduation | **Principal-only coupon at maturity** | A final `cNt` names the principal; the certificate is retired at its `start + N * interval` maturity (owner-signed or issuer-triggered). |
 | Trust | **Escrowed vault funding (assumed)** | The owner funds the vault through deposits and top-ups but cannot withdraw on-chain; holders trust the owner to keep it funded, documented as the instrument's central assumption (§7). |
 
@@ -278,7 +278,10 @@ owner's behalf through the third-party path:
 ### 4.6 Redemption (burn-to-pay, T-redeem)
 
 A coupon is redeemed by burning it at the vault. The vault pays exactly the ADA
-the burned coupons name.
+the burned coupons name, as long as the vault holds that liquidity: redemption
+depends on the vault's available balance, and a redemption against an
+underfunded vault fails (the coupon is not burned, so the claim survives until
+the vault is topped up).
 
 | | |
 | --- | --- |
@@ -458,8 +461,11 @@ owner's behalf:
 - **Open issuance, no cap.** Deposits are permissionless and the number of
   certificates is not capped on-chain: every certificate claims its vault's
   coupons from that vault's owner-funded balance and the principal at its own
-  `start + N * interval` maturity. The owners must manage total issuance
-  off-chain; holders trust them to fund and honor all certificates.
+  `start + N * interval` maturity. Redemption is **first-come-first-served
+  against the vault's available liquidity**: if the owner underfunds the vault,
+  redemptions fail (the coupon is not burned, so the claim survives) until it
+  is topped up. The owners must manage total issuance off-chain; holders trust
+  them to fund and honor all certificates.
 - **Name collisions are intended.** Coupons are valued only by amount, so two
   steps of equal amount share an asset name and are fungible; the year is not
   encoded. If per-step distinctness is required, the name must encode more.

@@ -288,9 +288,12 @@ deadline (I3).
 ## Redemption (burn-to-pay)
 
 Coupons redeem at the vault for their face value: the coupons are burned and
-the vault releases exactly the decoded sum (I4). Payouts are named in the
-redeemer; payout outputs get at least the ledger min-ADA, and the excess over
-the named amount comes from the payer's wallet — the vault's loss stays
+the vault releases exactly the decoded sum (I4), **while the vault holds that
+liquidity** — redemption is first-come-first-served against the vault's
+available balance, so an underfunded vault makes redemptions fail until it is
+topped up (the coupon is not burned, so the claim survives). Payouts are named
+in the redeemer; payout outputs get at least the ledger min-ADA, and the excess
+over the named amount comes from the payer's wallet — the vault's loss stays
 exactly the burned value:
 
 ```ts
