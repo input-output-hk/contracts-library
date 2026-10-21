@@ -31,8 +31,13 @@ import {
   type UTxO,
 } from "@meshsdk/core";
 
-import { applyAuthorization, type ScriptAuthorizer } from "../authorization";
-import { credentialToData } from "../common";
+import {
+  applyAuthorization,
+  authorizerReference,
+  authorizerScriptHash,
+  type ScriptAuthorizer,
+} from "../authorization";
+import { credentialToData, type Credential } from "../common";
 import {
   baseSpendRedeemer,
   EX_UNITS,
@@ -279,18 +284,52 @@ function w0(
 
 /**
  * Index of `programmable_logic_global` in the ledger's complete withdrawal
- * set. Pass every withdraw-0 script the transaction carries: the PLB redeemer
+ * set. Pass every withdrawal key the transaction carries: the PLB redeemer
  * witnesses PLG's position in the full set, not just the transfer chain.
  */
-function wdrlIdxOf(d: CoreDeployment, scripts: PlutusScript[]): number {
-  const all: WithdrawalKey[] = scripts.map((s) => ({
-    hash: scriptHashOf(s),
-    isScript: true,
-  }));
-  return withdrawalIndexOf(all, {
+function wdrlIdxOf(d: CoreDeployment, keys: WithdrawalKey[]): number {
+  const unique = new Map<string, WithdrawalKey>();
+  for (const key of keys) {
+    unique.set(`${key.isScript}:${key.hash.toLowerCase()}`, key);
+  }
+  return withdrawalIndexOf([...unique.values()], {
     hash: d.core.programmableLogicGlobalHash,
     isScript: true,
   });
+}
+
+/** Withdrawal keys of the given withdraw-0 scripts. */
+function withdrawalKeys(scripts: PlutusScript[]): WithdrawalKey[] {
+  return scripts.map((s) => ({ hash: scriptHashOf(s), isScript: true }));
+}
+
+/**
+ * The transaction's complete withdrawal set: the given chain plus the
+ * authorizer's entry, when the credential is authorized by a script. The
+ * ledger orders withdrawals canonically, so index-bearing redeemers must count
+ * the authorizer's withdraw-0 too.
+ */
+function fullWithdrawalKeys(
+  chain: PlutusScript[],
+  credential: Credential,
+  authorizer: ScriptAuthorizer | undefined,
+): WithdrawalKey[] {
+  const keys = withdrawalKeys(chain);
+  const hash = authorizerScriptHash(credential, authorizer);
+  if (hash !== undefined) keys.push({ hash, isScript: true });
+  return keys;
+}
+
+/**
+ * The transaction's complete reference-input set, canonically sorted,
+ * including the authorizer's reference UTxO when it has one.
+ */
+function fullReferences(
+  refs: UTxO[],
+  authorizer: ScriptAuthorizer | undefined,
+): UTxO[] {
+  const reference = authorizerReference(authorizer);
+  return sortReferenceInputs(reference ? [...refs, reference] : refs);
 }
 
 function plbSpend(
@@ -577,24 +616,20 @@ export async function buildTransferTx(p: TransferTxParams): Promise<string> {
   const { deployment: d, bond: b } = p;
   const tb = p.txBuilder;
 
-  const refs = sortReferenceInputs([d.refs.protocolParams, p.node]);
+  const holder = holderCredential(p.holderStakeHash, p.holderIsScript);
+  const refs = fullReferences([d.refs.protocolParams, p.node], p.authorizer);
   const paramsIdx = referenceIndexOf(refs, d.refs.protocolParams);
   const nodeIdx = referenceIndexOf(refs, p.node);
 
   const chain = [d.core.programmableLogicGlobal, d.core.transfer, b.transfer];
-  const wdrlIdx = wdrlIdxOf(d, chain);
+  const wdrlIdx = wdrlIdxOf(d, fullWithdrawalKeys(chain, holder, p.authorizer));
 
   plbSpend(tb, d, p.certificate, paramsIdx, wdrlIdx);
   w0(tb, d, d.core.programmableLogicGlobal, transferAct());
   w0(tb, d, d.core.transfer, transferRedeemer([{ nodeIdx }]));
   w0(tb, d, b.transfer, moveRedeemer());
 
-  applyAuthorization(
-    tb,
-    holderCredential(p.holderStakeHash, p.holderIsScript),
-    p.authorizer,
-    d.config.networkId,
-  );
+  applyAuthorization(tb, holder, p.authorizer, d.config.networkId);
 
   tb.txOut(p.recipientAddress, p.certificate.output.amount);
   tb.txOutInlineDatumValue(certificateDatumToData(p.outputDatum));
@@ -658,7 +693,8 @@ export async function buildClaimOwnerTx(p: ClaimOwnerParams): Promise<string> {
   const { deployment: d, bond: b } = p;
   const tb = p.txBuilder;
 
-  const refs = sortReferenceInputs([d.refs.protocolParams, p.node]);
+  const holder = holderCredential(p.holderStakeHash, p.holderIsScript);
+  const refs = fullReferences([d.refs.protocolParams, p.node], p.authorizer);
   const paramsIdx = referenceIndexOf(refs, d.refs.protocolParams);
   const nodeIdx = referenceIndexOf(refs, p.node);
 
@@ -669,7 +705,7 @@ export async function buildClaimOwnerTx(p: ClaimOwnerParams): Promise<string> {
     b.issuance,
     d.core.issuanceLogic,
   ];
-  const wdrlIdx = wdrlIdxOf(d, chain);
+  const wdrlIdx = wdrlIdxOf(d, fullWithdrawalKeys(chain, holder, p.authorizer));
 
   plbSpend(tb, d, p.certificate, paramsIdx, wdrlIdx);
 
@@ -690,12 +726,7 @@ export async function buildClaimOwnerTx(p: ClaimOwnerParams): Promise<string> {
     ]),
   );
 
-  applyAuthorization(
-    tb,
-    holderCredential(p.holderStakeHash, p.holderIsScript),
-    p.authorizer,
-    d.config.networkId,
-  );
+  applyAuthorization(tb, holder, p.authorizer, d.config.networkId);
 
   // Certificate continuation (name advanced, datum preserved).
   tb.txOut(p.certificate.output.address, [
@@ -735,7 +766,7 @@ export async function buildClaimIssuerTx(
   const { deployment: d, bond: b } = p;
   const tb = p.txBuilder;
 
-  const refs = sortReferenceInputs([d.refs.protocolParams, p.node]);
+  const refs = fullReferences([d.refs.protocolParams, p.node], p.authorizer);
   const paramsIdx = referenceIndexOf(refs, d.refs.protocolParams);
   const nodeIdx = referenceIndexOf(refs, p.node);
 
@@ -746,7 +777,10 @@ export async function buildClaimIssuerTx(
     b.issuance,
     d.core.issuanceLogic,
   ];
-  const wdrlIdx = wdrlIdxOf(d, chain);
+  const wdrlIdx = wdrlIdxOf(
+    d,
+    fullWithdrawalKeys(chain, b.config.issuer, p.authorizer),
+  );
 
   plbSpend(tb, d, p.certificate, paramsIdx, wdrlIdx);
 
@@ -868,7 +902,8 @@ export async function buildGraduateOwnerTx(
   const { deployment: d, bond: b } = p;
   const tb = p.txBuilder;
 
-  const refs = sortReferenceInputs([d.refs.protocolParams, p.node]);
+  const holder = holderCredential(p.holderStakeHash, p.holderIsScript);
+  const refs = fullReferences([d.refs.protocolParams, p.node], p.authorizer);
   const paramsIdx = referenceIndexOf(refs, d.refs.protocolParams);
   const nodeIdx = referenceIndexOf(refs, p.node);
 
@@ -879,7 +914,7 @@ export async function buildGraduateOwnerTx(
     b.issuance,
     d.core.issuanceLogic,
   ];
-  const wdrlIdx = wdrlIdxOf(d, chain);
+  const wdrlIdx = wdrlIdxOf(d, fullWithdrawalKeys(chain, holder, p.authorizer));
 
   plbSpend(tb, d, p.certificate, paramsIdx, wdrlIdx);
 
@@ -899,12 +934,7 @@ export async function buildGraduateOwnerTx(
     ]),
   );
 
-  applyAuthorization(
-    tb,
-    holderCredential(p.holderStakeHash, p.holderIsScript),
-    p.authorizer,
-    d.config.networkId,
-  );
+  applyAuthorization(tb, holder, p.authorizer, d.config.networkId);
 
   tb.txOut(p.couponAddress, [
     lovelace(MIN_ADA),
@@ -934,7 +964,7 @@ export async function buildGraduateIssuerTx(
   const { deployment: d, bond: b } = p;
   const tb = p.txBuilder;
 
-  const refs = sortReferenceInputs([d.refs.protocolParams, p.node]);
+  const refs = fullReferences([d.refs.protocolParams, p.node], p.authorizer);
   const paramsIdx = referenceIndexOf(refs, d.refs.protocolParams);
   const nodeIdx = referenceIndexOf(refs, p.node);
 
@@ -945,7 +975,10 @@ export async function buildGraduateIssuerTx(
     b.issuance,
     d.core.issuanceLogic,
   ];
-  const wdrlIdx = wdrlIdxOf(d, chain);
+  const wdrlIdx = wdrlIdxOf(
+    d,
+    fullWithdrawalKeys(chain, b.config.issuer, p.authorizer),
+  );
 
   plbSpend(tb, d, p.certificate, paramsIdx, wdrlIdx);
 
