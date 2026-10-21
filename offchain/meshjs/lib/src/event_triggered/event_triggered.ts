@@ -82,6 +82,7 @@ import {
   unitRedeemer,
   vaultDatumToData,
   vaultDepositRedeemer,
+  vaultTopUpRedeemer,
   vaultNftParamsToData,
   vaultParamsToData,
   couponParamsToData,
@@ -669,6 +670,39 @@ export async function buildBondDepositTx(
 
   tb.invalidHereafter(p.validHereafterSlot);
   return complete(p, refs);
+}
+
+// -------------------------------------------------------------- vault top-up
+
+export interface VaultTopUpParams extends TxBase {
+  bond: Bond;
+  vault: UTxO;
+  /** ADA added to the vault (any positive amount). */
+  amount: bigint;
+}
+
+/**
+ * Permissionless vault top-up (§3.1): the vault gains `amount` lovelace,
+ * carrying address, datum, NFT and other assets unchanged. This is the escrow
+ * funding path — there is no owner withdrawal.
+ */
+export async function buildVaultTopUpTx(p: VaultTopUpParams): Promise<string> {
+  const { bond: b } = p;
+  const tb = p.txBuilder;
+
+  if (p.amount <= 0n) {
+    throw new Error(`Vault top-up amount must be positive, got ${p.amount}.`);
+  }
+
+  vaultSpend(tb, b, p.vault, vaultTopUpRedeemer());
+
+  tb.txOut(
+    p.vault.output.address,
+    addLovelace(p.vault.output.amount, p.amount),
+  );
+  tb.txOutInlineDatumValue(vaultDatumToData({ cntPolicy: b.cntPolicy }));
+
+  return complete(p);
 }
 
 // ---------------------------------------------------- transfer / authorize

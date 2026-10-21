@@ -78,6 +78,10 @@ pub type VaultAction {
   /// Burn-to-pay redemption (§4.6): the vault loses exactly the sum decoded
   /// from the burned coupon names, paid to the named addresses.
   Redeem { payouts: List<Payout> }
+  /// Permissionless top-up (§3.1): the vault gains ADA (any positive amount);
+  /// address, datum, NFT and other assets are preserved. This is how the
+  /// owner funds the coupon reserve — there is no owner withdrawal path.
+  VaultTopUp
 }
 
 /// Redeemer of the third-party-logic withdraw-0 — the opt-in issuer trigger

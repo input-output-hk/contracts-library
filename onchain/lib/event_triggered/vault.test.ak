@@ -8,7 +8,7 @@ use cardano/transaction.{
 }
 use event_triggered/schedule
 use event_triggered/types.{
-  Payout, Redeem, VaultAction, VaultDatum, VaultDeposit, VaultParams,
+  Payout, Redeem, VaultAction, VaultDatum, VaultDeposit, VaultParams, VaultTopUp,
 }
 use event_triggered/vault
 
@@ -137,6 +137,57 @@ test deposit_rejects_without_nft() {
       ..placeholder,
       inputs: [vault_input(0, 5_000_000, False)],
       outputs: [vault_output(5_000_000 + principal, False)],
+    },
+  )
+}
+
+// ------------------------------------------------------------------- top-up
+
+test top_up_ok() {
+  check(
+    VaultTopUp,
+    Transaction {
+      ..placeholder,
+      inputs: [vault_input(0, 5_000_000, True)],
+      outputs: [vault_output(8_000_000, True)],
+    },
+  )
+}
+
+test top_up_rejects_no_gain() {
+  !check(
+    VaultTopUp,
+    Transaction {
+      ..placeholder,
+      inputs: [vault_input(0, 5_000_000, True)],
+      outputs: [vault_output(5_000_000, True)],
+    },
+  )
+}
+
+test top_up_rejects_loss() {
+  !check(
+    VaultTopUp,
+    Transaction {
+      ..placeholder,
+      inputs: [vault_input(0, 5_000_000, True)],
+      outputs: [vault_output(4_999_999, True)],
+    },
+  )
+}
+
+test top_up_rejects_removing_native_asset() {
+  !check(
+    VaultTopUp,
+    Transaction {
+      ..placeholder,
+      inputs: [
+        Input {
+          ..vault_input(0, 5_000_000, True),
+          output: with_stray(vault_input(0, 5_000_000, True).output),
+        },
+      ],
+      outputs: [vault_output(8_000_000, True)],
     },
   )
 }

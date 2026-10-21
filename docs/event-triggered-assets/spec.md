@@ -52,7 +52,7 @@ Three postures make the instrument legible:
 | Deposit | **Permissionless, principal-backed mint** | Anyone may deposit one unit into a chosen vault; the minting logic admits the certificate only when that vault gains exactly the unit `principal` (I6). |
 | Timeline | **Per certificate** | Each unit's deadlines are multiples of a baked `interval` after its deposit time (`start`, pinned at mint), so late deposits earn no past coupons. |
 | Coupon terms | **Per vault, fixed principal** | Each vault's `cnt_policy` bakes its own `interval` / amounts; the unit principal is fixed for the whole instrument. The certificate records the `cnt_policy` of the vault it deposited into. |
-| Vault control | **Burn-to-pay redemptions** | Holders redeem by burning coupons; owner custody is an assumption, not enforced (§7). |
+| Vault control | **Burn-to-pay redemptions, escrowed funding** | Holders redeem by burning coupons; vaults are funded through deposits and permissionless top-ups, with no owner withdrawal path — solvency is an assumption (§7). |
 | Certificate | **One CIP-113 certificate per deposit at the PLB** | Each unit gets a holder-staked certificate whose name carries the step and whose datum carries `start` / `commit` / `cnt_policy`. |
 | Authorize | **Owner opt-in via self-transfer** | A signed self-transfer (same stake) commits a payment credential to the certificate; it is cleared automatically when the owner changes. |
 | Trigger | **Issuer-triggered, holder-passive, destination-bound** | When a certificate is committed, the issuer may trigger its coupon claims and graduation through the third-party path; every payout goes to the committed credential and every trigger carries the coupon. |
@@ -61,7 +61,7 @@ Three postures make the instrument legible:
 | Coupon claim | **Name-anchored; owner-signed or issuer-triggered** | The claim burns the current name and mints the next, so no step can be claimed twice per certificate; a committed certificate may be claimed by the issuer. |
 | Redemption | **Burn-to-pay at the vault** | Burning a coupon releases exactly `decode(name) × burned` ADA; double redemption is impossible (the coupon is destroyed). |
 | Graduation | **Principal-only coupon at maturity** | A final `cNt` names the principal; the certificate is retired at its `start + N * interval` maturity (owner-signed or issuer-triggered). |
-| Trust | **Explicit owner custody (assumed)** | The owner can withdraw the vault's ADA at any time; documented as the instrument's custody assumption (§7). |
+| Trust | **Escrowed vault funding (assumed)** | The owner funds the vault through deposits and top-ups but cannot withdraw on-chain; holders trust the owner to keep it funded, documented as the instrument's central assumption (§7). |
 
 ## 2. Roles
 
@@ -69,9 +69,10 @@ Three postures make the instrument legible:
   ADA into a chosen vault — and own the certificate minted for it. Claims
   coupons and redeems them; may transfer the certificate, which transfers the
   right to that unit's future coupons and principal claim.
-- **Vault owner (company/country)**: controls the vaults, created and funded
-  outside this design, and may withdraw their ADA at any time; this custody is
-  assumed, not enforced on-chain (§7).
+- **Vault owner (company/country)**: controls the vaults, created outside this
+  design and funded through deposits and permissionless top-ups. The vault has
+  no owner withdrawal path: funds are escrowed for coupon and principal
+  redemptions, so holders trust the owner to keep it funded (§7).
 - **Issuer**: registers the instrument (the RegistryNode) once; mints no
   certificate and does not control coupons or the vaults. When a certificate
   commits a payment credential (§4.4), the issuer may trigger its coupon claims
@@ -103,25 +104,29 @@ created. A script address alone does not identify a vault — anyone can create
 outputs at a script address — so every vault spend and continuation requires
 the NFT.
 
-A vault is **created and funded by its owner outside this design**, and each
-deposit adds one unit's principal to the vault it selects, so coupon and
-principal redemptions are deterministically payable while that vault is
-solvent. The owner lives off-chain — custody is the instrument's central
-assumption (§7), not a datum field. A vault is governed by a validator with
-two spend paths, each pairing the spent vault with exactly one continuation
-carrying the same NFT and datum:
+A vault is **created by its owner outside this design** and funded through the
+permissionless `VaultTopUp` path (the coupon reserve) and deposits (one unit's
+principal each), so coupon and principal redemptions are payable while that
+vault is solvent. The owner lives off-chain — solvency is the instrument's
+central assumption (§7), not a datum field, and there is no owner withdrawal
+path. A vault is governed by a validator with three spend paths, each pairing
+the spent vault with exactly one continuation carrying the same NFT and datum:
 
 | Redeemer | Admitted when | Effect |
 | --- | --- | --- |
 | `VaultDeposit` | a deposit continues the vault | The vault gains exactly the baked unit `principal`; its address, datum and NFT are preserved. |
+| `VaultTopUp` | anyone continues the vault | The vault gains the topped-up ADA (any positive amount); its address, datum, NFT and other assets are preserved. |
 | `Redeem` | no owner signature needed | The vault's net ADA loss equals the sum decoded from the burned coupons; the payout(s) go to the address(es) the redeemer names. |
 
 A vault is a single UTxO and a redemption spends **exactly one** vault; a
-deposit or redemption re-outputs the remainder. Solvency is an assumption, not
-an invariant (§7). Vault **creation** is out of scope: the deployment assumes
-the `authority` mints exactly one vault NFT into the vault UTxO at creation
-(§7). Vaults that share the same `cnt_policy` are interchangeable — coupons are
-bearer claims under that policy (I10).
+deposit, top-up or redemption re-outputs the remainder. Solvency is an
+assumption, not an invariant (§7). ADA sent to the vault address without the
+vault NFT and an inline `VaultDatum` is not a vault UTxO and can never be
+spent: the supported ways to fund a vault are `VaultDeposit` and `VaultTopUp`.
+Vault **creation** is out of scope: the deployment assumes the `authority`
+mints exactly one vault NFT into the vault UTxO at creation (§7). Vaults that
+share the same `cnt_policy` are interchangeable — coupons are bearer claims
+under that policy (I10).
 
 ### 3.2 Coupon token (`cNt`)
 
@@ -428,17 +433,19 @@ owner's behalf:
 
 ### Assumptions / out of scope
 
-- **Vault solvency and owner honesty.** Each owner has unconditional custody of
-  its vault: the company/country can drain it at any time, in which case coupon
-  and principal redemptions have nothing to pay. Holders trust the owner. This
-  is the instrument's central custodial assumption; the owner-extract path and
-  the vault's detailed validator logic are out of scope.
-- **Vault creation and pre-funding.** Vaults are assumed created and funded by
-  their owners outside this design. Each deposit adds its unit's principal to
-  the vault it selects; the owner is assumed to fund that vault's coupon
-  amounts (per the terms of its `cnt_policy`) before redemptions occur —
-  depositing does not itself fund coupons. Because units start on their own
-  timer, the owner's coupon liability extends with every deposit.
+- **Vault solvency and owner honesty.** A vault is an escrow: the owner (or
+  anyone) can fund it through `VaultDeposit` and `VaultTopUp`, but there is no
+  owner withdrawal path — ADA can only leave through redemptions, exactly the
+  value of the burned coupons. If the owner never funds the coupon reserve,
+  coupon and principal redemptions have nothing to pay. Holders trust the owner
+  to keep the vault funded; this is the instrument's central solvency
+  assumption.
+- **Vault creation and pre-funding.** Vaults are assumed created by their
+  owners outside this design and funded through top-ups. Each deposit adds its
+  unit's principal to the vault it selects; the owner is assumed to fund that
+  vault's coupon amounts (per the terms of its `cnt_policy`) before redemptions
+  occur — depositing does not itself fund coupons. Because units start on their
+  own timer, the owner's coupon liability extends with every deposit.
 - **Vault creation ceremony.** Vault identity is modeled — every vault UTxO
   carries exactly one `vault_nft_cs` NFT (I10) — but the creation transaction
   is out of scope: the deployment assumes the `authority` mints exactly one

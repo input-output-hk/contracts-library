@@ -12,20 +12,24 @@
 //// Two spend paths:
 ////   * `VaultDeposit` (§4.2): a unit deposit must add exactly the baked
 ////     `principal` to the vault, carrying address, datum and NFT unchanged;
-////     and
 ////   * `Redeem` (§4.6): burn-to-pay — the vault loses exactly the sum decoded
-////     from the burned coupon names, paid to the addresses the redeemer names.
+////     from the burned coupon names, paid to the addresses the redeemer names;
+////     and
+////   * `VaultTopUp` (§3.1): anyone may add ADA to the vault (any positive
+////     amount), carrying address, datum, NFT and other assets unchanged. This
+////     is the escrow funding path — there is no owner withdrawal.
 ////
 //// On every path the vault's non-ADA assets are carried through unchanged, so
-//// neither a deposit nor a redemption can strip the vault. A redemption must
-//// burn a positive value, its payouts must be positive and are aggregated per
-//// address against the ADA paid to that address (the vault continuation never
-//// counts as a payout), so several payouts cannot share one output and the
-//// vault's own continuation cannot satisfy one.
+//// neither a deposit, a top-up nor a redemption can strip the vault. A
+//// redemption must burn a positive value, its payouts must be positive and
+//// are aggregated per address against the ADA paid to that address (the vault
+//// continuation never counts as a payout), so several payouts cannot share one
+//// output and the vault's own continuation cannot satisfy one.
 ////
-//// Owner custody (draining or topping up the vault) is the instrument's
-//// central assumption and lives off-chain (§7); the owner funds the vault by
-//// sending ADA to its address, which runs no validator.
+//// The owner funds the vault through `VaultDeposit` (exact unit principals) and
+//// `VaultTopUp` (arbitrary amounts); a UTxO sent to the vault address without
+//// the vault NFT and an inline `VaultDatum` is not a vault and can never be
+//// spent, so the only supported way to fund a vault is through those paths.
 
 use aiken/collection/list
 use cardano/address.{Address}
@@ -33,7 +37,7 @@ use cardano/assets.{quantity_of, without_lovelace}
 use cardano/transaction.{Output, OutputReference, Transaction}
 use event_triggered/schedule
 use event_triggered/types.{
-  Payout, Redeem, VaultAction, VaultDatum, VaultDeposit, VaultParams,
+  Payout, Redeem, VaultAction, VaultDatum, VaultDeposit, VaultParams, VaultTopUp,
 }
 use event_triggered/vault_nft.{nft_of}
 
@@ -73,6 +77,8 @@ pub fn validate(
             without_lovelace(vin.output.value) == without_lovelace(vout.value),
             when redeemer is {
               VaultDeposit -> delta(vin.output, vout) == params.principal
+              // Escrow funding: any positive gain, no signature required.
+              VaultTopUp -> delta(vin.output, vout) > 0
               Redeem { payouts } -> {
                 expect Some(burned) = schedule.total_burned(
                   self.mint,

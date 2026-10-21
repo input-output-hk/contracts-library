@@ -66,6 +66,10 @@ export function vaultDepositRedeemer(): Data {
   return mConStr0([]);
 }
 
+export function vaultTopUpRedeemer(): Data {
+  return mConStr2([]);
+}
+
 export function redeemRedeemer(payouts: Payout[]): Data {
   return mConStr1([payouts.map(payoutToData)]);
 }

@@ -61,6 +61,7 @@
 //   create_vault         §3.1: mint the vault NFT into a funded vault
 //   register             §4.1: registry insert (no certificate)
 //   deposit              §4.2: unit deposit → certificate (step 0)
+//   vault_top_up         §3.1: permissionless ADA top-up (escrow funding)
 //   transfer             §4.3: plain transfer / owner change
 //   authorize            §4.4: self-transfer committing a payout credential
 //   claim_owner          §4.5: owner-signed coupon claim (advance)
@@ -343,12 +344,13 @@ type Payout {
     amount: Int,
 }
 
-// Redeemer of the vault spending validator (§4.2, §4.6).
+// Redeemer of the vault spending validator (§4.2, §4.6, §3.1).
 type VaultAction {
     VaultDeposit,
     Redeem {
         payouts: List<Payout>,
     },
+    VaultTopUp,
 }
 
 // ----------------------------------------------------------------- core types
@@ -695,6 +697,60 @@ tx deposit(
     cardano::plutus_witness {
         version: 3,
         script: cip_policy_script,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: vault_script,
+    }
+}
+
+// --------------------------------------------------------------- vault top-up
+
+// Permissionless top-up (§3.1): anyone may add ADA to a vault; the vault gains
+// exactly `top_up_amount`, carrying address, datum, NFT and other assets
+// unchanged. This is the escrow funding path — there is no owner withdrawal.
+// The signer pays the fees (and the topped-up ADA).
+tx vault_top_up(
+    /// The vault script address.
+    vault_address: Address,
+    /// The vault UTxO being topped up; it continues with `+ top_up_amount`.
+    vault_ref: UtxoRef,
+    /// The vault's datum (the continuation preserves it byte-for-byte).
+    vault_datum: VaultDatum,
+    /// ADA added to the vault (must be positive).
+    top_up_amount: Int,
+) {
+    input vault_in {
+        from: vault_address,
+        ref: vault_ref,
+        datum_is: VaultDatum,
+        redeemer: VaultAction::VaultTopUp {},
+    }
+
+    input funding {
+        from: Signer,
+        min_amount: Ada(top_up_amount) + fees,
+    }
+
+    output vault_out {
+        to: vault_address,
+        amount: vault_in + Ada(top_up_amount),
+        datum: vault_datum,
+    }
+
+    output {
+        to: Signer,
+        amount: funding - Ada(top_up_amount) - fees,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    signers {
+        Signer,
     }
 
     cardano::plutus_witness {

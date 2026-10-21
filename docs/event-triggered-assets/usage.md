@@ -167,8 +167,23 @@ await buildCreateVaultTx({
 });
 ```
 
-Whoever creates a vault must fund it and keep it funded; custody is the
-instrument's central assumption (§7).
+Whoever creates a vault must fund it and keep it funded; the vault is an
+escrow — the owner can top it up at any time but cannot withdraw on-chain
+(§7). Top up a vault's coupon reserve with `buildVaultTopUpTx`:
+
+```ts
+import { buildVaultTopUpTx } from "@contracts-library/meshjs";
+
+await buildVaultTopUpTx({
+  txBuilder,
+  bond, vault,                  // the vault UTxO to top up
+  amount: 2_000_000n,           // ADA added (any positive amount)
+  funding, collateral, changeAddress,
+});
+```
+
+Never send ADA to the vault address with a plain transfer: a UTxO without the
+vault NFT and inline datum is not a vault and can never be spent.
 
 ## Register the instrument
 
@@ -434,6 +449,15 @@ await client(depositor)
   })
   .env(env).resolve().then((r) => r.sign()).then((s) => s.submit());
 
+// Vault top-up: anyone adds ADA to the vault (escrow funding, no withdrawal)
+await client(owner)
+  .vaultTopUp({
+    vault_address: vaultAddr, vault_ref: vaultRef,
+    vault_datum: { cnt_policy: bond.cntPolicy },
+    top_up_amount: 2_000_000,
+  })
+  .env(env).resolve().then((r) => r.sign()).then((s) => s.submit());
+
 // Issuer-triggered claim: step k-1 -> k, coupon to the committed payout
 await client(issuer)
   .claimIssuer({
@@ -529,10 +553,11 @@ Notes:
   an owner change. The ghost shell preserves the spent UTxO's address and
   datum byte-for-byte.
 - **Vault identity is the NFT (I10).** Every vault UTxO carries exactly one
-  `vault_nft_cs` NFT; the deposit and redemption require it, so a fake output
-  at the vault address can never back a certificate. Creation is out of
-  scope; custody (funding, withdrawing surplus) is an off-chain assumption
-  (§7).
+  `vault_nft_cs` NFT; the deposit, top-up and redemption require it, so a fake
+  output at the vault address can never back a certificate. Creation is out of
+  scope; the vault is an escrow with no owner withdrawal path (§7), so fund it
+  through `buildBondDepositTx`/`buildVaultTopUpTx` — ADA sent to the vault
+  address without the NFT and inline datum is locked forever.
 - **Names are raw bytes.** The certificate's name is its step, exactly one
   byte (`N ≤ 255`); a coupon's name is the decimal bytes of its lovelace value
   (leading zeros rejected on-chain). Tx3 string literals are UTF-8 —

@@ -30,10 +30,12 @@ import {
   buildClaimOwnerTx,
   buildGraduateIssuerTx,
   buildTransferTx,
+  buildVaultTopUpTx,
   compareWithdrawalKeys,
   plbAddress,
   sortReferenceInputs,
   stepName,
+  vaultAddress,
   type Bond,
   type BondConfig,
   type CertificateDatum,
@@ -130,7 +132,10 @@ function certificate(
 }
 
 /** An authorizer whose script is read from a reference UTxO. */
-function refAuthorizer(hash: string, refTx: string): {
+function refAuthorizer(
+  hash: string,
+  refTx: string,
+): {
   authorizer: ScriptAuthorizer;
   ref: UTxO;
 } {
@@ -216,7 +221,10 @@ function inspect(tb: MeshTxBuilder, hex: string, cert: UTxO): Built {
 
   const references = sortReferenceInputs(
     (body.referenceInputs()?.values() ?? []).map((i) => ({
-      input: { txHash: i.transactionId().toString(), outputIndex: Number(i.index()) },
+      input: {
+        txHash: i.transactionId().toString(),
+        outputIndex: Number(i.index()),
+      },
       output: { address: "", amount: [] },
     })),
   ).map((u) => `${u.input.txHash}#${u.input.outputIndex}`);
@@ -285,7 +293,9 @@ describe("builder indices include script-authorizer dependencies", () => {
 
       expect(b.withdrawals.some((w) => w.hash === side.hash)).toBe(true);
       expect.soft(b.plbRedeemer[1]).toBe(plgIndex(b));
-      expect.soft(b.plbRedeemer[0]).toBe(refIndex(b, deployment.refs.protocolParams));
+      expect
+        .soft(b.plbRedeemer[0])
+        .toBe(refIndex(b, deployment.refs.protocolParams));
     });
 
     it(`transfer, script holder ${side.label}`, async () => {
@@ -311,7 +321,9 @@ describe("builder indices include script-authorizer dependencies", () => {
       const b = inspect(p.txBuilder, hex, cert);
 
       expect.soft(b.plbRedeemer[1]).toBe(plgIndex(b));
-      expect.soft(b.plbRedeemer[0]).toBe(refIndex(b, deployment.refs.protocolParams));
+      expect
+        .soft(b.plbRedeemer[0])
+        .toBe(refIndex(b, deployment.refs.protocolParams));
     });
   }
 
@@ -327,14 +339,10 @@ describe("builder indices include script-authorizer dependencies", () => {
         commit: { kind: "key", hash: PAYER_KEY },
         cntPolicy: scriptIssuerBond.cntPolicy,
       };
-      const cert = utxo(
-        tx("77"),
-        plbAddress(deployment, HOLDER_KEY),
-        [
-          lovelace(2_000_000),
-          { unit: scriptIssuerBond.cipPolicy + stepName(0), quantity: "1" },
-        ],
-      );
+      const cert = utxo(tx("77"), plbAddress(deployment, HOLDER_KEY), [
+        lovelace(2_000_000),
+        { unit: scriptIssuerBond.cipPolicy + stepName(0), quantity: "1" },
+      ]);
       const p = {
         ...base([cert, ref]),
         bond: scriptIssuerBond,
@@ -350,7 +358,9 @@ describe("builder indices include script-authorizer dependencies", () => {
       const b = inspect(p.txBuilder, hex, cert);
 
       expect.soft(b.plbRedeemer[1]).toBe(plgIndex(b));
-      expect.soft(b.plbRedeemer[0]).toBe(refIndex(b, deployment.refs.protocolParams));
+      expect
+        .soft(b.plbRedeemer[0])
+        .toBe(refIndex(b, deployment.refs.protocolParams));
     });
   }
 });
@@ -416,8 +426,47 @@ describe("issuer-triggered continuations preserve the certificate value", () => 
   });
 });
 
-// --------------------------------------- item 6: deployment parameters
+// ------------------------------------------- vault top-up (escrow funding)
 
+describe("vault top-up", () => {
+  it("gains the topped-up amount and preserves the vault", async () => {
+    const vault = utxo(tx("88"), vaultAddress(bond), [
+      lovelace(5_000_000),
+      { unit: bond.vaultNftCs + config.vaultNftName, quantity: "1" },
+    ]);
+    const p = {
+      ...base([vault]),
+      bond,
+      vault,
+      amount: 3_000_000n,
+    };
+    const hex = await buildVaultTopUpTx(p);
+    const out = p.txBuilder.meshTxBuilderBody.outputs[0]!;
+
+    expect(out.address).toBe(vaultAddress(bond));
+    const qty = (unit: string) =>
+      BigInt(out.amount.find((a) => a.unit === unit)?.quantity ?? "0");
+    expect(qty("lovelace")).toBe(8_000_000n);
+    expect(qty(bond.vaultNftCs + config.vaultNftName)).toBe(1n);
+    expect(deserializeTx(hex).body()).toBeDefined();
+  });
+
+  it("refuses a non-positive top-up", async () => {
+    const vault = utxo(tx("88"), vaultAddress(bond), [
+      lovelace(5_000_000),
+      { unit: bond.vaultNftCs + config.vaultNftName, quantity: "1" },
+    ]);
+    const p = {
+      ...base([vault]),
+      bond,
+      vault,
+      amount: 0n,
+    };
+    await expect(buildVaultTopUpTx(p)).rejects.toThrow();
+  });
+});
+
+// --------------------------------------- item 6: deployment parameters
 describe("applyBond refuses configurations the validators cannot honor", () => {
   it("accepts the reference configuration", () => {
     expect(() => applyBond(deployment, config)).not.toThrow();
