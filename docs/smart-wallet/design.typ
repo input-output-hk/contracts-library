@@ -148,15 +148,18 @@ forward unchanged._
       `threshold`, and the spend requires at least `threshold` of `members`
       present in `extra_signatories`. `members` is treated as a set (duplicates
       count once), and the threshold must satisfy
-      `0 < threshold <= distinct members`. A member may itself be a script
-      credential, so the floor can be another multisig, a DAO, and so on. This
+      `0 < threshold <= distinct members`. Members are verification key hashes
+      only in this version; script-credential members are not implemented. This
       design is agnostic of how that configuration is sourced.
     - delegated authorizations: every `ScriptHash` key in the wallet UTxO's
       `spenders` datum field is a withdraw-0 staking script that must run in
       this transaction; the `Data` value carries that script's own mutable
       state. Keys in both delegated maps are unique. Stateless scripts store the
       canonical marker `0` and must keep it on every spend/deposit; stateful
-      scripts enforce their own transition. The `Spend` redeemer asserts the conjunction — the M-of-N floor
+      scripts enforce their own transition. The same hash may appear in both
+      maps, but reference validators are single-role and their `publish` handler
+      validates only the map it reads; prefer separate instances. The `Spend`
+      redeemer asserts the conjunction — the M-of-N floor
       *and* all delegated checks — so no restriction can be silently omitted.
       The map is per-UTxO, so different wallet UTxOs may carry different
       restriction sets.
@@ -232,7 +235,9 @@ topped up explicitly._
   notes: [
     - the `admin` credential (a script parameter) must be satisfied: a key admin
       signs; a script admin authorizes by a withdraw-0 invocation (the same
-      pluggable mechanism used elsewhere).
+      pluggable mechanism used elsewhere) and must implement a `withdraw`
+      handler. The reference `smart_wallet` validator is spend/mint-only, so it
+      cannot administer another wallet.
     - the continuation must sit at the same `wallet_addr` and preserve every
       non-ADA asset exactly, including the NFT. Lovelace may only increase: this
       explicit top-up lets the admin cover a larger datum/min-UTxO but bypasses
@@ -250,9 +255,11 @@ topped up explicitly._
       `publish` handler only accepts the unregister when it sees the script
       leaving the wallet); every script *kept* must carry unchanged `Data`. This
       ensures each entry's `Data` was self-validated at registration and stays
-      coherent across updates. A credential registered before this transaction
-      cannot be added: the ledger rejects a second registration, so it must be
-      unregistered first.
+      coherent across updates. Unregistering and re-registering the same hash in
+      one transaction is still a *kept* entry, so its `Data` cannot change;
+      re-initialize it across two transactions instead. A credential registered
+      before this transaction cannot be added: the ledger rejects a second
+      registration, so it must be unregistered first.
   ],
 )
 
@@ -372,8 +379,10 @@ the burn._
       this transaction (`-1`), destroying the wallet's identity. The burn runs
       the mint endpoint with a `Burn` redeemer, which only checks the burn
       quantity; authorization is enforced by the `Close` spend redeemer.
-    - closing spends the wallet UTxO and releases any remaining funds. There is
-      no continuation: once the NFT is gone, the wallet can no longer be spent.
+    - closing spends the wallet UTxO and releases any remaining funds. The admin
+      may send them anywhere: `Close` does not enforce the M-of-N floor or any
+      delegated spender/depositor restriction. There is no continuation: once
+      the NFT is gone, the wallet can no longer be spent.
     - every script in the closing wallet's `spenders` and `depositors` maps must
       be unregistered here (`UnregisterCredential`), refunding its stake deposit.
       Each script's `publish` handler accepts this because it sees itself in the

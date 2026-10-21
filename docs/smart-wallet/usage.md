@@ -90,8 +90,10 @@ stateDiagram-v2
 | **Spender scripts** | keys of `spenders` (datum field) | Run and approve on every `Spend` |
 
 `admin` is a pluggable `Credential`: a key (required signer) or a script
-(invoked via a withdraw-0 reward withdrawal). A multisig, DAO, or another smart
-wallet can fill the role — see
+(invoked via a withdraw-0 reward withdrawal). A script admin must implement a
+`withdraw` handler; a multisig or DAO authorizer can fill the role, but the
+reference `smart_wallet` validator is spend/mint-only and cannot administer
+another wallet — see
 [offchain/meshjs/lib/src/authorization.ts](../../offchain/meshjs/lib/src/authorization.ts)
 and ARCHITECTURE.md §3. Deposits have no dedicated credential: the
 `depositors` scripts are the only gate (a key check is itself a deposit
@@ -326,14 +328,19 @@ await buildWalletUpdatePermissionsTx({
 Every script *added* must be registered here with its matching `Publish`
 redeemer (`registerWithdrawalScript` supplies both); every script *removed* must
 be unregistered; every script *kept* (in either map) must carry
-**byte-identical** `Data` (change a script's state by removing and re-adding
-it).
+**byte-identical** `Data`. A script's mutable state advances only through its
+own `withdraw` transition on `Spend`/`Deposit`; `UpdatePermissions` cannot reset
+it. To re-initialize a script, remove it in one transaction and re-add it in a
+later one — doing both in the same transaction keeps the hash “kept” and
+requires identical `Data`.
 
 ### 5. Close
 
-Burns the NFT and releases the remaining funds. Every script in the wallet's
-`spenders` and `depositors` maps must be unregistered so its stake deposit is
-refunded:
+Burns the NFT and releases the remaining funds. **The admin can send all
+remaining funds anywhere**; `Close` does not require member signatures or
+approval from the delegated spender/depositor scripts, and it places no
+restriction on the payout. Every script in the wallet's `spenders` and
+`depositors` maps must be unregistered so its stake deposit is refunded:
 
 ```ts
 import { buildWalletCloseTx } from "@contracts-library/meshjs";
@@ -375,8 +382,14 @@ A delegated script is a **withdraw-0 staking script** pinned to one wallet. It
 lives in the wallet datum's `spenders` map (run on every `Spend`) or
 `depositors` map (run on every `Deposit`); its entry
 (`spenders[scriptHash]` / `depositors[scriptHash]`) is that script's own `Data`
-(mutable state for spenders; configuration or state for depositors). It
-participates through two handlers:
+(mutable state for spenders; configuration or state for depositors). The same
+script hash **may** appear in both maps: the core does not enforce
+disjointness, and the two entries are independent (they may even carry
+different `Data`). The reference validators are single-role, however, and their
+`publish` handler validates only the map it reads. Listing one instance in both
+maps therefore leaves one side's initial `Data` unvalidated; use separate
+instances (different parameters) when a restriction is needed on both the spend
+and deposit side. It participates through two handlers:
 
 - **`publish`** — runs on `RegisterCredential` / `UnregisterCredential`
   certificates. On registration it reads its initial `Data` from the
@@ -563,13 +576,15 @@ the period's exclusive upper boundary); otherwise the spend is rejected.
 ### `full_recipient_allow_list` / `full_recipient_deny_list`
 
 Match the **full recipient address** (payment *and* staking credential) of every
-payout output. The allow list accepts only the listed addresses; the deny list
-rejects them. Matching is on the exact `Address` (the network id is not part of
-the on-chain representation), and outputs at the wallet's payment credential
-(the authenticated continuation) are exempt; the core rejects any other output
-at the wallet address, so a stray output cannot bypass the recipient filter.
-Parameterized by the wallet credential and a list of bech32 addresses. Both are
-stateless (`data: 0`).
+output whose payment credential differs from the wallet's. The checks apply to
+the **whole transaction**, not just the wallet's intended payout: allow-lists
+must include the transaction's change output and any other unrelated output,
+and deny-lists reject the transaction if any of them is denied. Matching is on
+the exact `Address` (the network id is not part of the on-chain representation);
+the authenticated wallet continuation is the only exempt output — the core
+rejects any other output at the wallet address, so a stray output cannot bypass
+the filter. Parameterized by the wallet credential and a list of bech32
+addresses. Both are stateless (`data: 0`).
 
 ```ts
 import { fullRecipientAllowListScript } from "@contracts-library/meshjs";
@@ -588,12 +603,13 @@ const allowHash = resolveScriptHash(allow.code, allow.version);
 ### `payment_staking_allow_list` / `payment_staking_deny_list`
 
 Match the recipient's **payment credential** and **staking credential**
-independently. On a payout, the allow list requires a listed payment credential
-*and* a listed inline staking credential; the deny list requires neither a
-listed payment nor a listed staking credential. An empty list leaves its
-dimension unrestricted; with a non-empty `allowedStakings`, a payout without an
-inline staking credential is rejected. Credentials use the library's
-`Credential` shape.
+independently. For every output whose payment credential differs from the
+wallet's — the whole transaction, including change — the allow list requires a
+listed payment credential *and* a listed inline staking credential; the deny
+list requires neither a listed payment nor a listed staking credential. An empty
+list leaves its dimension unrestricted; with a non-empty `allowedStakings`, an
+output without an inline staking credential is rejected. Credentials use the
+library's `Credential` shape.
 
 ```ts
 import {
@@ -790,6 +806,8 @@ tests use a 1-of-1 wallet.
   hash and cannot mint a second wallet.
 - **Closing is irreversible.** The seed nonce is spent and the NFT burned; the
   same script hash can never host another wallet.
+- **`Close` is an admin escape hatch.** The admin can drain the wallet to any
+  address with `Close`, without member signatures or delegated-script approval.
 - **The wallet must survive a spend.** `Spend` requires an NFT-bearing
   continuation at the wallet address, with `depositors` unchanged, the
   `spenders` key set fixed, and a value no greater than the input's. Removing
@@ -823,24 +841,27 @@ tests use a 1-of-1 wallet.
   NFT) must remain exactly the same. `topUpLovelace` is an explicit exception:
   the added ADA does not pass through the `depositors`, unlike a `Deposit`.
 - **Kept scripts must be byte-identical.** `UpdatePermissions` compares each kept
-  script's `Data` by CBOR serialization; changing state means removing
-  (unregistering) and re-adding (re-registering) the script in the same
-  transaction.
+  script's `Data` by CBOR serialization. Removing and re-registering the same
+  hash in one transaction still counts as “kept”, so its `Data` must remain
+  identical. Reset or re-initialize a script by removing it in one transaction
+  and re-adding it in a later transaction.
 - **`spending_limit` is strict.** The boundary is `input - output < bound`; a
-  payout exactly equal to `bound` is rejected. Sums cover every UTxO at the
-  wallet's payment credential on both sides, so a spend that recreates value at
-  the wallet address nets it out.
+  payout exactly equal to `bound` is rejected. Sums cover only the NFT-bearing
+  UTxOs at the wallet's payment credential; the core rejects any other output
+  there, so a spend that recreates value at the wallet address nets it out.
 - **Stateful scripts need both validity bounds.** `spending_window` reads the
   lower bound as the current time and requires the output state to record the
   finite upper bound, so always set `invalidBeforeSlot` and
   `invalidHereafterSlot` (or `invalid_before` / `invalid_hereafter`) and write
   the upper slot's start milliseconds into `lastUpper`.
 - **Script credentials need manual wiring (MeshJS).** The builders add required
-  signers for key credentials only; to authorize as a script (multisig, DAO,
-  smart wallet) as `admin`, pass the `authorizer` option (see
+  signers for key credentials only; to authorize as a script admin (multisig,
+  DAO, or another withdraw-0-capable script), pass the `authorizer` option (see
   [`offchain/meshjs/lib/src/authorization.ts`](../../offchain/meshjs/lib/src/authorization.ts)
-  and ARCHITECTURE.md §3). Depositor scripts are not a credential: invoke them
-  through `depositorScripts`.
+  and ARCHITECTURE.md §3). The script must implement a `withdraw` handler; the
+  reference `smart_wallet` validator is spend/mint-only and cannot administer
+  another wallet. Depositor scripts are not a credential: invoke them through
+  `depositorScripts`.
 - **Tx3 carries no withdrawal scripts.** Until upstream certificate support,
   Tx3 wallets have empty `spenders` / `depositors` maps, `Admin`/`Member` are
   key-authorized, and the attack-path / devnet-kit transactions

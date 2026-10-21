@@ -56,8 +56,11 @@ withdraw-0 scripts, and per-script mutable state) before generalizing it.
 ## 3. Roles
 
 - **Admin** (`admin`, a validator parameter). Creates the wallet (mint), rewrites
-  its config (`UpdatePermissions`), and closes it (`Close`). A `Credential`, so a key,
-  multisig, DAO, or smart wallet can fill the role. It has no power over
+  its config (`UpdatePermissions`), and closes it (`Close`). A `Credential`: a
+  key admin signs; a script admin must implement a `withdraw` handler and is
+  invoked as a withdraw-0 reward withdrawal. A multisig or DAO authorizer can
+  fill the role, but the reference `smart_wallet` validator is spend/mint-only,
+  so it cannot itself serve as a script admin. The admin has no power over
   individual spends, and (being a parameter) it is fixed for the life of the
   script address.
 - **Deposit scripts** (the `depositors` map). Each must run and approve on every
@@ -67,8 +70,9 @@ withdraw-0 scripts, and per-script mutable state) before generalizing it.
 - **Members** (from the external settings config). The base M-of-N floor: at
   least `threshold` of `members` must sign a `Spend`. `members` is treated as a
   set (a duplicate counts once), and the threshold must satisfy
-  `0 < threshold <= distinct member count`. A member may itself be a script
-  credential, so the floor can be a multisig, a DAO, etc.
+  `0 < threshold <= distinct member count`. Members are
+  `VerificationKeyHash`s only in this version; script-credential members are not
+  supported.
 - **Delegated spender scripts** (the `spenders` map). Each must run and
   approve on every `Spend`; they carry the restrictions that specialize a wallet
   beyond its floor.
@@ -88,8 +92,13 @@ at the wallet address (payment credential `Script(wallet_hash)`), where
 
 The datum is **inline** (datum hashes are rejected). Keys in both maps are
 unique; the wallet rejects duplicate entries at mint, on updates, and in
-`Spend`/`Deposit` continuations. Both maps are per-UTxO: different wallet UTxOs
-may carry different restriction sets.
+`Spend`/`Deposit` continuations. The same script hash may appear in both maps:
+the core does not enforce disjointness, and the two entries are independent and
+may carry different `Data`. Reference validators are single-role and their
+`publish` handler validates only the map it reads, so sharing one instance
+across both maps leaves one side's initial `Data` unvalidated; use separate
+instances when both sides need the restriction. Both maps are per-UTxO:
+different wallet UTxOs may carry different restriction sets.
 
 ### 4.2 Identity & one-shot mint
 
@@ -168,6 +177,11 @@ the same address with every non-ADA asset unchanged and lovelace at least the
 input's. The admin may add only ADA (for example to cover a larger datum); that
 top-up bypasses `depositors`, unlike an ordinary `Deposit`.
 
+A hash present in both the old and new maps is **kept** even if the transaction
+also unregisters and registers it; its `Data` must remain byte-identical. To
+re-initialize a script, remove it in one transaction and add it back in a later
+transaction; its own `withdraw` transition is the only way its state advances.
+
 ### 5.4 Deposit
 
 | | |
@@ -183,14 +197,17 @@ top-up bypasses `depositors`, unlike an ordinary `Deposit`.
 | | |
 |---|---|
 | **Inputs** | The wallet UTxO. |
-| **Outputs** | No continuation; the remaining funds may go anywhere. |
+| **Outputs** | No continuation; the admin may send the remaining funds anywhere. |
 | **Mint** | The NFT is burned: exactly one token under `wallet_hash`, quantity `-1`. |
 | **Redeemer** | `Close` (spend) **and** `Burn` (mint). |
 | **Authorization** | `admin`. |
 | **Constraints** | Every script in the wallet's `spenders` and `depositors` maps must be **unregistered** here (`UnregisterCredential`), refunding its stake deposit. |
 
-Closing is irreversible: the NFT is gone and the seed nonce is spent, so the
-wallet can never be relaunched at this script address.
+The admin can send all remaining funds anywhere: `Close` does not enforce the
+M-of-N floor or any delegated spender/depositor restriction, and it places no
+constraint on the payout outputs. Closing is irreversible: the NFT is gone and
+the seed nonce is spent, so the wallet can never be relaunched at this script
+address.
 
 ## 6. Withdrawal scripts
 
@@ -356,6 +373,10 @@ therefore cannot be used to bloat the datum.
 - **UpdatePermissions ADA top-up.** The `admin` may add ADA in a config update;
   this bypasses deposit validation for that ADA only. Non-ADA assets remain
   exactly preserved, and no funds can be removed.
+- **Script admins need a withdraw handler.** A script `admin` is invoked as a
+  withdraw-0 reward withdrawal. The reference `smart_wallet` validator exposes
+  only spend/mint endpoints, so it cannot administer another wallet; use a key
+  admin or a script with a `withdraw` handler.
 - **Open deposits.** A wallet with an empty `depositors` map accepts deposits from
   anyone; the core only preserves the spend side and the `depositors` key set and
   requires added value. Use deposit scripts to gate who and what may be deposited.
