@@ -1,0 +1,861 @@
+// Upgradeability — forced beacon indirection and opt-in migration (Tx3 off-chain).
+//
+// Reference Tx3 implementation of the upgradeability protocol, mirroring the
+// on-chain validators in `onchain/validators/upgradeability/` and the MeshJS
+// builders in `offchain/meshjs/lib/src/upgradeability/`.
+//
+// The registry lives as the `current` value of a settings UTxO (the settings
+// script from `settings/main.tx3`), typed here as `Map<Bytes, Bytes>` so it
+// encodes as the Plutus map every on-chain consumer decodes. Registry changes
+// reuse the settings delayed-apply pattern (`launch_registry` /
+// `propose_registry` / `apply_registry`).
+//
+// Datum / redeemer CBOR layout (must match the Aiken blueprint):
+//   RegistryDatum   = Constr 0 [current: Map<Bytes, Bytes>,
+//                               next: Option<Map>, next_apply: Option<Int>]
+//   CounterDatum    = Constr 0 [count: Int, owner: Credential]
+//   CounterRedeemer = Tick = Constr 0 [] | Upgrade = Constr 1 []
+//   MintRedeemer    = Mint = Constr 0 [out_ix] | Burn = Constr 1 []
+//   SpendRedeemer   = Propose = Constr 0 [out_ix] | Apply = Constr 1 [out_ix]
+//
+// The forced forwarder admits a spend only when the logic script registered
+// for its own hash runs as a reward withdrawal. Tx3 cannot attach an inline
+// script witness to a withdrawal, so the logic and migration scripts travel as
+// *reference scripts*: each policy is `ref:`-backed (the reference-input UTxO
+// carrying the script) and keys the withdrawal to the script's reward address
+// (`hash:` = `0xf0` header + script hash).
+
+env {
+    /// Hash of the parameterized settings validator (= registry policy id).
+    settings_hash: Bytes,
+    /// Single-CBOR flat settings validator script.
+    settings_script: Bytes,
+    /// Settings `apply_delay` in POSIX milliseconds.
+    apply_delay: Int,
+
+    /// Hash of the parameterized forwarder validator.
+    forwarder_hash: Bytes,
+    /// Single-CBOR flat forwarder validator script.
+    forwarder_script: Bytes,
+    /// Hash of the parameterized V1 validator.
+    v1_hash: Bytes,
+    /// Single-CBOR flat V1 validator script.
+    v1_script: Bytes,
+    /// Single-CBOR flat V2 validator script.
+    v2_script: Bytes,
+
+    /// UTxO carrying the registered logic script as a reference script.
+    logic_script_ref: UtxoRef,
+    /// Script reward address bytes (`0xf0` header + logic script hash).
+    logic_reward_address: Bytes,
+    /// UTxO carrying the registered migration script as a reference script.
+    migration_script_ref: UtxoRef,
+    /// Script reward address bytes (`0xf0` header + migration script hash).
+    migration_reward_address: Bytes,
+}
+
+/// Registry governance: proposes and applies registry changes (the settings
+/// `propose_auth` / `apply_auth` credential in the key-authorized paths).
+party Governor;
+
+/// The state owner (signer): funds gas, holds counter UTxOs, and consents to
+/// migrations.
+party Signer;
+
+/// The settings script address (holds the settings NFT UTxO with the registry).
+party Settings;
+
+/// The forced forwarder script address (holds forwarded counter UTxOs).
+party Forwarder;
+
+/// The opt-in V1 script address (holds counter UTxOs with an `Upgrade` path).
+party V1;
+
+/// The immutable V2 script address (the blessed migration target).
+party V2;
+
+// The registered logic script, carried by a reference input and invoked via
+// withdraw-0 when a forwarder UTxO is spent.
+policy LogicScript {
+    ref: logic_script_ref,
+    hash: logic_reward_address,
+}
+
+// The registered migration script, carried by a reference input and invoked
+// via withdraw-0 when a V1 UTxO is migrated.
+policy MigrationScript {
+    ref: migration_script_ref,
+    hash: migration_reward_address,
+}
+
+// ---------------------------------------------------------------- types
+
+// `Credential` in the Aiken sense: constructor 0 is a key credential,
+// constructor 1 a script credential. The carried value is a Blake2b-224 hash.
+type Credential {
+    Key {
+        hash: Bytes,
+    },
+    Script {
+        hash: Bytes,
+    },
+}
+
+// The registry: a map from a protocol validator's own script hash to the
+// script hash of its currently-active delegate.
+type Registry = Map<Bytes, Bytes>;
+
+// `Option<Registry>` — `Some` is constructor 0, `None` constructor 1.
+type OptionalRegistry {
+    Some {
+        value: Registry,
+    },
+    None,
+}
+
+// `Option<Int>` — `Some` is constructor 0, `None` constructor 1.
+type OptionalInt {
+    Some {
+        value: Int,
+    },
+    None,
+}
+
+// The settings datum with a typed `current` (the upgradeability registry).
+type RegistryDatum {
+    current: Registry,
+    next: OptionalRegistry,
+    next_apply: OptionalInt,
+}
+
+// Redeemer for the settings mint endpoint (used by `launch_registry`).
+type MintRedeemer {
+    Mint {
+        out_ix: Int,
+    },
+    Burn,
+}
+
+// Redeemer for the settings spend endpoint (registry changes).
+type SpendRedeemer {
+    Propose {
+        out_ix: Int,
+    },
+    Apply {
+        out_ix: Int,
+    },
+    Close,
+}
+
+// Counter state of the demo protocol.
+type CounterDatum {
+    count: Int,
+    owner: Credential,
+}
+
+// Actions accepted by the counter demo: `Tick` is the ordinary step, `Upgrade`
+// is the dedicated migration path accepted only by the opt-in V1 validator.
+type CounterRedeemer {
+    Tick,
+    Upgrade,
+}
+
+// ---------------------------------------------------------------- registry
+
+/// Create the registry instance: mint the settings NFT and produce the state
+/// UTxO whose `current` is the initial registry.
+///
+/// The registry is a two-entry map. Its keys are raw script hashes, so they
+/// travel as `Bytes` args and the map literal is built here: a `Map` argument
+/// from the generated client would encode its keys as UTF-8 strings, not the
+/// binary hashes the on-chain `decode_registry` looks up.
+tx launch_registry(
+    /// The UTxO consumed as the mint seed (settings validator parameter).
+    seed: UtxoRef,
+    /// First registry entry: a validator's own script hash.
+    entry_1_key: Bytes,
+    /// First registry entry: its registered delegate.
+    entry_1_value: Bytes,
+    /// Second registry entry: a validator's own script hash.
+    entry_2_key: Bytes,
+    /// Second registry entry: its registered delegate.
+    entry_2_value: Bytes,
+    /// Index of the settings output within the transaction outputs.
+    out_ix: Int,
+) {
+    input funding {
+        from: Governor,
+        ref: seed,
+        min_amount: Ada(5000000) + fees,
+    }
+
+    mint {
+        amount: AnyAsset(settings_hash, "settings", 1),
+        redeemer: MintRedeemer::Mint {
+            out_ix: out_ix,
+        },
+    }
+
+    output settings_out {
+        to: Settings,
+        amount: AnyAsset(settings_hash, "settings", 1) + Ada(5000000),
+        datum: RegistryDatum {
+            current: {
+                entry_1_key: entry_1_value,
+                entry_2_key: entry_2_value,
+            },
+            next: OptionalRegistry::None {},
+            next_apply: OptionalInt::None {},
+        },
+    }
+
+    output {
+        to: Governor,
+        amount: funding - Ada(5000000) - fees,
+    }
+
+    collateral {
+        from: Governor,
+        min_amount: fees,
+    }
+
+    signers {
+        Governor,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: settings_script,
+    }
+}
+
+/// Propose a registry change: write `next` to the given map and
+/// `next_apply = now_ms + apply_delay`, preserving `current` and the NFT.
+tx propose_registry(
+    /// First proposed entry: a validator's own script hash.
+    entry_1_key: Bytes,
+    /// First proposed entry: its registered delegate.
+    entry_1_value: Bytes,
+    /// Second proposed entry: a validator's own script hash.
+    entry_2_key: Bytes,
+    /// Second proposed entry: its registered delegate.
+    entry_2_value: Bytes,
+    /// POSIX time (milliseconds) of the validity lower bound.
+    now_ms: Int,
+    /// Slot of the validity lower bound.
+    since_slot: Int,
+    /// Index of the continuation output within the transaction outputs.
+    out_ix: Int,
+) {
+    // Resolver-selected: the unique settings UTxO at the script address.
+    input settings_in {
+        from: Settings,
+        datum_is: RegistryDatum,
+        min_amount: AnyAsset(settings_hash, "settings", 1),
+        redeemer: SpendRedeemer::Propose {
+            out_ix: out_ix,
+        },
+    }
+
+    input gas {
+        from: Governor,
+        min_amount: fees,
+    }
+
+    output settings_out {
+        to: Settings,
+        amount: settings_in,
+        datum: RegistryDatum {
+            current: settings_in.current,
+            next: OptionalRegistry::Some {
+                value: {
+                    entry_1_key: entry_1_value,
+                    entry_2_key: entry_2_value,
+                },
+            },
+            next_apply: OptionalInt::Some {
+                value: now_ms + apply_delay,
+            },
+        },
+    }
+
+    output {
+        to: Governor,
+        amount: gas - fees,
+    }
+
+    validity {
+        since_slot: since_slot,
+    }
+
+    collateral {
+        from: Governor,
+        min_amount: fees,
+    }
+
+    signers {
+        Governor,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: settings_script,
+    }
+}
+
+/// Apply a matured registry proposal: promote the given map and clear the
+/// pending fields.
+tx apply_registry(
+    /// First entry of the registry being promoted to `current`.
+    entry_1_key: Bytes,
+    /// First entry's delegate.
+    entry_1_value: Bytes,
+    /// Second entry of the registry being promoted to `current`.
+    entry_2_key: Bytes,
+    /// Second entry's delegate.
+    entry_2_value: Bytes,
+    /// Slot of the validity lower bound (at or after `next_apply`).
+    since_slot: Int,
+    /// Index of the continuation output within the transaction outputs.
+    out_ix: Int,
+) {
+    // Resolver-selected: the unique settings UTxO at the script address.
+    input settings_in {
+        from: Settings,
+        datum_is: RegistryDatum,
+        min_amount: AnyAsset(settings_hash, "settings", 1),
+        redeemer: SpendRedeemer::Apply {
+            out_ix: out_ix,
+        },
+    }
+
+    input gas {
+        from: Governor,
+        min_amount: fees,
+    }
+
+    output settings_out {
+        to: Settings,
+        amount: settings_in,
+        datum: RegistryDatum {
+            current: {
+                entry_1_key: entry_1_value,
+                entry_2_key: entry_2_value,
+            },
+            next: OptionalRegistry::None {},
+            next_apply: OptionalInt::None {},
+        },
+    }
+
+    output {
+        to: Governor,
+        amount: gas - fees,
+    }
+
+    validity {
+        since_slot: since_slot,
+    }
+
+    collateral {
+        from: Governor,
+        min_amount: fees,
+    }
+
+    signers {
+        Governor,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: settings_script,
+    }
+}
+
+// ---------------------------------------------------------------- counters
+
+/// Lock a counter UTxO at the forwarder address.
+tx lock_forwarder(
+    count: Int,
+    owner: Credential,
+) {
+    input gas {
+        from: Signer,
+        min_amount: Ada(3000000) + fees,
+    }
+
+    output counter_out {
+        to: Forwarder,
+        amount: Ada(3000000),
+        datum: CounterDatum {
+            count: count,
+            owner: owner,
+        },
+    }
+
+    output {
+        to: Signer,
+        amount: gas - Ada(3000000) - fees,
+    }
+}
+
+/// Lock a counter UTxO at the V1 address.
+tx lock_v1(
+    count: Int,
+    owner: Credential,
+) {
+    input gas {
+        from: Signer,
+        min_amount: Ada(3000000) + fees,
+    }
+
+    output counter_out {
+        to: V1,
+        amount: Ada(3000000),
+        datum: CounterDatum {
+            count: count,
+            owner: owner,
+        },
+    }
+
+    output {
+        to: Signer,
+        amount: gas - Ada(3000000) - fees,
+    }
+}
+
+/// Forced tick: spend the forwarder UTxO, run the registered logic via
+/// withdraw-0 (its reference script is pulled in by `LogicScript`), and write
+/// the `count + 1` continuation at the forwarder address.
+tx tick_forwarder(
+    /// The forwarder UTxO being forwarded.
+    forwarder_ref: UtxoRef,
+    /// The settings UTxO holding the registry (reference input).
+    settings_ref: UtxoRef,
+) {
+    reference settings_registry {
+        ref: settings_ref,
+    }
+
+    input forwarder_in {
+        from: Forwarder,
+        ref: forwarder_ref,
+        datum_is: CounterDatum,
+        // The forwarder does not inspect its redeemer; any Data is accepted.
+        redeemer: (),
+    }
+
+    input gas {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    output forwarder_out {
+        to: Forwarder,
+        amount: forwarder_in,
+        datum: CounterDatum {
+            count: forwarder_in.count + 1,
+            owner: forwarder_in.owner,
+        },
+    }
+
+    output {
+        to: Signer,
+        amount: gas - fees,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    cardano::withdrawal {
+        from: LogicScript,
+        amount: 0,
+        redeemer: (),
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: forwarder_script,
+    }
+}
+
+/// Native tick at the V1 address (no registry read).
+tx tick_v1(
+    counter_ref: UtxoRef,
+) {
+    input counter_in {
+        from: V1,
+        ref: counter_ref,
+        datum_is: CounterDatum,
+        redeemer: CounterRedeemer::Tick {},
+    }
+
+    input gas {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    output counter_out {
+        to: V1,
+        amount: counter_in,
+        datum: CounterDatum {
+            count: counter_in.count + 1,
+            owner: counter_in.owner,
+        },
+    }
+
+    output {
+        to: Signer,
+        amount: gas - fees,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: v1_script,
+    }
+}
+
+/// Native tick at the immutable V2 address.
+tx tick_v2(
+    counter_ref: UtxoRef,
+) {
+    input counter_in {
+        from: V2,
+        ref: counter_ref,
+        datum_is: CounterDatum,
+        redeemer: CounterRedeemer::Tick {},
+    }
+
+    input gas {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    output counter_out {
+        to: V2,
+        amount: counter_in,
+        datum: CounterDatum {
+            count: counter_in.count + 1,
+            owner: counter_in.owner,
+        },
+    }
+
+    output {
+        to: Signer,
+        amount: gas - fees,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: v2_script,
+    }
+}
+
+/// Opt-in migration: spend the V1 UTxO with `Upgrade`, run the registered
+/// migration script via withdraw-0 under the owner's native consent
+/// (`validate_upgrade`), and recreate the state at the blessed V2 address.
+tx migrate_v1(
+    /// The V1 UTxO being migrated.
+    v1_ref: UtxoRef,
+    /// The settings UTxO holding the registry (reference input).
+    settings_ref: UtxoRef,
+) {
+    reference settings_registry {
+        ref: settings_ref,
+    }
+
+    input v1_in {
+        from: V1,
+        ref: v1_ref,
+        datum_is: CounterDatum,
+        redeemer: CounterRedeemer::Upgrade {},
+    }
+
+    input gas {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    output v2_out {
+        to: V2,
+        amount: v1_in,
+        datum: CounterDatum {
+            count: v1_in.count,
+            owner: v1_in.owner,
+        },
+    }
+
+    output {
+        to: Signer,
+        amount: gas - fees,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    signers {
+        Signer,
+    }
+
+    cardano::withdrawal {
+        from: MigrationScript,
+        amount: 0,
+        redeemer: (),
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: v1_script,
+    }
+}
+
+// ------------------------------------------------------ attack-only variants
+
+/// Attack-only variant of `migrate_v1` that tampers with the migrated count.
+///
+/// Must fail phase-2: the migration script requires the state reappearing at
+/// the V2 address to be preserved exactly.
+tx migrate_tampered_count_attack(
+    v1_ref: UtxoRef,
+    settings_ref: UtxoRef,
+    /// The tampered count written to the V2 continuation.
+    count: Int,
+) {
+    reference settings_registry {
+        ref: settings_ref,
+    }
+
+    input v1_in {
+        from: V1,
+        ref: v1_ref,
+        datum_is: CounterDatum,
+        redeemer: CounterRedeemer::Upgrade {},
+    }
+
+    input gas {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    output v2_out {
+        to: V2,
+        amount: v1_in,
+        datum: CounterDatum {
+            count: count,
+            owner: v1_in.owner,
+        },
+    }
+
+    output {
+        to: Signer,
+        amount: gas - fees,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    signers {
+        Signer,
+    }
+
+    cardano::withdrawal {
+        from: MigrationScript,
+        amount: 0,
+        redeemer: (),
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: v1_script,
+    }
+}
+
+/// Attack-only variant of `migrate_v1` that keeps the state at the V1 address.
+///
+/// Must fail phase-2: the migration script requires a continuation at the
+/// blessed V2 address.
+tx migrate_wrong_target_attack(
+    v1_ref: UtxoRef,
+    settings_ref: UtxoRef,
+) {
+    reference settings_registry {
+        ref: settings_ref,
+    }
+
+    input v1_in {
+        from: V1,
+        ref: v1_ref,
+        datum_is: CounterDatum,
+        redeemer: CounterRedeemer::Upgrade {},
+    }
+
+    input gas {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    output v1_out {
+        to: V1,
+        amount: v1_in,
+        datum: CounterDatum {
+            count: v1_in.count,
+            owner: v1_in.owner,
+        },
+    }
+
+    output {
+        to: Signer,
+        amount: gas - fees,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    signers {
+        Signer,
+    }
+
+    cardano::withdrawal {
+        from: MigrationScript,
+        amount: 0,
+        redeemer: (),
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: v1_script,
+    }
+}
+
+/// Attack-only variant of `migrate_v1` that spends the V1 UTxO with `Tick`
+/// while the migration script runs.
+///
+/// Must fail phase-2: the migration script binds every forwarded input to the
+/// `Upgrade` action (`spent_with_upgrade`), so a plain tick cannot smuggle a
+/// registered V1 UTxO past it.
+tx migrate_wrong_action_attack(
+    v1_ref: UtxoRef,
+    settings_ref: UtxoRef,
+) {
+    reference settings_registry {
+        ref: settings_ref,
+    }
+
+    input v1_in {
+        from: V1,
+        ref: v1_ref,
+        datum_is: CounterDatum,
+        redeemer: CounterRedeemer::Tick {},
+    }
+
+    input gas {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    output v1_out {
+        to: V1,
+        amount: v1_in,
+        datum: CounterDatum {
+            count: v1_in.count + 1,
+            owner: v1_in.owner,
+        },
+    }
+
+    output {
+        to: Signer,
+        amount: gas - fees,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    signers {
+        Signer,
+    }
+
+    cardano::withdrawal {
+        from: MigrationScript,
+        amount: 0,
+        redeemer: (),
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: v1_script,
+    }
+}
+
+// ============================================================
+// TEST KIT — devnet infrastructure only.
+//
+// Consumed exclusively by `tests/devnet.test.ts` to bootstrap a
+// fresh trix devnet: the faucet pays wallets and the logic /
+// migration reference scripts are published as reference-script
+// UTxOs.
+//
+// Never used by production builders. Safe to delete wholesale.
+// ============================================================
+
+/// Funds every devnet wallet.
+party Faucet;
+
+/// Holds reference-script UTxOs published by the test kit.
+party Publisher;
+
+/// Pay `quantity` lovelace from the faucet to any runtime address.
+tx devnet_pay(destination: Address, quantity: Int) {
+    input source {
+        from: Faucet,
+        min_amount: Ada(quantity) + fees,
+    }
+
+    output {
+        to: destination,
+        amount: Ada(quantity),
+    }
+
+    output {
+        to: Faucet,
+        amount: source - Ada(quantity) - fees,
+    }
+}
+
+/// Publish a parameterized protocol script as a reference script.
+tx devnet_deploy_authorizer(script_code: Bytes, lovelace: Int) {
+    input gas {
+        from: Faucet,
+        min_amount: Ada(lovelace) + fees,
+    }
+
+    cardano::publish {
+        to: Publisher,
+        amount: Ada(lovelace),
+        version: 3,
+        script: script_code,
+    }
+
+    output {
+        to: Faucet,
+        amount: gas - Ada(lovelace) - fees,
+    }
+}
