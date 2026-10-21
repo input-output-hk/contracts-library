@@ -764,14 +764,18 @@ describe.skipIf(!reachable)(
         bondB.cntPolicy + couponName(2222),
       );
 
-      // A coupon of vault A cannot be redeemed at vault B: B's coupon policy
-      // sees no burned coupons, so its vault fails closed (I4/I10).
+      // A coupon of vault A cannot be redeemed at vault B: the redemption
+      // burns under A's policy (the bond that minted it), so B's coupon policy
+      // sees no burned coupons and its vault fails closed (I4/I10). The
+      // continuation datum is B's own, so the rejection cannot be a datum
+      // mismatch — it proves the two coupon policies are kept separate.
       const fCross = await fundingOf(holder);
       const crossTx = await buildRedeemTx({
         txBuilder: newTxBuilderManualExUnits(provider),
         deployment,
         bond,
         vault: depB.vault,
+        vaultDatum: { cntPolicy: bondB.cntPolicy },
         coupons: [await couponOf(holder.address, bond.cntPolicy, 1040)],
         payouts: [{ address: holder.address, amount: 1040n }],
         funding: fCross.funding,

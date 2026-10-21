@@ -97,6 +97,7 @@ import type {
   RegistryNode,
   ThirdPartyParams,
   TransferParams,
+  VaultDatum,
   VaultNftParams,
   VaultParams,
 } from "./types";
@@ -944,6 +945,11 @@ export interface RedeemParams extends TxBase {
   vault: UTxO;
   coupons: UTxO[];
   payouts: Payout[];
+  /**
+   * The vault continuation datum. Defaults to the bond's `cntPolicy`; pass the
+   * target vault's own datum when it differs (multi-vault deployments).
+   */
+  vaultDatum?: VaultDatum;
 }
 
 /** Burn-to-pay at the vault (§4.6): burn coupons, the vault pays them out. */
@@ -987,7 +993,9 @@ export async function buildRedeemTx(p: RedeemParams): Promise<string> {
     tb.txOut(payout.address, [lovelace(value)]);
   }
   tb.txOut(p.vault.output.address, addLovelace(p.vault.output.amount, -burned));
-  tb.txOutInlineDatumValue(vaultDatumToData({ cntPolicy: b.cntPolicy }));
+  tb.txOutInlineDatumValue(
+    vaultDatumToData(p.vaultDatum ?? { cntPolicy: b.cntPolicy }),
+  );
 
   return complete(p);
 }

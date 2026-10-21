@@ -581,6 +581,23 @@ test("deposits, transfers, claims, redeems and graduates on the owner path", asy
     VAULT_ADA + BigInt(PRINCIPAL),
   );
 
+  // ---- vault_top_up (§3.1): anyone may fund the vault; no withdrawal ------
+  const TOP_UP = 2n * ADA;
+  await confirm(
+    clientFor(issuer)
+      .vaultTopUp({
+        vault_address: inst.vaultAddress,
+        vault_ref: vaultRef,
+        vault_datum: { cnt_policy: bytes(bond.cntPolicy) },
+        top_up_amount: Number(TOP_UP),
+      } as unknown as Parameters<Client["vaultTopUp"]>[0])
+      .env(inst.env),
+  );
+  vaultRef = one(await devnet.utxosOf(inst.vaultAddress), "vault").ref;
+  expect((await devnet.lovelaceBalanceOf(inst.vaultAddress)).lovelace).toBe(
+    VAULT_ADA + BigInt(PRINCIPAL) + TOP_UP,
+  );
+
   // ---- transfer (§4.3): owner change clears `commit` ----------------------
   const holderAddress = plbAddr(inst.plbHash, holder.keyHash, false);
   const transferRefs = sortRefs([
@@ -696,7 +713,7 @@ test("deposits, transfers, claims, redeems and graduates on the owner path", asy
   );
   vaultRef = one(await devnet.utxosOf(inst.vaultAddress), "vault").ref;
   expect((await devnet.lovelaceBalanceOf(inst.vaultAddress)).lovelace).toBe(
-    VAULT_ADA + BigInt(PRINCIPAL) - BigInt(AMOUNTS[0]),
+    VAULT_ADA + BigInt(PRINCIPAL) + TOP_UP - BigInt(AMOUNTS[0]),
   );
 
   // ---- graduate (§4.7, owner path) ----------------------------------------
@@ -749,7 +766,11 @@ test("deposits, transfers, claims, redeems and graduates on the owner path", asy
       .env(inst.env),
   );
   expect((await devnet.lovelaceBalanceOf(inst.vaultAddress)).lovelace).toBe(
-    VAULT_ADA + BigInt(PRINCIPAL) - BigInt(AMOUNTS[0]) - BigInt(PRINCIPAL),
+    VAULT_ADA +
+      BigInt(PRINCIPAL) +
+      TOP_UP -
+      BigInt(AMOUNTS[0]) -
+      BigInt(PRINCIPAL),
   );
 }, 300_000);
 
