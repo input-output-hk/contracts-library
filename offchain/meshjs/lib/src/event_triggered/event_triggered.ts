@@ -136,6 +136,78 @@ export function vaultNftPolicyScript(p: VaultNftParams): PlutusScript {
 
 // ------------------------------------------------------------ bond assembly
 
+/** Asset names are at most 32 bytes (64 hex chars). */
+const MAX_ASSET_NAME_BYTES = 32;
+
+function isPositiveInt(value: number): boolean {
+  return Number.isSafeInteger(value) && value > 0;
+}
+
+/** A non-empty, even-length hex string of at most 32 bytes. */
+function isValidAssetName(name: string): boolean {
+  return (
+    name.length > 0 &&
+    name.length <= MAX_ASSET_NAME_BYTES * 2 &&
+    name.length % 2 === 0 &&
+    /^[0-9a-fA-F]+$/.test(name)
+  );
+}
+
+/** The byte length of a coupon asset name (the decimal bytes of `amount`). */
+function couponNameBytes(amount: number): number {
+  return Buffer.byteLength(amount.toString(), "utf8");
+}
+
+/**
+ * Refuse configurations the validators cannot honor, before any parameter is
+ * applied: a non-positive or fractional principal/interval, an empty or
+ * over-long schedule, non-positive coupon amounts, coupon names over 32 bytes,
+ * or a vault NFT name over 32 bytes. Steps past 255 can never be reached (the
+ * certificate step is one byte), so at most 255 steps are admitted.
+ */
+function validateBondConfig(config: BondConfig): void {
+  if (!isPositiveInt(config.principal)) {
+    throw new Error(
+      `Bond principal must be a positive integer, got ${config.principal}.`,
+    );
+  }
+  if (!isPositiveInt(config.interval)) {
+    throw new Error(
+      `Bond interval must be a positive integer, got ${config.interval}.`,
+    );
+  }
+  if (config.amounts.length === 0) {
+    throw new Error("Bond schedule must have at least one step.");
+  }
+  if (config.amounts.length > 255) {
+    throw new Error(
+      `Bond schedule has ${config.amounts.length} steps; the certificate step ` +
+        `is one byte, so at most 255 are reachable.`,
+    );
+  }
+  for (const amount of config.amounts) {
+    if (!isPositiveInt(amount)) {
+      throw new Error(
+        `Coupon amounts must be positive integers, got ${amount}.`,
+      );
+    }
+  }
+  for (const amount of [config.principal, ...config.amounts]) {
+    if (couponNameBytes(amount) > MAX_ASSET_NAME_BYTES) {
+      throw new Error(
+        `Coupon name for amount ${amount} exceeds the ` +
+          `${MAX_ASSET_NAME_BYTES}-byte asset-name limit.`,
+      );
+    }
+  }
+  if (!isValidAssetName(config.vaultNftName)) {
+    throw new Error(
+      `Vault NFT name must be a non-empty hex string of at most ` +
+        `${MAX_ASSET_NAME_BYTES} bytes, got "${config.vaultNftName}".`,
+    );
+  }
+}
+
 /**
  * Apply a bond over a core deployment, in the documented dependency order:
  * transfer / third-party / vault-NFT policy → vault → minting logic →
@@ -145,6 +217,8 @@ export function applyBond(
   deployment: CoreDeployment,
   config: BondConfig,
 ): Bond {
+  validateBondConfig(config);
+
   const { registryNodeCs, paramsPolicy } = deployment.core;
 
   const transfer = transferScript({ registryNodeCs });

@@ -20,9 +20,9 @@ Three postures make the instrument legible:
 
 - **The certificate is the governed CIP-113 token.** One is minted per
   deposited unit and lives at the PLB, holder-staked (ownership = the UTxO's
-  inline stake credential); its **asset name's first byte is the current step**
-  and its datum holds `{start, commit, cnt_policy}`. Every claim **burns the
-  current name and mints the next**, so the state advances in place: whoever
+  inline stake credential); its **asset name is exactly one byte: the current
+  step** and its datum holds `{start, commit, cnt_policy}`. Every claim **burns
+  the current name and mints the next**, so the state advances in place: whoever
   holds it may claim that unit's coupons still due, exactly once per step.
 - **Redemption is burn-to-pay.** A `cNt` is worth what its name says and only
   what its name says: the vault validator sums the amounts decoded from the
@@ -51,7 +51,7 @@ Three postures make the instrument legible:
 | Registry node | **Frozen stance** | `transfer` ours (name-monotone), `third_party` ours (issuer-triggered, opt-in), `unfracking` forbidden, empty global state; the minting logic refuses node updates. |
 | Deposit | **Permissionless, principal-backed mint** | Anyone may deposit one unit into a chosen vault; the minting logic admits the certificate only when that vault gains exactly the unit `principal` (I6). |
 | Timeline | **Per certificate** | Each unit's deadlines are multiples of a baked `interval` after its deposit time (`start`, pinned at mint), so late deposits earn no past coupons. |
-| Coupon terms | **Per vault** | Each vault's `cnt_policy` bakes its own `interval` / amounts / principal; the certificate records the `cnt_policy` of the vault it deposited into. |
+| Coupon terms | **Per vault, fixed principal** | Each vault's `cnt_policy` bakes its own `interval` / amounts; the unit principal is fixed for the whole instrument. The certificate records the `cnt_policy` of the vault it deposited into. |
 | Vault control | **Burn-to-pay redemptions** | Holders redeem by burning coupons; owner custody is an assumption, not enforced (§7). |
 | Certificate | **One CIP-113 certificate per deposit at the PLB** | Each unit gets a holder-staked certificate whose name carries the step and whose datum carries `start` / `commit` / `cnt_policy`. |
 | Authorize | **Owner opt-in via self-transfer** | A signed self-transfer (same stake) commits a payment credential to the certificate; it is cleared automatically when the owner changes. |
@@ -146,7 +146,7 @@ credential. Its state is split between the asset name and the inline datum:
 
 | Field | Meaning |
 | --- | --- |
-| name | The **current step in the first byte** (`0` at deposit, `N` at maturity; the rest of the name is reserved). The name advances only by burning the current one and minting the next (I7). |
+| name | The **current step: exactly one byte** (`0` at deposit, `N` at maturity). The name advances only by burning the current one and minting the next (I7). |
 | `start` | The unit's timeline origin, pinned at deposit to the transaction's validity **upper** bound (required finite). Preserved byte-for-byte by every transition. |
 | `commit` | `Option<Credential>` — the owner's committed payment credential for issuer-triggered claims (`None` at deposit). Settable/clearable only by an owner-signed self-transfer, and cleared whenever the owner (stake credential) changes. |
 | `cnt_policy` | The coupon policy of the vault this unit deposited into. Pinned at deposit from the vault's datum and preserved byte-for-byte by every transition; it selects the coupon terms and the coupon/payout binding. |
@@ -156,9 +156,10 @@ paired output's `datum` but **not the subject policy's asset names** — an
 issuer-triggered claim can replace the certificate in place (`name k-1 → name
 k`) and leaves no certificate-less shell behind.
 
-The coupon terms (`interval`, amounts) and the unit principal are baked into
-each vault's coupon policy, not certificate state; the certificate only records
-which coupon policy applies to it.
+The coupon terms (`interval`, amounts) are baked into each vault's coupon
+policy and the unit principal is fixed for the whole instrument (it is baked
+into the minting logic and every coupon policy), not certificate state; the
+certificate only records which coupon policy applies to it.
 
 Ownership of a certificate is the claim on its unit: transferring it transfers
 that unit's remaining coupons and principal claim.
@@ -167,11 +168,11 @@ that unit's remaining coupons and principal claim.
 
 A fixed number `N` of coupon steps on a **constant interval**: step `k` opens
 at `start + k * interval` (`interval` baked; step `N` opens graduation). The
-amounts `amount_1 … amount_N` and the unit principal are baked deployment
-constants. A certificate may claim the coupon `amount_k` once the validity
-range reaches `start + k * interval`; each unit matures at
-`start + N * interval`. The first byte of the certificate's asset name carries
-the current step, so no `step` lives in the datum.
+amounts `amount_1 … amount_N` and the unit principal are baked, instrument-wide
+deployment constants. A certificate may claim the coupon `amount_k` once the
+validity range reaches `start + k * interval`; each unit matures at
+`start + N * interval`. The certificate's asset name is exactly one byte: the
+current step, so no `step` lives in the datum.
 
 ## 4. Transactions
 
@@ -253,7 +254,7 @@ and mints the name `k` one**, plus the coupon.
 | **Signatures** | Holder. |
 | **Outputs** | 1. **Coupon** at the holder's payment address: `cNt(amount_k)` × 1. 2. **Certificate** at the PLB [stake: holder], name step `k`, datum `{ start, commit, cnt_policy }` preserved. |
 | **Validity range** | Lower bound finite, `≥ start + k * interval`. |
-| **Constraints** | The coupon policy admits the mint only when the validity range reaches that certificate's baked `start + k * interval`, the spent name is step `k-1` and the continuation's name is step `k` with the datum preserved. The minting logic's `Advance` mode validates the burn/mint shape **and requires that very coupon mint under the certificate's `cnt_policy`**, so no advance can skip its coupon. This makes each step claimable exactly once per certificate (I3). |
+| **Constraints** | Exactly one certificate is handled per transaction (I8). The coupon policy admits the mint only when the validity range reaches that certificate's baked `start + k * interval`, the spent name is step `k-1` and the continuation's name is step `k` with the datum preserved. The minting logic's `Advance` mode validates the burn/mint shape **and requires that very coupon mint under the certificate's `cnt_policy`**, so no advance can skip its coupon. This makes each step claimable exactly once per certificate (I3). |
 
 **Issuer-triggered shape (`commit: Some(pay)`).** The issuer claims on the
 owner's behalf through the third-party path:
@@ -299,7 +300,7 @@ path.
 | **Signatures** | Holder. |
 | **Outputs** | **Principal coupon** at the holder's payment address; no certificate continuation. |
 | **Validity range** | Lower bound finite, `≥ start + N * interval`. |
-| **Constraints** | Our minting logic's `Retire` validates the burn shape (exactly `−1` of name `N`) **and requires the principal coupon mint under the certificate's `cnt_policy`**; the coupon policy admits it only at the certificate's `start + N * interval` maturity with `name = principal`. The transfer logic admits a no-continuation spend only on this burn shape (I7), so a retirement can never skip its principal coupon. The principal coupon is then redeemed at the vault like any other coupon (§4.6). |
+| **Constraints** | Exactly one certificate is handled per transaction (I8). Our minting logic's `Retire` validates the burn shape (exactly `−1` of name `N`) **and requires the principal coupon mint under the certificate's `cnt_policy`**; the coupon policy admits it only at the certificate's `start + N * interval` maturity with `name = principal`. The transfer logic admits a no-continuation spend only on this burn shape (I7), so a retirement can never skip its principal coupon. The principal coupon is then redeemed at the vault like any other coupon (§4.6). |
 
 **Issuer-triggered shape (`commit: Some(pay)`).** The issuer retires on the
 owner's behalf:
@@ -441,8 +442,11 @@ owner's behalf:
 - **Vault creation ceremony.** Vault identity is modeled — every vault UTxO
   carries exactly one `vault_nft_cs` NFT (I10) — but the creation transaction
   is out of scope: the deployment assumes the `authority` mints exactly one
-  vault NFT into the vault UTxO at creation. A certificate binds only to the
-  vault's `cnt_policy`, not to a vault outref, so vaults that share a
+  vault NFT into the vault UTxO at creation. The NFT policy admits any single
+  mint the authority signs; it cannot stop the authority from minting the same
+  name again (a duplicate would break vault identity), so the deployment trusts
+  the authority to mint each vault NFT exactly once. A certificate binds only
+  to the vault's `cnt_policy`, not to a vault outref, so vaults that share a
   `cnt_policy` are interchangeable (coupons are bearer claims).
 - **Open issuance, no cap.** Deposits are permissionless and the number of
   certificates is not capped on-chain: every certificate claims its vault's

@@ -8,7 +8,10 @@
 //// the deposit and the vault validator require.
 ////
 //// Only mints are admitted (exactly one unit of one name); burns are refused
-//// so a vault can never lose its identity.
+//// so a vault can never lose its identity. The policy cannot stop the
+//// authority from minting the same name again — the deployment trusts the
+//// authority to mint each vault's NFT exactly once (creation is out of
+//// scope, §7).
 
 use aiken/collection/dict
 use authorization.{is_authorized}
