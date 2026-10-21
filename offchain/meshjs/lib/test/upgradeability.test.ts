@@ -31,7 +31,7 @@ import {
   upgradeRedeemer,
 } from "../src/upgradeability/datum";
 import {
-  addressToBytes,
+  addressToData,
   buildForwardTx,
   buildUpgradeTx,
   counterForwarderScript,
@@ -207,12 +207,18 @@ describe("counter script factories", () => {
     expect(counterScriptHash(a)).not.toBe(counterScriptHash(b));
   });
 
-  it("counterScriptAddress pins the payment credential of the script", () => {
+  it("addressToData encodes the Aiken Address record (payment + stake option)", () => {
     const script = counterV2Script();
     const addr = counterScriptAddress(script, 0);
-    const bytes = addressToBytes(addr);
-    // Enterprise script address: 1 header byte + the 28-byte payment credential.
-    expect(bytes.slice(2, 58)).toBe(counterScriptHash(script));
+    const json = deserializeDatum(serializeData(addressToData(addr)));
+    // Constr 0 [payment: Script(hash), stake: None]
+    expect(json.constructor).toBe(0n);
+    const payment = json.fields[0];
+    expect(payment.constructor).toBe(1n); // Script credential
+    expect(payment.fields[0].bytes).toBe(counterScriptHash(script));
+    const stake = json.fields[1];
+    expect(stake.constructor).toBe(1n); // None
+    expect(stake.fields).toHaveLength(0);
     expect(deserializeAddress(addr).scriptHash).toBe(counterScriptHash(script));
   });
 });

@@ -18,9 +18,12 @@
 import {
   applyCborEncoding,
   applyParamsToScript,
-  cst,
+  deserializeAddress,
+  mConStr0,
+  mConStr1,
   resolveScriptHash,
   serializePlutusScript,
+  type Data,
   type MeshTxBuilder,
   type Network,
   type PlutusScript,
@@ -77,9 +80,31 @@ export function counterScriptAddress(
   return serializePlutusScript(script, undefined, networkId).address;
 }
 
-/** Raw address bytes (hex) for an Aiken `Address` validator parameter. */
-export function addressToBytes(bech32: string): string {
-  return cst.Address.fromBech32(bech32).toBytes();
+/**
+ * Encode a bech32 address as the Aiken `Address` record a validator parameter
+ * expects: `Constr 0 [payment_credential, stake_credential: Option]`, where a
+ * credential is `Constr 0 [key_hash]` or `Constr 1 [script_hash]` and the
+ * stake part is `Some(Inline(credential))` or `None`.
+ */
+export function addressToData(bech32: string): Data {
+  const {
+    pubKeyHash,
+    scriptHash,
+    stakeCredentialHash,
+    stakeScriptCredentialHash,
+  } = deserializeAddress(bech32);
+  if (!pubKeyHash && !scriptHash) {
+    throw new Error(`Cannot decode the payment credential of ${bech32}.`);
+  }
+  const payment: Data = scriptHash
+    ? mConStr1([scriptHash])
+    : mConStr0([pubKeyHash]);
+  const stake: Data = stakeScriptCredentialHash
+    ? mConStr0([mConStr1([stakeScriptCredentialHash])])
+    : stakeCredentialHash
+      ? mConStr0([mConStr0([stakeCredentialHash])])
+      : mConStr1([]); // None
+  return mConStr0([payment, stake]);
 }
 
 // ------------------------------------------------------------ script factories
@@ -128,7 +153,7 @@ export function counterMigrationScript(params: MigrationParams): PlutusScript {
     [
       params.settingsPolicy,
       params.settingsTokenName,
-      addressToBytes(params.v2Address),
+      addressToData(params.v2Address),
     ],
     "Mesh",
   );
