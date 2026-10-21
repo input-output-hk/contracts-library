@@ -30,6 +30,11 @@
     "dao.vote": "159c194c38c731f22357da05d3f7ddd1078e80067222340a55789bf1",
     "settings": "2404b296676c4ab96a657c873a5bf58d01c77c6021f380a481a9a0bd",
     "settings_typed": "df77ce7f7d573025b2176af1efaa36ac27bfd324fd68be775c11c04a",
+    "upgradeability.counter_forwarder": "aab1f9e8bbf9b11b5658792d53a6d574b6fa1d4f8e22d7456eba19e9",
+    "upgradeability.counter_logic": "afeae1c93b98aefd5a1dfa7cf4f99db7593365943c56182cabcf63a6",
+    "upgradeability.counter_v1": "fb859d2817a1dded27326c5407086b270a5050f8f007bfcd0730eead",
+    "upgradeability.counter_migration": "32c2c4c81c12dbcb265da714fa1eb950a6292e7dab6f2af14c8f0a58",
+    "upgradeability.counter_v2": "3e021596f538533b8939c8bc57460b87a3541707bde2281bbb375517",
     "compiler": "aiken-v1.1.22"
   }
 }
