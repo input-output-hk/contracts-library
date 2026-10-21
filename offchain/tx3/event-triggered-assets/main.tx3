@@ -1564,7 +1564,7 @@ tx graduate_issuer(
 
     output shell_out {
         to: certificate_address,
-        amount: Ada(2000000),
+        amount: certificate_in - AnyAsset(cip_policy, final_name, 1),
         datum: CertificateDatum {
             start: certificate_in.start,
             commit: certificate_in.commit,
@@ -1580,8 +1580,7 @@ tx graduate_issuer(
 
     output {
         to: Signer,
-        amount: certificate_in - AnyAsset(cip_policy, final_name, 1) -
-            Ada(2000000) - Ada(2000000) + gas - fees,
+        amount: gas - Ada(2000000) - fees,
     }
 
     validity {

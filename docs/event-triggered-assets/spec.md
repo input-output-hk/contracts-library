@@ -311,7 +311,7 @@ owner's behalf:
 | **Mint** | `cip_policy`: `−1` of name `N` — our minting logic's `Retire` mode; the certificate's `cnt_policy`: `1` unit of asset name `principal`. |
 | **Withdrawals** | `programmable_logic_global` [ThirdPartyAct] → `third_party` [ThirdPartyRedeemer] → `third_party_logic` (ours); minting logic `[Retire]` → core `issuance_mint`. |
 | **Signatures** | Issuer. |
-| **Outputs** | 1. **Ghost continuation**: paired PLB output at the same address and `datum` with the certificate removed (`min_ada`) — the design's only shell. 2. **Principal coupon** at `[payment: pay]`: `cNt(principal)` × 1. |
+| **Outputs** | 1. **Ghost continuation**: paired PLB output at the same address and `datum`, preserving the spent UTxO's lovelace and other assets with the certificate removed — the design's only shell. 2. **Principal coupon** at `[payment: pay]`: `cNt(principal)` × 1. |
 | **Validity range** | Lower bound finite, `≥ start + N * interval`. |
 | **Constraints** | The burn's custody is covered by the third-party path (the core `issuance_logic` delegates to it); `third_party_logic` requires the issuer's signature and `commit`, validates name `N`, and binds the principal coupon minted under the certificate's `cnt_policy` to `pay`. Our minting logic's `Retire` requires that principal coupon, so the trigger cannot retire without paying it. Because the certificate disappears, the pair output is a certificate-less shell — inert and sweepable (§7). |
 
@@ -461,13 +461,14 @@ owner's behalf:
 - **Issuer graduation leaves one shell.** An issuer-claimed coupon pairs to the
   next certificate, so claims leave no shell; only the issuer's *graduation*
   removes the certificate, leaving a certificate-less paired continuation (a
-  *ghost shell*) holding ratcheted `min_ada`. It is inert — no `cip_policy`, no
-  effect on claims or graduation, and third-party cannot touch it (the paired
-  input must already hold the policy). The owner can sweep any number of shells
-  in a single owner-signed transfer-path spend (`PLG [TransferAct]` +
-  `transfer`; that path does not require paired outputs) and recover the
-  `min_ada`; the issuer cannot (the stake is the owner's), and a CIP-113-aware
-  builder is required.
+  *ghost shell*) holding the spent UTxO's lovelace and other assets (the core
+  third-party rule forbids the pair from losing value). It is inert — no
+  `cip_policy`, no effect on claims or graduation, and third-party cannot touch
+  it (the paired input must already hold the policy). The owner can sweep any
+  number of shells in a single owner-signed transfer-path spend (`PLG
+  [TransferAct]` + `transfer`; that path does not require paired outputs) and
+  recover their ADA; the issuer cannot (the stake is the owner's), and a
+  CIP-113-aware builder is required.
 - **The certificate's asset id changes every step.** The step rides the first
   byte of the asset name, so a unit is a different asset at each step (`0…N`).
   Wallets and indexers must follow the name transition; the certificate is

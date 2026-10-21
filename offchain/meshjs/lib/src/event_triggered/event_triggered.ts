@@ -804,11 +804,16 @@ export async function buildClaimIssuerTx(
 
   applyAuthorization(tb, b.config.issuer, p.authorizer, d.config.networkId);
 
-  // Paired continuation: the next certificate, same address and datum.
-  tb.txOut(p.certificate.output.address, [
-    lovelace(MIN_ADA),
-    { unit: b.cipPolicy + stepName(p.step), quantity: "1" },
-  ]);
+  // Paired continuation: the next certificate, same address and datum. The
+  // core third-party rule requires the pair to keep at least the spent UTxO's
+  // lovelace and unrelated assets, so the continuation is built from the
+  // input value with only the certificate name swapped.
+  tb.txOut(
+    p.certificate.output.address,
+    p.certificate.output.amount
+      .filter((a) => a.unit !== b.cipPolicy + stepName(p.step - 1))
+      .concat([{ unit: b.cipPolicy + stepName(p.step), quantity: "1" }]),
+  );
   tb.txOutInlineDatumValue(certificateDatumToData(p.datum));
 
   // Coupon bound to the commitment.
@@ -1001,8 +1006,15 @@ export async function buildGraduateIssuerTx(
 
   applyAuthorization(tb, b.config.issuer, p.authorizer, d.config.networkId);
 
-  // Ghost shell: the paired continuation preserves address and datum.
-  tb.txOut(p.certificate.output.address, [lovelace(MIN_ADA)]);
+  // Ghost shell: the paired continuation preserves address and datum, and —
+  // per the core third-party rule — the spent UTxO's lovelace and unrelated
+  // assets, with only the certificate removed.
+  tb.txOut(
+    p.certificate.output.address,
+    p.certificate.output.amount.filter(
+      (a) => a.unit !== b.cipPolicy + stepName(p.step),
+    ),
+  );
   tb.txOutInlineDatumValue(certificateDatumToData(p.datum));
 
   tb.txOut(p.payoutAddress, [
