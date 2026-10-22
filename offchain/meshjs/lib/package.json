@@ -30,6 +30,12 @@
     "dao.vote": "159c194c38c731f22357da05d3f7ddd1078e80067222340a55789bf1",
     "settings": "2404b296676c4ab96a657c873a5bf58d01c77c6021f380a481a9a0bd",
     "settings_typed": "df77ce7f7d573025b2176af1efaa36ac27bfd324fd68be775c11c04a",
-    "compiler": "aiken-v1.1.22"
+    "compiler": "aiken-v1.1.22",
+    "event_triggered.issuance": "0e1477ee0356f5c69376811ffff350ed7d5832992ee84dc1a4793396",
+    "event_triggered.transfer": "0ad39115b868e3db8439c2da4a706c6b241d16ab49c5024083fa8b40",
+    "event_triggered.third_party": "9f2108e60db114bc1a598dec9765500a8c3d55df5513b2fae56a20e3",
+    "event_triggered.vault": "55f3e552aad55bb8c98c7764e6b45fb36b2c913dd46b903d96ba87c3",
+    "event_triggered.coupon_policy": "f0da56d0617258734466ba0306cc2370822533bd96cd2753436b1a3c",
+    "event_triggered.vault_nft_policy": "601198710ff29674e394a0953a0c9a7f6905623d2fefcdba9aab7b5f"
   }
 }

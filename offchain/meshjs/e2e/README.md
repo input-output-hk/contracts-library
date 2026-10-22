@@ -21,15 +21,23 @@ As raw malicious transactions (built with `MeshTxBuilder` + the library's public
 - Cancel before `recovery_time`;
 - Cancel by a non-locker.
 
+### Event-triggered assets (tokenized bond)
+
+The core (CIP-113 programmable tokens) is deployed once, then each scenario applies its own bond and drives the real builders:
+
+- **Owner path** — vault creation, registration, permissionless deposit, transfer to a new owner, commit/revoke opt-in, coupon claim, burn-to-pay redemption, and owner graduation + principal redemption;
+- **Issuer path** — the committed (`authorize`) certificate is advanced and retired by the issuer (`claim_issuer` / `graduate_issuer`), with the certificate-less ghost shell, and the payouts land at the committed payment credential;
+- **Several vaults** with distinct coupon terms inside one instrument: each certificate binds to its vault's `cnt_policy`, claims against its own terms and redeems only at its own vault (a cross-vault redemption fails closed);
+- **Invariant negatives**, each asserted rejected: a claim before its step deadline (I3), a payout above the burned value (I4), retiring before maturity (I5), an owner change that keeps `commit` (I7), and an issuer trigger without a commitment (I9).
+
 ## Running locally
 
 ```sh
-npm install -g @bloxbean/yaci-devkit   # one-time
 npm install
 npm run test:devnet
 ```
 
-`test:devnet` (`scripts/devnet-test.sh`) starts an ephemeral devnet, waits for its API to serve blocks, runs the suite, and always tears the devnet down. If yaci-devkit is not installed it falls back to `npm test` with no devnet, and the suite **skips itself** (so it is safe to run anywhere).
+`test:devnet` (`scripts/devnet-test.sh`) starts an ephemeral devnet, waits for its API to serve blocks, runs the suite, and always tears the devnet down. The Yaci DevKit CLI is pinned as a devDependency (`@bloxbean/yaci-devkit@0.10.6`; the 0.12.x launcher does not work with this setup) and preferred over any global install. If yaci-devkit is not installed it falls back to `npm test` with no devnet, and the suite **skips itself** (so it is safe to run anywhere).
 
 `npm test` alone runs the suite against whatever devnet is already reachable (or skips). Endpoints come from env, matching the shared lifecycle convention: `INDEXER_URL` / `YACI_STORE_URL` for the store API (default `http://localhost:8080/api/v1/`) and `YACI_ADMIN_URL` for the admin API (default `http://localhost:10000`).
 
@@ -44,7 +52,7 @@ Their compiled CBOR is committed in [`src/fixtures.ts`](./src/fixtures.ts), so r
 
 ## CI
 
-`.github/workflows/ci.yml` runs these on every push and PR to `main`: it installs Yaci DevKit, starts the devnet, waits until the store API is serving blocks, builds the library, and runs this suite.
+`.github/workflows/ci.yml` runs these on every push and PR to `main`: it builds the library, installs the e2e package (pulling the pinned Yaci DevKit), starts the devnet, waits until the store API is serving blocks, and runs this suite.
 
 ## Notes on time
 
