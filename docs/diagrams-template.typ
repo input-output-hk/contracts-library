@@ -3,11 +3,12 @@
 // Go ahead and customize it to your liking!
 #let report(
   body,
+  paper: "a2",
 ) = {
   // Set the document's basic properties.
   set text(font: "Libertinus Serif", lang: "en")
   set heading(numbering: "1.1.a -")
-  set page(numbering: "1", number-align: center, fill: none, paper: "a2")
+  set page(numbering: "1", number-align: center, fill: none, paper: paper)
   show heading.where(level: 1): set block(below: 1em)
 
   // Table of contents.

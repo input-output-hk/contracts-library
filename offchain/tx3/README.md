@@ -64,7 +64,11 @@ claims, burn-to-pay redemptions and both graduation paths.
 Then run the suite (from `offchain/tx3`):
 
 ```bash
-npm run test:devnet      # or: npx vitest run <protocol-name>/tests/devnet.test.ts
+npm run test:devnet          # all protocols
+npm run test:settings        # or: npx vitest run settings/tests/devnet.test.ts
+npm run test:dao             # or: npx vitest run dao/tests/devnet.test.ts
+npm run test:smart-wallet    # or: npx vitest run smart_wallet/tests/devnet.test.ts
+npm run test:event-triggered # or: npx vitest run event-triggered-assets/tests/devnet.test.ts
 ```
 
 A single test by name:
