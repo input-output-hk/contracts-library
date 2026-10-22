@@ -18,7 +18,7 @@
 
 #import "../diagrams-template.typ": *
 
-#show: report
+#show: report.with(paper: "a3")
 
 = Mint (create the wallet)
 _The wallet is created by minting its identifying NFT — one token under the

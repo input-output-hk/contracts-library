@@ -32,7 +32,7 @@
     "dao.vote": "159c194c38c731f22357da05d3f7ddd1078e80067222340a55789bf1",
     "settings": "2404b296676c4ab96a657c873a5bf58d01c77c6021f380a481a9a0bd",
     "settings_typed": "df77ce7f7d573025b2176af1efaa36ac27bfd324fd68be775c11c04a",
-    "smart_wallet": "412e4bb6b9cf365ba6d3cc101d39eafc4ade9836e02cc6f59460e5ff",
+    "smart_wallet": "fe17146bcf1942416c3ec2aa13e78b6343ae1af7552c22ceb72817f6",
     "smart_wallet.spending_limit": "628f18f26192e6e912fb131a9996fa3a2e35568bd6a0149470c32dbe",
     "smart_wallet.spending_window": "44b22663bbd76e3a6e32f3236c508e288c124a9100625c59920e17cc",
     "smart_wallet.spending_period_limit": "e78a6ec521074e0d0a7bb42a3510aa1cc29ffa79b24f72bff3b4fc95",
@@ -44,6 +44,12 @@
     "smart_wallet.asset_deny_list": "81cd174bf9738d6126471bcfe5616a282ff09a1522b6066b1e0c3665",
     "smart_wallet.asset_deposit_allow_list": "00a01f5e34d8a3b7a9ab3d5246e965e2062e65a28728ef8e9ff14d93",
     "smart_wallet.asset_deposit_deny_list": "d2e284d55c54f7c1076dcfee1218ac49e1e56b1e72d933024cf615eb",
-    "compiler": "aiken-v1.1.24+bacbeb3"
+    "compiler": "aiken-v1.1.24+bacbeb3",
+    "event_triggered.issuance": "0e1477ee0356f5c69376811ffff350ed7d5832992ee84dc1a4793396",
+    "event_triggered.transfer": "0ad39115b868e3db8439c2da4a706c6b241d16ab49c5024083fa8b40",
+    "event_triggered.third_party": "9f2108e60db114bc1a598dec9765500a8c3d55df5513b2fae56a20e3",
+    "event_triggered.vault": "55f3e552aad55bb8c98c7764e6b45fb36b2c913dd46b903d96ba87c3",
+    "event_triggered.coupon_policy": "f0da56d0617258734466ba0306cc2370822533bd96cd2753436b1a3c",
+    "event_triggered.vault_nft_policy": "601198710ff29674e394a0953a0c9a7f6905623d2fefcdba9aab7b5f"
   }
 }
