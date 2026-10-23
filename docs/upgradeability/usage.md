@@ -119,7 +119,10 @@ coexist; other users are unaffected.
 
 Both are governed, timelocked changes to the settings UTxO. A forced repoint is
 **mandatory-timelocked**: the `apply_delay` is the users' window to inspect the
-new logic (and, for opt-in, to migrate or exit) before it takes effect.
+new logic (and, for opt-in, to migrate or exit) before it takes effect. The
+anchor is chosen by the proposer, though: treat the delay as a scheduling tool,
+not a hard guarantee against malicious governance (see the gotchas and
+[settings spec §6.a](../settings/spec.md)).
 
 ## Reading the registry
 
@@ -258,6 +261,16 @@ migration script), and the malformed-registry recovery.
 - **A malformed registry is a liveness hazard.** The reference settings validator
   accepts any value; a malformed map makes every consumer reject until governance
   fixes it (it can never be acted on).
+- **Never `Close` the registry's settings instance.** The settings NFT is
+  one-shot: closing burns it and the instance can never be relaunched, so every
+  forced forwarder UTxO becomes permanently unspendable and opt-in V1 UTxOs lose
+  their only value exit (they can still tick natively, never migrate). For a
+  production registry use a settings fork without `Close`, or forbid closing at
+  the governance layer.
+- **The proposer anchors the delay.** `next_apply = now + apply_delay` is
+  computed from the propose transaction's lower bound, which the proposer
+  chooses; a malicious proposer can anchor it in the past and apply almost
+  immediately (settings spec §6.a).
 - **The settings UTxO needs enough lovelace for the registry.** A map of script
   hashes inflates the inline datum, which raises the min-UTxO of every
   continuation; 1.5 ADA is rejected on-chain (`BabbageOutputTooSmallUTxO`). The
@@ -270,11 +283,12 @@ migration script), and the malformed-registry recovery.
   output can never satisfy the input it does not name. If your protocol adds
   state fields, keep the tag (or use a per-UTxO NFT) — a continuation lookup
   that ignores it would reintroduce the N→1 collapse.
-- **Off-chain: MeshJS ships; Tx3 is deferred.** The builders
+- **Off-chain: MeshJS and Tx3 ship.** The MeshJS builders
   (`buildCounterTickTx`, `buildForwardTx`, `buildUpgradeTx`) live in
   `offchain/meshjs/lib/src/upgradeability/`; registry changes reuse the settings
-  builders (`buildRegistryProposeTx` / `buildRegistryApplyTx`). Tx3 is not
-  shipped yet.
+  builders (`buildRegistryProposeTx` / `buildRegistryApplyTx`). The Tx3
+  reference protocol and its devnet tests live in
+  [`offchain/tx3/upgradeability/`](../../offchain/tx3/upgradeability/).
 
 ## Where to go next
 
