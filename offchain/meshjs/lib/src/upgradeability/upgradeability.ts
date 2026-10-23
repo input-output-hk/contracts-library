@@ -207,13 +207,18 @@ export interface TickTxParams {
 
 /**
  * The native counter action: continuation at the same address with `count + 1`,
- * same owner, and the input's value carried over.
+ * same owner, the input's value carried over, and the input tagged as
+ * `prevInput` (the validators settle each UTxO by its own continuation).
  */
 export async function buildCounterTickTx(p: TickTxParams): Promise<string> {
   const datum = counterDatumFromUtxo(p.counterUtxo);
   const continuation = counterDatumToData({
     count: datum.count + 1,
     owner: datum.owner,
+    prevInput: {
+      txHash: p.counterUtxo.input.txHash,
+      outputIndex: p.counterUtxo.input.outputIndex,
+    },
   });
 
   return await p.txBuilder
@@ -261,7 +266,8 @@ export interface ForwardTxParams {
 /**
  * The forced forwarder spend: requires the script currently registered for the
  * forwarder's own hash to run as a withdraw-0, and carries the state's
- * continuation (`count + 1`) at the forwarder address. Funds never move.
+ * continuation (`count + 1`, tagged with the spent UTxO as `prevInput`) at the
+ * forwarder address. Funds never move.
  *
  * Throws early if the forwarder is unregistered or the provided logic script
  * does not match the registry entry — a mistake surfaces as a clear error
@@ -292,6 +298,10 @@ export async function buildForwardTx(p: ForwardTxParams): Promise<string> {
   const continuation = counterDatumToData({
     count: datum.count + 1,
     owner: datum.owner,
+    prevInput: {
+      txHash: p.forwarderUtxo.input.txHash,
+      outputIndex: p.forwarderUtxo.input.outputIndex,
+    },
   });
 
   applyAuthorization(
@@ -351,7 +361,8 @@ export interface UpgradeTxParams {
 /**
  * The opt-in migration: spends the user's V1 UTxO with `Upgrade`, requires the
  * registered migration script as a withdraw-0, and re-creates the state at the
- * V2 address with `count` and `owner` preserved.
+ * V2 address with `count` and `owner` preserved, tagged with the spent UTxO as
+ * `prevInput`.
  *
  * Consent is enforced here — the owner's key must sign — so a governance
  * repoint of the migration script can never move funds without the owner.
@@ -411,7 +422,15 @@ export async function buildUpgradeTx(p: UpgradeTxParams): Promise<string> {
       p.settingsUtxo.input.outputIndex,
     )
     .txOut(p.v2Address, p.v1Utxo.output.amount)
-    .txOutInlineDatumValue(counterDatumToData(datum))
+    .txOutInlineDatumValue(
+      counterDatumToData({
+        ...datum,
+        prevInput: {
+          txHash: p.v1Utxo.input.txHash,
+          outputIndex: p.v1Utxo.input.outputIndex,
+        },
+      }),
+    )
     .txInCollateral(
       p.collateralUtxo.input.txHash,
       p.collateralUtxo.input.outputIndex,

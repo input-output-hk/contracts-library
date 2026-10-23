@@ -45,7 +45,23 @@ fn owner() -> Credential {
 }
 
 fn counter_datum(count: Int) -> CounterDatum {
-  CounterDatum { count, owner: owner() }
+  CounterDatum { count, owner: owner(), prev_input: None }
+}
+
+/// A continuation output at `hash` continuing the UTxO referenced by `prev`.
+fn continuation_output(
+  hash: ScriptHash,
+  prev: OutputReference,
+  count: Int,
+) -> Output {
+  Output {
+    address: from_script(hash),
+    value: assets.from_lovelace(2_000_000),
+    datum: InlineDatum(
+      CounterDatum { count, owner: owner(), prev_input: Some(prev) },
+    ),
+    reference_script: None,
+  }
 }
 
 fn ref(index: Int) -> OutputReference {
@@ -212,7 +228,7 @@ test tick_admits_increment() {
   let tx = Transaction {
     ..placeholder,
     inputs: [counter_input(forwarder_hash, 0, 5)],
-    outputs: [counter_output(forwarder_hash, 6)],
+    outputs: [continuation_output(forwarder_hash, ref(0), 6)],
   }
   validate_counter_tick(tx, ref(0))
 }
@@ -221,7 +237,7 @@ test tick_rejects_wrong_count() fail {
   let tx = Transaction {
     ..placeholder,
     inputs: [counter_input(forwarder_hash, 0, 5)],
-    outputs: [counter_output(forwarder_hash, 5)],
+    outputs: [continuation_output(forwarder_hash, ref(0), 5)],
   }
   validate_counter_tick(tx, ref(0))
 }
@@ -235,11 +251,56 @@ test tick_rejects_missing_continuation() fail {
   validate_counter_tick(tx, ref(0))
 }
 
+test tick_rejects_mistagged_continuation() fail {
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [counter_input(forwarder_hash, 0, 5)],
+    outputs: [continuation_output(forwarder_hash, ref(1), 6)],
+  }
+  validate_counter_tick(tx, ref(0))
+}
+
+test tick_binds_each_input_to_its_own_continuation() {
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [
+      counter_input(forwarder_hash, 0, 5),
+      counter_input(forwarder_hash, 1, 5),
+    ],
+    outputs: [
+      continuation_output(forwarder_hash, ref(0), 6),
+      continuation_output(forwarder_hash, ref(1), 6),
+    ],
+  }
+  and {
+    validate_counter_tick(tx, ref(0)),
+    validate_counter_tick(tx, ref(1)),
+  }
+}
+
+test tick_rejects_collapsed_shared_continuation() fail {
+  // M1: two same-count UTxOs settled by one continuation tagged for only one
+  // of them. The second input has no continuation of its own, so the collapse
+  // cannot drain its value.
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [
+      counter_input(forwarder_hash, 0, 5),
+      counter_input(forwarder_hash, 1, 5),
+    ],
+    outputs: [continuation_output(forwarder_hash, ref(0), 6)],
+  }
+  and {
+    validate_counter_tick(tx, ref(0)),
+    validate_counter_tick(tx, ref(1)),
+  }
+}
+
 test migrate_admits_state_preserved_at_v2() {
   let tx = Transaction {
     ..placeholder,
     inputs: [counter_input(forwarder_hash, 0, 5)],
-    outputs: [counter_output(v2_hash, 5)],
+    outputs: [continuation_output(v2_hash, ref(0), 5)],
   }
   validate_counter_migrate(tx, ref(0), from_script(v2_hash))
 }
@@ -248,9 +309,51 @@ test migrate_rejects_output_still_at_v1() fail {
   let tx = Transaction {
     ..placeholder,
     inputs: [counter_input(forwarder_hash, 0, 5)],
-    outputs: [counter_output(forwarder_hash, 5)],
+    outputs: [continuation_output(forwarder_hash, ref(0), 5)],
   }
   validate_counter_migrate(tx, ref(0), from_script(v2_hash))
+}
+
+test migrate_rejects_mistagged_continuation() fail {
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [counter_input(forwarder_hash, 0, 5)],
+    outputs: [continuation_output(v2_hash, ref(1), 5)],
+  }
+  validate_counter_migrate(tx, ref(0), from_script(v2_hash))
+}
+
+test migrate_binds_each_input_to_its_own_continuation() {
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [
+      counter_input(forwarder_hash, 0, 5),
+      counter_input(forwarder_hash, 1, 5),
+    ],
+    outputs: [
+      continuation_output(v2_hash, ref(0), 5),
+      continuation_output(v2_hash, ref(1), 5),
+    ],
+  }
+  and {
+    validate_counter_migrate(tx, ref(0), from_script(v2_hash)),
+    validate_counter_migrate(tx, ref(1), from_script(v2_hash)),
+  }
+}
+
+test migrate_rejects_collapsed_shared_continuation() fail {
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [
+      counter_input(forwarder_hash, 0, 5),
+      counter_input(forwarder_hash, 1, 5),
+    ],
+    outputs: [continuation_output(v2_hash, ref(0), 5)],
+  }
+  and {
+    validate_counter_migrate(tx, ref(0), from_script(v2_hash)),
+    validate_counter_migrate(tx, ref(1), from_script(v2_hash)),
+  }
 }
 
 // --------------------------------------------------------- redeemer binding

@@ -96,6 +96,9 @@ const collat: UTxO = {
   },
 };
 
+/** A UTxO reference for `prevInput` fixtures. */
+const PREV_REF = { txHash: "aa".repeat(32), outputIndex: 3 };
+
 function counterUtxo(d: CounterDatum, index = 0): UTxO {
   return {
     input: { txHash: "bb".repeat(32), outputIndex: index },
@@ -130,7 +133,7 @@ function forwardTxParams(
     txBuilder: recorder().txBuilder,
     forwarderScript,
     logicAuthorizer: { scriptCbor: counterLogicScript(PARAMS).code },
-    forwarderUtxo: counterUtxo({ count: 3, owner: OWNER }),
+    forwarderUtxo: counterUtxo({ count: 3, owner: OWNER, prevInput: null }),
     settingsUtxo: settingsUtxo(registry),
     utxos: [],
     changeAddress: "addr_test_change",
@@ -153,7 +156,7 @@ function upgradeTxParams(
         v2Address: V2_ADDR,
       }).code,
     },
-    v1Utxo: counterUtxo({ count: 5, owner: OWNER }, 1),
+    v1Utxo: counterUtxo({ count: 5, owner: OWNER, prevInput: PREV_REF }, 1),
     settingsUtxo: settingsUtxo(registry),
     v2Address: V2_ADDR,
     utxos: [],
@@ -227,8 +230,28 @@ describe("counter script factories", () => {
 
 describe("datum/redeemer encoding", () => {
   it("counter datum round-trips through CBOR", () => {
-    const d: CounterDatum = { count: 7, owner: OWNER };
+    const d: CounterDatum = { count: 7, owner: OWNER, prevInput: PREV_REF };
     expect(counterDatumFromUtxo(counterUtxo(d))).toEqual(d);
+  });
+
+  it("counter datum round-trips a null prevInput (genesis lock)", () => {
+    const d: CounterDatum = { count: 0, owner: OWNER, prevInput: null };
+    expect(counterDatumFromUtxo(counterUtxo(d))).toEqual(d);
+  });
+
+  it("encodes prevInput as Some(OutputReference)", () => {
+    const json = deserializeDatum(
+      serializeData(
+        counterDatumToData({ count: 1, owner: OWNER, prevInput: PREV_REF }),
+      ),
+    );
+    expect(json.fields).toHaveLength(3);
+    const some = json.fields[2];
+    expect(some.constructor).toBe(0n); // Some
+    const ref = some.fields[0];
+    expect(ref.constructor).toBe(0n); // OutputReference record
+    expect(ref.fields[0].bytes).toBe(PREV_REF.txHash);
+    expect(Number(ref.fields[1].int)).toBe(PREV_REF.outputIndex);
   });
 
   it("tick is constructor 0 and upgrade is constructor 1", () => {
@@ -275,7 +298,7 @@ describe("datum/redeemer encoding", () => {
       ...bare,
       output: {
         ...bare.output,
-        plutusData: serializeData(mConStr0([1, 2, 3])),
+        plutusData: serializeData(mConStr0([1, 2])),
       },
     };
     expect(() => counterDatumFromUtxo(wrong)).toThrow(/Constr 0/);
@@ -325,6 +348,24 @@ describe("buildForwardTx guards", () => {
     expect(ref?.args[0]).toBe("dd".repeat(32));
     expect(ref?.args[1]).toBe(9);
   });
+
+  it("tags the continuation with the spent UTxO as prevInput", async () => {
+    const registered: Registry = new Map([
+      [
+        counterScriptHash(counterForwarderScript(PARAMS)),
+        counterScriptHash(counterLogicScript(PARAMS)),
+      ],
+    ]);
+    const { txBuilder, calls } = recorder();
+    await buildForwardTx(forwardTxParams(registered, { txBuilder }));
+
+    const out = calls.find((c) => c.method === "txOutInlineDatumValue");
+    const json = deserializeDatum(serializeData(out?.args[0]));
+    expect(Number(json.fields[0].int)).toBe(4); // count + 1
+    expect(json.fields[2].constructor).toBe(0n); // Some
+    expect(json.fields[2].fields[0].fields[0].bytes).toBe("bb".repeat(32));
+    expect(Number(json.fields[2].fields[0].fields[1].int)).toBe(0);
+  });
 });
 
 describe("buildUpgradeTx guards", () => {
@@ -335,7 +376,10 @@ describe("buildUpgradeTx guards", () => {
     await expect(
       buildUpgradeTx(
         upgradeTxParams(registered, {
-          v1Utxo: counterUtxo({ count: 5, owner: SCRIPT_OWNER }, 1),
+          v1Utxo: counterUtxo(
+            { count: 5, owner: SCRIPT_OWNER, prevInput: PREV_REF },
+            1,
+          ),
         }),
       ),
     ).rejects.toThrow(/owner to be a key/i);
@@ -384,5 +428,12 @@ describe("buildUpgradeTx guards", () => {
 
     const out = calls.find((c) => c.method === "txOut");
     expect(out?.args[0]).toBe(V2_ADDR);
+
+    const datum = calls.find((c) => c.method === "txOutInlineDatumValue");
+    const json = deserializeDatum(serializeData(datum?.args[0]));
+    expect(Number(json.fields[0].int)).toBe(5); // count preserved
+    expect(json.fields[2].constructor).toBe(0n); // Some
+    expect(json.fields[2].fields[0].fields[0].bytes).toBe("bb".repeat(32));
+    expect(Number(json.fields[2].fields[0].fields[1].int)).toBe(1); // v1Utxo index
   });
 });

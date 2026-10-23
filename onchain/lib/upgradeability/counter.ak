@@ -11,15 +11,15 @@ use cardano/transaction.{
 ///
 /// - `count` is the counter value.
 /// - `owner` gates the opt-in `Upgrade` path (per-UTxO consent).
-///
-/// The demo assumes at most one counter UTxO per script address and one
-/// continuation per target address per transaction. A production protocol
-/// would tag continuations (e.g. a `prev_input` datum field or a per-UTxO NFT)
-/// to support batching; that is orthogonal to the upgradeability mechanics this
-/// demo exercises.
+/// - `prev_input` binds a continuation output to the UTxO it continues (`None`
+///   only at the genesis lock). Every validation matches its continuation by
+///   the `OutputReference` it claims, so several UTxOs can be settled in one
+///   transaction without one continuation swallowing another: a single output
+///   can only satisfy the single input it names.
 pub type CounterDatum {
   count: Int,
   owner: Credential,
+  prev_input: Option<OutputReference>,
 }
 
 /// Actions accepted by the counter demo.
@@ -32,42 +32,55 @@ pub type CounterRedeemer {
   Upgrade
 }
 
-/// The first output at `target_address`, if any.
-fn find_continuation(
+/// The first output at `target_address` whose inline datum is exactly
+/// `expected`, if any.
+///
+/// Continuations are matched by full datum equality — including the
+/// `prev_input` tag naming the UTxO they continue — so the lookup is a plain
+/// `Data` comparison: no casting of foreign outputs, and one output can only
+/// ever satisfy the single input it names.
+fn find_output(
   self: Transaction,
   target_address: Address,
+  expected: Data,
 ) -> Option<Output> {
-  list.find(self.outputs, fn(out) { out.address == target_address })
+  list.find(
+    self.outputs,
+    fn(out) {
+      out.address == target_address && out.datum == InlineDatum(expected)
+    },
+  )
 }
 
 /// Validate a forced counter tick: the input referenced by `own_ref` must be
-/// settled by a continuation at its own address that increments `count` by one,
-/// preserves `owner`, and does not decrease the lovelace held.
+/// settled by a continuation at its own address — one whose datum names
+/// `own_ref` as its `prev_input` — that increments `count` by one, preserves
+/// `owner`, and does not decrease the lovelace held.
 pub fn validate_counter_tick(
   self: Transaction,
   own_ref: OutputReference,
 ) -> Bool {
   expect Some(input) = find_input(self.inputs, own_ref)
   expect InlineDatum(in_raw) = input.output.datum
-  expect CounterDatum { count, owner } = in_raw
+  expect CounterDatum { count, owner, .. } = in_raw
 
-  when find_continuation(self, input.output.address) is {
-    Some(out) -> {
-      expect InlineDatum(out_raw) = out.datum
-      expect CounterDatum { count: out_count, owner: out_owner } = out_raw
-      and {
-        out_count == count + 1,
-        out_owner == owner,
-        assets.lovelace_of(out.value) >= assets.lovelace_of(input.output.value),
-      }
-    }
+  let continuation: Data = CounterDatum {
+    count: count + 1,
+    owner,
+    prev_input: Some(own_ref),
+  }
+
+  when find_output(self, input.output.address, continuation) is {
+    Some(out) ->
+      assets.lovelace_of(out.value) >= assets.lovelace_of(input.output.value)
     None -> False
   }
 }
 
 /// Validate an opt-in migration of the input referenced by `own_ref`: the same
-/// state must reappear at `v2_address`, with `count` and `owner` preserved and
-/// no decrease in lovelace.
+/// state must reappear at `v2_address` — in a continuation whose datum names
+/// `own_ref` as its `prev_input` — with `count` and `owner` preserved and no
+/// decrease in lovelace.
 pub fn validate_counter_migrate(
   self: Transaction,
   own_ref: OutputReference,
@@ -75,18 +88,17 @@ pub fn validate_counter_migrate(
 ) -> Bool {
   expect Some(input) = find_input(self.inputs, own_ref)
   expect InlineDatum(in_raw) = input.output.datum
-  expect CounterDatum { count, owner } = in_raw
+  expect CounterDatum { count, owner, .. } = in_raw
 
-  when find_continuation(self, v2_address) is {
-    Some(out) -> {
-      expect InlineDatum(out_raw) = out.datum
-      expect CounterDatum { count: out_count, owner: out_owner } = out_raw
-      and {
-        out_count == count,
-        out_owner == owner,
-        assets.lovelace_of(out.value) >= assets.lovelace_of(input.output.value),
-      }
-    }
+  let continuation: Data = CounterDatum {
+    count,
+    owner,
+    prev_input: Some(own_ref),
+  }
+
+  when find_output(self, v2_address, continuation) is {
+    Some(out) ->
+      assets.lovelace_of(out.value) >= assets.lovelace_of(input.output.value)
     None -> False
   }
 }
