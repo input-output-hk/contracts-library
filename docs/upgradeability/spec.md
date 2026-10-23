@@ -39,7 +39,7 @@ This document specifies the reusable predicates (`onchain/lib/upgradeability/`) 
 
 ### Limitations
 
-The reference predicates delegate the *meaning* of a forwarder's state and of a migration to the protocol's own logic / migration script; they validate only that the correct delegate runs. The `counter_*` demo assumes one continuation output per target address per transaction (no batched ticks/migrations; §6.a). Nothing here validates the *content* of a protocol's logic beyond its registered hash.
+The reference predicates delegate the *meaning* of a forwarder's state and of a migration to the protocol's own logic / migration script; they validate only that the correct delegate runs. Nothing here validates the *content* of a protocol's logic beyond its registered hash.
 
 ## 3. Glossary
 
@@ -101,7 +101,7 @@ As specified in the settings spec §4.a. Its `current` value is a well-formed re
 
 ### 4.b Protocol UTxO
 
-The state a forwarder (forced) or V1 (opt-in) holds. Its shape is protocol-defined; the upgradeability predicates treat it as opaque. The `counter_*` demo uses `CounterDatum { count: Int, owner: Credential }`.
+The state a forwarder (forced) or V1 (opt-in) holds. Its shape is protocol-defined; the upgradeability predicates treat it as opaque. The `counter_*` demo uses `CounterDatum { count: Int, owner: Credential, prev_input: Option<OutputReference> }`: the `prev_input` tag binds a continuation output to the UTxO it continues (`None` only at the genesis lock), so each validation settles its input by its own continuation and several UTxOs can be ticked or migrated in one transaction without one continuation swallowing another.
 
 ## 5. Transactions
 
@@ -155,7 +155,11 @@ Attacks the protocol defends against, each backed by the invariants of §6.b:
 - **Forced repoints need a timelock and bounded governance.** `apply_delay` is the users' only window to react; a negative or tiny delay, or unbounded governance, weakens the guarantee (settings spec §6.a).
 - **The reference settings validator does not constrain the registry shape.** Any `Data` is admissible; consumers reject a malformed value at spend time, but governance can still write one (a liveness, not a safety, hazard). A deployer who wants to constrain it can fork settings with their own `validate_datum`.
 - **No global migration completeness.** On eUTxO each UTxO migrates independently; there is no all-or-nothing across the protocol, and no on-chain way to force a user off an opt-in V1.
-- **`counter_*` batching.** The demo finds the first output at the target address, so it supports one continuation per target per transaction. Production protocols should tag continuations (e.g. a `prev_input` datum field or a per-UTxO NFT).
+- **Batched continuations are tagged.** The `counter_*` datums carry a
+  `prev_input: Option<OutputReference>` tag naming the UTxO each continuation
+  continues (`None` only at the genesis lock), so several UTxOs can be ticked
+  or migrated in one transaction: a continuation settles only the single input
+  it names, so one output cannot swallow another.
 - **The protocol state's meaning is delegated.** The upgradeability predicates treat a forwarder's datum opaquely; the logic script defines it.
 - **Off-chain is out of scope in this pass.**
 
@@ -207,6 +211,7 @@ And, on the migration side (enforced by the migration script, not by `validate_u
 
 - **R5 (wrong action).** A forwarded V1 input was not spent with `Upgrade`. _(¬I6)_
 - **R6 (no continuation / wrong target).** The migrated state does not reappear at `v2_address` with the required shape. _(¬I6)_
+- **R7 (collapsed continuation).** An input is settled by a continuation whose `prev_input` tag names another UTxO (or nothing); each validation binds the continuation by the `OutputReference` it claims, so a single output cannot satisfy two inputs.
 
 #### Scope of the formalization
 

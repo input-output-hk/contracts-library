@@ -2,7 +2,8 @@
  * Datum/redeemer encoding for the upgradeability counter validators.
  *
  * CBOR constructor layout matching the Aiken blueprint:
- *   CounterDatum    = Constr 0 [count: Int, owner: Credential]
+ *   CounterDatum    = Constr 0 [count: Int, owner: Credential,
+ *                              prev_input: Option<OutputReference>]
  *   CounterRedeemer = Tick=0 | Upgrade=1
  *   Registry        = Map<bytes, bytes>   (the settings datum's `current`)
  *
@@ -19,14 +20,30 @@ import {
 } from "@meshsdk/core";
 
 import { credentialToData, type Credential } from "../common";
-import type { CounterDatum, Registry } from "./types";
+import type { CounterDatum, OutputRef, Registry } from "./types";
 
 export { credentialToData };
 
 // ------------------------------------------------------------------ encoding
 
+/** Encode a UTxO reference as the Aiken `OutputReference` record. */
+export function outputRefToData(r: OutputRef): Data {
+  return mConStr0([r.txHash, r.outputIndex]);
+}
+
+/** Encode `prevInput` as the Aiken `Option<OutputReference>` field. */
+function prevInputToData(prevInput: OutputRef | null): Data {
+  return prevInput === null
+    ? mConStr1([])
+    : mConStr0([outputRefToData(prevInput)]);
+}
+
 export function counterDatumToData(d: CounterDatum): Data {
-  return mConStr0([d.count, credentialToData(d.owner)]);
+  return mConStr0([
+    d.count,
+    credentialToData(d.owner),
+    prevInputToData(d.prevInput),
+  ]);
 }
 
 /** The ordinary counter step, accepted by the forced logic and both versions. */
@@ -108,26 +125,53 @@ function credentialFromJson(data: unknown, what: string): Credential {
   return c.constructor === 0 ? { kind: "key", hash } : { kind: "script", hash };
 }
 
+function outputRefFromJson(data: unknown, what: string): OutputRef {
+  const r = asConstr(data, what);
+  if (r.constructor !== 0 || r.fields.length !== 2) {
+    throw new Error(`Malformed datum: malformed output reference for ${what}.`);
+  }
+  return {
+    txHash: asBytes(r.fields[0], what),
+    outputIndex: asInt(r.fields[1], what),
+  };
+}
+
+/** Decode the Aiken `Option<OutputReference>` continuation tag. */
+function optionalOutputRefFromJson(
+  data: unknown,
+  what: string,
+): OutputRef | null {
+  const o = asConstr(data, what);
+  if (o.constructor === 1) {
+    return null;
+  }
+  if (o.constructor !== 0 || o.fields.length !== 1) {
+    throw new Error(`Malformed datum: malformed option for ${what}.`);
+  }
+  return outputRefFromJson(o.fields[0], what);
+}
+
 /** Decode the counter state from a UTxO's inline datum. Throws on absence/malformation. */
 export function counterDatumFromUtxo(utxo: UTxO): CounterDatum {
   if (!utxo.output.plutusData) {
     throw new Error(
       `The counter UTxO (${utxo.input.txHash}#${utxo.input.outputIndex}) has no ` +
-        "inline datum; the builders need `count` and `owner` from it.",
+        "inline datum; the builders need `count`, `owner` and `prevInput` from it.",
     );
   }
   const d = asConstr(
     deserializeDatum(utxo.output.plutusData),
     "the counter datum",
   );
-  if (d.constructor !== 0 || d.fields.length !== 2) {
+  if (d.constructor !== 0 || d.fields.length !== 3) {
     throw new Error(
-      "Malformed counter datum: expected Constr 0 [count, owner].",
+      "Malformed counter datum: expected Constr 0 [count, owner, prevInput].",
     );
   }
   return {
     count: asInt(d.fields[0], "count"),
     owner: credentialFromJson(d.fields[1], "owner"),
+    prevInput: optionalOutputRefFromJson(d.fields[2], "prevInput"),
   };
 }
 

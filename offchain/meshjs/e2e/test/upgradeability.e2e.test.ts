@@ -14,7 +14,9 @@
  *   - malicious migrations → tampered state, wrong target, underpayment,
  *     missing continuation, or a non-`Upgrade` action → rejected;
  *   - batched forwards → every registered input is validated, so a benign
- *     input cannot shield a stale one;
+ *     input cannot shield a stale one, and each input settles by its own
+ *     `prev_input`-tagged continuation (a collapsed single continuation
+ *     cannot drain a second UTxO);
  *   - forced repoint → delegation actually switches (a tick routed to the
  *     migration script is rejected on-chain), and back;
  *   - forged registry → a look-alike without the settings NFT is ignored;
@@ -131,6 +133,12 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
     hash: alice.keyHash,
   });
 
+  /** The `prevInput` tag naming `utxo` as the UTxO a continuation continues. */
+  const prevOf = (utxo: UTxO): CounterDatum["prevInput"] => ({
+    txHash: utxo.input.txHash,
+    outputIndex: utxo.input.outputIndex,
+  });
+
   beforeAll(async () => {
     provider = makeProvider();
     slotConfig = await devnetSlotConfig();
@@ -190,12 +198,12 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
 
     forwarderUtxo = await lockCounter(
       forwarderAddr,
-      { count: 1, owner: aliceOwner() },
+      { count: 1, owner: aliceOwner(), prevInput: null },
       alice,
     );
     v1Utxo = await lockCounter(
       v1Addr,
-      { count: 5, owner: aliceOwner() },
+      { count: 5, owner: aliceOwner(), prevInput: null },
       alice,
     );
   });
@@ -453,23 +461,28 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
     expect(counterDatumFromUtxo(forwarderUtxo!)).toEqual({
       count: 1,
       owner: aliceOwner(),
+      prevInput: null,
     });
     expect(counterDatumFromUtxo(v1Utxo!)).toEqual({
       count: 5,
       owner: aliceOwner(),
+      prevInput: null,
     });
   });
 
   it("ticks the forwarder through the registered logic (forced)", async () => {
+    const spent = forwarderUtxo!;
     const continuation = await forwardTick(logicScript.code);
     expect(counterDatumFromUtxo(continuation)).toEqual({
       count: 2,
       owner: aliceOwner(),
+      prevInput: prevOf(spent),
     });
     forwarderUtxo = continuation;
   });
 
   it("ticks V1 natively without consulting the registry", async () => {
+    const spent = v1Utxo!;
     const tx = await buildCounterTickTx({
       txBuilder: newTxBuilder(provider),
       script: v1Script,
@@ -484,6 +497,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
     expect(counterDatumFromUtxo(continuation)).toEqual({
       count: 6,
       owner: aliceOwner(),
+      prevInput: prevOf(spent),
     });
     v1Utxo = continuation;
   });
@@ -503,7 +517,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
   it("rejects a migration that tampers with the count", async () => {
     const v1 = await lockCounter(
       v1Addr,
-      { count: 1, owner: aliceOwner() },
+      { count: 1, owner: aliceOwner(), prevInput: null },
       alice,
     );
     await expect(
@@ -514,7 +528,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
           {
             address: v2Addr,
             amount: COUNTER_LOVELACE,
-            datum: { count: 2, owner: aliceOwner() },
+            datum: { count: 2, owner: aliceOwner(), prevInput: prevOf(v1) },
           },
         ],
         withdrawMigration: true,
@@ -526,7 +540,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
   it("rejects a migration that swaps the state's owner", async () => {
     const v1 = await lockCounter(
       v1Addr,
-      { count: 1, owner: aliceOwner() },
+      { count: 1, owner: aliceOwner(), prevInput: null },
       alice,
     );
     await expect(
@@ -537,7 +551,11 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
           {
             address: v2Addr,
             amount: COUNTER_LOVELACE,
-            datum: { count: 1, owner: { kind: "key", hash: bob.keyHash } },
+            datum: {
+              count: 1,
+              owner: { kind: "key", hash: bob.keyHash },
+              prevInput: prevOf(v1),
+            },
           },
         ],
         withdrawMigration: true,
@@ -549,7 +567,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
   it("rejects a migration whose continuation stays at the V1 address", async () => {
     const v1 = await lockCounter(
       v1Addr,
-      { count: 1, owner: aliceOwner() },
+      { count: 1, owner: aliceOwner(), prevInput: null },
       alice,
     );
     await expect(
@@ -560,7 +578,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
           {
             address: v1Addr,
             amount: COUNTER_LOVELACE,
-            datum: { count: 1, owner: aliceOwner() },
+            datum: { count: 1, owner: aliceOwner(), prevInput: prevOf(v1) },
           },
         ],
         withdrawMigration: true,
@@ -572,7 +590,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
   it("rejects a migration that underpays the continuation", async () => {
     const v1 = await lockCounter(
       v1Addr,
-      { count: 1, owner: aliceOwner() },
+      { count: 1, owner: aliceOwner(), prevInput: null },
       alice,
     );
     await expect(
@@ -583,7 +601,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
           {
             address: v2Addr,
             amount: [{ unit: "lovelace", quantity: "2000000" }],
-            datum: { count: 1, owner: aliceOwner() },
+            datum: { count: 1, owner: aliceOwner(), prevInput: prevOf(v1) },
           },
         ],
         withdrawMigration: true,
@@ -595,7 +613,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
   it("rejects a migration with no V2 continuation", async () => {
     const v1 = await lockCounter(
       v1Addr,
-      { count: 1, owner: aliceOwner() },
+      { count: 1, owner: aliceOwner(), prevInput: null },
       alice,
     );
     await expect(
@@ -612,7 +630,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
   it("rejects a V1 spent with Tick while the migration script runs", async () => {
     const v1 = await lockCounter(
       v1Addr,
-      { count: 1, owner: aliceOwner() },
+      { count: 1, owner: aliceOwner(), prevInput: null },
       alice,
     );
     await expect(
@@ -623,7 +641,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
           {
             address: v1Addr,
             amount: COUNTER_LOVELACE,
-            datum: { count: 2, owner: aliceOwner() },
+            datum: { count: 2, owner: aliceOwner(), prevInput: prevOf(v1) },
           },
         ],
         withdrawMigration: true,
@@ -635,12 +653,12 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
   it("rejects a batch migration when one forwarded input is not preserved", async () => {
     const matching = await lockCounter(
       v1Addr,
-      { count: 2, owner: aliceOwner() },
+      { count: 2, owner: aliceOwner(), prevInput: null },
       alice,
     );
     const stale = await lockCounter(
       v1Addr,
-      { count: 5, owner: aliceOwner() },
+      { count: 5, owner: aliceOwner(), prevInput: null },
       alice,
     );
     await expect(
@@ -651,7 +669,11 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
           {
             address: v2Addr,
             amount: [{ unit: "lovelace", quantity: "6000000" }],
-            datum: { count: 2, owner: aliceOwner() },
+            datum: {
+              count: 2,
+              owner: aliceOwner(),
+              prevInput: prevOf(matching),
+            },
           },
         ],
         withdrawMigration: true,
@@ -678,6 +700,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
     expect(counterDatumFromUtxo(v2Utxo)).toEqual({
       count: 6,
       owner: aliceOwner(),
+      prevInput: prevOf(v1Utxo!),
     });
   });
 
@@ -702,7 +725,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
     // signs, so the required vkey witness is missing.
     const bobUtxo = await lockCounter(
       v1Addr,
-      { count: 0, owner: { kind: "key", hash: bob.keyHash } },
+      { count: 0, owner: { kind: "key", hash: bob.keyHash }, prevInput: null },
       alice,
     );
     await expect(
@@ -764,12 +787,12 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
   it("rejects a batch tick when one forwarded input is not preserved", async () => {
     const matching = await lockCounter(
       forwarderAddr,
-      { count: 1, owner: aliceOwner() },
+      { count: 1, owner: aliceOwner(), prevInput: null },
       alice,
     );
     const stale = await lockCounter(
       forwarderAddr,
-      { count: 5, owner: aliceOwner() },
+      { count: 5, owner: aliceOwner(), prevInput: null },
       alice,
     );
     await expect(
@@ -779,11 +802,80 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
           {
             address: forwarderAddr,
             amount: [{ unit: "lovelace", quantity: "6000000" }],
-            datum: { count: 2, owner: aliceOwner() },
+            datum: {
+              count: 2,
+              owner: aliceOwner(),
+              prevInput: prevOf(matching),
+            },
           },
         ],
       }),
     ).rejects.toThrow();
+  });
+
+  it("rejects a collapsed tick: one shared continuation cannot drain the second UTxO", async () => {
+    // Two same-count UTxOs and a single continuation tagged for only the
+    // first one. Before the `prevInput` binding both inputs validated against
+    // the one output and the second UTxO's value vanished with it.
+    const first = await lockCounter(
+      forwarderAddr,
+      { count: 1, owner: aliceOwner(), prevInput: null },
+      alice,
+    );
+    const second = await lockCounter(
+      forwarderAddr,
+      { count: 1, owner: aliceOwner(), prevInput: null },
+      alice,
+    );
+    await expect(
+      rawForwardTick({
+        inputs: [first, second],
+        outputs: [
+          {
+            address: forwarderAddr,
+            amount: COUNTER_LOVELACE,
+            datum: { count: 2, owner: aliceOwner(), prevInput: prevOf(first) },
+          },
+        ],
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("ticks two forwarder UTxOs in one transaction with per-input continuations", async () => {
+    const first = await lockCounter(
+      forwarderAddr,
+      { count: 1, owner: aliceOwner(), prevInput: null },
+      alice,
+    );
+    const second = await lockCounter(
+      forwarderAddr,
+      { count: 4, owner: aliceOwner(), prevInput: null },
+      alice,
+    );
+    const hash = await rawForwardTick({
+      inputs: [first, second],
+      outputs: [
+        {
+          address: forwarderAddr,
+          amount: COUNTER_LOVELACE,
+          datum: { count: 2, owner: aliceOwner(), prevInput: prevOf(first) },
+        },
+        {
+          address: forwarderAddr,
+          amount: COUNTER_LOVELACE,
+          datum: { count: 5, owner: aliceOwner(), prevInput: prevOf(second) },
+        },
+      ],
+    });
+    await waitForTx(provider, hash);
+    const continuations = (await provider.fetchUTxOs(hash)).filter(
+      (u) => u.output.address === forwarderAddr,
+    );
+    expect(continuations).toHaveLength(2);
+    const counts = continuations
+      .map((u) => counterDatumFromUtxo(u).count)
+      .sort();
+    expect(counts).toEqual([2, 5]);
   });
 
   it("ignores a forged registry without the settings NFT", async () => {

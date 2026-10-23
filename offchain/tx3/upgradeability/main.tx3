@@ -13,7 +13,8 @@
 // Datum / redeemer CBOR layout (must match the Aiken blueprint):
 //   RegistryDatum   = Constr 0 [current: Map<Bytes, Bytes>,
 //                               next: Option<Map>, next_apply: Option<Int>]
-//   CounterDatum    = Constr 0 [count: Int, owner: Credential]
+//   CounterDatum    = Constr 0 [count: Int, owner: Credential,
+//                               prev_input: Option<UtxoRef>]
 //   CounterRedeemer = Tick = Constr 0 [] | Upgrade = Constr 1 []
 //   MintRedeemer    = Mint = Constr 0 [out_ix] | Burn = Constr 1 []
 //   SpendRedeemer   = Propose = Constr 0 [out_ix] | Apply = Constr 1 [out_ix]
@@ -148,9 +149,31 @@ type SpendRedeemer {
 }
 
 // Counter state of the demo protocol.
+//
+// `prev_input` binds a continuation output to the UTxO it continues (`None`
+// only at the genesis lock): every validation matches its continuation by the
+// ref it claims, so one output can only ever settle the single input it names.
 type CounterDatum {
     count: Int,
     owner: Credential,
+    prev_input: OptionalUtxoRef,
+}
+
+// `OutputReference` as Aiken encodes it (`Constr 0 [txid, index]`). Declared
+// explicitly rather than relying on the `UtxoRef` datum encoding: `UtxoRef` is
+// a transaction-level type and Tx3 cannot coerce it into a datum field.
+type OutputReference {
+    transaction_id: Bytes,
+    output_index: Int,
+}
+
+// `Option<OutputReference>` — the on-chain `Option<OutputReference>`
+// continuation tag.
+type OptionalUtxoRef {
+    Some {
+        value: OutputReference,
+    },
+    None,
 }
 
 // Actions accepted by the counter demo: `Tick` is the ordinary step, `Upgrade`
@@ -389,6 +412,7 @@ tx lock_forwarder(
         datum: CounterDatum {
             count: count,
             owner: owner,
+            prev_input: OptionalUtxoRef::None {},
         },
     }
 
@@ -414,6 +438,7 @@ tx lock_v1(
         datum: CounterDatum {
             count: count,
             owner: owner,
+            prev_input: OptionalUtxoRef::None {},
         },
     }
 
@@ -425,10 +450,13 @@ tx lock_v1(
 
 /// Forced tick: spend the forwarder UTxO, run the registered logic via
 /// withdraw-0 (its reference script is pulled in by `LogicScript`), and write
-/// the `count + 1` continuation at the forwarder address.
+/// the `count + 1` continuation at the forwarder address, tagged with the
+/// spent UTxO's ref as `prev_input`.
 tx tick_forwarder(
     /// The forwarder UTxO being forwarded.
     forwarder_ref: UtxoRef,
+    /// The spent forwarder UTxO as the on-chain `OutputReference` (datum tag).
+    prev_ref: OutputReference,
     /// The settings UTxO holding the registry (reference input).
     settings_ref: UtxoRef,
 ) {
@@ -455,6 +483,9 @@ tx tick_forwarder(
         datum: CounterDatum {
             count: forwarder_in.count + 1,
             owner: forwarder_in.owner,
+            prev_input: OptionalUtxoRef::Some {
+                value: prev_ref,
+            },
         },
     }
 
@@ -483,6 +514,8 @@ tx tick_forwarder(
 /// Native tick at the V1 address (no registry read).
 tx tick_v1(
     counter_ref: UtxoRef,
+    /// The spent counter UTxO as the on-chain `OutputReference` (datum tag).
+    prev_ref: OutputReference,
 ) {
     input counter_in {
         from: V1,
@@ -502,6 +535,9 @@ tx tick_v1(
         datum: CounterDatum {
             count: counter_in.count + 1,
             owner: counter_in.owner,
+            prev_input: OptionalUtxoRef::Some {
+                value: prev_ref,
+            },
         },
     }
 
@@ -524,6 +560,8 @@ tx tick_v1(
 /// Native tick at the immutable V2 address.
 tx tick_v2(
     counter_ref: UtxoRef,
+    /// The spent counter UTxO as the on-chain `OutputReference` (datum tag).
+    prev_ref: OutputReference,
 ) {
     input counter_in {
         from: V2,
@@ -543,6 +581,9 @@ tx tick_v2(
         datum: CounterDatum {
             count: counter_in.count + 1,
             owner: counter_in.owner,
+            prev_input: OptionalUtxoRef::Some {
+                value: prev_ref,
+            },
         },
     }
 
@@ -564,10 +605,13 @@ tx tick_v2(
 
 /// Opt-in migration: spend the V1 UTxO with `Upgrade`, run the registered
 /// migration script via withdraw-0 under the owner's native consent
-/// (`validate_upgrade`), and recreate the state at the blessed V2 address.
+/// (`validate_upgrade`), and recreate the state at the blessed V2 address,
+/// tagged with the spent UTxO's ref as `prev_input`.
 tx migrate_v1(
     /// The V1 UTxO being migrated.
     v1_ref: UtxoRef,
+    /// The spent V1 UTxO as the on-chain `OutputReference` (datum tag).
+    prev_ref: OutputReference,
     /// The settings UTxO holding the registry (reference input).
     settings_ref: UtxoRef,
 ) {
@@ -593,6 +637,9 @@ tx migrate_v1(
         datum: CounterDatum {
             count: v1_in.count,
             owner: v1_in.owner,
+            prev_input: OptionalUtxoRef::Some {
+                value: prev_ref,
+            },
         },
     }
 
@@ -631,6 +678,8 @@ tx migrate_v1(
 tx migrate_tampered_count_attack(
     v1_ref: UtxoRef,
     settings_ref: UtxoRef,
+    /// The spent V1 UTxO as the on-chain `OutputReference` (datum tag).
+    prev_ref: OutputReference,
     /// The tampered count written to the V2 continuation.
     count: Int,
 ) {
@@ -656,6 +705,9 @@ tx migrate_tampered_count_attack(
         datum: CounterDatum {
             count: count,
             owner: v1_in.owner,
+            prev_input: OptionalUtxoRef::Some {
+                value: prev_ref,
+            },
         },
     }
 
@@ -692,6 +744,8 @@ tx migrate_tampered_count_attack(
 tx migrate_wrong_target_attack(
     v1_ref: UtxoRef,
     settings_ref: UtxoRef,
+    /// The spent V1 UTxO as the on-chain `OutputReference` (datum tag).
+    prev_ref: OutputReference,
 ) {
     reference settings_registry {
         ref: settings_ref,
@@ -715,6 +769,9 @@ tx migrate_wrong_target_attack(
         datum: CounterDatum {
             count: v1_in.count,
             owner: v1_in.owner,
+            prev_input: OptionalUtxoRef::Some {
+                value: prev_ref,
+            },
         },
     }
 
@@ -753,6 +810,8 @@ tx migrate_wrong_target_attack(
 tx migrate_wrong_action_attack(
     v1_ref: UtxoRef,
     settings_ref: UtxoRef,
+    /// The spent V1 UTxO as the on-chain `OutputReference` (datum tag).
+    prev_ref: OutputReference,
 ) {
     reference settings_registry {
         ref: settings_ref,
@@ -776,6 +835,9 @@ tx migrate_wrong_action_attack(
         datum: CounterDatum {
             count: v1_in.count + 1,
             owner: v1_in.owner,
+            prev_input: OptionalUtxoRef::Some {
+                value: prev_ref,
+            },
         },
     }
 

@@ -263,9 +263,13 @@ migration script), and the malformed-registry recovery.
   continuation; 1.5 ADA is rejected on-chain (`BabbageOutputTooSmallUTxO`). The
   settings builders now start at 2.5 ADA — re-check the minimum if your registry
   grows.
-- **The demo assumes one continuation per target address per transaction.**
-  Production protocols should tag continuations (e.g. a `prev_input` datum field
-  or a per-UTxO NFT) to support batching.
+- **Batched continuations are tagged, not first-match.** The demo datums carry
+  a `prev_input: Option<OutputReference>` tag naming the UTxO each continuation
+  continues (`None` only at the genesis lock), so every input settles by its
+  own continuation: two same-count UTxOs cannot share one output, and one
+  output can never satisfy the input it does not name. If your protocol adds
+  state fields, keep the tag (or use a per-UTxO NFT) — a continuation lookup
+  that ignores it would reintroduce the N→1 collapse.
 - **Off-chain: MeshJS ships; Tx3 is deferred.** The builders
   (`buildCounterTickTx`, `buildForwardTx`, `buildUpgradeTx`) live in
   `offchain/meshjs/lib/src/upgradeability/`; registry changes reuse the settings

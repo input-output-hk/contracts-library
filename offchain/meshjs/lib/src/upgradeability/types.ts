@@ -16,10 +16,22 @@ export type { Credential };
  */
 export type Registry = Map<string, string>;
 
+/** Reference to a UTxO, mirroring the Aiken `OutputReference` record. */
+export interface OutputRef {
+  txHash: string;
+  outputIndex: number;
+}
+
 /** State of the `counter_*` reference validators. */
 export interface CounterDatum {
   count: number;
   owner: Credential;
+  /**
+   * The UTxO this state continues (`null` only at the genesis lock). The
+   * validators match their continuation by this tag, so one output can only
+   * ever settle the single input it names.
+   */
+  prevInput: OutputRef | null;
 }
 
 /**

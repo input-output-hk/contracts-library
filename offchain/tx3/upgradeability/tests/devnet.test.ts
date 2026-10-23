@@ -36,6 +36,12 @@ const REGISTRAR_FUNDS = 30n * ADA;
 
 const toBytes = (hex: string): Uint8Array => Buffer.from(hex, "hex");
 
+/** The spent UTxO as the on-chain `OutputReference` (datum tag). */
+const prevOf = (utxo: DevnetUtxo) => ({
+  transaction_id: toBytes(utxo.txHash),
+  output_index: utxo.outputIndex,
+});
+
 /** Dummy env satisfying the protocol's declared env for test-kit txs. */
 const KIT_ENV = {
   settings_hash: "00",
@@ -411,6 +417,7 @@ test("launches the registry and ticks the forwarder through the registered logic
       .client(owner)
       .tickForwarder({
         forwarder_ref: forwarderUtxo.ref,
+        prev_ref: prevOf(forwarderUtxo),
         settings_ref: inst.settingsRef,
       } as unknown as TickForwarderArgs)
       .env(inst.env),
@@ -431,7 +438,10 @@ test("ticks V1 natively without consulting the registry", async () => {
   await confirm(
     inst
       .client(owner)
-      .tickV1({ counter_ref: v1Utxo.ref } as unknown as TickV1Args)
+      .tickV1({
+        counter_ref: v1Utxo.ref,
+        prev_ref: prevOf(v1Utxo),
+      } as unknown as TickV1Args)
       .env(inst.env),
   );
 
@@ -452,6 +462,7 @@ test("migrates a V1 UTxO to V2 with the owner's consent, and ticks V2 natively",
       .client(owner)
       .migrateV1({
         v1_ref: v1.ref,
+        prev_ref: prevOf(v1),
         settings_ref: inst.settingsRef,
       } as unknown as MigrateV1Args)
       .env(inst.env),
@@ -487,6 +498,7 @@ test("rejects a migration without the owner's consent", async () => {
         .client(owner)
         .migrateV1({
           v1_ref: v1.ref,
+          prev_ref: prevOf(v1),
           settings_ref: inst.settingsRef,
         } as unknown as MigrateV1Args)
         .env(inst.env),
@@ -504,6 +516,7 @@ test("rejects a migration that tampers with the migrated count", async () => {
         .client(owner)
         .migrateTamperedCountAttack({
           v1_ref: v1.ref,
+          prev_ref: prevOf(v1),
           settings_ref: inst.settingsRef,
           count: 4,
         } as unknown as MigrateTamperedCountAttackArgs)
@@ -522,6 +535,7 @@ test("rejects a migration whose continuation stays at the V1 address", async () 
         .client(owner)
         .migrateWrongTargetAttack({
           v1_ref: v1.ref,
+          prev_ref: prevOf(v1),
           settings_ref: inst.settingsRef,
         } as unknown as MigrateWrongTargetAttackArgs)
         .env(inst.env),
@@ -539,6 +553,7 @@ test("rejects a V1 spent with Tick while the migration script runs", async () =>
         .client(owner)
         .migrateWrongActionAttack({
           v1_ref: v1.ref,
+          prev_ref: prevOf(v1),
           settings_ref: inst.settingsRef,
         } as unknown as MigrateWrongActionAttackArgs)
         .env(inst.env),
@@ -564,6 +579,7 @@ test("repoints the registry and a tick routed to the migration script is rejecte
         .client(owner)
         .tickForwarder({
           forwarder_ref: forwarderUtxo.ref,
+          prev_ref: prevOf(forwarderUtxo),
           settings_ref: inst.settingsRef,
         } as unknown as TickForwarderArgs)
         .env(migrationEnv),
@@ -579,6 +595,7 @@ test("repoints the registry and a tick routed to the migration script is rejecte
       .client(owner)
       .tickForwarder({
         forwarder_ref: forwarderUtxo.ref,
+        prev_ref: prevOf(forwarderUtxo),
         settings_ref: inst.settingsRef,
       } as unknown as TickForwarderArgs)
       .env(inst.env),
