@@ -337,6 +337,30 @@ test tick_admits_preserving_input_token() {
   validate_counter_tick(tx, ref(0))
 }
 
+test tick_admits_token_preserved_and_extra_lovelace() {
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [
+      counter_input_with(
+        forwarder_hash,
+        0,
+        5,
+        with_token(assets.from_lovelace(2_000_000)),
+      ),
+    ],
+    outputs: [
+      continuation_output_with(
+        forwarder_hash,
+        ref(0),
+        6,
+        with_token(assets.from_lovelace(3_000_000)),
+        None,
+      ),
+    ],
+  }
+  validate_counter_tick(tx, ref(0))
+}
+
 test tick_rejects_continuation_with_reference_script() fail {
   let tx = Transaction {
     ..placeholder,

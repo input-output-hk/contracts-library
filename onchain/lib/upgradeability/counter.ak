@@ -41,8 +41,10 @@ pub type CounterRedeemer {
 /// ever satisfy the single input it names.
 ///
 /// The continuation must also carry no reference script and preserve the
-/// input's non-ADA assets exactly, so a permissionless tick cannot bloat the
-/// UTxO with attached scripts or smuggle tokens in (or drop state assets).
+/// input's non-ADA assets exactly (`assets.match` compares the token bundle
+/// exhaustively and delegates ADA to `>=`), so a permissionless tick cannot
+/// bloat the UTxO with attached scripts or smuggle tokens in (or drop state
+/// assets).
 fn settled_by(
   self: Transaction,
   target_address: Address,
@@ -52,10 +54,10 @@ fn settled_by(
   list.any(
     self.outputs,
     fn(out) {
-      out.address == target_address && out.datum == InlineDatum(expected) && out.reference_script == None && assets.without_lovelace(
+      out.address == target_address && out.datum == InlineDatum(expected) && out.reference_script == None && assets.match(
         out.value,
-      ) == assets.without_lovelace(input.value) && assets.lovelace_of(out.value) >= assets.lovelace_of(
         input.value,
+        >=,
       )
     },
   )
