@@ -6,6 +6,12 @@
 # chain, so test files never pollute each other's state (e.g. stake credential
 # registrations).
 #
+# The CLI is pinned as an e2e devDependency (`@bloxbean/yaci-devkit@0.10.6`) so
+# local runs and CI use the exact same version. Do not bump to 0.12.x blindly:
+# that line replaced the launcher with a different architecture (Yano-based
+# sync) whose `cardano-submit-api` fails to start and whose store API never
+# came up for us. A globally installed CLI is used as a fallback.
+#
 # Degrades gracefully when yaci-devkit is not installed: the suite then runs
 # with no devnet and skips itself, so this stays green anywhere.
 #
@@ -21,6 +27,8 @@ TEST_FILES=(
   "test/vesting.e2e.test.ts"
   "test/settings.e2e.test.ts"
   "test/dao.e2e.test.ts"
+  "test/smart_wallet.e2e.test.ts"
+  "test/event_triggered.e2e.test.ts"
   "test/upgradeability.e2e.test.ts"
 )
 
@@ -64,17 +72,36 @@ if [ -f "$NODE_PROPS" ]; then
   done < <(grep -E '^[[:space:]]*(shiftStartTimeBehind|conwayHardForkAtEpoch)[[:space:]]*=' "$NODE_PROPS")
 fi
 
-if ! command -v yaci-devkit >/dev/null 2>&1; then
+YACI_BIN=""
+if [ -x "node_modules/.bin/yaci-devkit" ]; then
+  YACI_BIN="$PWD/node_modules/.bin/yaci-devkit"
+  echo "• Using pinned yaci-devkit: $YACI_BIN"
+elif command -v yaci-devkit >/dev/null 2>&1; then
+  YACI_BIN="$(command -v yaci-devkit)"
+  echo "• Using a global yaci-devkit: $YACI_BIN"
+  echo "  The pinned version is an e2e devDependency; run \`npm install\` in offchain/meshjs/e2e."
+fi
+
+if [ -z "$YACI_BIN" ]; then
   echo "• yaci-devkit not installed. Running the suite without a devnet (it will skip)."
-  echo "  Install it for the full e2e run: npm install -g @bloxbean/yaci-devkit"
+  echo "  Run \`npm install\` in offchain/meshjs/e2e for the full e2e run."
   exec npm test
 fi
 
 CURRENT_DEVNET_PID=""
+stop_devnet() {
+  if [ -n "$CURRENT_DEVNET_PID" ]; then kill "$CURRENT_DEVNET_PID" >/dev/null 2>&1 || true; fi
+  # The npm launcher forks the JVM CLI, which in turn forks cardano-node;
+  # killing the launcher pid alone leaves those running.
+  for pat in "yaci-devkit-linux-x64/yaci-cli" "yaci-devkit-macos-arm64/yaci-cli"; do
+    pkill -f "$pat" >/dev/null 2>&1 || true
+  done
+  pkill -f "$HOME/.yaci-cli/" >/dev/null 2>&1 || true
+  CURRENT_DEVNET_PID=""
+}
 teardown() {
   echo "Tearing down devnet ..."
-  if [ -n "$CURRENT_DEVNET_PID" ]; then kill "$CURRENT_DEVNET_PID" >/dev/null 2>&1 || true; fi
-  pkill -f "$HOME/.yaci-cli/" >/dev/null 2>&1 || true
+  stop_devnet
 }
 trap 'teardown; exit 1' INT TERM
 
@@ -86,7 +113,7 @@ run_file() {
   echo "  $TEST_FILE"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-  nohup yaci-devkit "${GENESIS_OVERRIDES[@]+"${GENESIS_OVERRIDES[@]}"}" up --enable-yaci-store >"$LOG" 2>&1 &
+  nohup "$YACI_BIN" "${GENESIS_OVERRIDES[@]+"${GENESIS_OVERRIDES[@]}"}" up --enable-yaci-store >"$LOG" 2>&1 &
   CURRENT_DEVNET_PID=$!
 
   echo "Waiting for the devnet API (up to 150s) ..."
@@ -109,9 +136,7 @@ run_file() {
   local TEST_EXIT=$?
 
   echo "Tearing down devnet ..."
-  if [ -n "$CURRENT_DEVNET_PID" ]; then kill "$CURRENT_DEVNET_PID" >/dev/null 2>&1 || true; fi
-  pkill -f "$HOME/.yaci-cli/" >/dev/null 2>&1 || true
-  CURRENT_DEVNET_PID=""
+  stop_devnet
   sleep 2
 
   return $TEST_EXIT

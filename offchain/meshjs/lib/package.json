@@ -16,14 +16,17 @@
     "test": "vitest run"
   },
   "peerDependencies": {
-    "@meshsdk/core": "^1.8.0"
+    "@meshsdk/core": "^1.8.0",
+    "@meshsdk/core-cst": "^1.8.0"
   },
   "devDependencies": {
     "@meshsdk/core": "^1.8.0",
+    "@meshsdk/core-cst": "^1.8.0",
     "typescript": "^5.5.0",
     "vitest": "^4.1.10"
   },
   "blueprint": {
+    "compiler": "aiken-v1.1.24+bacbeb3",
     "vesting": "95da21788eb1f59f51aad9669eb8c8b7081ab618c1f29b871925894a",
     "dao.proposal": "0222c427016359c662a5ec9da8548cd502ede975dfaee74127c4f44a",
     "dao.stake": "2590ef411a0d1524b803dd00fdc4cb47b0424d3f4054501cef00e975",
@@ -35,6 +38,23 @@
     "upgradeability.counter_v1": "fb859d2817a1dded27326c5407086b270a5050f8f007bfcd0730eead",
     "upgradeability.counter_migration": "32c2c4c81c12dbcb265da714fa1eb950a6292e7dab6f2af14c8f0a58",
     "upgradeability.counter_v2": "3e021596f538533b8939c8bc57460b87a3541707bde2281bbb375517",
-    "compiler": "aiken-v1.1.22"
+    "smart_wallet": "fe17146bcf1942416c3ec2aa13e78b6343ae1af7552c22ceb72817f6",
+    "smart_wallet.spending_limit": "628f18f26192e6e912fb131a9996fa3a2e35568bd6a0149470c32dbe",
+    "smart_wallet.spending_window": "44b22663bbd76e3a6e32f3236c508e288c124a9100625c59920e17cc",
+    "smart_wallet.spending_period_limit": "e78a6ec521074e0d0a7bb42a3510aa1cc29ffa79b24f72bff3b4fc95",
+    "smart_wallet.full_recipient_allow_list": "c226ed318a0382a9f681ea8bead57c6675d198ead40fd3368a491382",
+    "smart_wallet.full_recipient_deny_list": "7279d1ba9daeb01d875f30fd6c58d92363c2ac6762aaeb5460c9dc79",
+    "smart_wallet.payment_staking_allow_list": "b0dd71e8710950cc00ed59fe88648026c70fcbb9340c8f2e04e1a18d",
+    "smart_wallet.payment_staking_deny_list": "a14fb01634a665be62e9e30193a0d750b289700b4fa4c91a5a5dfbce",
+    "smart_wallet.asset_allow_list": "66b8c84f066a6903acc70cd1063a4b88fa077ad1422190247c64c9d9",
+    "smart_wallet.asset_deny_list": "81cd174bf9738d6126471bcfe5616a282ff09a1522b6066b1e0c3665",
+    "smart_wallet.asset_deposit_allow_list": "00a01f5e34d8a3b7a9ab3d5246e965e2062e65a28728ef8e9ff14d93",
+    "smart_wallet.asset_deposit_deny_list": "d2e284d55c54f7c1076dcfee1218ac49e1e56b1e72d933024cf615eb",
+    "event_triggered.issuance": "0e1477ee0356f5c69376811ffff350ed7d5832992ee84dc1a4793396",
+    "event_triggered.transfer": "0ad39115b868e3db8439c2da4a706c6b241d16ab49c5024083fa8b40",
+    "event_triggered.third_party": "9f2108e60db114bc1a598dec9765500a8c3d55df5513b2fae56a20e3",
+    "event_triggered.vault": "55f3e552aad55bb8c98c7764e6b45fb36b2c913dd46b903d96ba87c3",
+    "event_triggered.coupon_policy": "f0da56d0617258734466ba0306cc2370822533bd96cd2753436b1a3c",
+    "event_triggered.vault_nft_policy": "601198710ff29674e394a0953a0c9a7f6905623d2fefcdba9aab7b5f"
   }
 }
