@@ -22,8 +22,10 @@ Two mechanisms share this registry:
 | Forced reference validators | [`onchain/validators/upgradeability/counter_forwarder.ak`](../../onchain/validators/upgradeability/counter_forwarder.ak), [`counter_logic.ak`](../../onchain/validators/upgradeability/counter_logic.ak) |
 | Opt-in reference validators | [`onchain/validators/upgradeability/counter_v1.ak`](../../onchain/validators/upgradeability/counter_v1.ak), [`counter_migration.ak`](../../onchain/validators/upgradeability/counter_migration.ak), [`counter_v2.ak`](../../onchain/validators/upgradeability/counter_v2.ak) |
 | MeshJS builders | [`offchain/meshjs/lib/src/upgradeability/`](../../offchain/meshjs/lib/src/upgradeability/) |
-| Unit tests | [`offchain/meshjs/lib/test/upgradeability.test.ts`](../../offchain/meshjs/lib/test/upgradeability.test.ts) |
+| On-chain unit tests | [`onchain/lib/upgradeability/upgradeability.test.ak`](../../onchain/lib/upgradeability/upgradeability.test.ak) |
+| Unit tests (MeshJS) | [`offchain/meshjs/lib/test/upgradeability.test.ts`](../../offchain/meshjs/lib/test/upgradeability.test.ts) |
 | e2e (Yaci devnet) | [`offchain/meshjs/e2e/test/upgradeability.e2e.test.ts`](../../offchain/meshjs/e2e/test/upgradeability.e2e.test.ts) |
+| Tx3 reference + tests | [`offchain/tx3/upgradeability/`](../../offchain/tx3/upgradeability/) |
 | Compiled blueprint | [`onchain/plutus.json`](../../onchain/plutus.json) |
 
 The `counter_*` validators under `onchain/validators/upgradeability/` are a
@@ -224,16 +226,26 @@ await buildUpgradeTx({
 
 `buildUpgradeTx` requires the UTxO owner to be a key credential and adds it as
 a required signer (consent), checks the migration script against the registry,
-and re-creates the state at `v2Address` with `count` and `owner` preserved.
+and re-creates the state at `v2Address` with `count`, `owner` and the non-ADA
+assets preserved (and no reference script).
 
 ### 5. Running the tests
 
-The builders are covered by unit tests (`npm test` in `offchain/meshjs/lib`)
-and by an end-to-end suite against an ephemeral Yaci devnet
-(`npm run test:devnet` in `offchain/meshjs/e2e`), which exercises the full
+The validator constraints are covered by the on-chain unit tests (`aiken check`
+in `onchain`) — including the continuation constraints: no reference script and
+non-ADA assets preserved — and the builders by the MeshJS unit tests
+(`npm test` in `offchain/meshjs/lib`). An end-to-end suite against an ephemeral
+Yaci devnet (`npm run test:devnet` in `offchain/meshjs/e2e`) exercises the full
 flow: launch with a registry, forced tick, registry propose/apply, migration
-with consent, a forced repoint (and its on-chain rejection while routed to the
-migration script), and the malformed-registry recovery.
+with consent, per-input continuation tagging (collapsed and merged continuation
+attacks are rejected), a forced repoint (and its on-chain rejection while
+routed to the migration script), the migration negatives (tampered state, wrong
+target, underpayment, missing continuation, wrong action), the forged-registry
+rejection, the malformed-registry recovery, and the permanent brick caused by
+closing the instance.
+
+The Tx3 reference protocol has its own devnet suite
+(`npm run test:upgradeability` in `offchain/tx3`).
 
 ## Gotchas and safety notes
 
@@ -273,9 +285,11 @@ migration script), and the malformed-registry recovery.
   immediately (settings spec §6.a).
 - **The settings UTxO needs enough lovelace for the registry.** A map of script
   hashes inflates the inline datum, which raises the min-UTxO of every
-  continuation; 1.5 ADA is rejected on-chain (`BabbageOutputTooSmallUTxO`). The
-  settings builders now start at 2.5 ADA — re-check the minimum if your registry
-  grows.
+  continuation; the `buildLaunchTx` default (1.5 ADA) is rejected on-chain
+  (`BabbageOutputTooSmallUTxO`) once the registry grows. Pass
+  `minUtxoLovelace` to launch with headroom — the e2e suite uses 5 ADA — and
+  remember that `propose` / `apply` carry the input amount forward, so the
+  launch must cover the largest `current + next` datum.
 - **Batched continuations are tagged, not first-match.** The demo datums carry
   a `prev_input: Option<OutputReference>` tag naming the UTxO each continuation
   continues (`None` only at the genesis lock), so every input settles by its
@@ -283,6 +297,11 @@ migration script), and the malformed-registry recovery.
   output can never satisfy the input it does not name. If your protocol adds
   state fields, keep the tag (or use a per-UTxO NFT) — a continuation lookup
   that ignores it would reintroduce the N→1 collapse.
+- **Continuations carry no reference script and preserve non-ADA assets.** The
+  demo's tick/migration checks reject a continuation that attaches a reference
+  script or changes the input's token bundle: because the forced path is
+  permissionless, anyone could otherwise bloat the UTxO or smuggle/drop
+  tokens. Keep both checks when reusing the pattern.
 - **Off-chain: MeshJS and Tx3 ship.** The MeshJS builders
   (`buildCounterTickTx`, `buildForwardTx`, `buildUpgradeTx`) live in
   `offchain/meshjs/lib/src/upgradeability/`; registry changes reuse the settings
@@ -296,8 +315,11 @@ migration script), and the malformed-registry recovery.
   must-accept / must-reject characterization.
 - [e2e suite](../../offchain/meshjs/e2e/test/upgradeability.e2e.test.ts) — the
   full flow on a Yaci devnet: launch with a registry, forced tick,
-  propose/apply, migration with consent, a forced repoint (+ its on-chain
-  rejection), and the malformed-registry recovery.
+  propose/apply, migration with consent, per-input continuation tagging, the
+  migration negatives, a forced repoint (+ its on-chain rejection), the
+  malformed-registry recovery, and the close-brick case.
+- [Tx3 reference](../../offchain/tx3/upgradeability/) — the same protocol as a
+  Tx3 interface, with its own devnet suite.
 - [Settings usage guide](../settings/usage.md) — deploying and operating the
   settings instance that holds the registry.
 - [Architecture](../ARCHITECTURE.md) — composability conventions shared by every
