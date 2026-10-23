@@ -478,7 +478,10 @@ test("migrates a V1 UTxO to V2 with the owner's consent, and ticks V2 natively",
   await confirm(
     inst
       .client(owner)
-      .tickV2({ counter_ref: v2.ref } as unknown as TickV2Args)
+      .tickV2({
+        counter_ref: v2.ref,
+        prev_ref: prevOf(v2),
+      } as unknown as TickV2Args)
       .env(inst.env),
   );
   const [continued] = await addedSince(inst.v2Addr, beforeTick);
