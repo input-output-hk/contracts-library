@@ -148,18 +148,23 @@ Attacks the protocol defends against, each backed by the invariants of §6.b:
 - **Migration re-creation / double spend.** The migration script binds each forwarded input to the `Upgrade` action and a `v2_address` continuation; a UTxO is spent once, and a migrated V1 UTxO cannot be re-created under a normal action. (I6)
 - **Malformed registry.** A malformed registry value makes every consumer reject (a liveness hazard), but it cannot be acted on. Governance is trusted to write well-formed maps. (I7)
 - **Fake registry.** The registry is read only from the settings UTxO carrying the settings NFT; a look-alike UTxO without the NFT is not accepted. (I8)
+- **Closed registry.** Closing the settings instance burns its one-shot NFT, and the instance can never be relaunched. Unlike a malformed registry, this liveness failure is **permanent**: forced forwarders reject forever and opt-in V1 UTxOs lose their only value exit. See §6.a.
 
 ### 6.a Assumptions / out of scope
 
 - **The logic / migration script is trusted once registered.** `validate_forward` guarantees only that the registered script ran; the script itself carries the protocol's safety. For forced, a malicious repoint installs arbitrary logic — that is the inherent trust cost of beacon indirection.
 - **Forced repoints need a timelock and bounded governance.** `apply_delay` is the users' only window to react; a negative or tiny delay, or unbounded governance, weakens the guarantee (settings spec §6.a).
+- **The proposer anchors the timelock.** `next_apply = now + apply_delay` is computed from the propose transaction's lower bound, which the proposer chooses; a proposer can anchor it in the past and apply almost immediately. The delay is a scheduling tool, not a hard real-time guarantee against malicious governance (settings spec §6.a).
+- **Closing the registry settings instance is a permanent brick.** `Close` burns the one-shot settings NFT and the instance can never be relaunched, so `get_registry` fails forever: forced forwarders become unspendable and opt-in V1 UTxOs can only tick in place (their only value exit is the migration path). A production registry must live in a settings fork without `Close`, or its governance must treat closing as forbidden (settings spec §6.a, "Closing is irreversible").
 - **The reference settings validator does not constrain the registry shape.** Any `Data` is admissible; consumers reject a malformed value at spend time, but governance can still write one (a liveness, not a safety, hazard). A deployer who wants to constrain it can fork settings with their own `validate_datum`.
 - **No global migration completeness.** On eUTxO each UTxO migrates independently; there is no all-or-nothing across the protocol, and no on-chain way to force a user off an opt-in V1.
 - **Batched continuations are tagged.** The `counter_*` datums carry a
   `prev_input: Option<OutputReference>` tag naming the UTxO each continuation
   continues (`None` only at the genesis lock), so several UTxOs can be ticked
   or migrated in one transaction: a continuation settles only the single input
-  it names, so one output cannot swallow another.
+  it names, so one output cannot swallow another. A continuation must also
+  carry no reference script and preserve the input's non-ADA assets exactly,
+  so a permissionless tick cannot bloat the UTxO or smuggle/drop tokens.
 - **The protocol state's meaning is delegated.** The upgradeability predicates treat a forwarder's datum opaquely; the logic script defines it.
 - **Off-chain is out of scope in this pass.**
 

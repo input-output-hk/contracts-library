@@ -20,7 +20,9 @@
  *   - forced repoint → delegation actually switches (a tick routed to the
  *     migration script is rejected on-chain), and back;
  *   - forged registry → a look-alike without the settings NFT is ignored;
- *   - malformed registry → consumers brick (guarded off-chain) until restored.
+ *   - malformed registry → consumers brick (guarded off-chain) until restored;
+ *   - closed settings instance → the one-shot NFT is burned and every consumer
+ *     is permanently bricked (there is no registry to restore).
  */
 
 import {
@@ -45,6 +47,7 @@ import {
   settingsScriptAddress,
   tickRedeemer,
   upgradeRedeemer,
+  buildCloseTx,
   buildCounterTickTx,
   buildForwardTx,
   buildRegistryApplyTx,
@@ -981,4 +984,52 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
     expect(counterDatumFromUtxo(continuation).count).toBe(4);
     forwarderUtxo = continuation;
   });
+
+  it("closing the settings instance permanently bricks consumers", async () => {
+    // Sanity: the forwarder still ticks while the registry exists.
+    const ticked = await forwardTick(logicScript.code);
+    expect(counterDatumFromUtxo(ticked).count).toBe(5);
+    forwarderUtxo = ticked;
+
+    // The applier closes the instance: the settings NFT is burned.
+    const closeTx = await buildCloseTx({
+      txBuilder: newTxBuilder(provider),
+      script: settingsScript,
+      settingsUtxo: settingsUtxo!,
+      utxos: await governor.wallet.getUtxos(),
+      changeAddress: governor.address,
+      collateralUtxo: await collateralOf(governor),
+      applyAuth: { kind: "key", hash: governor.keyHash },
+    });
+    const closeHash = await signAndSubmit(governor, closeTx);
+    await waitForTx(provider, closeHash);
+
+    // The NFT was one-shot: no settings UTxO carrying it exists anywhere
+    // (the earlier forged look-alike has no NFT), and the instance can never
+    // be relaunched (the seed UTxO is spent).
+    const nftUnit = counterParams.settingsPolicy + SETTINGS_TOKEN_NAME;
+    const remaining = await provider.fetchAddressUTxOs(settingsAddr!);
+    expect(
+      remaining.some((u) =>
+        u.output.amount.some((asset) => asset.unit === nftUnit),
+      ),
+    ).toBe(false);
+
+    // Consumers can never run again: the registry reference input is gone.
+    await expect(
+      (async () => {
+        const tx = await buildForwardTx({
+          txBuilder: newTxBuilder(provider),
+          forwarderScript,
+          logicAuthorizer: { scriptCbor: logicScript.code },
+          forwarderUtxo: ticked,
+          settingsUtxo: settingsUtxo!,
+          utxos: await alice.wallet.getUtxos(),
+          changeAddress: alice.address,
+          collateralUtxo: await collateralOf(alice),
+        });
+        await signAndSubmit(alice, tx);
+      })(),
+    ).rejects.toThrow();
+  }, 120_000);
 });

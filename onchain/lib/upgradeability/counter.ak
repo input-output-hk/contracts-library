@@ -32,22 +32,31 @@ pub type CounterRedeemer {
   Upgrade
 }
 
-/// The first output at `target_address` whose inline datum is exactly
-/// `expected`, if any.
+/// Whether `input` is settled by a continuation output at `target_address`
+/// whose inline datum is exactly `expected`.
 ///
 /// Continuations are matched by full datum equality — including the
 /// `prev_input` tag naming the UTxO they continue — so the lookup is a plain
 /// `Data` comparison: no casting of foreign outputs, and one output can only
 /// ever satisfy the single input it names.
-fn find_output(
+///
+/// The continuation must also carry no reference script and preserve the
+/// input's non-ADA assets exactly, so a permissionless tick cannot bloat the
+/// UTxO with attached scripts or smuggle tokens in (or drop state assets).
+fn settled_by(
   self: Transaction,
   target_address: Address,
   expected: Data,
-) -> Option<Output> {
-  list.find(
+  input: Output,
+) -> Bool {
+  list.any(
     self.outputs,
     fn(out) {
-      out.address == target_address && out.datum == InlineDatum(expected)
+      out.address == target_address && out.datum == InlineDatum(expected) && out.reference_script == None && assets.without_lovelace(
+        out.value,
+      ) == assets.without_lovelace(input.value) && assets.lovelace_of(out.value) >= assets.lovelace_of(
+        input.value,
+      )
     },
   )
 }
@@ -55,7 +64,8 @@ fn find_output(
 /// Validate a forced counter tick: the input referenced by `own_ref` must be
 /// settled by a continuation at its own address — one whose datum names
 /// `own_ref` as its `prev_input` — that increments `count` by one, preserves
-/// `owner`, and does not decrease the lovelace held.
+/// `owner` and the non-ADA assets, carries no reference script, and does not
+/// decrease the lovelace held.
 pub fn validate_counter_tick(
   self: Transaction,
   own_ref: OutputReference,
@@ -70,17 +80,13 @@ pub fn validate_counter_tick(
     prev_input: Some(own_ref),
   }
 
-  when find_output(self, input.output.address, continuation) is {
-    Some(out) ->
-      assets.lovelace_of(out.value) >= assets.lovelace_of(input.output.value)
-    None -> False
-  }
+  settled_by(self, input.output.address, continuation, input.output)
 }
 
 /// Validate an opt-in migration of the input referenced by `own_ref`: the same
 /// state must reappear at `v2_address` — in a continuation whose datum names
-/// `own_ref` as its `prev_input` — with `count` and `owner` preserved and no
-/// decrease in lovelace.
+/// `own_ref` as its `prev_input` — with `count`, `owner` and the non-ADA assets
+/// preserved, no reference script, and no decrease in lovelace.
 pub fn validate_counter_migrate(
   self: Transaction,
   own_ref: OutputReference,
@@ -96,11 +102,7 @@ pub fn validate_counter_migrate(
     prev_input: Some(own_ref),
   }
 
-  when find_output(self, v2_address, continuation) is {
-    Some(out) ->
-      assets.lovelace_of(out.value) >= assets.lovelace_of(input.output.value)
-    None -> False
-  }
+  settled_by(self, v2_address, continuation, input.output)
 }
 
 /// Whether the input referenced by `ref` was spent with the `Upgrade` action.
