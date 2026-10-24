@@ -69,6 +69,7 @@ npm run test:settings        # or: npx vitest run settings/tests/devnet.test.ts
 npm run test:dao             # or: npx vitest run dao/tests/devnet.test.ts
 npm run test:smart-wallet    # or: npx vitest run smart_wallet/tests/devnet.test.ts
 npm run test:event-triggered # or: npx vitest run event-triggered-assets/tests/devnet.test.ts
+npm run test:upgradeability  # or: npx vitest run upgradeability/tests/devnet.test.ts
 ```
 
 A single test by name:
