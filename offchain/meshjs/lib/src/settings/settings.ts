@@ -85,6 +85,7 @@ export interface MintParams {
   authorizer?: ScriptAuthorizer;
   applyAuth: Credential;
   network?: Network;
+  minUtxoLovelace?: bigint;
 }
 
 export async function buildLaunchTx(p: MintParams): Promise<string> {
@@ -92,6 +93,7 @@ export async function buildLaunchTx(p: MintParams): Promise<string> {
   const networkId = networkIdOf(network);
   const scriptAddr = settingsScriptAddress(p.script, networkId);
   const policyId = resolveScriptHash(p.script.code, p.script.version);
+  const minLovelace = p.minUtxoLovelace ?? DEFAULT_MIN_UTXO_LOVELACE;
 
   const settingsAsset: Asset = {
     unit: policyId + SETTINGS_TOKEN_NAME,
@@ -112,7 +114,7 @@ export async function buildLaunchTx(p: MintParams): Promise<string> {
       p.seedUtxo.output.address,
     )
     .txOut(scriptAddr, [
-      { unit: "lovelace", quantity: DEFAULT_MIN_UTXO_LOVELACE.toString() },
+      { unit: "lovelace", quantity: minLovelace.toString() },
       settingsAsset,
     ])
     .txOutInlineDatumValue(settingsDatumToData(p.datum))
