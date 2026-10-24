@@ -71,7 +71,7 @@ A `Registry` is a `Map` from 28-byte script hashes to 28-byte script hashes, sto
 
 ### 3.d Validators
 
-Four reusable predicates, all in `onchain/lib/upgradeability/`.
+The reusable predicates and helpers, all in `onchain/lib/upgradeability/`.
 
 **`registry`** (helpers):
 
@@ -92,6 +92,14 @@ Returns `True` iff `own_hash = own_script_hash(inputs, own_ref)`, the registry m
 Returns `True` iff the registry maps `own_hash` to some `migration_hash`, `Script(migration_hash)` is present in `self.withdrawals`, **and** `user_auth` is satisfied (key in `extra_signatories`, or a script withdrawal — `authorization.is_authorized`).
 
 The **logic** and **migration** scripts run under the withdraw-0 convention (`withdraw(redeemer, account, self)`), derive `own_hash` from `account`, and apply their checks to `forwarded_inputs(inputs, get_registry(...), own_hash)`.
+
+**`counter`** (helpers, non-normative demo):
+
+| Function | Role |
+|---|---|
+| `validate_counter_tick(self, own_ref)` | Settle the input at `own_ref` with a `count + 1` continuation at its own address, tagged `prev_input = own_ref`, preserving `owner` and the non-ADA assets, not decreasing lovelace, and carrying no reference script. |
+| `validate_counter_migrate(self, own_ref, v2_address)` | Settle it with a state-preserving continuation at `v2_address` under the same constraints. |
+| `spent_with_upgrade(self, ref)` | Whether the input at `ref` was spent with the `Upgrade` action. |
 
 ## 4. UTxOs
 
@@ -215,8 +223,9 @@ The predicate returns `False` (transaction rejected) whenever **any** of:
 And, on the migration side (enforced by the migration script, not by `validate_upgrade`):
 
 - **R5 (wrong action).** A forwarded V1 input was not spent with `Upgrade`. _(¬I6)_
-- **R6 (no continuation / wrong target).** The migrated state does not reappear at `v2_address` with the required shape. _(¬I6)_
+- **R6 (no continuation / wrong target).** The migrated state does not reappear at `v2_address` with `count`, `owner` and the non-ADA assets preserved and no reference script. _(¬I6)_
 - **R7 (collapsed continuation).** An input is settled by a continuation whose `prev_input` tag names another UTxO (or nothing); each validation binds the continuation by the `OutputReference` it claims, so a single output cannot satisfy two inputs.
+- **R8 (bloated or altered continuation).** A continuation attaches a reference script or changes the input's non-ADA token bundle, so a permissionless tick cannot bloat the UTxO or smuggle/drop tokens.
 
 #### Scope of the formalization
 

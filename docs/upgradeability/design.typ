@@ -70,6 +70,10 @@ number of protocols._
       the one-shot `seed_utxo`, so at most one instance exists.
     - The reference settings validator accepts any value; consumers reject a
       malformed registry at spend time (`decode_registry`).
+    - `Close` burns the one-shot NFT and the instance can never be relaunched,
+      so closing permanently bricks every registered consumer: forced forwarders
+      become unspendable and opt-in V1 UTxOs lose their value exit. A production
+      registry should use a settings fork without `Close`.
   ],
 )
 
@@ -175,6 +179,9 @@ changes a protocol's behaviour._
       each user then chooses to migrate.
     - Timelocked: valid only when `now >= T = propose_time + apply_delay`, giving
       users a window to inspect the new delegate (and, for opt-in, to migrate).
+      The proposer chooses the anchor (`now` is the propose transaction's
+      validity lower bound), so the delay is a scheduling tool, not a hard
+      guarantee against malicious governance (spec §6.a).
   ],
 )
 
@@ -199,6 +206,7 @@ accompanied by the logic script registered for the forwarder's own hash._
       datum: (
         count: [*N*],
         owner: "Credential",
+        prev_input: "Option<OutputReference>",
       ),
       redeemer: [any],
     ),
@@ -229,6 +237,7 @@ accompanied by the logic script registered for the forwarder's own hash._
       datum: (
         count: [*N + 1*],
         owner: "Credential",
+        prev_input: [*Some(input_ref)*],
       ),
     ),
   ),
@@ -238,6 +247,11 @@ accompanied by the logic script registered for the forwarder's own hash._
       convention).
     - The forwarder's redeemer is opaque: the *logic script* is responsible for
       validating *every* input forwarded to it, not just one.
+    - Each continuation names the spent UTxO in its `prev_input` tag, so one
+      output can only settle the single input it names — several UTxOs can be
+      forwarded in one transaction without an N→1 collapse.
+    - The continuation preserves the input's non-ADA assets exactly, holds at
+      least its lovelace, and carries no reference script.
     - A registry repoint changes behaviour for all users at once — this is a
       *forced* upgrade, so timelock and bounded governance are mandatory.
   ],
@@ -264,6 +278,7 @@ _An opt-in protocol keeps its native logic for ordinary actions; only the
       datum: (
         count: [*N*],
         owner: "Credential",
+        prev_input: "Option<OutputReference>",
       ),
       redeemer: [Tick],
     ),
@@ -278,12 +293,16 @@ _An opt-in protocol keeps its native logic for ordinary actions; only the
       datum: (
         count: [*N + 1*],
         owner: "Credential",
+        prev_input: [*Some(input_ref)*],
       ),
     ),
   ),
   notes: [
     - V1's own validator enforces the action natively; the registry is not
       consulted on this path.
+    - The continuation is tagged with the spent UTxO (`prev_input`), preserves
+      its non-ADA assets exactly, does not decrease its lovelace, and carries no
+      reference script.
   ],
 )
 
@@ -308,6 +327,7 @@ in V1; the registered migration script validates the transformation._
       datum: (
         count: [*N*],
         owner: "Credential",
+        prev_input: "Option<OutputReference>",
       ),
       redeemer: [Upgrade],
     ),
@@ -341,6 +361,7 @@ in V1; the registered migration script validates the transformation._
       datum: (
         count: [*N*],
         owner: "Credential",
+        prev_input: [*Some(input_ref)*],
       ),
     ),
   ),
@@ -348,7 +369,8 @@ in V1; the registered migration script validates the transformation._
     - `validate_upgrade`: `R[v1_addr] = migration_script` must be present *and*
       `owner` must authorize (consent enforced natively in V1).
     - The migration script checks the V1 input was spent with `Upgrade` and that
-      its state reappears at `v2_addr`.
+      its state reappears at `v2_addr` tagged `prev_input = input_ref`, with
+      `count`, `owner` and the non-ADA assets preserved and no reference script.
     - A governance repoint of `migration_script` changes *how* a migration is
       performed but can never move funds without `owner`'s signature — this is
       what makes the mechanism *opt-in*.
