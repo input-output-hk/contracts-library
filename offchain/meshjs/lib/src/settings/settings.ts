@@ -24,7 +24,7 @@ import {
 } from "@meshsdk/core";
 
 import { applyAuthorization, type ScriptAuthorizer } from "../authorization";
-import type { Credential } from "../common";
+import { finalizeTx, type Credential } from "../common";
 import { compiledCode, plutusVersion, typedCompiledCode } from "./blueprint";
 import {
   applyRedeemer,
@@ -100,7 +100,7 @@ export async function buildLaunchTx(p: MintParams): Promise<string> {
 
   applyAuthorization(p.txBuilder, p.applyAuth, p.authorizer, networkId);
 
-  return await p.txBuilder
+  p.txBuilder
     .mintPlutusScriptV3()
     .mint("1", policyId, SETTINGS_TOKEN_NAME)
     .mintRedeemerValue(mintRedeemer(p.outputIndex))
@@ -115,16 +115,13 @@ export async function buildLaunchTx(p: MintParams): Promise<string> {
       { unit: "lovelace", quantity: DEFAULT_MIN_UTXO_LOVELACE.toString() },
       settingsAsset,
     ])
-    .txOutInlineDatumValue(settingsDatumToData(p.datum))
-    .txInCollateral(
-      p.collateralUtxo.input.txHash,
-      p.collateralUtxo.input.outputIndex,
-      p.collateralUtxo.output.amount,
-      p.collateralUtxo.output.address,
-    )
-    .changeAddress(p.changeAddress)
-    .selectUtxosFrom(p.utxos)
-    .complete();
+    .txOutInlineDatumValue(settingsDatumToData(p.datum));
+
+  return finalizeTx(p.txBuilder, {
+    collateral: p.collateralUtxo,
+    changeAddress: p.changeAddress,
+    utxos: p.utxos,
+  });
 }
 
 // ---------------------------------------------------- Propose
@@ -165,7 +162,7 @@ export async function buildProposeTx(p: ProposeParams): Promise<string> {
 
   applyAuthorization(p.txBuilder, p.proposeAuth, p.authorizer, networkId);
 
-  return await p.txBuilder
+  p.txBuilder
     .spendingPlutusScriptV3()
     .txIn(
       p.settingsUtxo.input.txHash,
@@ -178,16 +175,12 @@ export async function buildProposeTx(p: ProposeParams): Promise<string> {
     .txInScript(p.script.code)
     .txOut(scriptAddr, p.settingsUtxo.output.amount)
     .txOutInlineDatumValue(settingsDatumToData(newDatum))
-    .invalidBefore(lowerBoundSlot)
-    .txInCollateral(
-      p.collateralUtxo.input.txHash,
-      p.collateralUtxo.input.outputIndex,
-      p.collateralUtxo.output.amount,
-      p.collateralUtxo.output.address,
-    )
-    .changeAddress(p.changeAddress)
-    .selectUtxosFrom(p.utxos)
-    .complete();
+    .invalidBefore(lowerBoundSlot);
+  return finalizeTx(p.txBuilder, {
+    collateral: p.collateralUtxo,
+    changeAddress: p.changeAddress,
+    utxos: p.utxos,
+  });
 }
 
 // ---------------------------------------------------- Apply
@@ -237,7 +230,7 @@ export async function buildApplyTx(p: ApplyParams): Promise<string> {
 
   applyAuthorization(p.txBuilder, p.applyAuth, p.authorizer, networkId);
 
-  return await p.txBuilder
+  p.txBuilder
     .spendingPlutusScriptV3()
     .txIn(
       p.settingsUtxo.input.txHash,
@@ -250,16 +243,12 @@ export async function buildApplyTx(p: ApplyParams): Promise<string> {
     .txInScript(p.script.code)
     .txOut(scriptAddr, p.settingsUtxo.output.amount)
     .txOutInlineDatumValue(settingsDatumToData(newDatum))
-    .invalidBefore(lowerBoundSlot)
-    .txInCollateral(
-      p.collateralUtxo.input.txHash,
-      p.collateralUtxo.input.outputIndex,
-      p.collateralUtxo.output.amount,
-      p.collateralUtxo.output.address,
-    )
-    .changeAddress(p.changeAddress)
-    .selectUtxosFrom(p.utxos)
-    .complete();
+    .invalidBefore(lowerBoundSlot);
+  return finalizeTx(p.txBuilder, {
+    collateral: p.collateralUtxo,
+    changeAddress: p.changeAddress,
+    utxos: p.utxos,
+  });
 }
 
 // ---------------------------------------------------- Close
@@ -283,7 +272,7 @@ export async function buildCloseTx(p: CloseParams): Promise<string> {
 
   applyAuthorization(p.txBuilder, p.applyAuth, p.authorizer, networkId);
 
-  return await p.txBuilder
+  p.txBuilder
     .spendingPlutusScriptV3()
     .txIn(
       p.settingsUtxo.input.txHash,
@@ -297,14 +286,10 @@ export async function buildCloseTx(p: CloseParams): Promise<string> {
     .mintPlutusScriptV3()
     .mint("-1", policyId, SETTINGS_TOKEN_NAME)
     .mintRedeemerValue(burnRedeemer())
-    .mintingScript(p.script.code)
-    .txInCollateral(
-      p.collateralUtxo.input.txHash,
-      p.collateralUtxo.input.outputIndex,
-      p.collateralUtxo.output.amount,
-      p.collateralUtxo.output.address,
-    )
-    .changeAddress(p.changeAddress)
-    .selectUtxosFrom(p.utxos)
-    .complete();
+    .mintingScript(p.script.code);
+  return finalizeTx(p.txBuilder, {
+    collateral: p.collateralUtxo,
+    changeAddress: p.changeAddress,
+    utxos: p.utxos,
+  });
 }

@@ -16,7 +16,6 @@ import {
   resolveScriptHash,
   serializeRewardAddress,
   serializePlutusScript,
-  SLOT_CONFIG_NETWORK,
   type Asset,
   type MeshTxBuilder,
   type PlutusScript,
@@ -24,7 +23,14 @@ import {
   type UTxO,
 } from "@meshsdk/core";
 
-import { enclosingSlotBound, nftNameFromRef } from "../common";
+import {
+  finalizeTx,
+  nftNameFromRef,
+  nftNameOf,
+  networkIdOf,
+  slotBound,
+  type Network,
+} from "../common";
 import {
   burnProposalRedeemer,
   burnVotesRedeemer,
@@ -49,24 +55,6 @@ import {
   plutusVersion,
 } from "./blueprint";
 import { stakeScriptAddress } from "./stake";
-
-type Network = "mainnet" | "preprod" | "preview";
-
-function networkIdOf(network: Network): 0 | 1 {
-  return network === "mainnet" ? 1 : 0;
-}
-
-/** The enclosing slot + start time for `now` on the given network/devnet. */
-function slotBound(
-  network: Network,
-  now: number,
-  customSlotConfig?: SlotConfig,
-) {
-  return enclosingSlotBound(
-    now,
-    customSlotConfig ?? SLOT_CONFIG_NETWORK[network],
-  );
-}
 
 /** Phase end times (POSIX ms) derived from a proposal's immutable fields. */
 function phaseBounds(datum: ProposalDatum) {
@@ -104,14 +92,6 @@ function proposalValue(script: PlutusScript, tokenName: string): Asset[] {
       quantity: "1",
     },
   ];
-}
-
-/** The proposal NFT token name held by `utxo`, or "" if none. */
-function nftNameOf(utxo: UTxO, policyId: string): string {
-  const unit = utxo.output.amount
-    .map((a) => a.unit)
-    .find((u) => u !== "lovelace" && u.startsWith(policyId));
-  return unit ? unit.slice(policyId.length) : "";
 }
 
 // ---------------------------------------------------- CreateProposal
@@ -184,17 +164,12 @@ export async function buildCreateProposalTx(
     )
     .txOutInlineDatumValue(stakePositionDatumToData(p.stakeDatum));
 
-  return await p.txBuilder
-    .invalidBefore(bound.slot)
-    .txInCollateral(
-      p.collateralUtxo.input.txHash,
-      p.collateralUtxo.input.outputIndex,
-      p.collateralUtxo.output.amount,
-      p.collateralUtxo.output.address,
-    )
-    .changeAddress(p.changeAddress)
-    .selectUtxosFrom(p.utxos)
-    .complete();
+  p.txBuilder.invalidBefore(bound.slot);
+  return finalizeTx(p.txBuilder, {
+    collateral: p.collateralUtxo,
+    changeAddress: p.changeAddress,
+    utxos: p.utxos,
+  });
 }
 
 // ---------------------------------------------------- proposal spends
@@ -301,16 +276,11 @@ async function buildProposalSpend(
       .withdrawalRedeemerValue(pollEffectWithdrawalRedeemer());
   }
 
-  return await p.txBuilder
-    .txInCollateral(
-      p.collateralUtxo.input.txHash,
-      p.collateralUtxo.input.outputIndex,
-      p.collateralUtxo.output.amount,
-      p.collateralUtxo.output.address,
-    )
-    .changeAddress(p.changeAddress)
-    .selectUtxosFrom(p.utxos)
-    .complete();
+  return finalizeTx(p.txBuilder, {
+    collateral: p.collateralUtxo,
+    changeAddress: p.changeAddress,
+    utxos: p.utxos,
+  });
 }
 
 // ---------------------------------------------------- Cosign

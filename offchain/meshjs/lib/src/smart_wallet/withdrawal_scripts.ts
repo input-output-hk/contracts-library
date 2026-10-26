@@ -16,6 +16,7 @@ import {
   mConStr0,
   resolveScriptHash,
   serializeRewardAddress,
+  type Data,
   type MeshTxBuilder,
   type PlutusScript,
 } from "@meshsdk/core";
@@ -190,153 +191,105 @@ function patchTxBuilderSerializer(
 }
 
 /** Parameterized `spending_limit` script: net outflow stays below `bound`. */
-export function spendingLimitScript(params: SpendingLimitParams): PlutusScript {
+/** Apply a withdraw-script's static code to its record parameter. */
+function applyScript(code: string, params: Data): PlutusScript {
   return {
-    code: applyParamsToScript(
-      spendingLimitCode,
-      spendingLimitParamsToData(params),
-      "Mesh",
-    ),
+    code: applyParamsToScript(code, [params], "Mesh"),
     version: plutusVersion,
   };
+}
+
+export function spendingLimitScript(params: SpendingLimitParams): PlutusScript {
+  return applyScript(spendingLimitCode, spendingLimitParamsToData(params));
 }
 
 /** Parameterized `spending_window` script: at most one spend per `window`. */
 export function spendingWindowScript(
   params: SpendingWindowParams,
 ): PlutusScript {
-  return {
-    code: applyParamsToScript(
-      spendingWindowCode,
-      spendingWindowParamsToData(params),
-      "Mesh",
-    ),
-    version: plutusVersion,
-  };
+  return applyScript(spendingWindowCode, spendingWindowParamsToData(params));
 }
 
 /** Parameterized `spending_period_limit` script: `max_spend` per `interval`. */
 export function spendingPeriodLimitScript(
   params: SpendingPeriodLimitParams,
 ): PlutusScript {
-  return {
-    code: applyParamsToScript(
-      spendingPeriodLimitCode,
-      spendingPeriodLimitParamsToData(params),
-      "Mesh",
-    ),
-    version: plutusVersion,
-  };
+  return applyScript(
+    spendingPeriodLimitCode,
+    spendingPeriodLimitParamsToData(params),
+  );
 }
 
 /** Parameterized `full_recipient_allow_list` script (spender). */
 export function fullRecipientAllowListScript(
   params: FullRecipientAllowListParams,
 ): PlutusScript {
-  return {
-    code: applyParamsToScript(
-      fullRecipientAllowListCode,
-      fullRecipientAllowListParamsToData(params),
-      "Mesh",
-    ),
-    version: plutusVersion,
-  };
+  return applyScript(
+    fullRecipientAllowListCode,
+    fullRecipientAllowListParamsToData(params),
+  );
 }
 
 /** Parameterized `full_recipient_deny_list` script (spender). */
 export function fullRecipientDenyListScript(
   params: FullRecipientDenyListParams,
 ): PlutusScript {
-  return {
-    code: applyParamsToScript(
-      fullRecipientDenyListCode,
-      fullRecipientDenyListParamsToData(params),
-      "Mesh",
-    ),
-    version: plutusVersion,
-  };
+  return applyScript(
+    fullRecipientDenyListCode,
+    fullRecipientDenyListParamsToData(params),
+  );
 }
 
 /** Parameterized `payment_staking_allow_list` script (spender). */
 export function paymentStakingAllowListScript(
   params: PaymentStakingAllowListParams,
 ): PlutusScript {
-  return {
-    code: applyParamsToScript(
-      paymentStakingAllowListCode,
-      paymentStakingAllowListParamsToData(params),
-      "Mesh",
-    ),
-    version: plutusVersion,
-  };
+  return applyScript(
+    paymentStakingAllowListCode,
+    paymentStakingAllowListParamsToData(params),
+  );
 }
 
 /** Parameterized `payment_staking_deny_list` script (spender). */
 export function paymentStakingDenyListScript(
   params: PaymentStakingDenyListParams,
 ): PlutusScript {
-  return {
-    code: applyParamsToScript(
-      paymentStakingDenyListCode,
-      paymentStakingDenyListParamsToData(params),
-      "Mesh",
-    ),
-    version: plutusVersion,
-  };
+  return applyScript(
+    paymentStakingDenyListCode,
+    paymentStakingDenyListParamsToData(params),
+  );
 }
 
 /** Parameterized `asset_allow_list` script (spender). */
 export function assetAllowListScript(
   params: AssetAllowListParams,
 ): PlutusScript {
-  return {
-    code: applyParamsToScript(
-      assetAllowListCode,
-      assetAllowListParamsToData(params),
-      "Mesh",
-    ),
-    version: plutusVersion,
-  };
+  return applyScript(assetAllowListCode, assetAllowListParamsToData(params));
 }
 
 /** Parameterized `asset_deny_list` script (spender). */
 export function assetDenyListScript(params: AssetDenyListParams): PlutusScript {
-  return {
-    code: applyParamsToScript(
-      assetDenyListCode,
-      assetDenyListParamsToData(params),
-      "Mesh",
-    ),
-    version: plutusVersion,
-  };
+  return applyScript(assetDenyListCode, assetDenyListParamsToData(params));
 }
 
 /** Parameterized `asset_deposit_allow_list` script (depositor). */
 export function assetDepositAllowListScript(
   params: AssetDepositAllowListParams,
 ): PlutusScript {
-  return {
-    code: applyParamsToScript(
-      assetDepositAllowListCode,
-      assetDepositAllowListParamsToData(params),
-      "Mesh",
-    ),
-    version: plutusVersion,
-  };
+  return applyScript(
+    assetDepositAllowListCode,
+    assetDepositAllowListParamsToData(params),
+  );
 }
 
 /** Parameterized `asset_deposit_deny_list` script (depositor). */
 export function assetDepositDenyListScript(
   params: AssetDepositDenyListParams,
 ): PlutusScript {
-  return {
-    code: applyParamsToScript(
-      assetDepositDenyListCode,
-      assetDepositDenyListParamsToData(params),
-      "Mesh",
-    ),
-    version: plutusVersion,
-  };
+  return applyScript(
+    assetDepositDenyListCode,
+    assetDepositDenyListParamsToData(params),
+  );
 }
 
 /** Address of a withdrawal script's reward account (stake credential). */
