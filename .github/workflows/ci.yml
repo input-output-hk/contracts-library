@@ -50,6 +50,9 @@ jobs:
       - name: aiken build
         working-directory: onchain
         run: aiken build
+      - name: aiken test
+        working-directory: onchain
+        run: aiken test
 
   offchain-unit:
     name: Off-chain unit (MeshJS lib)
