@@ -191,10 +191,10 @@ function patchTxBuilderSerializer(
 }
 
 /** Parameterized `spending_limit` script: net outflow stays below `bound`. */
-/** Apply a withdraw-script's static code to its record parameter. */
-function applyScript(code: string, params: Data): PlutusScript {
+/** Apply a withdraw-script's static code to its parameter list. */
+function applyScript(code: string, params: Data[]): PlutusScript {
   return {
-    code: applyParamsToScript(code, [params], "Mesh"),
+    code: applyParamsToScript(code, params, "Mesh"),
     version: plutusVersion,
   };
 }
