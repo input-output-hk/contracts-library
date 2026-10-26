@@ -37,7 +37,7 @@ import {
   authorizerScriptHash,
   type ScriptAuthorizer,
 } from "../authorization";
-import { credentialToData, type Credential } from "../common";
+import { credentialToData, finalizeTx, type Credential } from "../common";
 import {
   baseSpendRedeemer,
   EX_UNITS,
@@ -326,17 +326,11 @@ async function complete(base: TxBase, refs: UTxO[] = []): Promise<string> {
       ref.input.outputIndex,
     );
   }
-  const tx = await base.txBuilder
-    .txInCollateral(
-      base.collateral.input.txHash,
-      base.collateral.input.outputIndex,
-      base.collateral.output.amount,
-      base.collateral.output.address,
-    )
-    .changeAddress(base.changeAddress)
-    .selectUtxosFrom(base.funding)
-    .complete();
-  return tx;
+  return finalizeTx(base.txBuilder, {
+    collateral: base.collateral,
+    changeAddress: base.changeAddress,
+    utxos: base.funding,
+  });
 }
 
 /** The certificate holder's credential from its hash (+ script flag). */
@@ -584,29 +578,22 @@ export async function buildRegisterTx(p: RegisterParams): Promise<string> {
   w0(tb, d, b.issuance, mintingActionToData("Register"));
 
   // The covering node is re-emitted pointing at the new key, then the new node.
-  tb.txOut(nodeAddress(d), [
-    lovelace(MIN_ADA),
-    { unit: d.core.registryNodeCs + p.coveringNode.key, quantity: "1" },
-  ]);
-  tb.txOutInlineDatumValue(
-    registryNodeToData({ ...p.coveringNode, next: b.cipPolicy }),
-  );
-
-  tb.txOut(nodeAddress(d), [
-    lovelace(MIN_ADA),
-    { unit: d.core.registryNodeCs + b.cipPolicy, quantity: "1" },
-  ]);
-  tb.txOutInlineDatumValue(
-    registryNodeToData({
-      key: b.cipPolicy,
-      next: p.coveringNode.next,
-      mintingLogic: { kind: "script", hash: scriptHashOf(b.issuance) },
-      transferLogic: { kind: "script", hash: scriptHashOf(b.transfer) },
-      thirdPartyLogic: { kind: "script", hash: scriptHashOf(b.thirdParty) },
-      unfrackingLogic: EMPTY_VKEY,
-      globalStateCs: "",
-    }),
-  );
+  const nextNode: RegistryNode = {
+    key: b.cipPolicy,
+    next: p.coveringNode.next,
+    mintingLogic: { kind: "script", hash: scriptHashOf(b.issuance) },
+    transferLogic: { kind: "script", hash: scriptHashOf(b.transfer) },
+    thirdPartyLogic: { kind: "script", hash: scriptHashOf(b.thirdParty) },
+    unfrackingLogic: EMPTY_VKEY,
+    globalStateCs: "",
+  };
+  for (const node of [{ ...p.coveringNode, next: b.cipPolicy }, nextNode]) {
+    tb.txOut(nodeAddress(d), [
+      lovelace(MIN_ADA),
+      { unit: d.core.registryNodeCs + node.key, quantity: "1" },
+    ]);
+    tb.txOutInlineDatumValue(registryNodeToData(node));
+  }
 
   return complete(p, [d.refs.cborHex]);
 }
@@ -797,24 +784,68 @@ export interface ClaimOwnerParams extends TxBase {
   validFromSlot: number;
 }
 
-/** Owner-signed coupon claim (§4.5): advance `k-1 -> k` + coupon mint. */
-export async function buildClaimOwnerTx(p: ClaimOwnerParams): Promise<string> {
+export interface ClaimIssuerParams extends TxBase {
+  bond: Bond;
+  node: UTxO;
+  certificate: UTxO;
+  step: number;
+  datum: CertificateDatum;
+  /** The committed payout address (payment credential = `commit`). */
+  payoutAddress: string;
+  authorizer?: ScriptAuthorizer;
+  validFromSlot: number;
+}
+
+/**
+ * The shared §4.5 claim skeleton: spend the certificate, advance `k-1 -> k`
+ * plus the step's coupon, then emit the continuation and the coupon. The
+ * paths differ in who signs (holder transfer vs issuer third-party) and in
+ * the continuation output, which `continuation` writes.
+ */
+async function buildClaimTx(
+  p: TxBase & {
+    bond: Bond;
+    node: UTxO;
+    certificate: UTxO;
+    step: number;
+    datum: CertificateDatum;
+    /** Where the minted coupon goes (holder address or committed payout). */
+    couponAddress: string;
+    authorizer?: ScriptAuthorizer;
+    /** The owner path signs with this credential. */
+    holderStakeHash?: string;
+    holderIsScript?: boolean;
+    validFromSlot: number;
+    /** `transfer` = owner-signed; `thirdParty` = issuer-triggered. */
+    kind: "transfer" | "thirdParty";
+    continuation: (b: Bond) => void;
+  },
+): Promise<string> {
   const { deployment: d, bond: b } = p;
   const tb = p.txBuilder;
 
-  const holder = holderCredential(p.holderStakeHash, p.holderIsScript);
+  const credential =
+    p.kind === "transfer"
+      ? holderCredential(p.holderStakeHash ?? "", p.holderIsScript)
+      : b.config.issuer;
+  const spendLogic =
+    p.kind === "transfer" ? d.core.transfer : d.core.thirdParty;
+  const bondLogic = p.kind === "transfer" ? b.transfer : b.thirdParty;
   const refs = fullReferences([d.refs.protocolParams, p.node], p.authorizer);
   const paramsIdx = referenceIndexOf(refs, d.refs.protocolParams);
   const nodeIdx = referenceIndexOf(refs, p.node);
 
   const chain = [
     d.core.programmableLogicGlobal,
-    d.core.transfer,
-    b.transfer,
+    spendLogic,
+    bondLogic,
     b.issuance,
     d.core.issuanceLogic,
   ];
-  const wdrlIdx = wdrlIdxOf(d, fullWithdrawalKeys(chain, holder, p.authorizer));
+  const wdrlIdx = wdrlIdxOf(
+    d,
+    fullWithdrawalKeys(chain, credential, p.authorizer),
+  );
 
   plbSpend(tb, d, p.certificate, paramsIdx, wdrlIdx);
 
@@ -822,9 +853,16 @@ export async function buildClaimOwnerTx(p: ClaimOwnerParams): Promise<string> {
   mintCertificate(tb, b, paramsIdx, stepName(p.step), "1");
   mintCoupon(tb, b, couponName(b.config.amounts[p.step - 1]), "1");
 
-  w0(tb, d, d.core.programmableLogicGlobal, transferAct());
-  w0(tb, d, d.core.transfer, transferRedeemer([{ nodeIdx }]));
-  w0(tb, d, b.transfer, moveRedeemer());
+  if (p.kind === "transfer") {
+    w0(tb, d, d.core.programmableLogicGlobal, transferAct());
+    w0(tb, d, d.core.transfer, transferRedeemer([{ nodeIdx }]));
+    w0(tb, d, b.transfer, moveRedeemer());
+  } else {
+    w0(tb, d, d.core.programmableLogicGlobal, thirdPartyAct());
+    // The pair output (the next certificate) is the first output.
+    w0(tb, d, d.core.thirdParty, thirdPartyRedeemer(nodeIdx, 0));
+    w0(tb, d, b.thirdParty, triggerRedeemer());
+  }
   w0(tb, d, b.issuance, mintingActionToData("Advance"));
   w0(
     tb,
@@ -835,14 +873,9 @@ export async function buildClaimOwnerTx(p: ClaimOwnerParams): Promise<string> {
     ]),
   );
 
-  applyAuthorization(tb, holder, p.authorizer, d.config.networkId);
+  applyAuthorization(tb, credential, p.authorizer, d.config.networkId);
 
-  // Certificate continuation (name advanced, datum preserved).
-  tb.txOut(p.certificate.output.address, [
-    lovelace(MIN_ADA),
-    { unit: b.cipPolicy + stepName(p.step), quantity: "1" },
-  ]);
-  tb.txOutInlineDatumValue(certificateDatumToData(p.datum));
+  p.continuation(b);
 
   tb.txOut(p.couponAddress, [
     lovelace(MIN_ADA),
@@ -856,86 +889,43 @@ export async function buildClaimOwnerTx(p: ClaimOwnerParams): Promise<string> {
   return complete(p, refs);
 }
 
-export interface ClaimIssuerParams extends TxBase {
-  bond: Bond;
-  node: UTxO;
-  certificate: UTxO;
-  step: number;
-  datum: CertificateDatum;
-  /** The committed payout address (payment credential = `commit`). */
-  payoutAddress: string;
-  authorizer?: ScriptAuthorizer;
-  validFromSlot: number;
+/** Owner-signed coupon claim (§4.5): advance `k-1 -> k` + coupon mint. */
+export async function buildClaimOwnerTx(p: ClaimOwnerParams): Promise<string> {
+  return buildClaimTx({
+    ...p,
+    kind: "transfer",
+    continuation: (bond) => {
+      // Certificate continuation (name advanced, datum preserved).
+      p.txBuilder.txOut(p.certificate.output.address, [
+        lovelace(MIN_ADA),
+        { unit: bond.cipPolicy + stepName(p.step), quantity: "1" },
+      ]);
+      p.txBuilder.txOutInlineDatumValue(certificateDatumToData(p.datum));
+    },
+  });
 }
 
 /** Issuer-triggered coupon claim (§4.5): third-party spend, coupon to `pay`. */
 export async function buildClaimIssuerTx(
   p: ClaimIssuerParams,
 ): Promise<string> {
-  const { deployment: d, bond: b } = p;
-  const tb = p.txBuilder;
-
-  const refs = fullReferences([d.refs.protocolParams, p.node], p.authorizer);
-  const paramsIdx = referenceIndexOf(refs, d.refs.protocolParams);
-  const nodeIdx = referenceIndexOf(refs, p.node);
-
-  const chain = [
-    d.core.programmableLogicGlobal,
-    d.core.thirdParty,
-    b.thirdParty,
-    b.issuance,
-    d.core.issuanceLogic,
-  ];
-  const wdrlIdx = wdrlIdxOf(
-    d,
-    fullWithdrawalKeys(chain, b.config.issuer, p.authorizer),
-  );
-
-  plbSpend(tb, d, p.certificate, paramsIdx, wdrlIdx);
-
-  mintCertificate(tb, b, paramsIdx, stepName(p.step - 1), "-1");
-  mintCertificate(tb, b, paramsIdx, stepName(p.step), "1");
-  mintCoupon(tb, b, couponName(b.config.amounts[p.step - 1]), "1");
-
-  w0(tb, d, d.core.programmableLogicGlobal, thirdPartyAct());
-  // The pair output (the next certificate) is the first output.
-  w0(tb, d, d.core.thirdParty, thirdPartyRedeemer(nodeIdx, 0));
-  w0(tb, d, b.thirdParty, triggerRedeemer());
-  w0(tb, d, b.issuance, mintingActionToData("Advance"));
-  w0(
-    tb,
-    d,
-    d.core.issuanceLogic,
-    issuanceLogicRedeemer([
-      { policy: b.cipPolicy, index: nodeIdx, proof: "ref" },
-    ]),
-  );
-
-  applyAuthorization(tb, b.config.issuer, p.authorizer, d.config.networkId);
-
-  // Paired continuation: the next certificate, same address and datum. The
-  // core third-party rule requires the pair to keep at least the spent UTxO's
-  // lovelace and unrelated assets, so the continuation is built from the
-  // input value with only the certificate name swapped.
-  tb.txOut(
-    p.certificate.output.address,
-    p.certificate.output.amount
-      .filter((a) => a.unit !== b.cipPolicy + stepName(p.step - 1))
-      .concat([{ unit: b.cipPolicy + stepName(p.step), quantity: "1" }]),
-  );
-  tb.txOutInlineDatumValue(certificateDatumToData(p.datum));
-
-  // Coupon bound to the commitment.
-  tb.txOut(p.payoutAddress, [
-    lovelace(MIN_ADA),
-    {
-      unit: b.cntPolicy + couponName(b.config.amounts[p.step - 1]),
-      quantity: "1",
+  return buildClaimTx({
+    ...p,
+    couponAddress: p.payoutAddress,
+    kind: "thirdParty",
+    continuation: (bond) => {
+      // Paired continuation: same address and datum; the core third-party
+      // rule keeps the spent UTxO's lovelace and unrelated assets, so the
+      // value is the input's with only the certificate name swapped.
+      p.txBuilder.txOut(
+        p.certificate.output.address,
+        p.certificate.output.amount
+          .filter((a) => a.unit !== bond.cipPolicy + stepName(p.step - 1))
+          .concat([{ unit: bond.cipPolicy + stepName(p.step), quantity: "1" }]),
+      );
+      p.txBuilder.txOutInlineDatumValue(certificateDatumToData(p.datum));
     },
-  ]);
-
-  tb.invalidBefore(p.validFromSlot);
-  return complete(p, refs);
+  });
 }
 
 // -------------------------------------------------------------- redemption
@@ -1016,56 +1006,6 @@ export interface GraduateOwnerParams extends TxBase {
   validFromSlot: number;
 }
 
-/** Owner-signed retirement (§4.7): burn name `N`, mint the principal coupon. */
-export async function buildGraduateOwnerTx(
-  p: GraduateOwnerParams,
-): Promise<string> {
-  const { deployment: d, bond: b } = p;
-  const tb = p.txBuilder;
-
-  const holder = holderCredential(p.holderStakeHash, p.holderIsScript);
-  const refs = fullReferences([d.refs.protocolParams, p.node], p.authorizer);
-  const paramsIdx = referenceIndexOf(refs, d.refs.protocolParams);
-  const nodeIdx = referenceIndexOf(refs, p.node);
-
-  const chain = [
-    d.core.programmableLogicGlobal,
-    d.core.transfer,
-    b.transfer,
-    b.issuance,
-    d.core.issuanceLogic,
-  ];
-  const wdrlIdx = wdrlIdxOf(d, fullWithdrawalKeys(chain, holder, p.authorizer));
-
-  plbSpend(tb, d, p.certificate, paramsIdx, wdrlIdx);
-
-  mintCertificate(tb, b, paramsIdx, stepName(p.step), "-1");
-  mintCoupon(tb, b, couponName(b.config.principal), "1");
-
-  w0(tb, d, d.core.programmableLogicGlobal, transferAct());
-  w0(tb, d, d.core.transfer, transferRedeemer([{ nodeIdx }]));
-  w0(tb, d, b.transfer, moveRedeemer());
-  w0(tb, d, b.issuance, mintingActionToData("Retire"));
-  w0(
-    tb,
-    d,
-    d.core.issuanceLogic,
-    issuanceLogicRedeemer([
-      { policy: b.cipPolicy, index: nodeIdx, proof: "ref" },
-    ]),
-  );
-
-  applyAuthorization(tb, holder, p.authorizer, d.config.networkId);
-
-  tb.txOut(p.couponAddress, [
-    lovelace(MIN_ADA),
-    { unit: b.cntPolicy + couponName(b.config.principal), quantity: "1" },
-  ]);
-
-  tb.invalidBefore(p.validFromSlot);
-  return complete(p, refs);
-}
-
 export interface GraduateIssuerParams extends TxBase {
   bond: Bond;
   node: UTxO;
@@ -1078,27 +1018,52 @@ export interface GraduateIssuerParams extends TxBase {
   validFromSlot: number;
 }
 
-/** Issuer-triggered retirement (§4.7): third-party burn + principal to `pay`. */
-export async function buildGraduateIssuerTx(
-  p: GraduateIssuerParams,
+/**
+ * The shared §4.7 graduation skeleton: burn the final name, mint the
+ * principal coupon. The paths differ in who signs and in whether the issuer
+ * path emits its paired ghost shell first (core third-party rule).
+ */
+async function buildGraduateTx(
+  p: TxBase & {
+    bond: Bond;
+    node: UTxO;
+    certificate: UTxO;
+    step: number;
+    couponAddress: string;
+    authorizer?: ScriptAuthorizer;
+    holderStakeHash?: string;
+    holderIsScript?: boolean;
+    validFromSlot: number;
+    /** `transfer` = owner-signed; `thirdParty` = issuer-triggered. */
+    kind: "transfer" | "thirdParty";
+    /** The issuer path emits its paired shell before the coupon. */
+    shell?: (b: Bond) => void;
+  },
 ): Promise<string> {
   const { deployment: d, bond: b } = p;
   const tb = p.txBuilder;
 
+  const credential =
+    p.kind === "transfer"
+      ? holderCredential(p.holderStakeHash ?? "", p.holderIsScript)
+      : b.config.issuer;
+  const spendLogic =
+    p.kind === "transfer" ? d.core.transfer : d.core.thirdParty;
+  const bondLogic = p.kind === "transfer" ? b.transfer : b.thirdParty;
   const refs = fullReferences([d.refs.protocolParams, p.node], p.authorizer);
   const paramsIdx = referenceIndexOf(refs, d.refs.protocolParams);
   const nodeIdx = referenceIndexOf(refs, p.node);
 
   const chain = [
     d.core.programmableLogicGlobal,
-    d.core.thirdParty,
-    b.thirdParty,
+    spendLogic,
+    bondLogic,
     b.issuance,
     d.core.issuanceLogic,
   ];
   const wdrlIdx = wdrlIdxOf(
     d,
-    fullWithdrawalKeys(chain, b.config.issuer, p.authorizer),
+    fullWithdrawalKeys(chain, credential, p.authorizer),
   );
 
   plbSpend(tb, d, p.certificate, paramsIdx, wdrlIdx);
@@ -1106,10 +1071,16 @@ export async function buildGraduateIssuerTx(
   mintCertificate(tb, b, paramsIdx, stepName(p.step), "-1");
   mintCoupon(tb, b, couponName(b.config.principal), "1");
 
-  w0(tb, d, d.core.programmableLogicGlobal, thirdPartyAct());
-  // The pair output (the certificate-less shell) is the first output.
-  w0(tb, d, d.core.thirdParty, thirdPartyRedeemer(nodeIdx, 0));
-  w0(tb, d, b.thirdParty, triggerRedeemer());
+  if (p.kind === "transfer") {
+    w0(tb, d, d.core.programmableLogicGlobal, transferAct());
+    w0(tb, d, d.core.transfer, transferRedeemer([{ nodeIdx }]));
+    w0(tb, d, b.transfer, moveRedeemer());
+  } else {
+    w0(tb, d, d.core.programmableLogicGlobal, thirdPartyAct());
+    // The pair output (the certificate-less shell) is the first output.
+    w0(tb, d, d.core.thirdParty, thirdPartyRedeemer(nodeIdx, 0));
+    w0(tb, d, b.thirdParty, triggerRedeemer());
+  }
   w0(tb, d, b.issuance, mintingActionToData("Retire"));
   w0(
     tb,
@@ -1120,24 +1091,45 @@ export async function buildGraduateIssuerTx(
     ]),
   );
 
-  applyAuthorization(tb, b.config.issuer, p.authorizer, d.config.networkId);
+  applyAuthorization(tb, credential, p.authorizer, d.config.networkId);
 
-  // Ghost shell: the paired continuation preserves address and datum, and —
-  // per the core third-party rule — the spent UTxO's lovelace and unrelated
-  // assets, with only the certificate removed.
-  tb.txOut(
-    p.certificate.output.address,
-    p.certificate.output.amount.filter(
-      (a) => a.unit !== b.cipPolicy + stepName(p.step),
-    ),
-  );
-  tb.txOutInlineDatumValue(certificateDatumToData(p.datum));
+  p.shell?.(b);
 
-  tb.txOut(p.payoutAddress, [
+  tb.txOut(p.couponAddress, [
     lovelace(MIN_ADA),
     { unit: b.cntPolicy + couponName(b.config.principal), quantity: "1" },
   ]);
 
   tb.invalidBefore(p.validFromSlot);
   return complete(p, refs);
+}
+
+/** Owner-signed retirement (§4.7): burn name `N`, mint the principal coupon. */
+export async function buildGraduateOwnerTx(
+  p: GraduateOwnerParams,
+): Promise<string> {
+  return buildGraduateTx({ ...p, kind: "transfer" });
+}
+
+/** Issuer-triggered retirement (§4.7): third-party burn + principal to `pay`. */
+export async function buildGraduateIssuerTx(
+  p: GraduateIssuerParams,
+): Promise<string> {
+  return buildGraduateTx({
+    ...p,
+    couponAddress: p.payoutAddress,
+    kind: "thirdParty",
+    shell: (bond) => {
+      // Ghost shell: paired continuation keeps address, datum, and — per the
+      // core third-party rule — the spent UTxO's lovelace and unrelated
+      // assets, with only the certificate removed.
+      p.txBuilder.txOut(
+        p.certificate.output.address,
+        p.certificate.output.amount.filter(
+          (a) => a.unit !== bond.cipPolicy + stepName(p.step),
+        ),
+      );
+      p.txBuilder.txOutInlineDatumValue(certificateDatumToData(p.datum));
+    },
+  });
 }
