@@ -19,7 +19,13 @@ import {
   type UTxO,
 } from "@meshsdk/core";
 
-import { enclosingSlotBound, nftNameFromRef } from "../common";
+import {
+  finalizeTx,
+  nftNameFromRef,
+  networkIdOf,
+  slotBound,
+  type Network,
+} from "../common";
 import {
   mintVoteRedeemer,
   stakePositionDatumToData,
@@ -35,24 +41,6 @@ import type {
 } from "./types";
 import { voteCompiledCode as voteCode, plutusVersion } from "./blueprint";
 import { stakeScriptAddress } from "./stake";
-
-type Network = "mainnet" | "preprod" | "preview";
-
-function networkIdOf(network: Network): 0 | 1 {
-  return network === "mainnet" ? 1 : 0;
-}
-
-/** The enclosing slot + start time for `now` on the given network/devnet. */
-function slotBound(
-  network: Network,
-  now: number,
-  customSlotConfig?: SlotConfig,
-) {
-  return enclosingSlotBound(
-    now,
-    customSlotConfig ?? SLOT_CONFIG_NETWORK[network],
-  );
-}
 
 const DEFAULT_MIN_UTXO_LOVELACE = 2_000_000n;
 
@@ -156,16 +144,12 @@ export async function buildVoteTx(p: VoteBuilderParams): Promise<string> {
     )
     .txOutInlineDatumValue(stakePositionDatumToData(p.stakeDatum));
 
-  return await p.txBuilder
+  p.txBuilder
     .invalidBefore(slotBound(network, p.now, p.customSlotConfig).slot)
-    .invalidHereafter(slotBound(network, unlock, p.customSlotConfig).slot)
-    .txInCollateral(
-      p.collateralUtxo.input.txHash,
-      p.collateralUtxo.input.outputIndex,
-      p.collateralUtxo.output.amount,
-      p.collateralUtxo.output.address,
-    )
-    .changeAddress(p.changeAddress)
-    .selectUtxosFrom(p.utxos)
-    .complete();
+    .invalidHereafter(slotBound(network, unlock, p.customSlotConfig).slot);
+  return finalizeTx(p.txBuilder, {
+    collateral: p.collateralUtxo,
+    changeAddress: p.changeAddress,
+    utxos: p.utxos,
+  });
 }

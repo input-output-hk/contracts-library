@@ -12,10 +12,7 @@
 
 import {
   applyCborEncoding,
-  Network,
   serializePlutusScript,
-  SLOT_CONFIG_NETWORK,
-  unixTimeToEnclosingSlot,
   type Asset,
   type MeshTxBuilder,
   type PlutusScript,
@@ -24,6 +21,7 @@ import {
 } from "@meshsdk/core";
 
 import { applyAuthorization, type ScriptAuthorizer } from "../authorization";
+import { finalizeTx, networkIdOf, slotBound, type Network } from "../common";
 import { compiledCode, plutusVersion } from "./blueprint";
 import {
   cancelRedeemer,
@@ -32,10 +30,6 @@ import {
   vestingDatumToData,
 } from "./datum";
 import type { VestedAsset, VestingDatum } from "./types";
-
-function networkIdOf(network: Network): 0 | 1 {
-  return network === "mainnet" ? 1 : 0;
-}
 
 /** Default floor (in lovelace) for the continuing output's ada. The validator
  * permits extra, schedule-unprotected ada, so bumping to satisfy min-utxo is
@@ -165,8 +159,7 @@ export async function buildClaimTx(p: ClaimParams): Promise<string> {
 
   const network = p.network ?? "preprod";
   const minLovelace = p.minUtxoLovelace ?? DEFAULT_MIN_UTXO_LOVELACE;
-  const slotConfig = p.customSlotConfig ?? SLOT_CONFIG_NETWORK[network];
-  const lowerBoundSlot = unixTimeToEnclosingSlot(now, slotConfig);
+  const lowerBoundSlot = slotBound(network, now, p.customSlotConfig).slot;
   const script = vestingScript();
   const { input, output } = p.vestingUtxo;
 
@@ -191,17 +184,12 @@ export async function buildClaimTx(p: ClaimParams): Promise<string> {
     networkIdOf(network),
   );
 
-  return await p.txBuilder
-    .invalidBefore(lowerBoundSlot)
-    .txInCollateral(
-      p.collateralUtxo.input.txHash,
-      p.collateralUtxo.input.outputIndex,
-      p.collateralUtxo.output.amount,
-      p.collateralUtxo.output.address,
-    )
-    .changeAddress(p.beneficiaryAddress)
-    .selectUtxosFrom(p.utxos)
-    .complete();
+  p.txBuilder.invalidBefore(lowerBoundSlot);
+  return finalizeTx(p.txBuilder, {
+    collateral: p.collateralUtxo,
+    changeAddress: p.beneficiaryAddress,
+    utxos: p.utxos,
+  });
 }
 
 export interface CancelParams {
@@ -253,8 +241,7 @@ export async function buildCancelTx(p: CancelParams): Promise<string> {
   }
 
   const network = p.network ?? "preprod";
-  const slotConfig = p.customSlotConfig ?? SLOT_CONFIG_NETWORK[network];
-  const lowerBoundSlot = unixTimeToEnclosingSlot(now, slotConfig);
+  const lowerBoundSlot = slotBound(network, now, p.customSlotConfig).slot;
   const script = vestingScript();
   const { input, output } = p.vestingUtxo;
 
@@ -272,15 +259,10 @@ export async function buildCancelTx(p: CancelParams): Promise<string> {
     networkIdOf(network),
   );
 
-  return await p.txBuilder
-    .invalidBefore(lowerBoundSlot)
-    .txInCollateral(
-      p.collateralUtxo.input.txHash,
-      p.collateralUtxo.input.outputIndex,
-      p.collateralUtxo.output.amount,
-      p.collateralUtxo.output.address,
-    )
-    .changeAddress(p.lockerAddress)
-    .selectUtxosFrom(p.utxos)
-    .complete();
+  p.txBuilder.invalidBefore(lowerBoundSlot);
+  return finalizeTx(p.txBuilder, {
+    collateral: p.collateralUtxo,
+    changeAddress: p.lockerAddress,
+    utxos: p.utxos,
+  });
 }
