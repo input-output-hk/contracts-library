@@ -19,6 +19,7 @@ use aiken/collection/pairs
 use aiken/crypto.{ScriptHash}
 use cardano/address.{Credential, Script}
 use cardano/assets.{AssetName, has_nft}
+use cardano/certificate.{Certificate, RegisterCredential, UnregisterCredential}
 use cardano/transaction.{InlineDatum, Output, Transaction}
 use smart_wallet/types.{WalletDatum}
 
@@ -248,4 +249,103 @@ fn wallet_datum(
     }
     None -> None
   }
+}
+
+// ------------------------------------------------------- reference scripts
+
+/// Which wallet-UTxO map a reference script keeps its own `Data` in: the
+/// `spenders` map (spend scripts) or the `depositors` map (deposit scripts).
+pub type ReferenceRole {
+  Spender
+  Depositor
+}
+
+fn role_data(
+  role: ReferenceRole,
+  self: Transaction,
+  wallet: Credential,
+  wallet_token_name: AssetName,
+  own_hash: ScriptHash,
+) -> Data {
+  when role is {
+    Spender -> own_withdrawal_data(self, wallet, wallet_token_name, own_hash)
+    Depositor -> own_depositor_data(self, wallet, wallet_token_name, own_hash)
+  }
+}
+
+fn role_removed(
+  role: ReferenceRole,
+  self: Transaction,
+  wallet: Credential,
+  wallet_token_name: AssetName,
+  own_hash: ScriptHash,
+) -> Bool {
+  when role is {
+    Spender -> own_withdrawal_removed(self, wallet, wallet_token_name, own_hash)
+    Depositor ->
+      own_depositor_removed(self, wallet, wallet_token_name, own_hash)
+  }
+}
+
+fn role_stateless_unchanged(
+  role: ReferenceRole,
+  self: Transaction,
+  wallet: Credential,
+  wallet_token_name: AssetName,
+  own_hash: ScriptHash,
+) -> Bool {
+  when role is {
+    Spender ->
+      own_withdrawal_stateless_unchanged(
+        self,
+        wallet,
+        wallet_token_name,
+        own_hash,
+      )
+    Depositor ->
+      own_depositor_stateless_unchanged(
+        self,
+        wallet,
+        wallet_token_name,
+        own_hash,
+      )
+  }
+}
+
+/// The shared `publish` handler of the reference spender/depositor scripts.
+/// On `RegisterCredential` the script's own `Data` is validated by
+/// `register_check`; on `UnregisterCredential` (the script leaving the wallet)
+/// removal is only accepted as part of the script's own deregistration, so it
+/// cannot be unregistered out of band (which would brick the wallet).
+pub fn reference_publish(
+  certificate: Certificate,
+  self: Transaction,
+  wallet: Credential,
+  wallet_token_name: AssetName,
+  role: ReferenceRole,
+  register_check: fn(Data) -> Bool,
+) -> Bool {
+  when certificate is {
+    RegisterCredential { credential: Script(own_hash), .. } ->
+      register_check(role_data(role, self, wallet, wallet_token_name, own_hash))
+    UnregisterCredential { credential: Script(own_hash), .. } ->
+      role_removed(role, self, wallet, wallet_token_name, own_hash)
+    _ -> fail
+  }
+}
+
+/// The shared `withdraw` guard of stateless reference scripts: the script's
+/// canonical own `Data` must be unchanged on both wallet legs, and the spend
+/// must satisfy the script's particular `rule`.
+pub fn reference_withdraw(
+  self: Transaction,
+  wallet: Credential,
+  wallet_token_name: AssetName,
+  own_hash: ScriptHash,
+  role: ReferenceRole,
+  rule: fn(Transaction) -> Bool,
+) -> Bool {
+  role_stateless_unchanged(role, self, wallet, wallet_token_name, own_hash) && rule(
+    self,
+  )
 }
