@@ -1,7 +1,7 @@
 // Settings — configuration-parameter management (Tx3 off-chain).
 //
 // Reference Tx3 implementation of the settings protocol, mirroring the
-// on-chain validators in `onchain/validators/settings.ak` and the MeshJS
+// on-chain validators in `onchain/validators/settings/` and the MeshJS
 // builders in `offchain/meshjs/lib/src/settings/`.
 //
 // The settings contract is a single Plutus V3 script that acts both as a
