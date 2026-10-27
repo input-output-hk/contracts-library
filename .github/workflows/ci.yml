@@ -97,6 +97,10 @@ jobs:
         working-directory: offchain/meshjs/e2e
         run: npm ci
 
+      - name: Typecheck e2e
+        working-directory: offchain/meshjs/e2e
+        run: npm run typecheck
+
       # Starts an ephemeral devnet, runs the suite against it, always tears down.
       - name: Run e2e tests against an ephemeral devnet
         working-directory: offchain/meshjs/e2e
