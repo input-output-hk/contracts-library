@@ -1,14 +1,14 @@
-use aiken/builtin.{un_constr_data}
 use cardano/address.{Credential}
 use cardano/assets.{AssetName, PolicyId}
 use cardano/transaction.{OutputReference, Transaction}
 use settings/reference
+use settings/typed.{validate_datum}
 use settings/types.{MintRedeemer, SettingsDatum, SpendRedeemer}
 
 /// Setting values must be `Constr(0, [_])` — a single-field constructor whose
-/// field may be any `Data` (spec §3.1, §7 R7). `un_constr_data` halts on
-/// non-constructor `Data`, so an out-of-shape value rejects the transaction.
-/// Everything else is shared with the reference `settings` validator.
+/// field may be any `Data` (spec §3.d, §6.d R7); the predicate lives in
+/// `settings/typed`. Everything else is shared with the reference `settings`
+/// validator.
 validator settings_typed(
   seed_utxo: OutputReference,
   propose_auth: Credential,
@@ -49,15 +49,5 @@ validator settings_typed(
 
   else(_) {
     fail
-  }
-}
-
-/// Admissible values are exactly `Constr(0, [_])` — a single-field
-/// constructor whose field may be any `Data`.
-fn validate_datum(data: Data) {
-  let constr = un_constr_data(data)
-  constr.1st == 0 && when constr.2nd is {
-    [_field] -> True
-    _ -> False
   }
 }
