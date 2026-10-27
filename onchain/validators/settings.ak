@@ -1,12 +1,12 @@
 use cardano/address.{Credential}
 use cardano/assets.{AssetName, PolicyId}
 use cardano/transaction.{OutputReference, Transaction}
-use settings/mint.{validate_burn, validate_mint}
-use settings/spend.{validate_apply, validate_close, validate_propose}
-use settings/types.{
-  Apply, Burn, Close, Mint, MintRedeemer, Propose, SettingsDatum, SpendRedeemer,
-}
+use settings/reference
+use settings/types.{MintRedeemer, SettingsDatum, SpendRedeemer}
 
+/// Reference settings validator: any well-formed value is admissible
+/// (`True`), per spec §3.1 (see `docs/settings/spec.md`). Everything else is
+/// shared with `settings_typed`.
 validator settings(
   seed_utxo: OutputReference,
   propose_auth: Credential,
@@ -20,53 +20,32 @@ validator settings(
     own_ref: OutputReference,
     self: Transaction,
   ) {
-    when redeemer is {
-      Propose { out_ix } ->
-        validate_propose(
-          propose_auth,
-          apply_delay,
-          datum,
-          out_ix,
-          own_ref,
-          self,
-          settings_token_name,
-          validate_datum,
-        )
-      Apply { out_ix } ->
-        validate_apply(
-          apply_auth,
-          datum,
-          out_ix,
-          own_ref,
-          self,
-          settings_token_name,
-          validate_datum,
-        )
-      Close -> validate_close(apply_auth, own_ref, self)
-    }
+    reference.reference_spend(
+      propose_auth,
+      apply_auth,
+      apply_delay,
+      settings_token_name,
+      datum,
+      redeemer,
+      own_ref,
+      self,
+      fn(_) { True },
+    )
   }
 
   mint(redeemer: MintRedeemer, own_policy: PolicyId, self: Transaction) {
-    when redeemer is {
-      Mint { out_ix } ->
-        validate_mint(
-          seed_utxo,
-          apply_auth,
-          out_ix,
-          own_policy,
-          self,
-          settings_token_name,
-          validate_datum,
-        )
-      Burn -> validate_burn(own_policy, self)
-    }
+    reference.reference_mint(
+      seed_utxo,
+      apply_auth,
+      settings_token_name,
+      redeemer,
+      own_policy,
+      self,
+      fn(_) { True },
+    )
   }
 
   else(_) {
     fail
   }
-}
-
-fn validate_datum(_datum: Data) {
-  True
 }
