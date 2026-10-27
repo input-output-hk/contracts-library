@@ -16,7 +16,7 @@ one-shot **Settings NFT**, whose inline datum holds the active configuration
 
 | Part | Where |
 |---|---|
-| On-chain validator | [`onchain/validators/settings.ak`](../../onchain/validators/settings.ak) (+ composable predicates in [`onchain/lib/settings/`](../../onchain/lib/settings/)) |
+| On-chain validators | [`onchain/validators/settings/`](../../onchain/validators/settings/) (`settings.ak`, `settings_typed.ak`) (+ composable predicates in [`onchain/lib/settings/`](../../onchain/lib/settings/)) |
 | MeshJS builders | [`offchain/meshjs/lib/src/settings/`](../../offchain/meshjs/lib/src/settings/) |
 | Tx3 protocol + client | [`offchain/tx3/settings/`](../../offchain/tx3/settings/) |
 | Compiled blueprint | [`onchain/plutus.json`](../../onchain/plutus.json) |
@@ -365,7 +365,7 @@ and invoked via a withdraw-0 keyed by its reward address
 - [Spec](spec.md) — full behavior,
   threat model (§6), invariants, and the formal must-accept/must-reject
   characterization.
-- [On-chain code](../../onchain/validators/settings.ak) — reference
+- [On-chain code](../../onchain/validators/settings/) — reference
   validator; composable predicates in [`onchain/lib/settings/`](../../onchain/lib/settings/).
 - [Devnet e2e test](../../offchain/tx3/settings/tests/devnet.test.ts) —
   end-to-end usage of both key- and script-authorized paths, including the

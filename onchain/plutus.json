@@ -687,7 +687,7 @@
       "hash": "95da21788eb1f59f51aad9669eb8c8b7081ab618c1f29b871925894a"
     },
     {
-      "title": "settings.settings.spend",
+      "title": "settings/settings.settings.spend",
       "datum": {
         "title": "datum",
         "schema": {
@@ -736,7 +736,7 @@
       "hash": "fa607ccdefde860144fa4d5270eef3932e5aeed121b2e102e9f3882e"
     },
     {
-      "title": "settings.settings.mint",
+      "title": "settings/settings.settings.mint",
       "redeemer": {
         "title": "redeemer",
         "schema": {
@@ -779,7 +779,7 @@
       "hash": "fa607ccdefde860144fa4d5270eef3932e5aeed121b2e102e9f3882e"
     },
     {
-      "title": "settings.settings.else",
+      "title": "settings/settings.settings.else",
       "redeemer": {
         "schema": {}
       },
@@ -819,7 +819,7 @@
       "hash": "fa607ccdefde860144fa4d5270eef3932e5aeed121b2e102e9f3882e"
     },
     {
-      "title": "settings_typed.settings_typed.spend",
+      "title": "settings/settings_typed.settings_typed.spend",
       "datum": {
         "title": "datum",
         "schema": {
@@ -868,7 +868,7 @@
       "hash": "69f4ddc81b2683185667e7ca25ecba79b5cde9cb1f20ecb3c5520e6b"
     },
     {
-      "title": "settings_typed.settings_typed.mint",
+      "title": "settings/settings_typed.settings_typed.mint",
       "redeemer": {
         "title": "redeemer",
         "schema": {
@@ -911,7 +911,7 @@
       "hash": "69f4ddc81b2683185667e7ca25ecba79b5cde9cb1f20ecb3c5520e6b"
     },
     {
-      "title": "settings_typed.settings_typed.else",
+      "title": "settings/settings_typed.settings_typed.else",
       "redeemer": {
         "schema": {}
       },
