@@ -40,7 +40,7 @@ Every instance goes through the same cycle:
 stateDiagram-v2
     direction LR
     [*] --> Active: launch (applier)<br/>mints the Settings NFT
-    Active --> Proposed: propose (proposer)<br/>next = v, next_apply = now + delay
+    Active --> Proposed: propose (proposer)<br/>next = v, next_apply ≥ now + delay
     Proposed --> Proposed: propose (proposer)<br/>supersedes the pending pair
     Proposed --> Active: apply (applier)<br/>current = next, pair cleared
     Active --> [*]: close (applier)<br/>burns the NFT
@@ -52,8 +52,9 @@ stateDiagram-v2
   Minting requires spending the parameterized `seed_utxo`, which makes the
   instance one-shot: at most one Settings UTxO can ever exist per script.
 - **propose** — the proposer writes a pending pair
-  `(next, next_apply = now + apply_delay)` into the datum. It cannot touch
-  `current`, and a new proposal **supersedes** any pending one.
+  `(next, next_apply ≥ now + apply_delay)` into the datum (the reference
+  builders use the minimum). It cannot touch `current`, and a new proposal
+  **supersedes** any pending one.
 - **apply** — once `now >= next_apply` (`now` being the transaction's validity
   lower bound), the applier promotes `next` to `current` and clears the pair.
 - **close** — the applier burns the NFT and recovers the locked lovelace.
@@ -187,7 +188,8 @@ await buildProposeTx({
 ```
 
 Proposing always writes a **fresh** pending pair: it overwrites any pending
-proposal and resets the deadline to `now + apply_delay`.
+proposal and resets the earliest apply time to `now + apply_delay` (the builder
+uses the minimum; the validator accepts a later time).
 
 ### 4. Apply
 
@@ -344,10 +346,12 @@ and invoked via a withdraw-0 keyed by its reward address
 
 - **Proposals supersede each other.** A new `propose` overwrites the pending
   pair and resets the deadline — there is no proposal queue.
-- **The delay anchor is proposer-chosen.** `next_apply = now + apply_delay`
-  uses the propose transaction's validity lower bound, which the proposer
-  picks. The delay is a scheduling tool, not a hard real-time guarantee
-  against a malicious proposer (§6.a of the spec).
+- **The delay anchor is proposer-chosen.** The validator requires
+  `next_apply ≥ now + apply_delay`; the reference builders compute exactly
+  `now + apply_delay` from the propose transaction's validity lower bound,
+  which the proposer picks. A proposer can delay an apply further but never
+  accelerate it: the delay is a scheduling tool, not a hard real-time
+  guarantee against a malicious proposer (§6.a of the spec).
 - **The apply boundary is non-strict.** `now == next_apply` is accepted.
 - **Closing is irreversible.** The seed nonce is spent and the NFT burned —
   the same script hash can never host a second instance. Re-deploy with a new

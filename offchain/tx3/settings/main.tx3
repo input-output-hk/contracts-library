@@ -11,7 +11,7 @@
 //
 //   - `launch`  mint the settings NFT and create the state UTxO.
 //   - `propose` record a proposed `next` value together with the earliest
-//               time it may be applied (`now + apply_delay`).
+//               time it may be applied (at least `now + apply_delay`).
 //   - `apply`   promote a matured `next` value to `current`.
 //   - `close`   burn the NFT and tear down the settings instance.
 //
@@ -214,8 +214,9 @@ tx launch(
 ///
 /// `validate_propose` requires the `propose_auth` (Proposer) signature and that
 /// the continuation datum equals `SettingsDatum { current, next: Some(new),
-/// next_apply: Some(now + apply_delay) }` with `new != current`, where `now` is
-/// the lower bound of the validity range.
+/// next_apply: Some(t) }` with `t >= now + apply_delay` and `new != current`,
+/// where `now` is the lower bound of the validity range. This builder uses the
+/// minimum, `t = now + apply_delay`.
 tx propose(
     /// Proposed new value (opaque `Bytes` mirror of the on-chain `Data`). Must
     /// differ from the current value.

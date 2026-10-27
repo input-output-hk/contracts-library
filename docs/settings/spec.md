@@ -110,8 +110,9 @@ A datum is **well-formed** when `next` and `next_apply` are both `None` or both 
 ```
 Mint (Launch)    ⊥  ─────────────────────────────────► (d, None, None)
 
-Propose          (d, ·, ·) ──────────────────────────► (d, Some(d′), Some(now + apply_delay))
-                                                            with d′ ≠ d and validate_datum(d′)
+Propose          (d, ·, ·) ──────────────────────────► (d, Some(d′), Some(t))
+                                                            with t ≥ now + apply_delay,
+                                                            d′ ≠ d and validate_datum(d′)
 
 Apply            (d, Some(d′), Some(t)), now ≥ t ────► (d′, None, None)
 
@@ -152,14 +153,14 @@ This transaction deploys the **Settings UTxO**, which holds the main protocol pa
 |                    |                                                                                                                                                                                                                                                                                                                        |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Inputs**         | The settings UTxO.                                                                                                                                                                                                                                                                                                     |
-| **Outputs**        | One **continuation** at `out_ix`: address **equal to the spent input's address** (payment and staking part), value = ada + exactly the NFT, **inline datum**, no reference script. Datum = `SettingsDatum { current, next: Some(d), next_apply: Some(now + apply_delay) }` with `validate_datum(d)` and `d ≠ current`. |
+| **Outputs**        | One **continuation** at `out_ix`: address **equal to the spent input's address** (payment and staking part), value = ada + exactly the NFT, **inline datum**, no reference script. Datum = `SettingsDatum { current, next: Some(d), next_apply: Some(t) }` with `t ≥ now + apply_delay`, `validate_datum(d)` and `d ≠ current`. |
 | **Redeemer**       | spend `Propose { out_ix }`.                                                                                                                                                                                                                                                                                            |
 | **Validity range** | Lower bound **finite**; `now` = lower bound (§5).                                                                                                                                                                                                                                                                      |
 | **Authorization**  | `propose_auth` satisfied.                                                                                                                                                                                                                                                                                              |
 
 The spent datum's `next`/`next_apply` are **ignored**: proposing always writes a
 fresh pending pair and thereby supersedes any pending proposal (and resets the
-apply deadline to `now + apply_delay`).
+earliest apply time to `now + apply_delay`; the proposer may choose a later `t`).
 
 ### 5.c Apply
 
@@ -223,11 +224,12 @@ Attacks the protocol defends against, each backed by the invariants of §6.b:
 - **`apply_delay` is trusted at deployment.** The reference validator does not
   constrain it (a negative delay would admit immediate applies); it is part of
   the script hash, so all parties can see it.
-- **The proposer controls the delay anchor.** `next_apply = now + apply_delay`
-  is computed from the propose transaction's lower bound, which the proposer
-  chooses (an honest builder sets it to the current time). `apply_delay` is the
-  proposer's scheduling tool, not a hard real-time guarantee against a malicious
-  proposer.
+- **The proposer controls the delay anchor.** The continuation's `next_apply`
+  must satisfy `t ≥ now + apply_delay`, where `now` is the propose transaction's
+  lower bound chosen by the proposer (the reference builders use the current
+  time and the minimum, `t = now + apply_delay`). A proposer can only push an
+  apply later, never earlier. `apply_delay` is the proposer's scheduling tool,
+  not a hard real-time guarantee against a malicious proposer.
 - **Closing is irreversible.** After `Close`, no instance can be relaunched at
   this script hash (seed spent, NFT burned).
 - **The staking credential is frozen at launch.** The launch output may pick any
@@ -260,10 +262,10 @@ Attacks the protocol defends against, each backed by the invariants of §6.b:
   produces the `Some` pair required by `Apply`.
 - **I6 — No no-op proposals.** A `Propose` whose `d == current` is rejected; the
   setting can only be _changed_, never rewritten.
-- **I7 — State integrity.** `Propose` preserves `current` and writes exactly
-  `next_apply = now + apply_delay`; `Apply` promotes the pending `next` to
-  `current` and clears the pair. The continuation datum must equal the expected
-  one exactly.
+- **I7 — State integrity.** `Propose` preserves `current` and writes
+  `next_apply ≥ now + apply_delay` (the reference builders use
+  `now + apply_delay`); `Apply` promotes the pending `next` to `current` and
+  clears the pair. The continuation datum must equal the expected one exactly.
 - **I8 — Composability.** The validator asserts only about its own input, the
   seed input (at launch), the mint under its own policy, the single output named
   by `out_ix`, the validity range, and the required authorization. It never
@@ -309,8 +311,8 @@ Returns `True` if **all** of:
   the spent input's address exactly; its value contains exactly the NFT and no
   other multi-asset; its datum is **inline**; no reference script.
 - **P4 (continuation datum).** That datum is
-  `SettingsDatum { current, next: Some(d), next_apply: Some(now + apply_delay) }`
-  with `validate_datum(d)` and `d ≠ current`.
+  `SettingsDatum { current, next: Some(d), next_apply: Some(t) }` with
+  `t ≥ now + apply_delay`, `validate_datum(d)` and `d ≠ current`.
 
 #### `Apply { out_ix }`
 
@@ -366,7 +368,7 @@ the following holds:
   has `next = None` or `next_apply = None`. _(¬A2, I5)_
 - **R5 (tampered continuation datum).** Redeemer is `Propose` or `Apply` and the
   continuation datum differs from the expected one — e.g. a changed `current` on
-  propose, a different `next`, or a `next_apply ≠ now + apply_delay`. _(¬P4,
+  propose, a different `next`, or a `next_apply < now + apply_delay`. _(¬P4,
   ¬A5, I7)_
 - **R6 (no-op proposal).** Redeemer is `Propose` and the proposed value equals
   `current`. _(¬P4's `d ≠ current`, I6)_
