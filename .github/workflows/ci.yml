@@ -104,4 +104,6 @@ jobs:
       # Starts an ephemeral devnet, runs the suite against it, always tears down.
       - name: Run e2e tests against an ephemeral devnet
         working-directory: offchain/meshjs/e2e
+        env:
+          REQUIRE_DEVNET: "1"
         run: npm run test:devnet

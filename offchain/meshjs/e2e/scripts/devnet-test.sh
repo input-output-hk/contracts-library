@@ -13,7 +13,8 @@
 # came up for us. A globally installed CLI is used as a fallback.
 #
 # Degrades gracefully when yaci-devkit is not installed: the suite then runs
-# with no devnet and skips itself, so this stays green anywhere.
+# with no devnet and skips itself, so local runs stay green. Set
+# REQUIRE_DEVNET=1 (as CI does) to fail instead of silently skipping.
 #
 # Invoked via `npm run test:devnet`. Yaci DevKit supports Linux x64 and
 # macOS arm64 (not Windows).
@@ -22,6 +23,7 @@ set -u
 API_URL="http://localhost:8080/api/v1/"
 ADMIN_URL="http://localhost:10000"
 LOG=".yaci-devnet.log"
+REPORT=".vitest-report.json"
 
 TEST_FILES=(
   "test/vesting.e2e.test.ts"
@@ -84,6 +86,10 @@ fi
 if [ -z "$YACI_BIN" ]; then
   echo "• yaci-devkit not installed. Running the suite without a devnet (it will skip)."
   echo "  Run \`npm install\` in offchain/meshjs/e2e for the full e2e run."
+  if [ "${REQUIRE_DEVNET:-0}" = "1" ]; then
+    echo "✗ REQUIRE_DEVNET=1: refusing to run an e2e suite that would skip everything."
+    exit 1
+  fi
   exec npm test
 fi
 
@@ -131,8 +137,23 @@ run_file() {
   " || { echo "Devnet did not become ready."; return 1; }
 
   echo "Devnet is up. Running e2e tests ..."
-  INDEXER_URL="$API_URL" YACI_ADMIN_URL="$ADMIN_URL" npx vitest run "$TEST_FILE"
+  INDEXER_URL="$API_URL" YACI_ADMIN_URL="$ADMIN_URL" npx vitest run "$TEST_FILE" --reporter=default --reporter=json --outputFile.json="$REPORT"
   local TEST_EXIT=$?
+
+  # A green vitest exit can still mean zero tests ran: the suite skips itself
+  # when the devnet probe fails. Fail unless at least one test executed.
+  if [ $TEST_EXIT -eq 0 ]; then
+    node -e '
+      const report = require(process.argv[1]);
+      if ((report.numPassedTests ?? 0) === 0) {
+        console.error(
+          `✗ no tests executed (${report.numPendingTests ?? 0} skipped): the devnet suite did not run.`,
+        );
+        process.exit(1);
+      }
+    ' "$PWD/$REPORT" || TEST_EXIT=1
+  fi
+  rm -f "$REPORT"
 
   echo "Tearing down devnet ..."
   stop_devnet
