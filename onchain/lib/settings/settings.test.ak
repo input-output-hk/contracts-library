@@ -339,8 +339,8 @@ test rejects_propose_tampering() {
 }
 
 test propose_longer_than_required_delay_is_accepted() {
-  // Current behavior: `validate_propose` requires `next_apply >= now + apply_delay`,
-  // not equality — spec §6.c P4 / §6.d R5 / I7 state exactly `now + apply_delay`.
+  // The validator enforces a minimum delay (`next_apply >= now + apply_delay`,
+  // spec §5.b), so a proposer may choose a later apply time.
   spend(
     Propose { out_ix: 0 },
     datum(value_a()),
