@@ -11,7 +11,8 @@
 //
 //   - `launch`  mint the settings NFT and create the state UTxO.
 //   - `propose` record a proposed `next` value together with the earliest
-//               time it may be applied (`now + apply_delay`).
+//               time it may be applied (at least `upper + apply_delay`, where
+//               `upper` is the propose transaction's validity upper bound).
 //   - `apply`   promote a matured `next` value to `current`.
 //   - `close`   burn the NFT and tear down the settings instance.
 //
