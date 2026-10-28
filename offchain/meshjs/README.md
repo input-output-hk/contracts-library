@@ -5,4 +5,6 @@ This directory groups the MeshJS off-chain work for all the contracts:
 - [`lib/`](./lib): the published library (`@contracts-library/meshjs`): transaction builders, datum/redeemer encoders, the pinned blueprint, and unit tests. This is what consumers install.
 - [`e2e/`](./e2e): end-to-end tests that run the library against a local [Yaci DevKit](https://devkit.yaci.xyz) devnet. A separate package that depends on `lib/` by its public name, so the tests consume the library exactly as a downstream user would and never ship with it.
 
+The pinned `blueprint.ts` files under `lib/` are generated artifacts: `npm run blueprint:update` (repo root, `scripts/blueprint-sync.mjs`) re-renders them from `onchain/plutus.json` together with the `blueprint` hash map in `lib/package.json`. Hand-edits are overwritten by the next sync; CI fails on drift (`blueprint:check`, run without any Node dependencies in the `offchain-unit` job).
+
 Future off-chain languages follow the same shape (e.g. `offchain/tx3/lib` + `offchain/tx3/e2e`).

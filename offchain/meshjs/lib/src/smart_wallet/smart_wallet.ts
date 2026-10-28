@@ -21,8 +21,7 @@ import {
 } from "@meshsdk/core";
 
 import { applyAuthorization, type ScriptAuthorizer } from "../authorization";
-import type { Credential } from "../common";
-import { finalizeTx } from "../common";
+import { type Credential, finalizeTx, networkIdOf } from "../common";
 import { plutusVersion, smartWalletCode } from "./blueprint";
 import {
   walletBurnRedeemer,
@@ -40,10 +39,6 @@ import {
   invokeWithdrawalScript,
   registerWithdrawalScript,
 } from "./withdrawal_scripts";
-
-function networkIdOf(network: Network): 0 | 1 {
-  return network === "mainnet" ? 1 : 0;
-}
 
 const DEFAULT_MIN_UTXO_LOVELACE = 1_500_000n;
 

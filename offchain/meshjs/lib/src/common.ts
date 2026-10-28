@@ -66,8 +66,12 @@ export function enclosingSlotBound(
 /** The networks every builder accepts. */
 export type Network = "mainnet" | "preprod" | "preview";
 
-/** `mainnet` is network id 1; the devnets are 0. */
-export function networkIdOf(network: Network): 0 | 1 {
+/**
+ * `mainnet` is network id 1; every devnet (and Mesh's legacy "testnet") is 0.
+ * Accepts Mesh's wider `Network` union so builders typed against it can call
+ * this without casts.
+ */
+export function networkIdOf(network: Network | "testnet"): 0 | 1 {
   return network === "mainnet" ? 1 : 0;
 }
 
