@@ -15,40 +15,40 @@ import {
   buildCancelTx,
   buildClaimTx,
   buildLockTx,
+  type Credential,
   cancelRedeemer,
   claimRedeemer,
   requiredRemainder,
+  type VestingDatum,
   vestingDatumToData,
   vestingScript,
   vestingScriptAddress,
-  type Credential,
-  type VestingDatum,
 } from "@contracts-library/meshjs";
-import { ALWAYS_TRUE, REJECT_WITHDRAW } from "../src/fixtures";
 import {
-  unixTimeToEnclosingSlot,
   type SlotConfig,
   type UTxO,
+  unixTimeToEnclosingSlot,
 } from "@meshsdk/core";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
-  collateralOf,
-  lovelaceOf,
-  signAndSubmit,
+  type Account,
   chainNowMs,
+  collateralOf,
   devnetReachable,
   devnetSlotConfig,
   fundedAccount,
+  lovelaceOf,
   makeProvider,
   NETWORK_ID,
   newTxBuilder,
   registerStakeCredential,
-  scriptOutputOf,
   STORE_URL,
+  scriptOutputOf,
+  signAndSubmit,
   waitForTx,
   waitUntilChainTimeMs,
-  type Account,
 } from "../src/devnet";
+import { ALWAYS_TRUE, REJECT_WITHDRAW } from "../src/fixtures";
 
 const reachable = await devnetReachable();
 if (!reachable) {

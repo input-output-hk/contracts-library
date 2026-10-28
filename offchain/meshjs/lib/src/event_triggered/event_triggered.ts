@@ -23,8 +23,8 @@
  */
 
 import {
-  applyParamsToScript,
   type Asset,
+  applyParamsToScript,
   type Data,
   type MeshTxBuilder,
   type PlutusScript,
@@ -37,13 +37,13 @@ import {
   authorizerScriptHash,
   type ScriptAuthorizer,
 } from "../authorization";
-import { credentialToData, finalizeTx, type Credential } from "../common";
 import {
   baseSpendRedeemer,
+  type CoreDeployment,
+  cip113PlutusVersion,
   EX_UNITS,
   issuanceLogicRedeemer,
   issuanceMintRedeemer,
-  cip113PlutusVersion,
   referenceIndexOf,
   registryInsertRedeemer,
   rewardAddressOf,
@@ -54,10 +54,10 @@ import {
   thirdPartyRedeemer,
   transferAct,
   transferRedeemer,
-  withdrawalIndexOf,
-  type CoreDeployment,
   type WithdrawalKey,
+  withdrawalIndexOf,
 } from "../cip113";
+import { type Credential, credentialToData, finalizeTx } from "../common";
 import {
   couponPolicyCompiledCode,
   issuanceCompiledCode,
@@ -69,6 +69,7 @@ import {
 import {
   certificateDatumToData,
   couponName,
+  couponParamsToData,
   decodeCouponName,
   mintingActionToData,
   mintingParamsToData,
@@ -82,10 +83,9 @@ import {
   unitRedeemer,
   vaultDatumToData,
   vaultDepositRedeemer,
-  vaultTopUpRedeemer,
   vaultNftParamsToData,
   vaultParamsToData,
-  couponParamsToData,
+  vaultTopUpRedeemer,
 } from "./datum";
 import type {
   Bond,
@@ -970,7 +970,7 @@ export async function buildRedeemTx(p: RedeemParams): Promise<string> {
     }
   }
   for (const [name, qty] of byName) {
-    mintCoupon(tb, b, name, "-" + qty.toString());
+    mintCoupon(tb, b, name, `-${qty.toString()}`);
   }
 
   vaultSpend(tb, b, p.vault, redeemRedeemer(p.payouts));

@@ -12,25 +12,29 @@
  */
 
 import {
-  applyParamsToScript,
-  resolveScriptHash,
-  serializeRewardAddress,
-  serializePlutusScript,
   type Asset,
+  applyParamsToScript,
   type MeshTxBuilder,
   type PlutusScript,
+  resolveScriptHash,
   type SlotConfig,
+  serializePlutusScript,
+  serializeRewardAddress,
   type UTxO,
 } from "@meshsdk/core";
 
 import {
   finalizeTx,
+  type Network,
+  networkIdOf,
   nftNameFromRef,
   nftNameOf,
-  networkIdOf,
   slotBound,
-  type Network,
 } from "../common";
+import {
+  plutusVersion,
+  proposalCompiledCode as proposalCode,
+} from "./blueprint";
 import {
   burnProposalRedeemer,
   burnVotesRedeemer,
@@ -44,17 +48,13 @@ import {
   stakeRedeemerToData,
   tallyVoteRedeemer,
 } from "./datum";
+import { stakeScriptAddress } from "./stake";
 import type {
   ProposalDatum,
   ProposalParams,
   ProposalRedeemer,
   StakePositionDatum,
 } from "./types";
-import {
-  proposalCompiledCode as proposalCode,
-  plutusVersion,
-} from "./blueprint";
-import { stakeScriptAddress } from "./stake";
 
 /** Phase end times (POSIX ms) derived from a proposal's immutable fields. */
 function phaseBounds(datum: ProposalDatum) {
@@ -485,7 +485,7 @@ export async function buildTallyTx(p: TallyParams): Promise<string> {
     }
   }
 
-  for (const [i, { voteUtxo, ownerAddress }] of p.votes.entries()) {
+  for (const { voteUtxo, ownerAddress } of p.votes) {
     // Refund the vote artifact's ada (minus the NFT, which this tx burns):
     // pure lovelace, tagged with the vote's own output reference.
     const refund = voteUtxo.output.amount.filter(

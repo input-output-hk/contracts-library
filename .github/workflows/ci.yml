@@ -8,7 +8,7 @@ on:
 
 jobs:
   format:
-    name: Format (biome + aiken)
+    name: Format & lint (biome) + aiken fmt
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,6 +21,8 @@ jobs:
         run: npm ci
       - name: Biome format check
         run: npm run format:check
+      - name: Biome lint check
+        run: npm run lint:check
       - uses: aiken-lang/setup-aiken@v1
         with:
           version: v1.1.24

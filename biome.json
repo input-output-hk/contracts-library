@@ -12,13 +12,13 @@
       "!**/dist",
       "!**/*.tsbuildinfo",
       "!**/package-lock.json",
-      "!offchain/tx3/devnet/genesis/**",
-      "!onchain/**",
-      "!formal/**",
-      "!logs/**",
-      "!.opencode/**",
-      "!.husky/**",
-      "!.git/**"
+      "!offchain/tx3",
+      "!onchain",
+      "!formal",
+      "!logs",
+      "!.opencode",
+      "!.husky",
+      "!.git"
     ]
   },
   "formatter": {
@@ -27,6 +27,12 @@
     "indentWidth": 2,
     "lineWidth": 80,
     "lineEnding": "lf"
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended"
+    }
   },
   "javascript": {
     "formatter": {

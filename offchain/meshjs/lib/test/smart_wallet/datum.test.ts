@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   walletBurnRedeemer,
   walletCloseRedeemer,
-  walletDepositRedeemer,
   walletDatumToData,
+  walletDepositRedeemer,
   walletMintRedeemer,
   walletSpendRedeemer,
   walletUpdatePermissionsRedeemer,

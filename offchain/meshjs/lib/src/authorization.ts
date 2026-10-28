@@ -16,13 +16,13 @@
  */
 
 import {
+  type Data,
+  type LanguageVersion,
+  type MeshTxBuilder,
   mConStr0,
   resolveScriptHash,
   serializeRewardAddress,
-  type Data,
-  type MeshTxBuilder,
   type UTxO,
-  type LanguageVersion,
 } from "@meshsdk/core";
 
 import type { Credential } from "./common";
@@ -129,7 +129,7 @@ export function applyAuthorization(
   if (authorizer.manual) return;
 
   const version = authorizer.version ?? "V3";
-  const hash = authorizerScriptHash(credential, authorizer)!;
+  const hash = authorizerScriptHash(credential, authorizer);
   if (hash !== credential.hash) {
     throw new Error(
       `Authorizer script hash (${hash}) does not match the credential in the ` +

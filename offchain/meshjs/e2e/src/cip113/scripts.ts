@@ -6,17 +6,16 @@
  * parameters are the funded wallet UTxOs the genesis transactions will spend.
  */
 
-import { mConStr0 } from "@meshsdk/core";
-
 import {
   applyScript,
-  credentialToData,
-  scriptHashOf,
   type CoreConfig,
   type CoreScripts,
   type Credential,
+  credentialToData,
   type OneShot,
+  scriptHashOf,
 } from "@contracts-library/meshjs";
+import { mConStr0 } from "@meshsdk/core";
 import {
   alwaysFailCompiledCode,
   issuanceCborHexMintCompiledCode,

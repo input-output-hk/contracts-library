@@ -11,17 +11,17 @@
  */
 
 import {
-  applyCborEncoding,
-  serializePlutusScript,
   type Asset,
+  applyCborEncoding,
   type MeshTxBuilder,
   type PlutusScript,
   type SlotConfig,
+  serializePlutusScript,
   type UTxO,
 } from "@meshsdk/core";
 
 import { applyAuthorization, type ScriptAuthorizer } from "../authorization";
-import { finalizeTx, networkIdOf, slotBound, type Network } from "../common";
+import { finalizeTx, type Network, networkIdOf, slotBound } from "../common";
 import { compiledCode, plutusVersion } from "./blueprint";
 import {
   cancelRedeemer,

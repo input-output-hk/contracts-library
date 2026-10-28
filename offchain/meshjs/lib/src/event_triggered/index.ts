@@ -6,6 +6,6 @@
  * deployment types and helpers they take.
  */
 
-export * from "./types";
 export * from "./datum";
 export * from "./event_triggered";
+export * from "./types";

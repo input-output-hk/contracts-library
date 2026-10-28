@@ -10,35 +10,34 @@
  */
 
 import {
-  applyParamsToScript,
-  resolveScriptHash,
-  serializePlutusScript,
-  SLOT_CONFIG_NETWORK,
   type Asset,
+  applyParamsToScript,
   type MeshTxBuilder,
   type PlutusScript,
+  resolveScriptHash,
   type SlotConfig,
+  serializePlutusScript,
   type UTxO,
 } from "@meshsdk/core";
 
 import {
+  type Credential,
   finalizeTx,
+  type Network,
+  networkIdOf,
   nftNameFromRef,
   nftNameOf,
-  networkIdOf,
   slotBound,
-  type Credential,
-  type Network,
 } from "../common";
+import { plutusVersion, stakeCompiledCode as stakeCode } from "./blueprint";
 import {
   closeStakePositionRedeemer,
   createPositionRedeemer,
-  stakePositionDatumToData,
   stakeParamsToData,
+  stakePositionDatumToData,
   stakeRedeemerToData,
 } from "./datum";
 import type { StakeParams, StakePositionDatum, StakeRedeemer } from "./types";
-import { stakeCompiledCode as stakeCode, plutusVersion } from "./blueprint";
 
 const DEFAULT_MIN_UTXO_LOVELACE = 2_000_000n;
 

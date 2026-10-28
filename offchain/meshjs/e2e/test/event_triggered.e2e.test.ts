@@ -17,11 +17,10 @@
  * Skips when no devnet is reachable (`npm run test:devnet`).
  */
 
-import { type SlotConfig, type UTxO } from "@meshsdk/core";
-import { beforeAll, describe, expect, it } from "vitest";
-
 import {
   applyBond,
+  type Bond,
+  type BondConfig,
   buildAuthorizeTx,
   buildBondDepositTx,
   buildClaimIssuerTx,
@@ -32,21 +31,22 @@ import {
   buildRedeemTx,
   buildRegisterTx,
   buildTransferTx,
+  type CertificateDatum,
   couponName,
   couponPolicyScript,
   plbAddress,
+  type RegistryNode,
   rewardAddressOf,
   scriptHashOf,
   stepName,
   vaultAddress,
-  type Bond,
-  type BondConfig,
-  type CertificateDatum,
-  type RegistryNode,
 } from "@contracts-library/meshjs";
+import type { SlotConfig, UTxO } from "@meshsdk/core";
+import { beforeAll, describe, expect, it } from "vitest";
 
-import { deployCore, type Deployment } from "../src/cip113/deploy";
+import { type Deployment, deployCore } from "../src/cip113/deploy";
 import {
+  type Account,
   chainNowMs,
   collateralOf,
   devnetReachable,
@@ -54,12 +54,11 @@ import {
   fundedAccount,
   makeProvider,
   newTxBuilderManualExUnits,
+  STORE_URL,
   scriptOutputOf,
   signAndSubmit,
-  STORE_URL,
   waitForTx,
   waitUntilChainTimeMs,
-  type Account,
 } from "../src/devnet";
 
 const reachable = await devnetReachable();
@@ -505,10 +504,7 @@ describe.skipIf(!reachable)(
         claimHash,
         bond.cipPolicy + stepName(1),
       );
-      const coupon = await outputHolding(
-        claimHash,
-        bond.cntPolicy + couponName(AMOUNTS[0]),
-      );
+      await outputHolding(claimHash, bond.cntPolicy + couponName(AMOUNTS[0]));
 
       // ---- redeem the coupon (§4.6), graduate (§4.7), redeem the principal -
       const vaultAfterRedeem = await redeem(
@@ -539,10 +535,7 @@ describe.skipIf(!reachable)(
       });
       const graduateHash = await signAndSubmit(holder, graduateTx);
       await waitForTx(provider, graduateHash);
-      const principalCoupon = await outputHolding(
-        graduateHash,
-        bond.cntPolicy + couponName(PRINCIPAL),
-      );
+      await outputHolding(graduateHash, bond.cntPolicy + couponName(PRINCIPAL));
 
       const vaultFinal = await redeem(
         holder,
@@ -660,10 +653,7 @@ describe.skipIf(!reachable)(
       });
       const graduateHash = await signAndSubmit(issuer, graduateTx);
       await waitForTx(provider, graduateHash);
-      const principalCoupon = await outputHolding(
-        graduateHash,
-        bond.cntPolicy + couponName(PRINCIPAL),
-      );
+      await outputHolding(graduateHash, bond.cntPolicy + couponName(PRINCIPAL));
       const shell = await scriptOutputOf(provider, graduateHash, holderPlb);
       const shellAda = lovelaceOf(shell);
       expect(shellAda, "the shell preserves the UTxO's lovelace").toBe(MIN_ADA);
@@ -736,10 +726,7 @@ describe.skipIf(!reachable)(
       });
       const claimAHash = await signAndSubmit(holder, claimA);
       await waitForTx(provider, claimAHash);
-      const couponA = await outputHolding(
-        claimAHash,
-        bond.cntPolicy + couponName(1040),
-      );
+      await outputHolding(claimAHash, bond.cntPolicy + couponName(1040));
 
       const fClaimB = await fundingOf(holder);
       const claimB = await buildClaimOwnerTx({
@@ -759,10 +746,7 @@ describe.skipIf(!reachable)(
       });
       const claimBHash = await signAndSubmit(holder, claimB);
       await waitForTx(provider, claimBHash);
-      const couponB = await outputHolding(
-        claimBHash,
-        bondB.cntPolicy + couponName(2222),
-      );
+      await outputHolding(claimBHash, bondB.cntPolicy + couponName(2222));
 
       // A coupon of vault A cannot be redeemed at vault B: the redemption
       // burns under A's policy (the bond that minted it), so B's coupon policy

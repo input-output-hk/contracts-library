@@ -7,9 +7,9 @@
  * upgrade-multisig tree) live with the deployment tooling in `e2e/`.
  */
 
-import { mConStr0, mConStr1, mConStr2, type Data } from "@meshsdk/core";
+import { type Data, mConStr0, mConStr1, mConStr2 } from "@meshsdk/core";
 
-import { credentialToData, type Credential } from "../common";
+import { type Credential, credentialToData } from "../common";
 
 // ----------------------------------------------------------------- redeemers
 
