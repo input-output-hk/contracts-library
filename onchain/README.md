@@ -17,7 +17,7 @@ plutus.json       generated blueprint (compiled code + datum/redeemer schemas)
 Each contract is split into two parts on purpose:
 
 - **`lib/<contract>/`** holds well-behaved predicates that avoid global assumptions about transaction shape, so contracts compose freely in shared transactions. This is what you import to compose or fork.
-- **`validators/<contract>.ak`** is a thin wrapper that decodes the redeemer and delegates to `lib/`. Use it as-is, or embed the `lib/` functions in your own validator.
+- **`validators/<contract>.ak`** (or `validators/<contract>/` for contracts with several validators, e.g. settings and smart wallet) is a thin wrapper that decodes the redeemer and delegates to `lib/`. Use it as-is, or embed the `lib/` functions in your own validator.
 
 See [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md) for the composability conventions every contract follows.
 
@@ -36,9 +36,13 @@ When reading a validator, start from its spec; the code comments reference spec 
 | Contract | Library | Validator | Spec |
 |---|---|---|---|
 | Linear vesting | `lib/vesting/` | `validators/linear_vesting.ak` | [`../docs/vesting/spec.md`](../docs/vesting/spec.md) |
+| DAO | `lib/dao/` | `validators/dao/{proposal,stake,vote}.ak` (+ `poll_effect.ak`) | [`../docs/dao/spec.md`](../docs/dao/spec.md) |
+| Settings | `lib/settings/` | `validators/settings/{settings,settings_typed}.ak` | [`../docs/settings/spec.md`](../docs/settings/spec.md) |
+| Smart wallet | `lib/smart_wallet/` | `validators/smart_wallet/smart_wallet.ak` (+ `withdrawal_scripts/`) | [`../docs/smart-wallet/spec.md`](../docs/smart-wallet/spec.md) |
+| Event-triggered assets | `lib/event_triggered/` | `validators/event_triggered_assets.ak` | [`../docs/event-triggered-assets/spec.md`](../docs/event-triggered-assets/spec.md) |
 
 
-More contracts (escrow, AMM, CIP-68, multisig, …) are triaged in the [PRD](../docs/PRD.md#7-contract-catalog).
+More contracts (escrow, AMM, CIP-68, …) are triaged in the [PRD](../docs/PRD.md#7-contract-catalog).
 
 ## Building and testing
 
