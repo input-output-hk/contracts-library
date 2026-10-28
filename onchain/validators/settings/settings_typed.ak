@@ -1,3 +1,7 @@
+//// Typed settings validator module: dispatches to `settings/reference` with
+//// the `Constr(0, [_])` predicate from `settings/typed`.
+//// See `docs/settings/spec.md` §3.d and §6.d R7.
+
 use cardano/address.{Credential}
 use cardano/assets.{AssetName, PolicyId}
 use cardano/transaction.{OutputReference, Transaction}
