@@ -24,9 +24,12 @@ import {
 } from "@meshsdk/core";
 
 import { applyAuthorization, type ScriptAuthorizer } from "../authorization";
-
-import { type Credential, enclosingSlotBound, finalizeTx } from "../common";
-
+import {
+  type Credential,
+  enclosingSlotBound,
+  finalizeTx,
+  networkIdOf,
+} from "../common";
 import { compiledCode, plutusVersion, typedCompiledCode } from "./blueprint";
 import {
   applyRedeemer,
@@ -38,10 +41,6 @@ import {
   settingsDatumToData,
 } from "./datum";
 import type { SettingsDatum, SettingsParams } from "./types";
-
-function networkIdOf(network: Network): 0 | 1 {
-  return network === "mainnet" ? 1 : 0;
-}
 
 const DEFAULT_MIN_UTXO_LOVELACE = 1_500_000n;
 
