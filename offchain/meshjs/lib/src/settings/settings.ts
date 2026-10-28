@@ -9,22 +9,22 @@
  */
 
 import {
-  applyParamsToScript,
-  Network,
-  resolveScriptHash,
-  serializePlutusScript,
-  SLOT_CONFIG_NETWORK,
-  unixTimeToEnclosingSlot,
   type Asset,
+  applyParamsToScript,
   type Data,
   type MeshTxBuilder,
+  type Network,
   type PlutusScript,
+  resolveScriptHash,
+  SLOT_CONFIG_NETWORK,
   type SlotConfig,
+  serializePlutusScript,
   type UTxO,
+  unixTimeToEnclosingSlot,
 } from "@meshsdk/core";
 
 import { applyAuthorization, type ScriptAuthorizer } from "../authorization";
-import { finalizeTx, type Credential } from "../common";
+import { type Credential, finalizeTx } from "../common";
 import { compiledCode, plutusVersion, typedCompiledCode } from "./blueprint";
 import {
   applyRedeemer,

@@ -2,8 +2,17 @@
  * DAO governance (proposal / stake / vote) — MeshJS off-chain submodule.
  */
 
-export * from "./types";
 export {
+  plutusVersion as daoPlutusVersion,
+  proposalCompiledCode as proposalCode,
+  proposalValidatorHash,
+  stakeCompiledCode as stakeCode,
+  stakeValidatorHash,
+  voteCompiledCode as voteCode,
+  voteValidatorHash,
+} from "./blueprint";
+export {
+  acceptDraftRedeemer,
   burnProposalRedeemer,
   burnVotesRedeemer,
   cancelVoteRedeemer,
@@ -11,7 +20,6 @@ export {
   cosignRedeemer,
   createPositionRedeemer,
   daoSettingsToData,
-  acceptDraftRedeemer,
   endProposalRedeemer,
   endVotingStageRedeemer,
   mintProposalRedeemer,
@@ -28,31 +36,16 @@ export {
   rejectDraftRedeemer,
   stakeParamsToData,
   stakePositionDatumToData,
-  stakeTokenRedeemerToData,
   stakeRedeemerToData,
-  tallyVotesRedeemer,
+  stakeTokenRedeemerToData,
   tallyVoteRedeemer,
+  tallyVotesRedeemer,
   voteDatumToData,
   voteParamsToData,
   voteRedeemerToData,
   voteTokenRedeemerToData,
 } from "./datum";
 export { pollEffectScript } from "./effect";
-export {
-  buildCreateStakePositionTx,
-  buildDepositTx,
-  buildDelegateTx,
-  buildWithdrawTx,
-  buildClosePositionTx,
-  stakeScript,
-  stakeScriptAddress,
-  type ClosePositionParams,
-  type CreateStakePositionParams,
-  type DelegateParams,
-  type DepositParams,
-  type StakeSpendParams,
-  type WithdrawParams,
-} from "./stake";
 export {
   buildAcceptDraftTx,
   buildCosignProposalTx,
@@ -61,28 +54,35 @@ export {
   buildEndVotingStageTx,
   buildRejectDraftTx,
   buildTallyTx,
-  proposalScript,
-  proposalScriptAddress,
   type CosignProposalParams,
   type CreateProposalParams,
   type EndProposalParams,
   type ProposalSpendParams,
+  proposalScript,
+  proposalScriptAddress,
   type SimpleProposalParams,
   type TallyParams,
   type WinnerEffect,
 } from "./proposal";
 export {
+  buildClosePositionTx,
+  buildCreateStakePositionTx,
+  buildDelegateTx,
+  buildDepositTx,
+  buildWithdrawTx,
+  type ClosePositionParams,
+  type CreateStakePositionParams,
+  type DelegateParams,
+  type DepositParams,
+  type StakeSpendParams,
+  stakeScript,
+  stakeScriptAddress,
+  type WithdrawParams,
+} from "./stake";
+export * from "./types";
+export {
   buildVoteTx,
+  type VoteBuilderParams,
   voteScript,
   voteScriptAddress,
-  type VoteBuilderParams,
 } from "./vote";
-export {
-  proposalCompiledCode as proposalCode,
-  proposalValidatorHash,
-  stakeCompiledCode as stakeCode,
-  stakeValidatorHash,
-  voteCompiledCode as voteCode,
-  voteValidatorHash,
-  plutusVersion as daoPlutusVersion,
-} from "./blueprint";

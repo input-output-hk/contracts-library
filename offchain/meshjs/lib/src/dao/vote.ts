@@ -8,24 +8,24 @@
  */
 
 import {
-  applyParamsToScript,
-  resolveScriptHash,
-  serializePlutusScript,
-  SLOT_CONFIG_NETWORK,
   type Asset,
+  applyParamsToScript,
   type MeshTxBuilder,
   type PlutusScript,
+  resolveScriptHash,
   type SlotConfig,
+  serializePlutusScript,
   type UTxO,
 } from "@meshsdk/core";
 
 import {
   finalizeTx,
-  nftNameFromRef,
-  networkIdOf,
-  slotBound,
   type Network,
+  networkIdOf,
+  nftNameFromRef,
+  slotBound,
 } from "../common";
+import { plutusVersion, voteCompiledCode as voteCode } from "./blueprint";
 import {
   mintVoteRedeemer,
   stakePositionDatumToData,
@@ -33,14 +33,13 @@ import {
   voteDatumToData,
   voteParamsToData,
 } from "./datum";
+import { stakeScriptAddress } from "./stake";
 import type {
   ProposalDatum,
   StakePositionDatum,
   VoteDatum,
   VoteParams,
 } from "./types";
-import { voteCompiledCode as voteCode, plutusVersion } from "./blueprint";
-import { stakeScriptAddress } from "./stake";
 
 const DEFAULT_MIN_UTXO_LOVELACE = 2_000_000n;
 

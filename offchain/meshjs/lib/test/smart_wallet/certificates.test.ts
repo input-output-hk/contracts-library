@@ -40,7 +40,9 @@ function txWithCertificates(
 
 function certificatesOf(txHex: string) {
   const tx = Serialization.Transaction.fromCbor(txHex);
-  return [...tx.body().certs()!.values()];
+  const certs = tx.body().certs();
+  if (!certs) throw new Error("expected certificates in the transaction");
+  return [...certs.values()];
 }
 
 describe("rewriteWithdrawalCertificates", () => {
@@ -57,9 +59,9 @@ describe("rewriteWithdrawalCertificates", () => {
 
     const [target, otherScript, otherKey] = certificatesOf(rewritten);
     const registration = target.asRegistrationCert();
-    expect(registration).toBeDefined();
-    expect(registration!.stakeCredential().hash).toBe(TARGET_SCRIPT);
-    expect(registration!.deposit()).toBe(3_000_000n);
+    if (!registration) throw new Error("expected a registration certificate");
+    expect(registration.stakeCredential().hash).toBe(TARGET_SCRIPT);
+    expect(registration.deposit()).toBe(3_000_000n);
 
     expect(otherScript.kind()).toBe(0);
     expect(otherScript.asStakeRegistration()).toBeDefined();
@@ -79,9 +81,10 @@ describe("rewriteWithdrawalCertificates", () => {
 
     const [target, other] = certificatesOf(rewritten);
     const unregistration = target.asUnregistrationCert();
-    expect(unregistration).toBeDefined();
-    expect(unregistration!.stakeCredential().hash).toBe(TARGET_SCRIPT);
-    expect(unregistration!.deposit()).toBe(4_000_000n);
+    if (!unregistration)
+      throw new Error("expected an unregistration certificate");
+    expect(unregistration.stakeCredential().hash).toBe(TARGET_SCRIPT);
+    expect(unregistration.deposit()).toBe(4_000_000n);
 
     expect(other.kind()).toBe(1);
     expect(other.asStakeDeregistration()).toBeDefined();

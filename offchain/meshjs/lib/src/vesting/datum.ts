@@ -9,7 +9,7 @@
  *   Cancel       = Constr 1 []
  */
 
-import { mConStr0, mConStr1, type Data } from "@meshsdk/core";
+import { type Data, mConStr0, mConStr1 } from "@meshsdk/core";
 import { credentialToData } from "../common";
 import type { VestedAsset, VestingDatum } from "./types";
 

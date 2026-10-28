@@ -21,11 +21,11 @@
  */
 
 import {
+  type Data,
   mConStr,
   mConStr0,
   mConStr1,
   mConStr2,
-  type Data,
   type TxInput,
 } from "@meshsdk/core";
 
@@ -43,8 +43,8 @@ import type {
   ProposalTokenRedeemer,
   StakeParams,
   StakePositionDatum,
-  StakeTokenRedeemer,
   StakeRedeemer,
+  StakeTokenRedeemer,
   VoteDatum,
   VoteParams,
   VoteRedeemer,
