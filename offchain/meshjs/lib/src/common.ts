@@ -3,16 +3,16 @@
  */
 
 import {
+  type Data,
+  type MeshTxBuilder,
   mConStr0,
   mConStr1,
   resolveDataHash,
   SLOT_CONFIG_NETWORK,
-  unixTimeToEnclosingSlot,
-  type Data,
-  type MeshTxBuilder,
   type SlotConfig,
   type TxInput,
   type UTxO,
+  unixTimeToEnclosingSlot,
 } from "@meshsdk/core";
 
 /**

@@ -7,6 +7,7 @@
  *   - YACI_ADMIN_URL  (default http://localhost:10000)
  */
 
+import { registerWithdrawalScript } from "@contracts-library/meshjs";
 import {
   DEFAULT_V1_COST_MODEL_LIST,
   DEFAULT_V2_COST_MODEL_LIST,
@@ -14,14 +15,13 @@ import {
   deserializeAddress,
   MeshTxBuilder,
   MeshWallet,
-  serializeRewardAddress,
   type PlutusScript,
-  YaciProvider,
   type SlotConfig,
+  serializeRewardAddress,
   type UTxO,
+  YaciProvider,
 } from "@meshsdk/core";
 import { Serialization } from "@meshsdk/core-cst";
-import { registerWithdrawalScript } from "@contracts-library/meshjs";
 
 // `INDEXER_URL` is the convention used by the shared devnet lifecycle script.
 export const STORE_URL =

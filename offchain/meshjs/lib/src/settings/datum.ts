@@ -11,11 +11,11 @@
  */
 
 import {
+  type Data,
   mConStr0,
   mConStr1,
   mConStr2,
-  TxInput,
-  type Data,
+  type TxInput,
 } from "@meshsdk/core";
 
 import { credentialToData } from "../common";

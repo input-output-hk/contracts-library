@@ -2,38 +2,38 @@
  * Protocol settings — MeshJS off-chain submodule.
  */
 
-export * from "./types";
-export {
-  settingsDatumToData,
-  proposeRedeemer,
-  applyRedeemer,
-  closeRedeemer,
-  mintRedeemer,
-  burnRedeemer,
-  outputRefToData,
-  paramsToData,
-} from "./datum";
-export {
-  SETTINGS_TOKEN_NAME,
-  settingsScript,
-  settingsTypedScript,
-  settingsScriptAddress,
-  buildLaunchTx,
-  buildProposeTx,
-  proposalTiming,
-  DEFAULT_PROPOSE_TTL_MS,
-  buildApplyTx,
-  buildCloseTx,
-  type MintParams,
-  type ProposeParams,
-  type ProposalTiming,
-  type ApplyParams,
-  type CloseParams,
-} from "./settings";
 export {
   compiledCode as settingsCode,
-  validatorHash as settingsValidatorHash,
+  plutusVersion as settingsPlutusVersion,
   typedCompiledCode as settingsTypedCode,
   typedValidatorHash as settingsTypedValidatorHash,
-  plutusVersion as settingsPlutusVersion,
+  validatorHash as settingsValidatorHash,
 } from "./blueprint";
+export {
+  applyRedeemer,
+  burnRedeemer,
+  closeRedeemer,
+  mintRedeemer,
+  outputRefToData,
+  paramsToData,
+  proposeRedeemer,
+  settingsDatumToData,
+} from "./datum";
+export {
+  type ApplyParams,
+  buildApplyTx,
+  buildCloseTx,
+  buildLaunchTx,
+  buildProposeTx,
+  type CloseParams,
+  DEFAULT_PROPOSE_TTL_MS,
+  type MintParams,
+  type ProposalTiming,
+  type ProposeParams,
+  proposalTiming,
+  SETTINGS_TOKEN_NAME,
+  settingsScript,
+  settingsScriptAddress,
+  settingsTypedScript,
+} from "./settings";
+export * from "./types";

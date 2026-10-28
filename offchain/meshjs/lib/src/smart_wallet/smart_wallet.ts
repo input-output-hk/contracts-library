@@ -10,29 +10,29 @@
  */
 
 import {
+  type Asset,
   applyParamsToScript,
-  Network,
+  type MeshTxBuilder,
+  type Network,
+  type PlutusScript,
   resolveScriptHash,
   serializePlutusScript,
-  type Asset,
-  type MeshTxBuilder,
-  type PlutusScript,
   type UTxO,
 } from "@meshsdk/core";
 
 import { applyAuthorization, type ScriptAuthorizer } from "../authorization";
-import { finalizeTx } from "../common";
 import type { Credential } from "../common";
-import { smartWalletCode, plutusVersion } from "./blueprint";
+import { finalizeTx } from "../common";
+import { plutusVersion, smartWalletCode } from "./blueprint";
 import {
   walletBurnRedeemer,
   walletCloseRedeemer,
+  walletDatumToData,
   walletDepositRedeemer,
   walletMintRedeemer,
+  walletParamsToData,
   walletSpendRedeemer,
   walletUpdatePermissionsRedeemer,
-  walletDatumToData,
-  walletParamsToData,
 } from "./datum";
 import type { DelegatedScript, WalletDatum, WalletParams } from "./types";
 import {
