@@ -137,7 +137,7 @@ run_file() {
   " || { echo "Devnet did not become ready."; return 1; }
 
   echo "Devnet is up. Running e2e tests ..."
-  INDEXER_URL="$API_URL" YACI_ADMIN_URL="$ADMIN_URL" npx vitest run "$TEST_FILE" --reporter=default --reporter=json --outputFile.json="$REPORT"
+  INDEXER_URL="$API_URL" YACI_ADMIN_URL="$ADMIN_URL" npx vitest run "$TEST_FILE" --reporter=verbose --reporter=json --outputFile.json="$REPORT"
   local TEST_EXIT=$?
 
   # A green vitest exit can still mean zero tests ran: the suite skips itself
