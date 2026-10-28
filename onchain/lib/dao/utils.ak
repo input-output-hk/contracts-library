@@ -1,3 +1,6 @@
+//// Shared DAO helpers: unique token names, continuation lookup, redeemer
+//// extraction and settings reads. See `docs/dao/spec.md` §3.d, §4 and §5.
+
 use aiken/builtin
 use aiken/collection/dict
 use aiken/collection/list

@@ -10,7 +10,7 @@ The MeshJS implementation is in [`../../meshjs`](../../meshjs); the Tx3 implemen
 is not started yet.
 
 When implemented, it must cover the same actions against the same pinned
-blueprint (validator hash `fa1144f1…`):
+blueprint (validator hash `95da2178…`):
 
 - **Lock**: send the bundle to the script with the inline `VestingDatum`.
 - **Claim**: spend the vesting UTxO with the `Claim` redeemer, return the
@@ -20,4 +20,4 @@ blueprint (validator hash `fa1144f1…`):
   recovers the remainder with no continuing output.
 
 The datum/redeemer CBOR layout to target is documented in
-[`../meshjs/src/datum.ts`](../meshjs/src/datum.ts).
+[`../../meshjs/lib/src/vesting/datum.ts`](../../meshjs/lib/src/vesting/datum.ts).

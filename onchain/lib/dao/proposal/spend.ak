@@ -1,3 +1,7 @@
+//// Proposal lifecycle spend rules: cosign, draft acceptance/rejection,
+//// voting-stage transitions, tally and end. See `docs/dao/spec.md` §3.d and
+//// §5.g–§5.n.
+
 use aiken/collection/dict
 use aiken/collection/list
 use aiken/collection/pairs

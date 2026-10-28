@@ -1,3 +1,7 @@
+//// Reference settings validator module: dispatches the spend/mint handlers to
+//// `settings/reference` with the permissive `validate_datum` stub.
+//// See `docs/settings/spec.md` §3.d and §6.a.
+
 use cardano/address.{Credential}
 use cardano/assets.{AssetName, PolicyId}
 use cardano/transaction.{OutputReference, Transaction}
@@ -5,7 +9,7 @@ use settings/reference
 use settings/types.{MintRedeemer, SettingsDatum, SpendRedeemer}
 
 /// Reference settings validator: any well-formed value is admissible
-/// (`True`), per spec §3.1 (see `docs/settings/spec.md`). Everything else is
+/// (`True`), per spec §3.d (see `docs/settings/spec.md`). Everything else is
 /// shared with `settings_typed`.
 validator settings(
   seed_utxo: OutputReference,

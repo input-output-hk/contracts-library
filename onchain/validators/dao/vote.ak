@@ -1,3 +1,6 @@
+//// Reference vote validator: dispatches the mint/spend redeemers to
+//// `dao/vote/{mint,spend}`. See `docs/dao/spec.md` §3.d.
+
 use cardano/assets.{AssetName, PolicyId}
 use cardano/transaction.{OutputReference, Transaction}
 use dao/types.{

@@ -1,3 +1,6 @@
+//// Smart-wallet NFT mint/burn rules: one-shot launch and close.
+//// See `docs/smart-wallet/spec.md` §4.2, §5.1 and §5.5.
+
 use aiken/collection/dict
 use aiken/collection/list
 use authorization.{is_authorized}

@@ -1,3 +1,6 @@
+//// Settings spend rules: propose, apply and close.
+//// See `docs/settings/spec.md` §3.d, §5.b–§5.d and §6.c–§6.d.
+
 use aiken/collection/dict
 use aiken/interval.{Finite}
 use authorization.{is_authorized}
