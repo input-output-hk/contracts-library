@@ -20,4 +20,4 @@ blueprint (validator hash `95da2178…`):
   recovers the remainder with no continuing output.
 
 The datum/redeemer CBOR layout to target is documented in
-[`../meshjs/src/datum.ts`](../meshjs/src/datum.ts).
+[`../../meshjs/lib/src/vesting/datum.ts`](../../meshjs/lib/src/vesting/datum.ts).
