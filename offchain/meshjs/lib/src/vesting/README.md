@@ -3,7 +3,7 @@
 Transaction builders for the [linear vesting](../../../../../docs/vesting/spec.md) contract. This is the primary developer-facing API: you can lock and claim vested funds without reading the Aiken validator.
 
 - **Spec**: [`docs/vesting/spec.md`](../../../../../docs/vesting/spec.md)
-- **On-chain**: [`onchain/`](../../../onchain), pinned via `./blueprint.ts` (validator hash `fa1144f1…`, Aiken v1.1.22, Plutus V3).
+- **On-chain**: [`onchain/`](../../../onchain), pinned via `./blueprint.ts` (validator hash `95da2178…`, Plutus V3).
 
 ## The model in one paragraph
 
@@ -84,7 +84,7 @@ const cancelTx = await buildCancelTx({
   txBuilder: new MeshTxBuilder({ fetcher: provider, submitter: provider }),
   vestingUtxo,
   datum,
-  now: Date.now(),            // must be >= datum.recoveryTime
+  now: Date.now(),            // must be > datum.recoveryTime (validator rejects equality)
   lockerAddress: await lockerWallet.getChangeAddress(),
   collateralUtxo: (await lockerWallet.getCollateral())[0],
   utxos: await lockerWallet.getUtxos(),
