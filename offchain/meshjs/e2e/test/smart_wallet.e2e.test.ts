@@ -12,51 +12,52 @@
  */
 
 import {
-  buildWalletMintTx,
-  buildWalletDepositTx,
-  buildWalletSpendTx,
-  buildWalletUpdatePermissionsTx,
-  buildWalletCloseTx,
-  smartWalletScript,
-  smartWalletScriptAddress,
-  spendingLimitScript,
-  spendingWindowScript,
-  spendingWindowStateToData,
-  spendingPeriodLimitScript,
-  spendingPeriodStateToData,
-  fullRecipientAllowListScript,
-  fullRecipientDenyListScript,
-  paymentStakingAllowListScript,
-  paymentStakingDenyListScript,
   assetAllowListScript,
   assetDenyListScript,
   assetDepositAllowListScript,
   assetDepositDenyListScript,
-  walletConfigToData,
-  SETTINGS_TOKEN_NAME,
-  settingsScript,
-  settingsScriptAddress,
   buildLaunchTx,
+  buildWalletCloseTx,
+  buildWalletDepositTx,
+  buildWalletMintTx,
+  buildWalletSpendTx,
+  buildWalletUpdatePermissionsTx,
   type Credential,
+  fullRecipientAllowListScript,
+  fullRecipientDenyListScript,
+  paymentStakingAllowListScript,
+  paymentStakingDenyListScript,
+  SETTINGS_TOKEN_NAME,
   type SettingsDatum,
   type SettingsParams,
+  type SpendingWindowState,
+  settingsScript,
+  settingsScriptAddress,
+  smartWalletScript,
+  smartWalletScriptAddress,
+  spendingLimitScript,
+  spendingPeriodLimitScript,
+  spendingPeriodStateToData,
+  spendingWindowScript,
+  spendingWindowStateToData,
   type WalletConfig,
   type WalletDatum,
   type WalletParams,
-  type SpendingWindowState,
+  walletConfigToData,
 } from "@contracts-library/meshjs";
 import {
+  type Asset,
   deserializeAddress,
   mConStr0,
-  resolveScriptHash,
-  unixTimeToEnclosingSlot,
-  type Asset,
   type PlutusScript,
+  resolveScriptHash,
   type SlotConfig,
   type UTxO,
+  unixTimeToEnclosingSlot,
 } from "@meshsdk/core";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
+  type Account,
   chainNowMs,
   collateralOf,
   devnetReachable,
@@ -66,11 +67,10 @@ import {
   makeProvider,
   NETWORK_ID,
   newTxBuilder,
+  STORE_URL,
   scriptOutputOf,
   signAndSubmit,
-  STORE_URL,
   waitForTx,
-  type Account,
 } from "../src/devnet";
 import { ALWAYS_TRUE, REJECT_WITHDRAW } from "../src/fixtures";
 
@@ -1180,7 +1180,7 @@ describe.skipIf(!reachable)(
 
     async function walletWithToken(
       ctx: Ctx,
-      script: PlutusScript,
+      _script: PlutusScript,
       datum: WalletDatum,
       registerScripts: PlutusScript[],
     ): Promise<UTxO> {
@@ -1204,7 +1204,7 @@ describe.skipIf(!reachable)(
       const allowedDatum = statelessSpender(
         resolveScriptHash(allowed.code, allowed.version),
       );
-      let w = await walletWithToken(ctx, allowed, allowedDatum, [allowed]);
+      const w = await walletWithToken(ctx, allowed, allowedDatum, [allowed]);
 
       const moved = [
         { unit: tokenUnit, quantity: TOKEN_QTY.toString() },

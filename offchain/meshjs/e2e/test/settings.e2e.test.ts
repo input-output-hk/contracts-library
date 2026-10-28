@@ -7,31 +7,32 @@
 
 import {
   applyRedeemer,
-  buildLaunchTx,
-  buildProposeTx,
   buildApplyTx,
   buildCloseTx,
+  buildLaunchTx,
+  buildProposeTx,
   closeRedeemer,
   SETTINGS_TOKEN_NAME,
+  type SettingsDatum,
+  type SettingsParams,
   settingsDatumToData,
   settingsScript,
   settingsScriptAddress,
   settingsTypedScript,
-  type SettingsDatum,
-  type SettingsParams,
 } from "@contracts-library/meshjs";
 import {
+  type Data,
   mConStr0,
   mConStr1,
   resolveScriptHash,
-  type Data,
   type SlotConfig,
+  type TxInput,
   type UTxO,
   unixTimeToEnclosingSlot,
-  TxInput,
 } from "@meshsdk/core";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
+  type Account,
   chainNowMs,
   collateralOf,
   devnetReachable,
@@ -40,12 +41,11 @@ import {
   makeProvider,
   NETWORK_ID,
   newTxBuilder,
+  STORE_URL,
   scriptOutputOf,
   signAndSubmit,
-  STORE_URL,
   waitForTx,
   waitUntilChainTimeMs,
-  type Account,
 } from "../src/devnet";
 
 const reachable = await devnetReachable();
@@ -123,7 +123,9 @@ describe.skipIf(!reachable)("settings e2e (Yaci devnet)", () => {
       (u) =>
         u.input.txHash === ctx.seedUtxo.txHash &&
         u.input.outputIndex === ctx.seedUtxo.outputIndex,
-    )!;
+    );
+    if (!seedUtxo)
+      throw new Error("seed utxo not found in the applier's wallet");
 
     const mintTx = await buildLaunchTx({
       txBuilder: newTxBuilder(provider),
@@ -330,7 +332,10 @@ describe.skipIf(!reachable)("settings e2e (Yaci devnet)", () => {
     });
 
     // 3. Wait and Apply
-    await waitUntilChainTimeMs(proposedDatum.nextApply! + 2_000);
+    if (proposedDatum.nextApply === null) {
+      throw new Error("propose did not set next_apply");
+    }
+    await waitUntilChainTimeMs(proposedDatum.nextApply + 2_000);
     const applyNow = await chainNowMs();
 
     const applyTx = await buildApplyTx({
@@ -471,7 +476,10 @@ describe.skipIf(!reachable)("settings e2e (Yaci devnet)", () => {
       newValue: VALUE_B,
     });
 
-    await waitUntilChainTimeMs(proposedDatum.nextApply! + 2_000);
+    if (proposedDatum.nextApply === null) {
+      throw new Error("propose did not set next_apply");
+    }
+    await waitUntilChainTimeMs(proposedDatum.nextApply + 2_000);
     const now = await chainNowMs();
 
     // outputIndex = 1 points to a non-continuation output in this tx layout.
@@ -547,7 +555,10 @@ describe.skipIf(!reachable)("settings e2e (Yaci devnet)", () => {
         newValue: VALUE_B,
       });
 
-      await waitUntilChainTimeMs(proposedDatum.nextApply! + 2_000);
+      if (proposedDatum.nextApply === null) {
+        throw new Error("propose did not set next_apply");
+      }
+      await waitUntilChainTimeMs(proposedDatum.nextApply + 2_000);
       const applyNow = await chainNowMs();
 
       const applyTx = await buildApplyTx({

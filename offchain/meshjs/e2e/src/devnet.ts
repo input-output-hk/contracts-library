@@ -14,10 +14,10 @@ import {
   deserializeAddress,
   MeshTxBuilder,
   MeshWallet,
-  serializeRewardAddress,
-  YaciProvider,
   type SlotConfig,
+  serializeRewardAddress,
   type UTxO,
+  YaciProvider,
 } from "@meshsdk/core";
 import { Serialization } from "@meshsdk/core-cst";
 

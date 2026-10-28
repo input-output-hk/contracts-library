@@ -19,7 +19,7 @@
   "devDependencies": {
     "@bloxbean/yaci-devkit": "0.10.6",
     "@types/node": "^20.0.0",
-    "typescript": "^5.5.0",
-    "vitest": "^2.0.0"
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
   }
 }

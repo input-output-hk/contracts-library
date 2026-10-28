@@ -96,7 +96,7 @@
     - `settings_hash = hash(settings_validator(seed_utxo, propose_auth, apply_auth, apply_delay, settings_token_name))`
     - `maybe_data`: can be `None` or `Some(data)`
     - `proposed`: the proposed settings data. it is such that `validate_datum(proposed)` is true
-    - `timestamp = now + apply_delay`, where `apply_delay` is the minimum time that must pass before the proposed settings can be applied
+    - `timestamp ≥ now + apply_delay`, where `apply_delay` is the minimum time that must pass before the proposed settings can be applied (the reference builders set `timestamp = now + apply_delay`)
   ],
 )
 

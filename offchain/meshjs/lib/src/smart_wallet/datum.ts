@@ -13,13 +13,12 @@
  */
 
 import {
+  type Data,
   deserializeAddress,
   mConStr,
   mConStr0,
   mConStr1,
   mConStr2,
-  type Data,
-  type TxInput,
 } from "@meshsdk/core";
 
 import { credentialToData } from "../common";

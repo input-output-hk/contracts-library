@@ -16,15 +16,15 @@
  */
 
 import {
+  type Data,
   deserializeAddress,
   mConStr0,
   mConStr1,
   mConStr2,
   mConStr3,
-  type Data,
 } from "@meshsdk/core";
 
-import { credentialToData, type Credential } from "../common";
+import { type Credential, credentialToData } from "../common";
 import type {
   CertificateDatum,
   CouponParams,

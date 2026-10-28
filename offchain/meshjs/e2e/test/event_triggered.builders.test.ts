@@ -13,19 +13,9 @@
  */
 
 import {
-  DEFAULT_V1_COST_MODEL_LIST,
-  DEFAULT_V2_COST_MODEL_LIST,
-  DEFAULT_V3_COST_MODEL_LIST,
-  MeshTxBuilder,
-  pubKeyAddress,
-  serializeAddressObj,
-  type UTxO,
-} from "@meshsdk/core";
-import { Cardano, deserializeTx } from "@meshsdk/core-cst";
-import { describe, expect, it } from "vitest";
-
-import {
   applyBond,
+  type Bond,
+  type BondConfig,
   buildAuthorizeTx,
   buildBondDepositTx,
   buildClaimIssuerTx,
@@ -37,23 +27,32 @@ import {
   buildRegisterTx,
   buildTransferTx,
   buildVaultTopUpTx,
-  compareWithdrawalKeys,
-  couponName,
-  nodeAddress,
-  plbAddress,
-  sortReferenceInputs,
-  stepName,
-  vaultAddress,
-  type Bond,
-  type BondConfig,
   type CertificateDatum,
   type CoreConfig,
   type CoreDeployment,
+  compareWithdrawalKeys,
+  couponName,
+  nodeAddress,
   type Payout,
+  plbAddress,
   type RegistryNode,
   type ScriptAuthorizer,
+  sortReferenceInputs,
+  stepName,
+  vaultAddress,
   type WithdrawalKey,
 } from "@contracts-library/meshjs";
+import {
+  DEFAULT_V1_COST_MODEL_LIST,
+  DEFAULT_V2_COST_MODEL_LIST,
+  DEFAULT_V3_COST_MODEL_LIST,
+  MeshTxBuilder,
+  pubKeyAddress,
+  serializeAddressObj,
+  type UTxO,
+} from "@meshsdk/core";
+import { Cardano, deserializeTx } from "@meshsdk/core-cst";
+import { describe, expect, it } from "vitest";
 
 import { issuanceMintCompiledCode } from "../src/cip113/blueprint";
 import { applyCoreScripts } from "../src/cip113/scripts";
@@ -67,7 +66,7 @@ const ISSUER_KEY = "a1".repeat(28);
 const PAYER_KEY = "a2".repeat(28);
 const HOLDER_KEY = "a3".repeat(28);
 const PAYER = serializeAddressObj(pubKeyAddress(PAYER_KEY), NETWORK);
-const STRAY_UNIT = "de".repeat(28) + "7374726179"; // "stray"
+const STRAY_UNIT = `${"de".repeat(28)}7374726179`; // "stray"
 
 const coreConfig: CoreConfig = {
   networkId: NETWORK,
@@ -128,7 +127,7 @@ const collateral: UTxO = {
 
 function certificate(
   step: number,
-  datum: CertificateDatum,
+  _datum: CertificateDatum,
   stakeHash: string,
   stakeIsScript: boolean,
   extra: UTxO["output"]["amount"] = [lovelace(2_000_000)],
@@ -220,9 +219,9 @@ function inspect(tb: MeshTxBuilder, hex: string, cert: UTxO): Built {
 
   const withdrawals = [...(body.withdrawals()?.keys() ?? [])]
     .map((acct) => {
-      const cred = Cardano.Address.fromBech32(acct)
-        .asReward()!
-        .getPaymentCredential();
+      const reward = Cardano.Address.fromBech32(acct).asReward();
+      if (!reward) throw new Error(`not a reward address: ${acct}`);
+      const cred = reward.getPaymentCredential();
       return {
         hash: cred.hash.toString(),
         isScript: cred.type === Cardano.CredentialType.ScriptHash,
@@ -393,7 +392,8 @@ describe("issuer-triggered continuations preserve the certificate value", () => 
 
   function continuation(b: Built, cert: UTxO) {
     // The paired output is the first output (thirdPartyRedeemer(_, 0)).
-    const out = b.outputs[0]!;
+    const out = b.outputs[0];
+    if (!out) throw new Error("expected the paired continuation output");
     expect(out.address).toBe(cert.output.address);
     const qty = (unit: string) =>
       BigInt(out.amount.find((a) => a.unit === unit)?.quantity ?? "0");
@@ -452,7 +452,8 @@ describe("vault top-up", () => {
       amount: 3_000_000n,
     };
     const hex = await buildVaultTopUpTx(p);
-    const out = p.txBuilder.meshTxBuilderBody.outputs[0]!;
+    const out = p.txBuilder.meshTxBuilderBody.outputs[0];
+    if (!out) throw new Error("expected the top-up output");
 
     expect(out.address).toBe(vaultAddress(bond));
     const qty = (unit: string) =>
@@ -525,9 +526,9 @@ function inspectMintOnly(p: { txBuilder: MeshTxBuilder }, hex: string): Built {
   const body = deserializeTx(hex).body();
   return {
     withdrawals: [...(body.withdrawals()?.keys() ?? [])].map((acct) => {
-      const cred = Cardano.Address.fromBech32(acct)
-        .asReward()!
-        .getPaymentCredential();
+      const reward = Cardano.Address.fromBech32(acct).asReward();
+      if (!reward) throw new Error(`not a reward address: ${acct}`);
+      const cred = reward.getPaymentCredential();
       return {
         hash: cred.hash.toString(),
         isScript: cred.type === Cardano.CredentialType.ScriptHash,
@@ -540,17 +541,22 @@ function inspectMintOnly(p: { txBuilder: MeshTxBuilder }, hex: string): Built {
 }
 
 function couponUtxo(step: number, quantity: number): UTxO {
+  const amount = config.amounts[step - 1];
+  if (amount === undefined) {
+    throw new Error(`no coupon amount configured for step ${step}`);
+  }
   return utxo(tx("99"), PAYER, [
     lovelace(2_000_000),
     {
-      unit: bond.cntPolicy + couponName(config.amounts[step - 1]!),
+      unit: bond.cntPolicy + couponName(amount),
       quantity: quantity.toString(),
     },
   ]);
 }
 
 function outputAt(b: Built, index: number) {
-  const out = b.outputs[index]!;
+  const out = b.outputs[index];
+  if (!out) throw new Error(`expected an output at index ${index}`);
   const qty = (unit: string) =>
     BigInt(out.amount.find((a) => a.unit === unit)?.quantity ?? "0");
   return { out, qty };
@@ -598,10 +604,14 @@ describe("register inserts the bond node", () => {
     const nodeAddr = nodeAddress(deployment);
 
     // Continuation of the covering node first, then the new bond node.
-    expect(b.outputs[0]!.address).toBe(nodeAddr);
-    expect(b.outputs[1]!.address).toBe(nodeAddr);
+    const continued = b.outputs[0];
+    if (!continued) throw new Error("expected the continuation node output");
+    expect(continued.address).toBe(nodeAddr);
+    const created = b.outputs[1];
+    if (!created) throw new Error("expected the new bond node output");
+    expect(created.address).toBe(nodeAddr);
     expect(
-      b.outputs[1]!.amount.find(
+      created.amount.find(
         (a) => a.unit === deployment.core.registryNodeCs + bond.cipPolicy,
       ),
     ).toBeDefined();
@@ -628,10 +638,13 @@ describe("bond deposit mints certificate step 0 into the vault", () => {
     const hex = await buildBondDepositTx(p);
     const b = inspectMintOnly(p, hex);
 
-    const vaultOut = b.outputs.find((o) => o.address === vaultAddress(bond))!;
-    expect(
-      BigInt(vaultOut.amount.find((a) => a.unit === "lovelace")!.quantity),
-    ).toBe(5_000_000n + BigInt(config.principal));
+    const vaultOut = b.outputs.find((o) => o.address === vaultAddress(bond));
+    if (!vaultOut) throw new Error("expected the vault output");
+    const vaultAda = vaultOut.amount.find((a) => a.unit === "lovelace");
+    if (!vaultAda) throw new Error("expected lovelace in the vault output");
+    expect(BigInt(vaultAda.quantity)).toBe(
+      5_000_000n + BigInt(config.principal),
+    );
     // The certificate lands at the depositor's PLB address.
     expect(
       b.outputs.some((o) =>
@@ -660,7 +673,8 @@ describe("authorize delegates to transfer with the commit written", () => {
     const hex = await buildAuthorizeTx(p);
     expect(deserializeTx(hex).body()).toBeDefined();
     // Same recipient as the spent certificate (self-transfer).
-    const out = p.txBuilder.meshTxBuilderBody.outputs[0]!;
+    const out = p.txBuilder.meshTxBuilderBody.outputs[0];
+    if (!out) throw new Error("expected the certificate transfer output");
     expect(out.address).toBe(cert.output.address);
   });
 });
@@ -685,14 +699,21 @@ describe("redeem burns coupons and pays the payouts", () => {
     const hex = await buildRedeemTx(p);
     const b = inspectMintOnly(p, hex);
 
-    const payer = b.outputs.find((o) => o.address === PAYER)!;
-    expect(
-      BigInt(payer.amount.find((a) => a.unit === "lovelace")!.quantity),
-    ).toBeGreaterThanOrEqual(2_000_000n);
-    const vaultOut = b.outputs.find((o) => o.address === vaultAddress(bond))!;
-    expect(
-      BigInt(vaultOut.amount.find((a) => a.unit === "lovelace")!.quantity),
-    ).toBe(50_000_000n - BigInt(config.amounts[0]!));
+    const payer = b.outputs.find((o) => o.address === PAYER);
+    if (!payer)
+      throw new Error("expected a change output at the payer's address");
+    const payerAda = payer.amount.find((a) => a.unit === "lovelace");
+    if (!payerAda) throw new Error("expected lovelace in the payer output");
+    expect(BigInt(payerAda.quantity)).toBeGreaterThanOrEqual(2_000_000n);
+    const vaultOut = b.outputs.find((o) => o.address === vaultAddress(bond));
+    if (!vaultOut) throw new Error("expected the vault output");
+    const vaultAda = vaultOut.amount.find((a) => a.unit === "lovelace");
+    if (!vaultAda) throw new Error("expected lovelace in the vault output");
+    const couponValue = config.amounts[0];
+    if (couponValue === undefined) {
+      throw new Error("no coupon amount configured for step 1");
+    }
+    expect(BigInt(vaultAda.quantity)).toBe(50_000_000n - BigInt(couponValue));
     expect(deserializeTx(hex).body()).toBeDefined();
   });
 });
@@ -714,7 +735,8 @@ describe("owner graduation burns the final name and mints the principal coupon",
     const hex = await buildGraduateOwnerTx(p);
     const b = inspect(p.txBuilder, hex, cert);
 
-    const couponOut = b.outputs.find((o) => o.address === PAYER)!;
+    const couponOut = b.outputs.find((o) => o.address === PAYER);
+    if (!couponOut) throw new Error("expected the coupon output at the payer");
     expect(
       couponOut.amount.find(
         (a) => a.unit === bond.cntPolicy + couponName(config.principal),
