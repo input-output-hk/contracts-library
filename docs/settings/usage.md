@@ -91,8 +91,8 @@ payment credential of the Settings address:
 
 The setting value itself is arbitrary `Data`. The reference validator accepts
 anything (`validate_datum` is a `True` stub); the `settings_typed` fork
-requires the value to be `Constr(0, [Int])`. If you need a real predicate,
-fork the validator (§6.a of the spec).
+requires `Constr(0, [_])` — a single-field constructor whose field may be any
+`Data`. If you need a different predicate, fork the validator (§6.a of the spec).
 
 ## Reading the settings (consumers)
 

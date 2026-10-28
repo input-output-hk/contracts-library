@@ -5,7 +5,7 @@ use settings/reference
 use settings/types.{MintRedeemer, SettingsDatum, SpendRedeemer}
 
 /// Reference settings validator: any well-formed value is admissible
-/// (`True`), per spec §3.1 (see `docs/settings/spec.md`). Everything else is
+/// (`True`), per spec §3.d (see `docs/settings/spec.md`). Everything else is
 /// shared with `settings_typed`.
 validator settings(
   seed_utxo: OutputReference,

@@ -29,12 +29,12 @@ The way it works is:
 
 ### Limitations
 
-The reference validator delegates the _meaning_ of the setting value to the
-deployer-supplied `validate_datum` predicate (a `True` stub in the reference)
-and does not constrain `apply_delay` (a negative delay would admit immediate
-applies). The proposer anchors the delay, closing is irreversible, and the
-staking credential is frozen at launch. The full list of assumptions and
-out-of-scope items is §6.a.
+The validators delegate the _meaning_ of the setting value to the
+`validate_datum` predicate: a `True` stub in the reference `settings`
+validator and `Constr(0, [_])` in `settings_typed` (§3.d). Neither constrains
+`apply_delay` (a negative delay would admit immediate applies). The proposer
+anchors the delay, closing is irreversible, and the staking credential is
+frozen at launch. The full list of assumptions and out-of-scope items is §6.a.
 
 ## 3. Glossary
 
@@ -55,7 +55,7 @@ Baked into the script hash (the validator is parameterized by them):
 | `apply_auth`          | `Credential`         | Who may launch, `Apply`, and `Close`.                                                  |
 | `apply_delay`         | `Int` (milliseconds) | Minimum delay between when new settings are proposed and when they can be applied.     |
 | `settings_token_name` | `AssetName`          | Name of the instance NFT under the script's policy.                                    |
-| `validate_datum`      | `fn(Data) -> Bool`   | Predicate admissible setting values must satisfy.                                      |
+| `validate_datum`      | `fn(Data) -> Bool`   | Predicate admissible setting values must satisfy: `True` in `settings`, `Constr(0, [_])` in `settings_typed` (§3.d). |
 
 The **policy id** `policy_id ≜ hash(validator params)` is the minting policy of
 the Settings NFT and the payment credential of the Settings address; it is
@@ -70,7 +70,20 @@ denoted `policy` in §6.c and §6.d.
 
 ### 3.d Validators
 
-One validator, parameterized by the constants of §3.b, exposing two endpoints.
+The protocol ships two reference validators under `onchain/validators/settings/`,
+both parameterized by the constants of §3.b and sharing the same dispatch logic:
+
+- **`settings`** (`settings.ak`) — reference validator. Its `validate_datum`
+  predicate is the constant `True`, so any well-formed value is admissible
+  (§6.a).
+- **`settings_typed`** (`settings_typed.ak`) — typed fork. Admissible values are
+  exactly `Constr(0, [_])`: a single-field constructor whose field may be any
+  `Data` (`onchain/lib/settings/typed.ak`; §6.d R7).
+
+Both validators delegate their handlers to the shared `reference_spend` /
+`reference_mint` dispatchers in `onchain/lib/settings/reference.ak`, which pass
+the selected `validate_datum` predicate through to the mint, propose and apply
+rules. Each validator exposes the same two endpoints.
 
 **Spend** (on the Settings UTxO):
 
@@ -87,7 +100,10 @@ One validator, parameterized by the constants of §3.b, exposing two endpoints.
 | `Mint { out_ix }` | Launch: mint the NFT exactly once.  |
 | `Burn`            | Mint-side of `Close`: burn the NFT. |
 
-`out_ix` is the index of the Settings UTxO in the transaction's output list (the continuation output). The validator checks that output in full and ignores the rest. Admissible setting values are constrained by the `validate_datum` predicate (§3.b).
+`out_ix` is the index of the Settings UTxO in the transaction's output list (the
+continuation output). The validator checks that output in full and ignores the
+rest. Admissible setting values are constrained by the `validate_datum` predicate
+(§3.b); the two validators differ only in that predicate.
 
 ## 4. UTxOs
 
@@ -218,9 +234,10 @@ Attacks the protocol defends against, each backed by the invariants of §6.b:
 
 ### 6.a Assumptions / out of scope
 
-- **`validate_datum` is a stub** (`True`) in the reference validator. Deployers
-  who care about admissible values must fork the validator to supply a real
-  predicate; nothing here validates the setting's _meaning_.
+- **`validate_datum` semantics are deployer-chosen.** The reference `settings`
+  validator uses a `True` stub; `settings_typed` ships a concrete predicate
+  (`Constr(0, [_])`, §3.d). Deployers who need other admissible values must fork
+  the validator; nothing here validates the setting's _meaning_.
 - **`apply_delay` is trusted at deployment.** The reference validator does not
   constrain it (a negative delay would admit immediate applies); it is part of
   the script hash, so all parties can see it.
