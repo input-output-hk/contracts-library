@@ -1,3 +1,6 @@
+//// Settings read helpers: resolve the datum from a reference input and check
+//// continuation outputs. See `docs/settings/spec.md` §4.a and §5.b–§5.c.
+
 use aiken/collection/list
 use cardano/address.{Script}
 use cardano/assets.{AssetName, PolicyId, has_nft_strict}

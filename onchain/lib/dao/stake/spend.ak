@@ -1,3 +1,7 @@
+//// Stake-position spend rules: deposit, delegate, withdraw, close, and the
+//// proposal actions (create, cosign, vote). See `docs/dao/spec.md` §3.d and
+//// §5.b–§5.j.
+
 use aiken/collection/list
 use aiken/interval.{Finite}
 use authorization.{is_authorized}

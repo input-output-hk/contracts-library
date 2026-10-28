@@ -1,3 +1,6 @@
+//// Reference stake validator: dispatches the mint/spend redeemers to
+//// `dao/stake/{mint,spend}`. See `docs/dao/spec.md` §3.d.
+
 use cardano/assets.{AssetName, PolicyId}
 use cardano/transaction.{OutputReference, Transaction}
 use dao/stake/mint.{validate_close_position, validate_create_position}

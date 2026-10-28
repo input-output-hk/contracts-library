@@ -1,3 +1,7 @@
+//// Reference settings validator module: dispatches the spend/mint handlers to
+//// `settings/reference` with the permissive `validate_datum` stub.
+//// See `docs/settings/spec.md` §3.d and §6.a.
+
 use cardano/address.{Credential}
 use cardano/assets.{AssetName, PolicyId}
 use cardano/transaction.{OutputReference, Transaction}
