@@ -1,3 +1,6 @@
+//// Proposal NFT mint/burn rules: create a proposal and finish it in batch.
+//// See `docs/dao/spec.md` §3.d, §5.f, §5.i and §5.n.
+
 use aiken/collection/dict
 use aiken/collection/list
 use aiken/crypto.{ScriptHash}
