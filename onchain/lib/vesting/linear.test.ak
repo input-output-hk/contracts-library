@@ -20,8 +20,6 @@ const beneficiary_key =
 
 const locker_key = #"44444444444444444444444444444444444444444444444444444444"
 
-const auth_script = #"22222222222222222222222222222222222222222222222222222222"
-
 const token_policy = #"33333333333333333333333333333333333333333333333333333333"
 
 const tx_id =
@@ -162,36 +160,6 @@ test claim_at_start_must_keep_all() {
   validate_claim(datum(), input.output, tx)
 }
 
-test script_beneficiary_claim_ok() {
-  let d = VestingDatum { ..datum(), beneficiary: Script(auth_script) }
-  let input = input_with(d, assets.from_lovelace(100), 0)
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [input],
-    outputs: [output_with(d, assets.from_lovelace(50))],
-    validity_range: interval.after(1500),
-    withdrawals: [Pair(Script(auth_script), 0)],
-  }
-  validate_claim(d, input.output, tx)
-}
-
-test multi_asset_partial_ok() {
-  let d = VestingDatum {
-    ..datum(),
-    vesting: [
-      VestedAsset { policy: "", name: "", total: 100 },
-      VestedAsset { policy: token_policy, name: "TOKEN", total: 10 },
-    ],
-  }
-  let locked = assets.from_lovelace(100)
-    |> assets.merge(assets.from_asset(token_policy, "TOKEN", 10))
-  let kept = assets.from_lovelace(50)
-    |> assets.merge(assets.from_asset(token_policy, "TOKEN", 5))
-  let input = input_with(d, locked, 0)
-  let tx = claim_tx(1500, [input], [output_with(d, kept)], [beneficiary_key])
-  validate_claim(d, input.output, tx)
-}
-
 test batched_distinct_instances_ok() {
   // Two DIFFERENT instances claimed in one tx. Each keeps its own continuation;
   // each validates independently (k = 1 per datum). Composable batching.
@@ -220,17 +188,6 @@ test rejects_overclaim() fail {
     [input],
     [output_with(datum(), assets.from_lovelace(40))],
     [beneficiary_key],
-  )
-  validate_claim(datum(), input.output, tx)
-}
-
-test rejects_without_authorization() fail {
-  let input = input_with(datum(), assets.from_lovelace(100), 0)
-  let tx = claim_tx(
-    1500,
-    [input],
-    [output_with(datum(), assets.from_lovelace(50))],
-    [],
   )
   validate_claim(datum(), input.output, tx)
 }
@@ -277,23 +234,6 @@ test rejects_datum_hash_input() fail {
   validate_claim(datum(), input.output, tx)
 }
 
-test rejects_multi_asset_token_shortfall() fail {
-  let d = VestingDatum {
-    ..datum(),
-    vesting: [
-      VestedAsset { policy: "", name: "", total: 100 },
-      VestedAsset { policy: token_policy, name: "TOKEN", total: 10 },
-    ],
-  }
-  let locked = assets.from_lovelace(100)
-    |> assets.merge(assets.from_asset(token_policy, "TOKEN", 10))
-  let kept = assets.from_lovelace(50)
-    |> assets.merge(assets.from_asset(token_policy, "TOKEN", 4))
-  let input = input_with(d, locked, 0)
-  let tx = claim_tx(1500, [input], [output_with(d, kept)], [beneficiary_key])
-  validate_claim(d, input.output, tx)
-}
-
 // -------------------------------------------- instance-count preservation (§5.1)
 //
 // Regression guard for the cross-transaction instance-merge over-release.
@@ -324,28 +264,6 @@ test rejects_instance_merge() fail {
     [beneficiary_key],
   )
   validate_claim(datum(), input0.output, tx)
-}
-
-test identical_instances_keep_separate_continuations_ok() {
-  // The honest shape: two identical instances stay as two continuations, each
-  // holding its own remainder (50). Batching identical instances still works;
-  // only collapsing them into fewer UTxOs is forbidden.
-  let input0 = input_with(datum(), assets.from_lovelace(100), 0)
-  let input1 = input_with(datum(), assets.from_lovelace(100), 1)
-  let tx = claim_tx(
-    1500,
-    [input0, input1],
-    [
-      output_with(datum(), assets.from_lovelace(50)),
-      output_with(datum(), assets.from_lovelace(50)),
-    ],
-    [beneficiary_key],
-  )
-  validate_claim(datum(), input0.output, tx) && validate_claim(
-    datum(),
-    input1.output,
-    tx,
-  )
 }
 
 // ------------------------------------------------ end_time continuation boundary

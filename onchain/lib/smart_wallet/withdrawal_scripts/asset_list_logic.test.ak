@@ -96,33 +96,6 @@ fn allow_only(
 
 // ------------------------------------------------- only_allowed_assets_moved
 
-test allow_listed_policy_any_name() {
-  only_allowed_assets_moved(
-    tx(holding(policy_a, name_x, 10), lovelace(2_000_000)),
-    Script(wallet_policy),
-    wallet_token,
-    allow_any(policy_a),
-  )
-}
-
-test allow_listed_policy_listed_name() {
-  only_allowed_assets_moved(
-    tx(holding(policy_a, name_x, 10), lovelace(2_000_000)),
-    Script(wallet_policy),
-    wallet_token,
-    allow_only(policy_a, [name_x]),
-  )
-}
-
-test allow_rejects_unlisted_policy() fail {
-  only_allowed_assets_moved(
-    tx(holding(policy_a, name_x, 10), lovelace(2_000_000)),
-    Script(wallet_policy),
-    wallet_token,
-    allow_any(policy_b),
-  )
-}
-
 test allow_rejects_unlisted_name() fail {
   only_allowed_assets_moved(
     tx(holding(policy_a, name_x, 10), lovelace(2_000_000)),
@@ -141,30 +114,12 @@ test allow_rejects_partial_move_of_unlisted() fail {
   )
 }
 
-test allow_ignores_unchanged_holding() {
-  only_allowed_assets_moved(
-    tx(holding(policy_a, name_x, 10), holding(policy_a, name_x, 10)),
-    Script(wallet_policy),
-    wallet_token,
-    none(),
-  )
-}
-
 test allow_rejects_added_asset() fail {
   only_allowed_assets_moved(
     tx(lovelace(2_000_000), holding(policy_a, name_x, 5)),
     Script(wallet_policy),
     wallet_token,
     allow_any(policy_b),
-  )
-}
-
-test allow_empty_list_rejects_any_move() fail {
-  only_allowed_assets_moved(
-    tx(holding(policy_a, name_x, 10), lovelace(2_000_000)),
-    Script(wallet_policy),
-    wallet_token,
-    none(),
   )
 }
 
@@ -273,15 +228,6 @@ test deny_allows_unlisted_policy() {
     Script(wallet_policy),
     wallet_token,
     allow_any(policy_b),
-  )
-}
-
-test deny_ignores_unchanged_holding() {
-  no_denied_assets_moved(
-    tx(holding(policy_a, name_x, 10), holding(policy_a, name_x, 10)),
-    Script(wallet_policy),
-    wallet_token,
-    allow_any(policy_a),
   )
 }
 

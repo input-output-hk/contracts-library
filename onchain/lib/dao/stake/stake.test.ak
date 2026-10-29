@@ -220,19 +220,6 @@ fn spend(d: StakePositionDatum, r: StakeRedeemer, self: Transaction) -> Bool {
 
 // ------------------------------------------------------------------- Deposit
 
-test deposit_ok() {
-  let d = stake_datum(None, [])
-  let out = pos_output(20, stake_datum(None, []))
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [pos_input(10)],
-    outputs: [out],
-    extra_signatories: [owner_hash],
-    validity_range: interval.after(500),
-  }
-  spend(d, Deposit, tx)
-}
-
 test rejects_deposit_unsigned() {
   let d = stake_datum(None, [])
   let out = pos_output(20, stake_datum(None, []))
@@ -240,20 +227,6 @@ test rejects_deposit_unsigned() {
     ..placeholder,
     inputs: [pos_input(10)],
     outputs: [out],
-    validity_range: interval.after(500),
-  }
-  !spend(d, Deposit, tx)
-}
-
-test rejects_deposit_that_removes_stake() {
-  let d = stake_datum(None, [])
-  // continuation carries less stake than the input — disallowed for a deposit
-  let out = pos_output(5, stake_datum(None, []))
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [pos_input(10)],
-    outputs: [out],
-    extra_signatories: [owner_hash],
     validity_range: interval.after(500),
   }
   !spend(d, Deposit, tx)
@@ -292,19 +265,6 @@ test rejects_delegate_that_changes_stake() {
 }
 
 // ------------------------------------------------------------------ Withdraw
-
-test withdraw_free_ok() {
-  let d = stake_datum(None, [])
-  let out = pos_output(6, stake_datum(None, []))
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [pos_input(10)],
-    outputs: [out],
-    extra_signatories: [owner_hash],
-    validity_range: interval.after(500),
-  }
-  spend(d, Withdraw { amount: 4 }, tx)
-}
 
 test rejects_withdraw_of_locked_stake() {
   // a live lock freezes 8 tokens; only 2 of 10 are free

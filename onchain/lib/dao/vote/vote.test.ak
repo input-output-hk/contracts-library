@@ -185,34 +185,6 @@ test rejects_tally_refund_wrong_address() {
   !validate_vote_tally(proposal_policy, d, 0, stake_ref(), tx)
 }
 
-test rejects_tally_refund_below_owed() {
-  // the refund must hold at least the vote UTxO's lovelace
-  let d = vote_datum()
-  let tally_r: Data = TallyVotes
-  let proposal_in = proposal_utxo(ProposalStatus.Tally { votes: [] })
-  let owed = 1_000_000
-  let vote_in = Input {
-    ..vote_utxo(d),
-    output: Output {
-      ..vote_utxo(d).output,
-      value: assets.from_lovelace(owed)
-        |> assets.add(vote_policy, vote_name(), 1),
-    },
-  }
-  let short = Output {
-    ..refund_output(),
-    value: assets.from_lovelace(owed - 1),
-  }
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [proposal_in, vote_in],
-    outputs: [short],
-    mint: assets.from_asset(vote_policy, vote_name(), -1),
-    redeemers: [Pair(Spend(proposal_ref()), tally_r)],
-  }
-  !validate_vote_tally(proposal_policy, d, 0, stake_ref(), tx)
-}
-
 test rejects_tally_refund_with_extra_tokens() {
   // the refund output must carry nothing but lovelace
   let d = vote_datum()

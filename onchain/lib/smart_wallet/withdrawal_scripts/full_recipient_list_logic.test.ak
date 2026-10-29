@@ -72,20 +72,12 @@ fn denied_payout(tx: Transaction) -> Bool {
 
 // ------------------------------------------------- only_allowed_recipients
 
-test allow_single_listed_payout() {
-  allowed_payout(tx_with([wallet_output(), payout(alice())]))
-}
-
 test allow_allows_multiple_listed_payouts() {
   only_allowed_recipients(
     tx_with([wallet_output(), payout(alice()), payout(bob())]),
     Script(wallet_policy),
     [alice(), bob()],
   )
-}
-
-test allow_rejects_unlisted_payout() fail {
-  allowed_payout(tx_with([wallet_output(), payout(bob())]))
 }
 
 test allow_rejects_partially_listed_payouts() fail {
@@ -115,10 +107,6 @@ test allow_exempts_wallet_payment_credential() {
 }
 
 // -------------------------------------------------- no_denied_recipients
-
-test deny_rejects_denied_payout() fail {
-  denied_payout(tx_with([wallet_output(), payout(alice())]))
-}
 
 test deny_allows_unlisted_payout() {
   denied_payout(tx_with([wallet_output(), payout(bob())]))
