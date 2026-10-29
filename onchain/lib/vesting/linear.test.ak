@@ -1,7 +1,9 @@
+use aiken/collection/list
 use aiken/fuzz
 use aiken/interval
-use cardano/address.{Script, VerificationKey, from_script}
-use cardano/assets.{Value}
+use cardano/address.{Credential, Script, VerificationKey, from_script}
+use cardano/assets.{Lovelace, Value}
+use cardano/fuzz as cardano_fuzz
 use cardano/transaction.{
   DatumHash, InlineDatum, Input, Output, OutputReference, Transaction,
   placeholder,
@@ -401,4 +403,159 @@ test rejects_cancel_with_recovery_not_after_end() fail {
   let input = input_with(d, assets.from_lovelace(100), 0)
   let tx = claim_tx(1500, [input], [], [locker_key])
   validate_cancel(d, tx)
+}
+
+// --------------------------------------------------------------- properties
+
+const token_name = "TOKEN"
+
+fn authorize(
+  credential: Credential,
+) -> (List<ByteArray>, Pairs<Credential, Lovelace>) {
+  when credential is {
+    VerificationKey(hash) -> ([hash], [])
+    Script(hash) -> ([], [Pair(Script(hash), 0)])
+  }
+}
+
+test prop_claim_authorized_credential(credential via cardano_fuzz.credential()) {
+  let d = VestingDatum { ..datum(), beneficiary: credential }
+  let input = input_with(d, assets.from_lovelace(100), 0)
+  let output = output_with(d, assets.from_lovelace(50))
+  let (signers, withdrawals) = authorize(credential)
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [input],
+    outputs: [output],
+    validity_range: interval.after(1500),
+    extra_signatories: signers,
+    withdrawals,
+  }
+  validate_claim(d, input.output, tx)
+}
+
+test prop_claim_rejects_missing_authorization(
+  credential via cardano_fuzz.credential(),
+) fail {
+  let d = VestingDatum { ..datum(), beneficiary: credential }
+  let input = input_with(d, assets.from_lovelace(100), 0)
+  let output = output_with(d, assets.from_lovelace(50))
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [input],
+    outputs: [output],
+    validity_range: interval.after(1500),
+  }
+  validate_claim(d, input.output, tx)
+}
+
+fn multi_datum(ada_total: Int, token_total: Int) -> VestingDatum {
+  VestingDatum {
+    ..datum(),
+    vesting: [
+      VestedAsset { policy: "", name: "", total: ada_total },
+      VestedAsset { policy: token_policy, name: token_name, total: token_total },
+    ],
+  }
+}
+
+fn multi_value(ada: Int, token: Int) -> Value {
+  assets.from_lovelace(ada) |> assets.add(token_policy, token_name, token)
+}
+
+fn conservation_scenario() -> Fuzzer<(Int, Int, Int)> {
+  fuzz.tuple3(
+    fuzz.int_between(1, 1_000),
+    fuzz.int_between(1, 1_000),
+    fuzz.int_between(1000, 1999),
+  )
+}
+
+test prop_claim_multi_asset_conservation(
+  (ada_total, token_total, at) via conservation_scenario(),
+) {
+  let d = multi_datum(ada_total, token_total)
+  let required_ada = ada_total - vested_quantity(ada_total, 1000, 2000, at)
+  let required_token = token_total - vested_quantity(
+    token_total,
+    1000,
+    2000,
+    at,
+  )
+  let input = input_with(d, multi_value(ada_total, token_total), 0)
+  let output = output_with(d, multi_value(required_ada, required_token))
+  let tx = claim_tx(at, [input], [output], [beneficiary_key])
+  validate_claim(d, input.output, tx)
+}
+
+test prop_claim_multi_asset_shortfall(
+  (ada_total, token_total, at) via conservation_scenario(),
+) {
+  let d = multi_datum(ada_total, token_total)
+  let required_ada = ada_total - vested_quantity(ada_total, 1000, 2000, at)
+  let required_token = token_total - vested_quantity(
+    token_total,
+    1000,
+    2000,
+    at,
+  )
+  let input = input_with(d, multi_value(ada_total, token_total), 0)
+  let output = output_with(d, multi_value(required_ada, required_token - 1))
+  let tx = claim_tx(at, [input], [output], [beneficiary_key])
+  !validate_claim(d, input.output, tx)
+}
+
+fn cancel_scenario() -> Fuzzer<(Int, Int)> {
+  fuzz.tuple(fuzz.int_between(1, 1_000_000), fuzz.int_between(0, 2_000_000))
+}
+
+test prop_cancel_strictly_after_recovery(
+  (recovery_extra, at) via cancel_scenario(),
+) {
+  let recovery = 2000 + recovery_extra
+  let d = VestingDatum { ..datum(), recovery_time: recovery }
+  let input = input_with(d, assets.from_lovelace(100), 0)
+  let tx = claim_tx(at, [input], [], [locker_key])
+  let expected = at > recovery
+  fuzz.label_if(@"after", expected)
+  fuzz.label_if(@"not-after", !expected)
+  validate_cancel(d, tx) == expected
+}
+
+fn k_scenario() -> Fuzzer<Int> {
+  fuzz.int_between(1, 4)
+}
+
+test prop_identical_instances_need_k_continuations(k via k_scenario()) {
+  let d = datum()
+  let required = 50
+  let inputs = list.map(
+    list.range(0, k - 1),
+    fn(i) { input_with(d, assets.from_lovelace(100), i) },
+  )
+  let outputs = list.map(
+    list.range(0, k - 1),
+    fn(_) { output_with(d, assets.from_lovelace(required)) },
+  )
+  let tx = claim_tx(1500, inputs, outputs, [beneficiary_key])
+  list.all(inputs, fn(input) { validate_claim(d, input.output, tx) })
+}
+
+test prop_identical_instances_reject_fewer_continuations(k via k_scenario()) {
+  let d = datum()
+  let required = 50
+  let inputs = list.map(
+    list.range(0, k - 1),
+    fn(i) { input_with(d, assets.from_lovelace(100), i) },
+  )
+  let outputs = if k > 1 {
+    list.map(
+      list.range(0, k - 2),
+      fn(_) { output_with(d, assets.from_lovelace(required)) },
+    )
+  } else {
+    []
+  }
+  let tx = claim_tx(1500, inputs, outputs, [beneficiary_key])
+  list.all(inputs, fn(input) { !validate_claim(d, input.output, tx) })
 }
