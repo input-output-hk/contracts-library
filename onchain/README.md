@@ -55,6 +55,24 @@ aiken docs           # generate HTML API docs for the lib modules
 
 Tests live alongside the code they cover in `*.test.ak` files. Property tests use [`aiken-lang/fuzz`](https://github.com/aiken-lang/fuzz).
 
+### Property-based tests
+
+Default to property-based tests wherever a law or invariant can be expressed;
+keep unit tests for exact boundaries, regression pins, and rule-specific
+`must-reject` cases.
+
+- Use `aiken/fuzz` and `cardano/fuzz` (addresses, credentials, values, inputs,
+  outputs, datums, certificates, withdrawals). Aiken shrinks counterexamples
+  automatically: do not write custom generators or shrinkers — compose fuzzers
+  with `map`, `and_then`, `tuple`, `either`, `such_that` and the existing
+  fixtures.
+- Name properties `prop_*` and use `fuzz.label*` for interesting branches
+  (empty vs non-empty, key vs script, boundaries).
+- `aiken check` runs property tests with 100 samples by default. Reproduce a
+  failure with the seed it reports: `aiken check --seed <seed>`.
+- CI runs the PR suite at `--max-success=100`; the nightly job runs
+  `--max-success=1000`.
+
 ## Resources
 
 - [Aiken user manual](https://aiken-lang.org)
