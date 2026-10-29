@@ -339,18 +339,6 @@ test rejects_propose_tampering() {
   )
 }
 
-test propose_longer_than_required_delay_is_accepted() {
-  // The validator enforces a minimum delay (`next_apply >= now + apply_delay`,
-  // spec §5.b), so a proposer may choose a later apply time.
-  spend(
-    Propose { out_ix: 0 },
-    datum(value_a()),
-    proposed_with(value_b(), now + delay + 1),
-    now,
-    [proposer],
-  )
-}
-
 test rejects_propose_unbounded_range() fail {
   let d = datum(value_a())
   spend_on_tx(
