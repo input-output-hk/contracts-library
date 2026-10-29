@@ -48,13 +48,10 @@ jobs:
             ${{ runner.os }}-aiken-
       - name: aiken check
         working-directory: onchain
-        run: aiken check
+        run: aiken check --max-success=100
       - name: aiken build
         working-directory: onchain
         run: aiken build
-      - name: aiken test
-        working-directory: onchain
-        run: aiken test
 
   offchain-unit:
     name: Off-chain unit (MeshJS lib)
