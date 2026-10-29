@@ -1,5 +1,7 @@
+use aiken/fuzz
 use cardano/address.{Script, from_script}
 use cardano/assets.{AssetName, PolicyId, Value}
+use cardano/fuzz as cardano_fuzz
 use cardano/transaction.{
   Input, NoDatum, Output, OutputReference, Transaction, placeholder,
 }
@@ -308,4 +310,68 @@ test deny_ignores_lovelace_only_change() {
     wallet_token,
     allow_any(policy_a),
   )
+}
+
+// --------------------------------------------------------------- properties
+
+fn asset_scenario() -> Fuzzer<(PolicyId, AssetName, Int, Int)> {
+  fuzz.and_then(
+    fuzz.such_that(
+      cardano_fuzz.policy_id(),
+      fn(policy) { policy != wallet_policy },
+    ),
+    fn(policy) {
+      fuzz.and_then(
+        cardano_fuzz.asset_name(),
+        fn(name) {
+          fuzz.and_then(
+            fuzz.int_between(1, 1_000),
+            fn(qty_in) {
+              fuzz.map(
+                fuzz.int_between(0, 1_000),
+                fn(qty_out) { (policy, name, qty_in, qty_out) },
+              )
+            },
+          )
+        },
+      )
+    },
+  )
+}
+
+test prop_allow_empty_iff_unchanged(
+  (policy, name, qty_in, qty_out) via asset_scenario(),
+) {
+  let accepted = only_allowed_assets_moved(
+    tx(holding(policy, name, qty_in), holding(policy, name, qty_out)),
+    Script(wallet_policy),
+    wallet_token,
+    none(),
+  )
+  fuzz.label_if(@"moving", qty_in != qty_out)
+  fuzz.label_if(@"unchanged", qty_in == qty_out)
+  accepted == ( qty_in == qty_out )
+}
+
+test prop_allow_listed_policy_accepts(
+  (policy, name, qty_in, qty_out) via asset_scenario(),
+) {
+  only_allowed_assets_moved(
+    tx(holding(policy, name, qty_in), holding(policy, name, qty_out)),
+    Script(wallet_policy),
+    wallet_token,
+    allow_any(policy),
+  )
+}
+
+test prop_deny_listed_policy_iff_unchanged(
+  (policy, name, qty_in, qty_out) via asset_scenario(),
+) {
+  let accepted = no_denied_assets_moved(
+    tx(holding(policy, name, qty_in), holding(policy, name, qty_out)),
+    Script(wallet_policy),
+    wallet_token,
+    allow_any(policy),
+  )
+  accepted == ( qty_in == qty_out )
 }

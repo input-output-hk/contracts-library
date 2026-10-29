@@ -1,4 +1,5 @@
 use aiken/builtin.{constr_data, i_data}
+use aiken/fuzz
 use aiken/interval
 use cardano/address.{VerificationKey, from_script}
 use cardano/assets
@@ -433,4 +434,62 @@ test get_settings_datum_reads_reference_input() {
 test rejects_get_settings_datum_without_reference() fail {
   let settings = get_settings_datum(placeholder, policy, token)
   settings.current == value_a()
+}
+
+// --------------------------------------------------------------- properties
+
+test prop_typed_accepts_single_field(field via fuzz.data()) {
+  validate_datum(constr_data(0, [field]))
+}
+
+test prop_typed_rejects_nonzero_index(
+  (index, field) via fuzz.tuple(fuzz.int_between(1, 8), fuzz.data()),
+) {
+  !validate_datum(constr_data(index, [field]))
+}
+
+test prop_typed_rejects_multiple_fields(
+  fields via fuzz.list_at_least(fuzz.data(), 2),
+) {
+  !validate_datum(constr_data(0, fields))
+}
+
+fn delay_scenario() -> Fuzzer<(Int, Int, Int)> {
+  fuzz.tuple3(
+    fuzz.int_between(0, 1_000_000),
+    fuzz.int_between(0, 1_000),
+    fuzz.int_between(0, 1_001_000),
+  )
+}
+
+test prop_propose_requires_minimum_delay(
+  (at, delay_ms, next_apply) via delay_scenario(),
+) {
+  let current = value_a()
+  let input_datum = datum(current)
+  let output_datum = SettingsDatum {
+    current,
+    next: Some(value_b()),
+    next_apply: Some(next_apply),
+  }
+  let accepted = reference_spend(
+    VerificationKey(proposer),
+    VerificationKey(applier),
+    delay_ms,
+    token,
+    Some(input_datum),
+    Propose { out_ix: 0 },
+    seed_ref(),
+    spend_tx(
+      [settings_in(input_datum)],
+      [settings_out(output_datum, value_nft())],
+      at,
+      [proposer],
+    ),
+    validate_datum,
+  )
+  let expected = next_apply >= at + delay_ms
+  fuzz.label_if(@"accepted", expected)
+  fuzz.label_if(@"rejected", !expected)
+  accepted == expected
 }

@@ -1,0 +1,27 @@
+name: On-chain PBT (nightly)
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  onchain-pbt:
+    name: On-chain property tests (1,000 samples)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aiken-lang/setup-aiken@v1
+        with:
+          version: v1.1.24
+      - name: Cache Aiken packages
+        uses: actions/cache@v4
+        with:
+          path: onchain/build/packages
+          key: ${{ runner.os }}-aiken-${{ hashFiles('onchain/aiken.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-aiken-
+      - name: aiken check (1,000 samples)
+        working-directory: onchain
+        run: aiken check --max-success=1000
