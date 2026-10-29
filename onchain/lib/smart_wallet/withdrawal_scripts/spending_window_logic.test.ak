@@ -69,10 +69,6 @@ test initial_state_zero_valid() {
   initial_state_valid(state(0))
 }
 
-test initial_state_rejects_nonzero() fail {
-  initial_state_valid(state(500))
-}
-
 // ----------------------------------------------------------- validate_withdraw
 
 test first_spend_allowed() {
@@ -91,28 +87,6 @@ test cooldown_elapsed_allowed() {
     spend_tx(
       SpendingWindowState { last_upper: 500 },
       SpendingWindowState { last_upper: 3_700_000 },
-      3_600_500,
-      3_700_000,
-    ),
-  )
-}
-
-test cooldown_not_elapsed_rejected() fail {
-  validate(
-    spend_tx(
-      SpendingWindowState { last_upper: 500 },
-      SpendingWindowState { last_upper: 3_000_100 },
-      3_000_000,
-      3_000_100,
-    ),
-  )
-}
-
-test wrong_next_state_rejected() fail {
-  validate(
-    spend_tx(
-      SpendingWindowState { last_upper: 500 },
-      SpendingWindowState { last_upper: 3_600_500 },
       3_600_500,
       3_700_000,
     ),

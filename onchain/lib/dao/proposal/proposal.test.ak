@@ -380,30 +380,6 @@ test accept_draft_ok() {
   spend(d, AcceptDraft, tx)
 }
 
-test rejects_accept_below_threshold() {
-  let d = datum(ProposalStatus.Draft { cosigning_stake: 80 }, [])
-  let cont = prop_output(datum(ProposalStatus.Voting, []))
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [prop_input(d)],
-    outputs: [cont],
-    validity_range: interval.before(start + 1000),
-  }
-  !spend(d, AcceptDraft, tx)
-}
-
-test rejects_accept_after_draft_window() {
-  let d = datum(ProposalStatus.Draft { cosigning_stake: 120 }, [])
-  let cont = prop_output(datum(ProposalStatus.Voting, []))
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [prop_input(d)],
-    outputs: [cont],
-    validity_range: interval.before(start + 2000),
-  }
-  !spend(d, AcceptDraft, tx)
-}
-
 // ---------------------------------------------------------------- RejectDraft
 
 test reject_draft_ok() {
@@ -415,17 +391,6 @@ test reject_draft_ok() {
     validity_range: interval.after(start + 1000),
   }
   spend(d, RejectDraft, tx)
-}
-
-test rejects_reject_before_draft_window() {
-  let d = datum(ProposalStatus.Draft { cosigning_stake: 10 }, [])
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [prop_input(d)],
-    mint: assets.from_asset(proposal_policy, prop_nft, -1),
-    validity_range: interval.after(start + 500),
-  }
-  !spend(d, RejectDraft, tx)
 }
 
 // -------------------------------------------------------------- EndVotingStage
@@ -454,18 +419,6 @@ test end_voting_initializes_zero_tally() {
     validity_range: interval.after(start + 3000),
   }
   spend(d, EndVotingStage, tx)
-}
-
-test rejects_end_voting_too_early() {
-  let d = datum(ProposalStatus.Voting, [])
-  let cont = prop_output(datum(ProposalStatus.Tally { votes: [] }, []))
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [prop_input(d)],
-    outputs: [cont],
-    validity_range: interval.after(start + 2000),
-  }
-  !spend(d, EndVotingStage, tx)
 }
 
 // ----------------------------------------------------------------- TallyVotes

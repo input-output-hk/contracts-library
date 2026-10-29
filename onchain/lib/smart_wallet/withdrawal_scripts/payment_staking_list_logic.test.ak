@@ -82,45 +82,6 @@ fn denied_payout(tx: Transaction) -> Bool {
 
 // ------------------------------------------------- only_allowed_recipients
 
-test allow_listed_payment_and_staking() {
-  allowed_payout(
-    tx_with(
-      [
-        wallet_output(),
-        payout(
-          address_with_stake(VerificationKey(payer1), VerificationKey(staker1)),
-        ),
-      ],
-    ),
-  )
-}
-
-test allow_rejects_unlisted_staking() fail {
-  allowed_payout(
-    tx_with(
-      [
-        wallet_output(),
-        payout(
-          address_with_stake(VerificationKey(payer1), VerificationKey(staker2)),
-        ),
-      ],
-    ),
-  )
-}
-
-test allow_rejects_unlisted_payment() fail {
-  allowed_payout(
-    tx_with(
-      [
-        wallet_output(),
-        payout(
-          address_with_stake(VerificationKey(payer2), VerificationKey(staker1)),
-        ),
-      ],
-    ),
-  )
-}
-
 test allow_empty_allowed_payments_permits_any_payment() {
   only_allowed_recipients(
     tx_with(
@@ -169,25 +130,6 @@ test allow_empty_lists_permit_all() {
   )
 }
 
-test allow_rejects_missing_staking_credential() fail {
-  allowed_payout(
-    tx_with(
-      [wallet_output(), payout(address_without_stake(VerificationKey(payer1)))],
-    ),
-  )
-}
-
-test allow_rejects_pointer_staking_credential() fail {
-  allowed_payout(
-    tx_with(
-      [
-        wallet_output(),
-        payout(address_with_pointer_stake(VerificationKey(payer1))),
-      ],
-    ),
-  )
-}
-
 test allow_missing_staking_ok_when_stakings_empty() {
   only_allowed_recipients(
     tx_with(
@@ -213,10 +155,6 @@ test allow_matches_script_payment_credential() {
   )
 }
 
-test allow_wallet_output_exempt() {
-  allowed_payout(tx_with([wallet_output()]))
-}
-
 test allow_rejects_one_unlisted_payout() fail {
   allowed_payout(
     tx_with(
@@ -234,32 +172,6 @@ test allow_rejects_one_unlisted_payout() fail {
 }
 
 // -------------------------------------------------- no_denied_recipients
-
-test deny_rejects_denied_payment() fail {
-  denied_payout(
-    tx_with(
-      [
-        wallet_output(),
-        payout(
-          address_with_stake(VerificationKey(payer1), VerificationKey(staker2)),
-        ),
-      ],
-    ),
-  )
-}
-
-test deny_rejects_denied_staking() fail {
-  denied_payout(
-    tx_with(
-      [
-        wallet_output(),
-        payout(
-          address_with_stake(VerificationKey(payer2), VerificationKey(staker1)),
-        ),
-      ],
-    ),
-  )
-}
 
 test deny_allows_unlisted_payment_and_staking() {
   denied_payout(

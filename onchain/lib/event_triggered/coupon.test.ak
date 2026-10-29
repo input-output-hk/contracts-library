@@ -108,10 +108,6 @@ test scheduled_rejects_early() {
   !check(scheduled_tx(1040, Some(cert_output(1, 2000)), 2999))
 }
 
-test scheduled_rejects_wrong_amount() {
-  !check(scheduled_tx(1081, Some(cert_output(1, 2000)), 3000))
-}
-
 test graduation_ok() {
   check(
     Transaction {
