@@ -1,7 +1,9 @@
+use aiken/fuzz
 use cardano/address.{
   Address, Credential, Inline, Pointer, Script, VerificationKey, from_script,
 }
 use cardano/assets
+use cardano/fuzz as cardano_fuzz
 use cardano/transaction.{InlineDatum, NoDatum, Output, Transaction, placeholder}
 use smart_wallet/types.{WalletDatum}
 use smart_wallet/withdrawal_scripts/payment_staking_list_logic.{
@@ -361,5 +363,155 @@ test deny_rejects_one_denied_payout() fail {
         ),
       ],
     ),
+  )
+}
+
+// --------------------------------------------------------------- properties
+
+fn non_wallet_credential() -> Fuzzer<Credential> {
+  fuzz.such_that(
+    cardano_fuzz.credential(),
+    fn(credential) { credential != Script(wallet_policy) },
+  )
+}
+
+fn non_payer1_credential() -> Fuzzer<Credential> {
+  fuzz.such_that(
+    non_wallet_credential(),
+    fn(credential) { credential != VerificationKey(payer1) },
+  )
+}
+
+fn non_staker1_credential() -> Fuzzer<Credential> {
+  fuzz.such_that(
+    cardano_fuzz.credential(),
+    fn(credential) { credential != VerificationKey(staker1) },
+  )
+}
+
+test prop_empty_lists_allow_any(
+  (payment, stake) via fuzz.tuple(
+    non_wallet_credential(),
+    cardano_fuzz.credential(),
+  ),
+) {
+  only_allowed_recipients(
+    tx_with([wallet_output(), payout(address_with_stake(payment, stake))]),
+    Script(wallet_policy),
+    [],
+    [],
+  )
+}
+
+test prop_empty_lists_allow_without_stake(payment via non_wallet_credential()) {
+  only_allowed_recipients(
+    tx_with([wallet_output(), payout(address_without_stake(payment))]),
+    Script(wallet_policy),
+    [],
+    [],
+  )
+}
+
+test prop_allow_listed_both(
+  (payment, stake) via fuzz.tuple(
+    non_wallet_credential(),
+    cardano_fuzz.credential(),
+  ),
+) {
+  only_allowed_recipients(
+    tx_with([wallet_output(), payout(address_with_stake(payment, stake))]),
+    Script(wallet_policy),
+    [payment],
+    [stake],
+  )
+}
+
+test prop_allow_rejects_unlisted_payment(
+  (payment, stake) via fuzz.tuple(
+    non_payer1_credential(),
+    cardano_fuzz.credential(),
+  ),
+) {
+  !only_allowed_recipients(
+    tx_with([wallet_output(), payout(address_with_stake(payment, stake))]),
+    Script(wallet_policy),
+    [VerificationKey(payer1)],
+    [stake],
+  )
+}
+
+test prop_allow_rejects_unlisted_staking(
+  (payment, stake) via fuzz.tuple(
+    fuzz.constant(VerificationKey(payer1)),
+    non_staker1_credential(),
+  ),
+) {
+  !only_allowed_recipients(
+    tx_with([wallet_output(), payout(address_with_stake(payment, stake))]),
+    Script(wallet_policy),
+    [VerificationKey(payer1)],
+    [VerificationKey(staker1)],
+  )
+}
+
+test prop_allow_rejects_missing_stake(payment via non_wallet_credential()) {
+  !only_allowed_recipients(
+    tx_with([wallet_output(), payout(address_without_stake(payment))]),
+    Script(wallet_policy),
+    [payment],
+    [VerificationKey(staker1)],
+  )
+}
+
+test prop_allow_pointer_stake_counts_as_absent(
+  payment via non_wallet_credential(),
+) {
+  !only_allowed_recipients(
+    tx_with([wallet_output(), payout(address_with_pointer_stake(payment))]),
+    Script(wallet_policy),
+    [payment],
+    [VerificationKey(staker1)],
+  )
+}
+
+test prop_deny_rejects_listed_payment(
+  (payment, stake) via fuzz.tuple(
+    non_wallet_credential(),
+    cardano_fuzz.credential(),
+  ),
+) {
+  !no_denied_recipients(
+    tx_with([wallet_output(), payout(address_with_stake(payment, stake))]),
+    Script(wallet_policy),
+    [payment],
+    [],
+  )
+}
+
+test prop_deny_rejects_listed_staking(
+  (payment, stake) via fuzz.tuple(
+    fuzz.constant(VerificationKey(payer1)),
+    cardano_fuzz.credential(),
+  ),
+) {
+  !no_denied_recipients(
+    tx_with([wallet_output(), payout(address_with_stake(payment, stake))]),
+    Script(wallet_policy),
+    [],
+    [stake],
+  )
+}
+
+test prop_wallet_payment_is_exempt(stake via cardano_fuzz.credential()) {
+  only_allowed_recipients(
+    tx_with(
+      [
+        wallet_output(),
+        payout(address_with_stake(Script(wallet_policy), stake)),
+      ],
+    ),
+    Script(wallet_policy),
+    [VerificationKey(payer1)],
+    [VerificationKey(staker1)],
   )
 }

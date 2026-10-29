@@ -1,8 +1,10 @@
+use aiken/fuzz
 use cardano/address.{
   Address, Script, from_script, from_verification_key, with_delegation_key,
   with_delegation_script,
 }
 use cardano/assets
+use cardano/fuzz as cardano_fuzz
 use cardano/transaction.{InlineDatum, NoDatum, Output, Transaction, placeholder}
 use smart_wallet/types.{WalletDatum}
 use smart_wallet/withdrawal_scripts/full_recipient_list_logic.{
@@ -143,5 +145,46 @@ test deny_exempts_wallet_address() {
     tx_with([wallet_output()]),
     Script(wallet_policy),
     [from_script(wallet_policy)],
+  )
+}
+
+// --------------------------------------------------------------- properties
+
+fn non_wallet_address() -> Fuzzer<Address> {
+  fuzz.such_that(
+    cardano_fuzz.address(),
+    fn(address) { address.payment_credential != Script(wallet_policy) },
+  )
+}
+
+test prop_allow_empty_rejects_payout(address via non_wallet_address()) {
+  !only_allowed_recipients(
+    tx_with([wallet_output(), payout(address)]),
+    Script(wallet_policy),
+    [],
+  )
+}
+
+test prop_allow_listed_accepts(address via non_wallet_address()) {
+  only_allowed_recipients(
+    tx_with([wallet_output(), payout(address)]),
+    Script(wallet_policy),
+    [address],
+  )
+}
+
+test prop_deny_listed_rejects(address via non_wallet_address()) {
+  !no_denied_recipients(
+    tx_with([wallet_output(), payout(address)]),
+    Script(wallet_policy),
+    [address],
+  )
+}
+
+test prop_deny_empty_allows(address via non_wallet_address()) {
+  no_denied_recipients(
+    tx_with([wallet_output(), payout(address)]),
+    Script(wallet_policy),
+    [],
   )
 }
