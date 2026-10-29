@@ -1,3 +1,4 @@
+use aiken/fuzz
 use cardano/address.{Script, from_script}
 use cardano/assets
 use cardano/transaction.{
@@ -503,4 +504,45 @@ test rejects_burn_votes_positive() {
     mint: assets.from_asset(vote_policy, vote_nft, 1),
   }
   !validate_burn_votes(vote_policy, tx)
+}
+
+// --------------------------------------------------------------- properties
+
+fn vote_input_lovelace(d: VoteDatum, lovelace: Int) -> Input {
+  Input {
+    output_reference: vote_ref(),
+    output: Output {
+      address: from_script(vote_policy),
+      value: assets.from_lovelace(lovelace)
+        |> assets.add(vote_policy, vote_name(), 1),
+      datum: InlineDatum(d),
+      reference_script: None,
+    },
+  }
+}
+
+fn refund_with(lovelace: Int) -> Output {
+  Output { ..refund_output(), value: assets.from_lovelace(lovelace) }
+}
+
+test prop_vote_tally_refund(
+  (owed, refund_amount) via fuzz.tuple(
+    fuzz.int_between(0, 5_000_000),
+    fuzz.int_between(0, 5_000_000),
+  ),
+) {
+  let d = vote_datum()
+  let tally_r: Data = TallyVotes
+  let proposal_in = proposal_utxo(ProposalStatus.Tally { votes: [] })
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [proposal_in, vote_input_lovelace(d, owed)],
+    outputs: [refund_with(refund_amount)],
+    mint: assets.from_asset(vote_policy, vote_name(), -1),
+    redeemers: [Pair(Spend(proposal_ref()), tally_r)],
+  }
+  let expected = refund_amount >= owed
+  fuzz.label_if(@"covered", expected)
+  fuzz.label_if(@"short", !expected)
+  validate_vote_tally(proposal_policy, d, 0, stake_ref(), tx) == expected
 }

@@ -827,3 +827,54 @@ test prop_start_time_reflected_in_datum((create, stake) via scenario()) {
   let now = stake + create
   validate_mint(create_tx(create, stake, now))
 }
+
+// ------------------------------------------------------------ stage-3 props
+
+fn accept_scenario() -> Fuzzer<(Int, Int)> {
+  fuzz.tuple(fuzz.int_between(0, 200), fuzz.int_between(0, 2_000))
+}
+
+test prop_accept_draft_threshold((cosigning_stake, upper) via accept_scenario()) {
+  let d = datum(ProposalStatus.Draft { cosigning_stake }, [])
+  let out = prop_output(datum(ProposalStatus.Voting, []))
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d)],
+    outputs: [out],
+    validity_range: interval.before(upper),
+  }
+  let expected = cosigning_stake >= 100 && upper <= start + 1000
+  fuzz.label_if(@"accepted", expected)
+  fuzz.label_if(@"rejected", !expected)
+  spend(d, AcceptDraft, tx) == expected
+}
+
+test prop_end_voting_timing(lower via fuzz.int_between(0, 5_000)) {
+  let d = datum(ProposalStatus.Voting, [])
+  let out = prop_output(datum(ProposalStatus.Tally { votes: [] }, []))
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d)],
+    outputs: [out],
+    validity_range: interval.after(lower),
+  }
+  let expected = lower >= start + 1000 + 2000
+  fuzz.label_if(@"voting-ended", expected)
+  fuzz.label_if(@"too-early", !expected)
+  spend(d, EndVotingStage, tx) == expected
+}
+
+test prop_reject_draft_timing(lower via fuzz.int_between(0, 3_000)) {
+  let d = datum(ProposalStatus.Draft { cosigning_stake: 0 }, [])
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d)],
+    outputs: [],
+    mint: assets.from_asset(proposal_policy, prop_nft, -1),
+    validity_range: interval.after(lower),
+  }
+  let expected = lower >= start + 1000
+  fuzz.label_if(@"draft-ended", expected)
+  fuzz.label_if(@"too-early", !expected)
+  spend(d, RejectDraft, tx) == expected
+}
