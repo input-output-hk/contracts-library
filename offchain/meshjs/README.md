@@ -9,6 +9,6 @@ The Tx3 reference implementations live under [`offchain/tx3/`](../tx3): one
 directory per protocol with its `main.tx3` interface, a generated TypeScript
 client, and a devnet test suite; see [`offchain/tx3/README.md`](../tx3/README.md).
 
-The pinned `blueprint.ts` files under `lib/` are generated artifacts: `npm run blueprint:update` (repo root, `scripts/blueprint-sync.mjs`) re-renders them from `onchain/plutus.json` together with the `blueprint` hash map in `lib/package.json`. Hand-edits are overwritten by the next sync; CI fails on drift (`blueprint:check`, run without any Node dependencies in the `offchain-unit` job).
+The pinned `blueprint.ts` files under `lib/` are generated artifacts: `npm run blueprint:update` (repo root, `scripts/blueprint-sync.mjs`) re-renders them from `onchain/plutus.json` together with the `blueprint` hash map in `lib/package.json`. Hand-edits to the pinned values — and nothing else — are overwritten by the next sync (documentation edits survive); CI fails on drift (`blueprint:check`, run without any Node dependencies in the `offchain-unit` job).
 
 Future off-chain languages follow the same shape (e.g. `offchain/tx3/lib` + `offchain/tx3/e2e`).
