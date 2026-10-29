@@ -52,5 +52,16 @@
     "event_triggered.coupon_policy": "f0da56d0617258734466ba0306cc2370822533bd96cd2753436b1a3c",
     "event_triggered.vault_nft_policy": "601198710ff29674e394a0953a0c9a7f6905623d2fefcdba9aab7b5f",
     "compiler": "aiken-v1.1.24+bacbeb3"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./examples/upgradeability": {
+      "types": "./dist/examples/upgradeability/index.d.ts",
+      "import": "./dist/examples/upgradeability/index.js"
+    },
+    "./package.json": "./package.json"
   }
 }

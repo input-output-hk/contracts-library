@@ -11,24 +11,23 @@
  * requires, so each step rebinds the generated client's `Signer` party.
  */
 
+import { type Bond, couponName, stepName } from "@contracts-library/meshjs";
+import type { TxBuilder } from "tx3-sdk";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import { type TxBuilder } from "tx3-sdk";
-
-import { couponName, stepName, type Bond } from "@contracts-library/meshjs";
 
 import {
   DEVNET_POLL,
-  TrixDevnet,
-  unwrapCborBytes,
   type DevnetUtxo,
   type DevnetWallet,
+  TrixDevnet,
+  unwrapCborBytes,
 } from "../../devnet/utils";
 import { Client } from "../codegen/ts-client/tokenized-bond/protocol";
 import {
-  type CoreScripts,
   applyCoreScripts,
   bondScripts,
   bytes,
+  type CoreScripts,
   hexOf,
   issuanceMintCompiledCode,
   issuanceTemplate,

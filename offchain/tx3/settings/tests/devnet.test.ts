@@ -1,26 +1,26 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import {
-  TrixDevnet,
-  DEVNET_POLL,
-  PROPOSE_TTL_MS,
-  unwrapCborBytes,
-  type DevnetUtxo,
-  type DevnetWallet,
-} from "../../devnet/utils";
-import {
-  type SettingsParams,
   settingsPlutusVersion as plutusVersion,
+  SETTINGS_TOKEN_NAME,
+  type SettingsParams,
   settingsScript,
   settingsScriptAddress,
-  SETTINGS_TOKEN_NAME,
 } from "@contracts-library/meshjs";
-import { Party } from "tx3-sdk";
-import { Client } from "../codegen/ts-client/config-parameter-management/protocol"; // trix codegen ts-client
 import {
   applyCborEncoding,
+  type PlutusScript,
   resolveScriptHash,
-  PlutusScript,
 } from "@meshsdk/core";
+import { Party } from "tx3-sdk";
+import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
+import {
+  DEVNET_POLL,
+  type DevnetUtxo,
+  type DevnetWallet,
+  PROPOSE_TTL_MS,
+  TrixDevnet,
+  unwrapCborBytes,
+} from "../../devnet/utils";
+import { Client } from "../codegen/ts-client/config-parameter-management/protocol"; // trix codegen ts-client
 
 const ADA = 1_000_000n;
 // Must comfortably exceed ONE block interval (trix devnets mint every ~5s):
