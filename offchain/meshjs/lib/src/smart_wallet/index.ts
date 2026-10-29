@@ -3,33 +3,6 @@
  */
 
 export {
-  assetAllowListCode,
-  assetAllowListHash,
-  assetDenyListCode,
-  assetDenyListHash,
-  assetDepositAllowListCode,
-  assetDepositAllowListHash,
-  assetDepositDenyListCode,
-  assetDepositDenyListHash,
-  fullRecipientAllowListCode,
-  fullRecipientAllowListHash,
-  fullRecipientDenyListCode,
-  fullRecipientDenyListHash,
-  paymentStakingAllowListCode,
-  paymentStakingAllowListHash,
-  paymentStakingDenyListCode,
-  paymentStakingDenyListHash,
-  plutusVersion as smartWalletPlutusVersion,
-  smartWalletCode,
-  smartWalletHash,
-  spendingLimitCode,
-  spendingLimitHash,
-  spendingPeriodLimitCode,
-  spendingPeriodLimitHash,
-  spendingWindowCode,
-  spendingWindowHash,
-} from "./blueprint";
-export {
   addressToData,
   assetAllowListParamsToData,
   assetDenyListParamsToData,

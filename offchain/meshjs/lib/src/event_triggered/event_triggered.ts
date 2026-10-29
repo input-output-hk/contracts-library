@@ -22,13 +22,12 @@
  *   - `buildGraduateIssuerTx`   §4.7: issuer-triggered retirement (third party)
  */
 
-import {
-  type Asset,
-  applyParamsToScript,
-  type Data,
-  type MeshTxBuilder,
-  type PlutusScript,
-  type UTxO,
+import type {
+  Asset,
+  Data,
+  MeshTxBuilder,
+  PlutusScript,
+  UTxO,
 } from "@meshsdk/core";
 
 import {
@@ -38,9 +37,9 @@ import {
   type ScriptAuthorizer,
 } from "../authorization";
 import {
+  applyScript,
   baseSpendRedeemer,
   type CoreDeployment,
-  cip113PlutusVersion,
   EX_UNITS,
   issuanceLogicRedeemer,
   issuanceMintRedeemer,
@@ -105,35 +104,30 @@ import type {
 const MIN_ADA = 2_000_000n;
 const EMPTY_VKEY = { kind: "key" as const, hash: "" };
 
-function applyParams(code: string, params: Data[]): PlutusScript {
-  const applied = applyParamsToScript(code, params, "Mesh") as string;
-  return { code: applied, version: cip113PlutusVersion };
-}
-
 // -------------------------------------------------------------- script setup
 
 export function issuanceScript(p: MintingParams): PlutusScript {
-  return applyParams(issuanceCompiledCode, mintingParamsToData(p));
+  return applyScript(issuanceCompiledCode, mintingParamsToData(p));
 }
 
 export function transferScript(p: TransferParams): PlutusScript {
-  return applyParams(transferCompiledCode, transferParamsToData(p));
+  return applyScript(transferCompiledCode, transferParamsToData(p));
 }
 
 export function thirdPartyScript(p: ThirdPartyParams): PlutusScript {
-  return applyParams(thirdPartyCompiledCode, thirdPartyParamsToData(p));
+  return applyScript(thirdPartyCompiledCode, thirdPartyParamsToData(p));
 }
 
 export function vaultScript(p: VaultParams): PlutusScript {
-  return applyParams(vaultCompiledCode, vaultParamsToData(p));
+  return applyScript(vaultCompiledCode, vaultParamsToData(p));
 }
 
 export function couponPolicyScript(p: CouponParams): PlutusScript {
-  return applyParams(couponPolicyCompiledCode, couponParamsToData(p));
+  return applyScript(couponPolicyCompiledCode, couponParamsToData(p));
 }
 
 export function vaultNftPolicyScript(p: VaultNftParams): PlutusScript {
-  return applyParams(vaultNftPolicyCompiledCode, vaultNftParamsToData(p));
+  return applyScript(vaultNftPolicyCompiledCode, vaultNftParamsToData(p));
 }
 
 // ------------------------------------------------------------ bond assembly
@@ -249,7 +243,7 @@ export function applyBond(
     vaultNftCs,
     principal: config.principal,
   });
-  const issuanceMint = applyParams(deployment.issuanceMintCode, [
+  const issuanceMint = applyScript(deployment.issuanceMintCode, [
     credentialToData({ kind: "script", hash: scriptHashOf(issuance) }),
     paramsPolicy,
   ]);

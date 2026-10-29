@@ -3,13 +3,6 @@
  */
 
 export {
-  compiledCode as settingsCode,
-  plutusVersion as settingsPlutusVersion,
-  typedCompiledCode as settingsTypedCode,
-  typedValidatorHash as settingsTypedValidatorHash,
-  validatorHash as settingsValidatorHash,
-} from "./blueprint";
-export {
   applyRedeemer,
   burnRedeemer,
   closeRedeemer,

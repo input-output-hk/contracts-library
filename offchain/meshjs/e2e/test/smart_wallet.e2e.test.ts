@@ -48,7 +48,6 @@ import {
 import {
   type Asset,
   deserializeAddress,
-  mConStr0,
   type PlutusScript,
   resolveScriptHash,
   type SlotConfig,
@@ -60,27 +59,18 @@ import {
   type Account,
   chainNowMs,
   collateralOf,
-  devnetReachable,
   devnetSlotConfig,
   fundedAccount,
   lovelaceOf,
   makeProvider,
   NETWORK_ID,
   newTxBuilder,
-  STORE_URL,
+  REACHABLE,
   scriptOutputOf,
   signAndSubmit,
   waitForTx,
 } from "../src/devnet";
-import { ALWAYS_TRUE, REJECT_WITHDRAW } from "../src/fixtures";
-
-const reachable = await devnetReachable();
-if (!reachable) {
-  console.warn(
-    `[e2e] Skipping all e2e tests: no Yaci devnet at ${STORE_URL}. ` +
-      `Run \`npm run test:devnet\` (or start one and set INDEXER_URL / YACI_STORE_URL).`,
-  );
-}
+import { ALWAYS_TRUE, mintTestToken, REJECT_WITHDRAW } from "../src/fixtures";
 
 const WALLET_TOKEN_NAME = "57414c4c4554"; // hex "WALLET"
 const ADA = 1_000_000n;
@@ -195,7 +185,7 @@ async function setup(provider: ReturnType<typeof makeProvider>): Promise<{
   };
 }
 
-describe.skipIf(!reachable)("smart wallet e2e (Yaci devnet)", () => {
+describe.skipIf(!REACHABLE)("smart wallet e2e (Yaci devnet)", () => {
   let provider: ReturnType<typeof makeProvider>;
 
   beforeAll(async () => {
@@ -383,7 +373,7 @@ describe.skipIf(!reachable)("smart wallet e2e (Yaci devnet)", () => {
   });
 });
 
-describe.skipIf(!reachable)("smart wallet spender scripts e2e", () => {
+describe.skipIf(!REACHABLE)("smart wallet spender scripts e2e", () => {
   let provider: ReturnType<typeof makeProvider>;
   let slotConfig: SlotConfig;
 
@@ -749,7 +739,7 @@ describe.skipIf(!reachable)("smart wallet spender scripts e2e", () => {
   });
 });
 
-describe.skipIf(!reachable)(
+describe.skipIf(!REACHABLE)(
   "smart wallet recipient & asset scripts e2e",
   () => {
     let provider: ReturnType<typeof makeProvider>;
@@ -767,24 +757,8 @@ describe.skipIf(!reachable)(
     const tokenUnit = tokenPolicy + TOKEN_NAME;
     const OTHER_POLICY = "ff".repeat(28);
 
-    async function mintToken(account: Account): Promise<void> {
-      const col = (await account.wallet.getCollateral())[0];
-      const mintTx = await newTxBuilder(provider)
-        .mintPlutusScriptV3()
-        .mint(TOKEN_QTY.toString(), tokenPolicy, TOKEN_NAME)
-        .mintRedeemerValue(mConStr0([]))
-        .mintingScript(ALWAYS_TRUE.cbor)
-        .txInCollateral(
-          col.input.txHash,
-          col.input.outputIndex,
-          col.output.amount,
-          col.output.address,
-        )
-        .changeAddress(account.address)
-        .selectUtxosFrom(await account.wallet.getUtxos())
-        .complete();
-      await waitForTx(provider, await signAndSubmit(account, mintTx));
-    }
+    const mintToken = (account: Account) =>
+      mintTestToken(provider, account, TOKEN_QTY, tokenPolicy, TOKEN_NAME);
 
     function statelessSpender(scriptHash: string): WalletDatum {
       return { spenders: [{ scriptHash, data: 0 }], depositors: [] };

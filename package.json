@@ -8,6 +8,8 @@
     "format": "biome format --write .",
     "format:check": "biome format .",
     "lint:check": "biome lint .",
+    "blueprint:check": "node scripts/blueprint-sync.mjs --check",
+    "blueprint:update": "node scripts/blueprint-sync.mjs --write",
     "prepare": "husky"
   },
   "devDependencies": {

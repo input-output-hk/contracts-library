@@ -3,15 +3,6 @@
  */
 
 export {
-  plutusVersion as daoPlutusVersion,
-  proposalCompiledCode as proposalCode,
-  proposalValidatorHash,
-  stakeCompiledCode as stakeCode,
-  stakeValidatorHash,
-  voteCompiledCode as voteCode,
-  voteValidatorHash,
-} from "./blueprint";
-export {
   acceptDraftRedeemer,
   burnProposalRedeemer,
   burnVotesRedeemer,

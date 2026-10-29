@@ -61,6 +61,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Fails the job when the pinned blueprints drift from onchain/plutus.json
+      # (no Node dependencies needed for this step).
+      - name: Blueprint sync check
+        run: npm run blueprint:check
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -85,7 +89,7 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: offchain/meshjs/**/package-lock.json
+          cache-dependency-path: offchain/meshjs/*/package-lock.json
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

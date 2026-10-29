@@ -100,22 +100,12 @@ export interface RegistryNode {
 /** Mode redeemer of the minting logic (§4.1, §4.2, §4.5, §4.7). */
 export type MintingAction = "Register" | "Deposit" | "Advance" | "Retire";
 
-export type TransferAction = "Move";
-
-/** Redeemer of the issuer-triggered third-party logic (§4.5, §4.7). */
-export type ThirdPartyAction = "Trigger";
-
 /** One payout the redeemer names on a redemption (§4.6). */
 export interface Payout {
   /** A bech32 address. */
   address: string;
   amount: bigint;
 }
-
-/** Redeemer of the vault validator (§4.2, §4.6). */
-export type VaultAction =
-  | { kind: "VaultDeposit" }
-  | { kind: "Redeem"; payouts: Payout[] };
 
 // ------------------------------------------------------------- bond objects
 

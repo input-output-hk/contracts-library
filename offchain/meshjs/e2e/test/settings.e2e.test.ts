@@ -35,31 +35,23 @@ import {
   type Account,
   chainNowMs,
   collateralOf,
-  devnetReachable,
   devnetSlotConfig,
+  finishRawTx,
   fundedAccount,
   makeProvider,
   NETWORK_ID,
   newTxBuilder,
-  STORE_URL,
+  REACHABLE,
   scriptOutputOf,
   signAndSubmit,
   waitForTx,
   waitUntilChainTimeMs,
 } from "../src/devnet";
 
-const reachable = await devnetReachable();
-if (!reachable) {
-  console.warn(
-    `[e2e] Skipping all e2e tests: no Yaci devnet at ${STORE_URL}. ` +
-      `Run \`npm run test:devnet\` (or start one and set INDEXER_URL / YACI_STORE_URL).`,
-  );
-}
-
 const VALUE_A: Data = mConStr0([1n]);
 const VALUE_B: Data = mConStr0([2n]);
 
-describe.skipIf(!reachable)("settings e2e (Yaci devnet)", () => {
+describe.skipIf(!REACHABLE)("settings e2e (Yaci devnet)", () => {
   let provider: ReturnType<typeof makeProvider>;
   let slotConfig: SlotConfig;
 
@@ -261,19 +253,7 @@ describe.skipIf(!reachable)("settings e2e (Yaci devnet)", () => {
     tb.invalidBefore(unixTimeToEnclosingSlot(p.validityNow, slotConfig));
     if (p.requiredSigner) tb.requiredSignerHash(p.requiredSigner);
 
-    const col = await collateralOf(p.signer);
-    const unsigned = await tb
-      .txInCollateral(
-        col.input.txHash,
-        col.input.outputIndex,
-        col.output.amount,
-        col.output.address,
-      )
-      .changeAddress(p.signer.address)
-      .selectUtxosFrom(await p.signer.wallet.getUtxos())
-      .complete();
-
-    return provider.submitTx(await p.signer.wallet.signTx(unsigned, true));
+    return finishRawTx(provider, tb, p.signer);
   }
 
   /** A raw close attempt that intentionally omits mint/burn. */
@@ -298,19 +278,7 @@ describe.skipIf(!reachable)("settings e2e (Yaci devnet)", () => {
 
     if (p.requiredSigner) tb.requiredSignerHash(p.requiredSigner);
 
-    const col = await collateralOf(p.signer);
-    const unsigned = await tb
-      .txInCollateral(
-        col.input.txHash,
-        col.input.outputIndex,
-        col.output.amount,
-        col.output.address,
-      )
-      .changeAddress(p.signer.address)
-      .selectUtxosFrom(await p.signer.wallet.getUtxos())
-      .complete();
-
-    return provider.submitTx(await p.signer.wallet.signTx(unsigned, true));
+    return finishRawTx(provider, tb, p.signer);
   }
 
   // ----------------------------------------------------------- happy paths

@@ -16,15 +16,13 @@ import {
   type Network,
   type PlutusScript,
   resolveScriptHash,
-  SLOT_CONFIG_NETWORK,
   type SlotConfig,
   serializePlutusScript,
   type UTxO,
-  unixTimeToEnclosingSlot,
 } from "@meshsdk/core";
 
 import { applyAuthorization, type ScriptAuthorizer } from "../authorization";
-import { type Credential, finalizeTx } from "../common";
+import { type Credential, finalizeTx, networkIdOf, slotBound } from "../common";
 import { compiledCode, plutusVersion, typedCompiledCode } from "./blueprint";
 import {
   applyRedeemer,
@@ -36,10 +34,6 @@ import {
   settingsDatumToData,
 } from "./datum";
 import type { SettingsDatum, SettingsParams } from "./types";
-
-function networkIdOf(network: Network): 0 | 1 {
-  return network === "mainnet" ? 1 : 0;
-}
 
 const DEFAULT_MIN_UTXO_LOVELACE = 1_500_000n;
 
@@ -147,11 +141,11 @@ export interface ProposeParams {
 export async function buildProposeTx(p: ProposeParams): Promise<string> {
   const network = p.network ?? "preprod";
   const networkId = networkIdOf(network);
-  const slotConfig = p.customSlotConfig ?? SLOT_CONFIG_NETWORK[network];
-  const lowerBoundSlot = unixTimeToEnclosingSlot(p.now, slotConfig);
-  const slotStartMs =
-    slotConfig.zeroTime +
-    (lowerBoundSlot - slotConfig.zeroSlot) * slotConfig.slotLength;
+  const { slot: lowerBoundSlot, startMs: slotStartMs } = slotBound(
+    network,
+    p.now,
+    p.customSlotConfig,
+  );
   const scriptAddr = settingsScriptAddress(p.script, networkId);
 
   const newDatum: SettingsDatum = {
@@ -208,11 +202,11 @@ export async function buildApplyTx(p: ApplyParams): Promise<string> {
 
   const network = p.network ?? "preprod";
   const networkId = networkIdOf(network);
-  const slotConfig = p.customSlotConfig ?? SLOT_CONFIG_NETWORK[network];
-  const lowerBoundSlot = unixTimeToEnclosingSlot(p.now, slotConfig);
-  const slotStartMs =
-    slotConfig.zeroTime +
-    (lowerBoundSlot - slotConfig.zeroSlot) * slotConfig.slotLength;
+  const { slot: lowerBoundSlot, startMs: slotStartMs } = slotBound(
+    network,
+    p.now,
+    p.customSlotConfig,
+  );
 
   if (slotStartMs < p.datum.nextApply) {
     throw new Error(
