@@ -1,3 +1,4 @@
+use aiken/fuzz
 use aiken/interval
 use cardano/address.{Script, from_script}
 use cardano/assets.{Value}
@@ -273,4 +274,100 @@ test infinite_lower_rejected() fail {
       state(2000, 70),
     ),
   )
+}
+
+// --------------------------------------------------------------- properties
+
+fn validate_with_params(
+  tx: Transaction,
+  interval_value: Int,
+  max_spend_value: Int,
+) -> Bool {
+  validate_withdraw(
+    tx,
+    Script(wallet_policy),
+    wallet_token,
+    own_hash,
+    interval_value,
+    max_spend_value,
+  )
+}
+
+test prop_params_valid(
+  (interval_value, max_spend_value) via fuzz.tuple(
+    fuzz.int_between(-1_000_000, 1_000_000),
+    fuzz.int_between(-1_000_000, 1_000_000),
+  ),
+) {
+  params_valid(interval_value, max_spend_value) == (
+    interval_value > 0 && max_spend_value >= 0
+  )
+}
+
+test prop_period_initial_state(
+  (period, acc_spend) via fuzz.tuple(
+    fuzz.int_between(-10, 10),
+    fuzz.int_between(-10, 10),
+  ),
+) {
+  initial_state_valid(state_data(state(period, acc_spend))) == (
+    period == 0 && acc_spend == 0
+  )
+}
+
+fn spend_scenario() -> Fuzzer<(Int, Int, Int, Int)> {
+  fuzz.tuple4(
+    fuzz.int_between(0, 1_000_000),
+    fuzz.int_between(0, 1_000_000),
+    fuzz.int_between(0, 1_000_000),
+    fuzz.int_between(0, 1_000_000),
+  )
+}
+
+test prop_same_period_cap(
+  (input, output, acc_spend, max_spend_value) via spend_scenario(),
+) {
+  let tx_spend = input - output
+  let tx = spend_tx_with(
+    input,
+    output,
+    interval.between(1500, 1500),
+    state(2000, acc_spend),
+    state(2000, acc_spend + tx_spend),
+  )
+  let expected = acc_spend + tx_spend <= max_spend_value
+  fuzz.label_if(@"within-cap", expected)
+  fuzz.label_if(@"over-cap", !expected)
+  validate_with_params(tx, 1000, max_spend_value) == expected
+}
+
+test prop_rollover_resets(
+  (input, output, acc_spend, max_spend_value) via spend_scenario(),
+) {
+  let tx_spend = input - output
+  let tx = spend_tx_with(
+    input,
+    output,
+    interval.between(2500, 2500),
+    state(2000, acc_spend),
+    state(3000, tx_spend),
+  )
+  let expected = tx_spend <= max_spend_value
+  fuzz.label_if(@"within-cap", expected)
+  fuzz.label_if(@"over-cap", !expected)
+  validate_with_params(tx, 1000, max_spend_value) == expected
+}
+
+test prop_historical_period_rejected(
+  (input, output, acc_spend, max_spend_value) via spend_scenario(),
+) {
+  let tx_spend = input - output
+  let tx = spend_tx_with(
+    input,
+    output,
+    interval.between(500, 500),
+    state(3000, acc_spend),
+    state(1000, tx_spend),
+  )
+  !validate_with_params(tx, 1000, max_spend_value)
 }
