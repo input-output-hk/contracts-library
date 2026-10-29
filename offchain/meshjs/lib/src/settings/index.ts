@@ -2,6 +2,7 @@
  * Protocol settings — MeshJS off-chain submodule.
  */
 
+export { plutusVersion } from "./blueprint";
 export {
   applyRedeemer,
   burnRedeemer,
