@@ -1,5 +1,7 @@
 // Tests for the schedule and asset-name helpers (spec §3.2, §3.4).
 
+use aiken/fuzz
+use aiken/primitive/bytearray
 use cardano/assets
 use event_triggered/schedule
 
@@ -62,4 +64,54 @@ test total_burned_fails_closed_on_non_canonical() {
   let cnt_policy = #"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
   let mint = assets.from_asset(cnt_policy, "01124", -1)
   schedule.total_burned(mint, cnt_policy) == None
+}
+
+// --------------------------------------------------------------- properties
+
+test prop_step_name_round_trip(k via fuzz.int_between(0, 255)) {
+  schedule.step_of_name(schedule.step_name(k)) == Some(k)
+}
+
+test prop_step_of_name_non_single_byte(name via fuzz.bytearray()) {
+  if bytearray.length(name) == 1 {
+    True
+  } else {
+    schedule.step_of_name(name) == None
+  }
+}
+
+test prop_amount_round_trip(amount via fuzz.int_between(0, 1_000_000)) {
+  schedule.decode_amount(schedule.encode_amount(amount)) == Some(amount)
+}
+
+fn coupon_policy() -> ByteArray {
+  #"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+}
+
+test prop_total_burned_single(
+  (amount, quantity) via fuzz.tuple(
+    fuzz.int_between(0, 1_000_000),
+    fuzz.int_between(1, 100),
+  ),
+) {
+  let mint = assets.from_asset(
+    coupon_policy(),
+    schedule.encode_amount(amount),
+    0 - quantity,
+  )
+  schedule.total_burned(mint, coupon_policy()) == Some(amount * quantity)
+}
+
+test prop_total_burned_ignores_positive(
+  (amount, quantity) via fuzz.tuple(
+    fuzz.int_between(0, 1_000_000),
+    fuzz.int_between(1, 100),
+  ),
+) {
+  let mint = assets.from_asset(
+    coupon_policy(),
+    schedule.encode_amount(amount),
+    quantity,
+  )
+  schedule.total_burned(mint, coupon_policy()) == Some(0)
 }
