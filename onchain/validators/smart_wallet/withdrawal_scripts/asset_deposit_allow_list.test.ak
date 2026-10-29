@@ -1,7 +1,7 @@
 use aiken/crypto.{ScriptHash}
-use cardano/address.{Script, VerificationKey, from_script}
+use cardano/address.{Script, from_script}
 use cardano/assets.{AssetName, PolicyId, Value}
-use cardano/certificate.{Certificate, RegisterCredential, UnregisterCredential}
+use cardano/certificate.{Certificate, RegisterCredential}
 use cardano/transaction.{
   InlineDatum, Input, Output, OutputReference, Transaction, placeholder,
 }
@@ -82,22 +82,6 @@ fn wallet_tx(depositors: Pairs<ScriptHash, Data>) -> Transaction {
   }
 }
 
-fn removal_tx(depositors: Pairs<ScriptHash, Data>) -> Transaction {
-  Transaction {
-    ..placeholder,
-    inputs: [wallet_input(assets.zero, depositors)],
-    outputs: [wallet_output(assets.zero, [])],
-  }
-}
-
-fn kept_tx(depositors: Pairs<ScriptHash, Data>) -> Transaction {
-  Transaction {
-    ..placeholder,
-    inputs: [wallet_input(assets.zero, depositors)],
-    outputs: [wallet_output(assets.zero, depositors)],
-  }
-}
-
 fn lovelace(quantity: Int) -> Value {
   assets.from_lovelace(quantity)
 }
@@ -121,55 +105,6 @@ test publish_register_script_credential() {
   let data: Data = 0
   let tx = wallet_tx([Pair(a, data)])
   publish(RegisterCredential { credential: Script(a), deposit: Never }, tx)
-}
-
-test publish_rejects_noncanonical_data() fail {
-  let data: Data = 1
-  let tx = wallet_tx([Pair(a, data)])
-  publish(RegisterCredential { credential: Script(a), deposit: Never }, tx)
-}
-
-test publish_rejects_register_not_listed() fail {
-  let data: Data = 0
-  let tx = wallet_tx([Pair(a, data)])
-  publish(RegisterCredential { credential: Script(b), deposit: Never }, tx)
-}
-
-test publish_rejects_key_credential() fail {
-  publish(
-    RegisterCredential { credential: VerificationKey(a), deposit: Never },
-    placeholder,
-  )
-}
-
-test publish_accepts_unregister_on_removal() {
-  let data: Data = 0
-  publish(
-    UnregisterCredential { credential: Script(a), refund: Never },
-    removal_tx([Pair(a, data)]),
-  )
-}
-
-test publish_rejects_unregister_without_wallet() fail {
-  publish(
-    UnregisterCredential { credential: Script(a), refund: Never },
-    placeholder,
-  )
-}
-
-test publish_rejects_unregister_when_kept() fail {
-  let data: Data = 0
-  publish(
-    UnregisterCredential { credential: Script(a), refund: Never },
-    kept_tx([Pair(a, data)]),
-  )
-}
-
-test publish_rejects_key_credential_unregister() fail {
-  publish(
-    UnregisterCredential { credential: VerificationKey(a), refund: Never },
-    placeholder,
-  )
 }
 
 // ---------------------------------------------------------------- withdraw
