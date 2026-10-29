@@ -42,8 +42,6 @@ import type {
   WalletParams,
 } from "./types";
 
-export { credentialToData, outputRefToData };
-
 function pairsToData(scripts: DelegatedScript[]): Map<Data, Data> {
   return new Map(scripts.map((s) => [s.scriptHash, s.data]));
 }

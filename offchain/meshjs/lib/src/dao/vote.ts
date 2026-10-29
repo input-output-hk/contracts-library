@@ -8,7 +8,6 @@
  */
 
 import {
-  type Asset,
   applyParamsToScript,
   type MeshTxBuilder,
   type PlutusScript,
@@ -28,6 +27,7 @@ import {
 import { plutusVersion, voteCompiledCode as voteCode } from "./blueprint";
 import {
   mintVoteRedeemer,
+  nftValue,
   stakePositionDatumToData,
   stakeRedeemerToData,
   voteDatumToData,
@@ -41,8 +41,6 @@ import type {
   VoteParams,
 } from "./types";
 
-const DEFAULT_MIN_UTXO_LOVELACE = 2_000_000n;
-
 /** The Plutus V3 script in the form MeshJS expects (parameterized). */
 export function voteScript(params: VoteParams): PlutusScript {
   const code = applyParamsToScript(voteCode, voteParamsToData(params), "Mesh");
@@ -54,16 +52,6 @@ export function voteScriptAddress(script: PlutusScript, networkId = 0): string {
 }
 
 /** Value of a vote artifact UTxO: ada + vote NFT. */
-function voteValue(script: PlutusScript, tokenName: string): Asset[] {
-  return [
-    { unit: "lovelace", quantity: DEFAULT_MIN_UTXO_LOVELACE.toString() },
-    {
-      unit: resolveScriptHash(script.code, script.version) + tokenName,
-      quantity: "1",
-    },
-  ];
-}
-
 export interface VoteBuilderParams {
   txBuilder: MeshTxBuilder;
   /** The vote validator script (its hash is the vote NFT policy). */
@@ -134,7 +122,7 @@ export async function buildVoteTx(p: VoteBuilderParams): Promise<string> {
   p.txBuilder
     .txOut(
       voteScriptAddress(p.voteScript, networkId),
-      voteValue(p.voteScript, voteTokenName),
+      nftValue(p.voteScript, voteTokenName),
     )
     .txOutInlineDatumValue(voteDatumToData(p.voteDatum))
     .txOut(

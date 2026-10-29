@@ -89,7 +89,7 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: offchain/meshjs/**/package-lock.json
+          cache-dependency-path: offchain/meshjs/*/package-lock.json
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

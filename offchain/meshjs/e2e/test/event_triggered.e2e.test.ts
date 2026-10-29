@@ -49,24 +49,17 @@ import {
   type Account,
   chainNowMs,
   collateralOf,
-  devnetReachable,
   devnetSlotConfig,
   fundedAccount,
+  lovelaceOf,
   makeProvider,
   newTxBuilderManualExUnits,
-  STORE_URL,
+  REACHABLE,
   scriptOutputOf,
   signAndSubmit,
   waitForTx,
   waitUntilChainTimeMs,
 } from "../src/devnet";
-
-const reachable = await devnetReachable();
-if (!reachable) {
-  console.warn(
-    `[e2e] Skipping event_triggered real-core e2e: no Yaci devnet at ${STORE_URL}.`,
-  );
-}
 
 const PRINCIPAL = 1000;
 const INTERVAL = 10_000;
@@ -85,7 +78,7 @@ const ORIGIN_NODE: RegistryNode = {
   globalStateCs: "",
 };
 
-describe.skipIf(!reachable)(
+describe.skipIf(!REACHABLE)(
   "event_triggered real-core e2e (Yaci devnet)",
   () => {
     let provider: ReturnType<typeof makeProvider>;
@@ -175,11 +168,6 @@ describe.skipIf(!reachable)(
       );
       if (!found) throw new Error(`no output holding ${unit} in ${txHash}`);
       return found;
-    }
-
-    function lovelaceOf(utxo: UTxO): bigint {
-      const a = utxo.output.amount.find((x) => x.unit === "lovelace");
-      return a ? BigInt(a.quantity) : 0n;
     }
 
     /** Unspent UTxOs at `address` carrying `unit`, fresh from the chain. */

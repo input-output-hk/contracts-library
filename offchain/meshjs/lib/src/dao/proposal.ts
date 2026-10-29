@@ -12,7 +12,6 @@
  */
 
 import {
-  type Asset,
   applyParamsToScript,
   type MeshTxBuilder,
   type PlutusScript,
@@ -31,6 +30,7 @@ import {
   nftNameOf,
   slotBound,
 } from "../common";
+import { outputRefToData } from "../settings/datum";
 import {
   plutusVersion,
   proposalCompiledCode as proposalCode,
@@ -39,7 +39,7 @@ import {
   burnProposalRedeemer,
   burnVotesRedeemer,
   mintProposalRedeemer,
-  outputRefToData,
+  nftValue,
   pollEffectWithdrawalRedeemer,
   proposalDatumToData,
   proposalParamsToData,
@@ -64,8 +64,6 @@ function phaseBounds(datum: ProposalDatum) {
   return { draftEnd, votingEnd, tallyEnd };
 }
 
-const DEFAULT_MIN_UTXO_LOVELACE = 2_000_000n;
-
 /** The Plutus V3 script in the form MeshJS expects (parameterized). */
 export function proposalScript(params: ProposalParams): PlutusScript {
   const code = applyParamsToScript(
@@ -84,16 +82,6 @@ export function proposalScriptAddress(
 }
 
 /** Value of a proposal UTxO: ada + proposal NFT. */
-function proposalValue(script: PlutusScript, tokenName: string): Asset[] {
-  return [
-    { unit: "lovelace", quantity: DEFAULT_MIN_UTXO_LOVELACE.toString() },
-    {
-      unit: resolveScriptHash(script.code, script.version) + tokenName,
-      quantity: "1",
-    },
-  ];
-}
-
 // ---------------------------------------------------- CreateProposal
 
 export interface CreateProposalParams {
@@ -155,7 +143,7 @@ export async function buildCreateProposalTx(
   p.txBuilder
     .txOut(
       proposalScriptAddress(p.proposalScript, networkId),
-      proposalValue(p.proposalScript, proposalTokenName),
+      nftValue(p.proposalScript, proposalTokenName),
     )
     .txOutInlineDatumValue(proposalDatumToData(p.proposalDatum))
     .txOut(
@@ -234,7 +222,7 @@ async function buildProposalSpend(
     p.txBuilder
       .txOut(
         proposalScriptAddress(p.script, networkId),
-        proposalValue(p.script, tokenName),
+        nftValue(p.script, tokenName),
       )
       .txOutInlineDatumValue(proposalDatumToData(continuationDatum));
   } else {
@@ -326,7 +314,7 @@ export async function buildCosignProposalTx(
     )
     .txOut(
       proposalScriptAddress(p.script, networkId),
-      proposalValue(p.script, tokenName),
+      nftValue(p.script, tokenName),
     )
     .txOutInlineDatumValue(proposalDatumToData(p.proposalDatum))
     .spendingPlutusScriptV3()
@@ -513,7 +501,7 @@ export async function buildTallyTx(p: TallyParams): Promise<string> {
     )
     .txOut(
       proposalScriptAddress(p.script, networkId),
-      proposalValue(p.script, tokenName),
+      nftValue(p.script, tokenName),
     )
     .txOutInlineDatumValue(proposalDatumToData(p.continuationDatum));
 

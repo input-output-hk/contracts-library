@@ -21,15 +21,18 @@
  */
 
 import {
+  type Asset,
   type Data,
   mConStr,
   mConStr0,
   mConStr1,
   mConStr2,
+  type PlutusScript,
+  resolveScriptHash,
   type TxInput,
 } from "@meshsdk/core";
 
-import { credentialToData } from "../common";
+import { credentialToData, option } from "../common";
 import { outputRefToData } from "../settings/datum";
 import type {
   DaoSettings,
@@ -51,10 +54,18 @@ import type {
   VoteTokenRedeemer,
 } from "./types";
 
-export { credentialToData, outputRefToData };
+/** Minimum ada the DAO's artifact UTxOs (proposal, vote) carry. */
+export const DEFAULT_MIN_UTXO_LOVELACE = 2_000_000n;
 
-function option<T>(value: T | null, wrap: (v: T) => Data): Data {
-  return value === null ? mConStr1([]) : mConStr0([wrap(value)]);
+/** The value of a UTxO: the ada minimum plus the script's own NFT. */
+export function nftValue(script: PlutusScript, tokenName: string): Asset[] {
+  return [
+    { unit: "lovelace", quantity: DEFAULT_MIN_UTXO_LOVELACE.toString() },
+    {
+      unit: resolveScriptHash(script.code, script.version) + tokenName,
+      quantity: "1",
+    },
+  ];
 }
 
 // ------------------------------------------------------------ stake datum

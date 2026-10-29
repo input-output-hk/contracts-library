@@ -4,14 +4,8 @@
  */
 
 export {
-  compiledCode as vestingCode,
-  plutusVersion,
-  validatorHash,
-} from "./blueprint";
-export {
   cancelRedeemer,
   claimRedeemer,
-  credentialToData,
   requiredRemainder,
   vestedAssetToData,
   vestedQuantity,
