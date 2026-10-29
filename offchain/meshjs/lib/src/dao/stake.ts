@@ -10,45 +10,34 @@
  */
 
 import {
-  applyParamsToScript,
-  resolveScriptHash,
-  serializePlutusScript,
-  SLOT_CONFIG_NETWORK,
   type Asset,
+  applyParamsToScript,
   type MeshTxBuilder,
   type PlutusScript,
+  resolveScriptHash,
   type SlotConfig,
+  serializePlutusScript,
   type UTxO,
 } from "@meshsdk/core";
 
-import { enclosingSlotBound, nftNameFromRef, type Credential } from "../common";
+import {
+  type Credential,
+  finalizeTx,
+  type Network,
+  networkIdOf,
+  nftNameFromRef,
+  nftNameOf,
+  slotBound,
+} from "../common";
+import { plutusVersion, stakeCompiledCode as stakeCode } from "./blueprint";
 import {
   closeStakePositionRedeemer,
   createPositionRedeemer,
-  stakePositionDatumToData,
   stakeParamsToData,
+  stakePositionDatumToData,
   stakeRedeemerToData,
 } from "./datum";
 import type { StakeParams, StakePositionDatum, StakeRedeemer } from "./types";
-import { stakeCompiledCode as stakeCode, plutusVersion } from "./blueprint";
-
-type Network = "mainnet" | "preprod" | "preview";
-
-function networkIdOf(network: Network): 0 | 1 {
-  return network === "mainnet" ? 1 : 0;
-}
-
-/** The enclosing slot + start time for `now` on the given network/devnet. */
-function slotBound(
-  network: Network,
-  now: number,
-  customSlotConfig?: SlotConfig,
-) {
-  return enclosingSlotBound(
-    now,
-    customSlotConfig ?? SLOT_CONFIG_NETWORK[network],
-  );
-}
 
 const DEFAULT_MIN_UTXO_LOVELACE = 2_000_000n;
 
@@ -71,14 +60,6 @@ export function stakeScriptAddress(
 
 function assetUnit(policyId: string, assetName: string): string {
   return policyId + assetName;
-}
-
-/** The asset name held by `utxo` under `policyId` (excluding lovelace), or "". */
-function nftNameOf(utxo: UTxO, policyId: string): string {
-  const unit = utxo.output.amount
-    .map((a) => a.unit)
-    .find((u) => u !== "lovelace" && u.startsWith(policyId));
-  return unit ? unit.slice(policyId.length) : "";
 }
 
 /** Add (or subtract, for negative quantities) an asset to a value list. */
@@ -161,22 +142,17 @@ export async function buildCreateStakePositionTx(
     );
 
   p.txBuilder.requiredSignerHash(p.owner.keyHash);
-
-  return await p.txBuilder
+  p.txBuilder
     .txOut(
       scriptAddr,
       createPositionValue(p.script, stakeNftName, p.stakedTokens),
     )
-    .txOutInlineDatumValue(stakePositionDatumToData(p.datum))
-    .txInCollateral(
-      p.collateralUtxo.input.txHash,
-      p.collateralUtxo.input.outputIndex,
-      p.collateralUtxo.output.amount,
-      p.collateralUtxo.output.address,
-    )
-    .changeAddress(p.changeAddress)
-    .selectUtxosFrom(p.utxos)
-    .complete();
+    .txOutInlineDatumValue(stakePositionDatumToData(p.datum));
+  return finalizeTx(p.txBuilder, {
+    collateral: p.collateralUtxo,
+    changeAddress: p.changeAddress,
+    utxos: p.utxos,
+  });
 }
 
 // ---------------------------------------------------- generic spend
@@ -248,17 +224,12 @@ async function buildStakeSpend(
       .txOutInlineDatumValue(stakePositionDatumToData(continuation.datum));
   }
 
-  return await p.txBuilder
-    .invalidBefore(bound.slot)
-    .txInCollateral(
-      p.collateralUtxo.input.txHash,
-      p.collateralUtxo.input.outputIndex,
-      p.collateralUtxo.output.amount,
-      p.collateralUtxo.output.address,
-    )
-    .changeAddress(p.changeAddress)
-    .selectUtxosFrom(p.utxos)
-    .complete();
+  p.txBuilder.invalidBefore(bound.slot);
+  return finalizeTx(p.txBuilder, {
+    collateral: p.collateralUtxo,
+    changeAddress: p.changeAddress,
+    utxos: p.utxos,
+  });
 }
 
 // ---------------------------------------------------- Deposit
@@ -359,15 +330,10 @@ export async function buildClosePositionTx(
     );
   }
 
-  return await p.txBuilder
-    .invalidBefore(bound.slot)
-    .txInCollateral(
-      p.collateralUtxo.input.txHash,
-      p.collateralUtxo.input.outputIndex,
-      p.collateralUtxo.output.amount,
-      p.collateralUtxo.output.address,
-    )
-    .changeAddress(p.changeAddress)
-    .selectUtxosFrom(p.utxos)
-    .complete();
+  p.txBuilder.invalidBefore(bound.slot);
+  return finalizeTx(p.txBuilder, {
+    collateral: p.collateralUtxo,
+    changeAddress: p.changeAddress,
+    utxos: p.utxos,
+  });
 }

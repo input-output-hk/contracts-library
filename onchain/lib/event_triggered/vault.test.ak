@@ -1,6 +1,7 @@
 // Tests for the vault validator (spec §3.1, §4.2 VaultDeposit, §4.6 Redeem,
 // I10 vault identity).
 
+use aiken/fuzz
 use cardano/address.{from_script, from_verification_key}
 use cardano/assets
 use cardano/transaction.{
@@ -89,28 +90,6 @@ fn check(action: VaultAction, self: Transaction) -> Bool {
 
 // ------------------------------------------------------------------ deposit
 
-test deposit_ok() {
-  check(
-    VaultDeposit,
-    Transaction {
-      ..placeholder,
-      inputs: [vault_input(0, 5_000_000, True)],
-      outputs: [vault_output(5_000_000 + principal, True)],
-    },
-  )
-}
-
-test deposit_rejects_wrong_gain() {
-  !check(
-    VaultDeposit,
-    Transaction {
-      ..placeholder,
-      inputs: [vault_input(0, 5_000_000, True)],
-      outputs: [vault_output(5_000_000 + principal - 1, True)],
-    },
-  )
-}
-
 test deposit_rejects_datum_change() {
   let tampered = Output {
     ..vault_output(5_000_000 + principal, True),
@@ -143,39 +122,6 @@ test deposit_rejects_without_nft() {
 
 // ------------------------------------------------------------------- top-up
 
-test top_up_ok() {
-  check(
-    VaultTopUp,
-    Transaction {
-      ..placeholder,
-      inputs: [vault_input(0, 5_000_000, True)],
-      outputs: [vault_output(8_000_000, True)],
-    },
-  )
-}
-
-test top_up_rejects_no_gain() {
-  !check(
-    VaultTopUp,
-    Transaction {
-      ..placeholder,
-      inputs: [vault_input(0, 5_000_000, True)],
-      outputs: [vault_output(5_000_000, True)],
-    },
-  )
-}
-
-test top_up_rejects_loss() {
-  !check(
-    VaultTopUp,
-    Transaction {
-      ..placeholder,
-      inputs: [vault_input(0, 5_000_000, True)],
-      outputs: [vault_output(4_999_999, True)],
-    },
-  )
-}
-
 test top_up_rejects_removing_native_asset() {
   !check(
     VaultTopUp,
@@ -193,53 +139,6 @@ test top_up_rejects_removing_native_asset() {
 }
 
 // ------------------------------------------------------------------- redeem
-
-fn redeem_tx(payout_amount: Int, include_payout: Bool) -> Transaction {
-  let outs = if include_payout {
-    [vault_output(10_000_000 - 1000, True), wallet_output(payout_amount)]
-  } else {
-    [vault_output(10_000_000 - 1000, True)]
-  }
-  Transaction {
-    ..placeholder,
-    inputs: [vault_input(0, 10_000_000, True)],
-    outputs: outs,
-    mint: assets.from_asset(cnt_policy, schedule.encode_amount(1000), -1),
-  }
-}
-
-test redeem_ok() {
-  check(
-    Redeem {
-      payouts: [
-        Payout { address: from_verification_key(holder_key), amount: 1000 },
-      ],
-    },
-    redeem_tx(1000, True),
-  )
-}
-
-test redeem_rejects_wrong_total() {
-  !check(
-    Redeem {
-      payouts: [
-        Payout { address: from_verification_key(holder_key), amount: 999 },
-      ],
-    },
-    redeem_tx(999, True),
-  )
-}
-
-test redeem_rejects_missing_payout() {
-  !check(
-    Redeem {
-      payouts: [
-        Payout { address: from_verification_key(holder_key), amount: 1000 },
-      ],
-    },
-    redeem_tx(1000, False),
-  )
-}
 
 test redeem_rejects_without_nft() {
   !check(
@@ -448,4 +347,65 @@ test deposit_rejects_removing_native_asset() {
       outputs: [vault_output(5_000_000 + principal, True)],
     },
   )
+}
+
+// --------------------------------------------------------------- properties
+
+test prop_deposit_exact_principal(
+  (input_ada, gain) via fuzz.tuple(
+    fuzz.int_between(0, 10_000_000),
+    fuzz.int_between(0, 1_000_000),
+  ),
+) {
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [vault_input(0, input_ada, True)],
+    outputs: [vault_output(input_ada + gain, True)],
+  }
+  let expected = gain == principal
+  fuzz.label_if(@"exact", expected)
+  fuzz.label_if(@"wrong-gain", !expected)
+  check(VaultDeposit, tx) == expected
+}
+
+test prop_top_up_positive_gain(
+  (input_ada, gain) via fuzz.tuple(
+    fuzz.int_between(0, 10_000_000),
+    fuzz.int_between(0, 1_000_000),
+  ),
+) {
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [vault_input(0, input_ada, True)],
+    outputs: [vault_output(input_ada + gain, True)],
+  }
+  let expected = gain > 0
+  fuzz.label_if(@"gain", expected)
+  fuzz.label_if(@"no-gain", !expected)
+  check(VaultTopUp, tx) == expected
+}
+
+test prop_redeem_conservation(
+  (burned, payout) via fuzz.tuple(
+    fuzz.int_between(1, 1_000_000),
+    fuzz.int_between(0, 1_000_000),
+  ),
+) {
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [vault_input(0, 10_000_000, True)],
+    outputs: [vault_output(10_000_000 - burned, True), wallet_output(payout)],
+    mint: burn(burned),
+  }
+  let expected = payout == burned
+  fuzz.label_if(@"exact", expected)
+  fuzz.label_if(@"mismatch", !expected)
+  check(
+    Redeem {
+      payouts: [
+        Payout { address: from_verification_key(holder_key), amount: payout },
+      ],
+    },
+    tx,
+  ) == expected
 }

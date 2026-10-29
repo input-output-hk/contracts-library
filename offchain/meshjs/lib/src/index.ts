@@ -12,14 +12,13 @@
  *   - event_triggered/    Tokenized bond (event-triggered assets)
  */
 
-export * from "./common";
 export { applyAuthorization, type ScriptAuthorizer } from "./authorization";
-
 export * from "./cip113";
-export * from "./vesting";
-export * from "./settings";
+export * from "./common";
 export * from "./dao";
-export * from "./smart_wallet";
 export * from "./event_triggered";
 // Both submodules expose this encoder; retain the package's existing export.
 export { addressToData } from "./event_triggered";
+export * from "./settings";
+export * from "./smart_wallet";
+export * from "./vesting";

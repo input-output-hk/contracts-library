@@ -1,6 +1,7 @@
 // Tests for one vault's coupon policy (spec §3.2, §4.5 scheduled,
 // §4.7 graduation, burns).
 
+use aiken/fuzz
 use aiken/interval
 use cardano/address.{Address, VerificationKey, from_script, with_delegation_key}
 use cardano/assets
@@ -105,10 +106,6 @@ test scheduled_ok() {
 
 test scheduled_rejects_early() {
   !check(scheduled_tx(1040, Some(cert_output(1, 2000)), 2999))
-}
-
-test scheduled_rejects_wrong_amount() {
-  !check(scheduled_tx(1081, Some(cert_output(1, 2000)), 3000))
 }
 
 test graduation_ok() {
@@ -317,4 +314,67 @@ test burns_admitted_alongside_foreign_certificate() {
       validity_range: interval.after(3000),
     },
   )
+}
+
+// --------------------------------------------------------------- properties
+
+fn scheduled_tx_at(
+  start: Int,
+  name_amount: Int,
+  cert_out: Option<Output>,
+  lower: Int,
+) -> Transaction {
+  let outs: List<Output> = when cert_out is {
+    Some(o) -> [o]
+    None -> []
+  }
+  Transaction {
+    ..placeholder,
+    inputs: [cert_input(0, 0, start)],
+    outputs: outs,
+    mint: coupon(name_amount)
+      |> assets.merge(assets.from_asset(cip_policy, schedule.step_name(0), -1))
+      |> assets.merge(assets.from_asset(cip_policy, schedule.step_name(1), 1)),
+    validity_range: interval.after(lower),
+  }
+}
+
+test prop_scheduled_coupon_deadline(
+  (start, lower) via fuzz.tuple(
+    fuzz.int_between(0, 1_000_000),
+    fuzz.int_between(0, 2_000_000),
+  ),
+) {
+  let expected = lower >= start + interval
+  fuzz.label_if(@"reached", expected)
+  fuzz.label_if(@"early", !expected)
+  check(scheduled_tx_at(start, 1040, Some(cert_output(1, start)), lower)) == expected
+}
+
+test prop_scheduled_coupon_wrong_amount(
+  start via fuzz.int_between(0, 1_000_000),
+) {
+  !check(
+    scheduled_tx_at(start, 1081, Some(cert_output(1, start)), start + interval),
+  )
+}
+
+test prop_graduation_deadline(
+  (start, lower) via fuzz.tuple(
+    fuzz.int_between(0, 1_000_000),
+    fuzz.int_between(0, 2_000_000),
+  ),
+) {
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [cert_input(0, 4, start)],
+    outputs: [],
+    mint: coupon(principal)
+      |> assets.merge(assets.from_asset(cip_policy, schedule.step_name(4), -1)),
+    validity_range: interval.after(lower),
+  }
+  let expected = lower >= start + 4 * interval
+  fuzz.label_if(@"reached", expected)
+  fuzz.label_if(@"early", !expected)
+  check(tx) == expected
 }

@@ -3,28 +3,22 @@
  * Spec: docs/vesting/spec.md
  */
 
+export {
+  cancelRedeemer,
+  claimRedeemer,
+  requiredRemainder,
+  vestedAssetToData,
+  vestedQuantity,
+  vestingDatumToData,
+} from "./datum";
 export * from "./types";
 export {
-  credentialToData,
-  vestedAssetToData,
-  vestingDatumToData,
-  claimRedeemer,
-  cancelRedeemer,
-  vestedQuantity,
-  requiredRemainder,
-} from "./datum";
-export {
+  buildCancelTx,
+  buildClaimTx,
+  buildLockTx,
+  type CancelParams,
+  type ClaimParams,
+  type LockParams,
   vestingScript,
   vestingScriptAddress,
-  buildLockTx,
-  buildClaimTx,
-  buildCancelTx,
-  type LockParams,
-  type ClaimParams,
-  type CancelParams,
 } from "./vesting";
-export {
-  compiledCode as vestingCode,
-  validatorHash,
-  plutusVersion,
-} from "./blueprint";

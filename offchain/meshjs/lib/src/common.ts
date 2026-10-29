@@ -3,13 +3,16 @@
  */
 
 import {
+  type Data,
+  type MeshTxBuilder,
   mConStr0,
   mConStr1,
   resolveDataHash,
-  unixTimeToEnclosingSlot,
-  type Data,
+  SLOT_CONFIG_NETWORK,
   type SlotConfig,
   type TxInput,
+  type UTxO,
+  unixTimeToEnclosingSlot,
 } from "@meshsdk/core";
 
 /**
@@ -28,6 +31,11 @@ export function credentialToData(c: Credential): Data {
 
 /** The amount of lovelace in 1 ADA. */
 export const ADA = 1_000_000n;
+
+/** Plutus `Option<T>` as CBOR: `Constr 1 []` when null, `Constr 0 [t]` otherwise. */
+export function option<T>(value: T | null, wrap: (v: T) => Data): Data {
+  return value === null ? mConStr1([]) : mConStr0([wrap(value)]);
+}
 
 /**
  * The unique NFT name an on-chain script derives from a consumed output
@@ -58,4 +66,67 @@ export function enclosingSlotBound(
   const startMs =
     slotConfig.zeroTime + (slot - slotConfig.zeroSlot) * slotConfig.slotLength;
   return { slot, startMs };
+}
+
+/** The networks every builder accepts. */
+export type Network = "mainnet" | "preprod" | "preview";
+
+/**
+ * `mainnet` is network id 1; every devnet (and Mesh's legacy "testnet") is 0.
+ * Accepts Mesh's wider `Network` union so builders typed against it can call
+ * this without casts.
+ */
+export function networkIdOf(network: Network | "testnet"): 0 | 1 {
+  return network === "mainnet" ? 1 : 0;
+}
+
+/**
+ * The enclosing slot + start time (POSIX ms) for a wall-clock instant. Accepts
+ * Mesh's wider `Network` union so builders typed against it can call this
+ * without casts.
+ */
+export function slotBound(
+  network: Network | "testnet",
+  now: number,
+  customSlotConfig?: SlotConfig,
+) {
+  return enclosingSlotBound(
+    now,
+    customSlotConfig ?? SLOT_CONFIG_NETWORK[network],
+  );
+}
+
+/** The NFT token name held by `utxo` under `policyId`, or "" if none. */
+export function nftNameOf(utxo: UTxO, policyId: string): string {
+  const unit = utxo.output.amount
+    .map((a) => a.unit)
+    .find((u) => u !== "lovelace" && u.startsWith(policyId));
+  return unit ? unit.slice(policyId.length) : "";
+}
+
+/** Builder options shared by every transaction's closing calls. */
+export interface FinalizeOptions {
+  collateral: UTxO;
+  changeAddress: string;
+  utxos: UTxO[];
+}
+
+/**
+ * The closing chain every builder ends with: collateral + change + selection
+ * + completion, returning the unsigned transaction hex.
+ */
+export async function finalizeTx(
+  txBuilder: MeshTxBuilder,
+  o: FinalizeOptions,
+): Promise<string> {
+  return txBuilder
+    .txInCollateral(
+      o.collateral.input.txHash,
+      o.collateral.input.outputIndex,
+      o.collateral.output.amount,
+      o.collateral.output.address,
+    )
+    .changeAddress(o.changeAddress)
+    .selectUtxosFrom(o.utxos)
+    .complete();
 }

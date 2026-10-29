@@ -15,50 +15,42 @@ import {
   buildCancelTx,
   buildClaimTx,
   buildLockTx,
+  type Credential,
   cancelRedeemer,
   claimRedeemer,
   requiredRemainder,
+  type VestingDatum,
   vestingDatumToData,
   vestingScript,
   vestingScriptAddress,
-  type Credential,
-  type VestingDatum,
 } from "@contracts-library/meshjs";
-import { ALWAYS_TRUE, REJECT_WITHDRAW } from "../src/fixtures";
 import {
-  unixTimeToEnclosingSlot,
   type SlotConfig,
   type UTxO,
+  unixTimeToEnclosingSlot,
 } from "@meshsdk/core";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
-  collateralOf,
-  lovelaceOf,
-  signAndSubmit,
+  type Account,
   chainNowMs,
-  devnetReachable,
+  collateralOf,
   devnetSlotConfig,
+  finishRawTx,
   fundedAccount,
+  lovelaceOf,
   makeProvider,
   NETWORK_ID,
   newTxBuilder,
+  REACHABLE,
   registerStakeCredential,
   scriptOutputOf,
-  STORE_URL,
+  signAndSubmit,
   waitForTx,
   waitUntilChainTimeMs,
-  type Account,
 } from "../src/devnet";
+import { ALWAYS_TRUE, REJECT_WITHDRAW } from "../src/fixtures";
 
-const reachable = await devnetReachable();
-if (!reachable) {
-  console.warn(
-    `[e2e] Skipping all e2e tests: no Yaci devnet at ${STORE_URL}. ` +
-      `Run \`npm run test:devnet\` (or start one and set INDEXER_URL / YACI_STORE_URL).`,
-  );
-}
-
-describe.skipIf(!reachable)("linear vesting e2e (Yaci devnet)", () => {
+describe.skipIf(!REACHABLE)("linear vesting e2e (Yaci devnet)", () => {
   let provider: ReturnType<typeof makeProvider>;
   let slotConfig: SlotConfig;
   let scriptAddr: string;
@@ -140,19 +132,7 @@ describe.skipIf(!reachable)("linear vesting e2e (Yaci devnet)", () => {
     tb.invalidBefore(unixTimeToEnclosingSlot(p.validityNow, slotConfig));
     if (p.requiredSigner) tb.requiredSignerHash(p.requiredSigner);
 
-    const col = await collateralOf(p.signer);
-    const unsigned = await tb
-      .txInCollateral(
-        col.input.txHash,
-        col.input.outputIndex,
-        col.output.amount,
-        col.output.address,
-      )
-      .changeAddress(p.signer.address)
-      .selectUtxosFrom(await p.signer.wallet.getUtxos())
-      .complete();
-
-    return provider.submitTx(await p.signer.wallet.signTx(unsigned, true));
+    return finishRawTx(provider, tb, p.signer);
   }
 
   /**
@@ -229,19 +209,7 @@ describe.skipIf(!reachable)("linear vesting e2e (Yaci devnet)", () => {
     tb.invalidBefore(unixTimeToEnclosingSlot(p.validityNow, slotConfig));
     tb.requiredSignerHash(p.signer.keyHash);
 
-    const col = (await p.signer.wallet.getCollateral())[0];
-    const unsigned = await tb
-      .txInCollateral(
-        col.input.txHash,
-        col.input.outputIndex,
-        col.output.amount,
-        col.output.address,
-      )
-      .changeAddress(p.signer.address)
-      .selectUtxosFrom(await p.signer.wallet.getUtxos())
-      .complete();
-
-    return provider.submitTx(await p.signer.wallet.signTx(unsigned, true));
+    return finishRawTx(provider, tb, p.signer);
   }
 
   // ----------------------------------------------------------- happy paths

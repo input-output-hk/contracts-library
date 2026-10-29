@@ -13,6 +13,36 @@
  */
 
 import {
+  applyBond,
+  type Bond,
+  type BondConfig,
+  buildAuthorizeTx,
+  buildBondDepositTx,
+  buildClaimIssuerTx,
+  buildClaimOwnerTx,
+  buildCreateVaultTx,
+  buildGraduateIssuerTx,
+  buildGraduateOwnerTx,
+  buildRedeemTx,
+  buildRegisterTx,
+  buildTransferTx,
+  buildVaultTopUpTx,
+  type CertificateDatum,
+  type CoreConfig,
+  type CoreDeployment,
+  compareWithdrawalKeys,
+  couponName,
+  nodeAddress,
+  type Payout,
+  plbAddress,
+  type RegistryNode,
+  type ScriptAuthorizer,
+  sortReferenceInputs,
+  stepName,
+  vaultAddress,
+  type WithdrawalKey,
+} from "@contracts-library/meshjs";
+import {
   DEFAULT_V1_COST_MODEL_LIST,
   DEFAULT_V2_COST_MODEL_LIST,
   DEFAULT_V3_COST_MODEL_LIST,
@@ -23,27 +53,6 @@ import {
 } from "@meshsdk/core";
 import { Cardano, deserializeTx } from "@meshsdk/core-cst";
 import { describe, expect, it } from "vitest";
-
-import {
-  applyBond,
-  buildClaimIssuerTx,
-  buildClaimOwnerTx,
-  buildGraduateIssuerTx,
-  buildTransferTx,
-  buildVaultTopUpTx,
-  compareWithdrawalKeys,
-  plbAddress,
-  sortReferenceInputs,
-  stepName,
-  vaultAddress,
-  type Bond,
-  type BondConfig,
-  type CertificateDatum,
-  type CoreConfig,
-  type CoreDeployment,
-  type ScriptAuthorizer,
-  type WithdrawalKey,
-} from "@contracts-library/meshjs";
 
 import { issuanceMintCompiledCode } from "../src/cip113/blueprint";
 import { applyCoreScripts } from "../src/cip113/scripts";
@@ -57,7 +66,7 @@ const ISSUER_KEY = "a1".repeat(28);
 const PAYER_KEY = "a2".repeat(28);
 const HOLDER_KEY = "a3".repeat(28);
 const PAYER = serializeAddressObj(pubKeyAddress(PAYER_KEY), NETWORK);
-const STRAY_UNIT = "de".repeat(28) + "7374726179"; // "stray"
+const STRAY_UNIT = `${"de".repeat(28)}7374726179`; // "stray"
 
 const coreConfig: CoreConfig = {
   networkId: NETWORK,
@@ -118,7 +127,7 @@ const collateral: UTxO = {
 
 function certificate(
   step: number,
-  datum: CertificateDatum,
+  _datum: CertificateDatum,
   stakeHash: string,
   stakeIsScript: boolean,
   extra: UTxO["output"]["amount"] = [lovelace(2_000_000)],
@@ -175,6 +184,7 @@ function base(known: UTxO[]) {
     funding,
     collateral,
     deployment.refs.protocolParams,
+    deployment.refs.cborHex,
     node,
     ...known,
   ];
@@ -209,9 +219,9 @@ function inspect(tb: MeshTxBuilder, hex: string, cert: UTxO): Built {
 
   const withdrawals = [...(body.withdrawals()?.keys() ?? [])]
     .map((acct) => {
-      const cred = Cardano.Address.fromBech32(acct)
-        .asReward()!
-        .getPaymentCredential();
+      const reward = Cardano.Address.fromBech32(acct).asReward();
+      if (!reward) throw new Error(`not a reward address: ${acct}`);
+      const cred = reward.getPaymentCredential();
       return {
         hash: cred.hash.toString(),
         isScript: cred.type === Cardano.CredentialType.ScriptHash,
@@ -336,7 +346,7 @@ describe("builder indices include script-authorizer dependencies", () => {
       const { authorizer, ref } = refAuthorizer(side.hash, side.refTx);
       const datum: CertificateDatum = {
         start: 0,
-        commit: { kind: "key", hash: PAYER_KEY },
+        commit: { kind: "key" as const, hash: PAYER_KEY },
         cntPolicy: scriptIssuerBond.cntPolicy,
       };
       const cert = utxo(tx("77"), plbAddress(deployment, HOLDER_KEY), [
@@ -382,7 +392,8 @@ describe("issuer-triggered continuations preserve the certificate value", () => 
 
   function continuation(b: Built, cert: UTxO) {
     // The paired output is the first output (thirdPartyRedeemer(_, 0)).
-    const out = b.outputs[0]!;
+    const out = b.outputs[0];
+    if (!out) throw new Error("expected the paired continuation output");
     expect(out.address).toBe(cert.output.address);
     const qty = (unit: string) =>
       BigInt(out.amount.find((a) => a.unit === unit)?.quantity ?? "0");
@@ -441,7 +452,8 @@ describe("vault top-up", () => {
       amount: 3_000_000n,
     };
     const hex = await buildVaultTopUpTx(p);
-    const out = p.txBuilder.meshTxBuilderBody.outputs[0]!;
+    const out = p.txBuilder.meshTxBuilderBody.outputs[0];
+    if (!out) throw new Error("expected the top-up output");
 
     expect(out.address).toBe(vaultAddress(bond));
     const qty = (unit: string) =>
@@ -491,4 +503,245 @@ describe("applyBond refuses configurations the validators cannot honor", () => {
       expect(() => applyBond(deployment, { ...config, ...patch })).toThrow();
     });
   }
+});
+
+// ------------------------------------------------ remaining builders offline
+
+/** A withdrawal-key-free claimant: a plain key credential. */
+const holderDatum: CertificateDatum = {
+  start: 0,
+  commit: null,
+  cntPolicy: bond.cntPolicy,
+};
+
+function certUtxo(step: number, extra = [lovelace(2_000_000)]): UTxO {
+  return utxo(tx("77"), plbAddress(deployment, HOLDER_KEY), [
+    ...extra,
+    { unit: bond.cipPolicy + stepName(step), quantity: "1" },
+  ]);
+}
+
+/** The PLB spend of `cert` exists (0 or 1 per builder); `inspect` needs it. */
+function inspectMintOnly(p: { txBuilder: MeshTxBuilder }, hex: string): Built {
+  const body = deserializeTx(hex).body();
+  return {
+    withdrawals: [...(body.withdrawals()?.keys() ?? [])].map((acct) => {
+      const reward = Cardano.Address.fromBech32(acct).asReward();
+      if (!reward) throw new Error(`not a reward address: ${acct}`);
+      const cred = reward.getPaymentCredential();
+      return {
+        hash: cred.hash.toString(),
+        isScript: cred.type === Cardano.CredentialType.ScriptHash,
+      };
+    }),
+    references: [],
+    plbRedeemer: [-1, -1],
+    outputs: p.txBuilder.meshTxBuilderBody.outputs,
+  };
+}
+
+function couponUtxo(step: number, quantity: number): UTxO {
+  const amount = config.amounts[step - 1];
+  if (amount === undefined) {
+    throw new Error(`no coupon amount configured for step ${step}`);
+  }
+  return utxo(tx("99"), PAYER, [
+    lovelace(2_000_000),
+    {
+      unit: bond.cntPolicy + couponName(amount),
+      quantity: quantity.toString(),
+    },
+  ]);
+}
+
+function outputAt(b: Built, index: number) {
+  const out = b.outputs[index];
+  if (!out) throw new Error(`expected an output at index ${index}`);
+  const qty = (unit: string) =>
+    BigInt(out.amount.find((a) => a.unit === unit)?.quantity ?? "0");
+  return { out, qty };
+}
+
+describe("create vault mints the NFT into a funded vault UTxO", () => {
+  it("mints the vault NFT and puts it at the vault address", async () => {
+    const p = { ...base([]), bond, vaultAda: 5_000_000n };
+    const hex = await buildCreateVaultTx(p);
+    const { out, qty } = outputAt(inspectMintOnly(p, hex), 0);
+
+    expect(out.address).toBe(vaultAddress(bond));
+    expect(qty("lovelace")).toBe(5_000_000n);
+    expect(qty(bond.vaultNftCs + config.vaultNftName)).toBe(1n);
+    expect(deserializeTx(hex).body()).toBeDefined();
+  });
+});
+
+describe("register inserts the bond node", () => {
+  it("re-emits the covering node and adds the bond node", async () => {
+    const coveringNode: RegistryNode = {
+      key: "aa".repeat(28),
+      next: "bb".repeat(28),
+      mintingLogic: { kind: "script", hash: "cc".repeat(28) },
+      transferLogic: { kind: "script", hash: "dd".repeat(28) },
+      thirdPartyLogic: { kind: "script", hash: "ee".repeat(28) },
+      unfrackingLogic: { kind: "key", hash: "" },
+      globalStateCs: "",
+    };
+    const covering = utxo(tx("d3"), nodeAddress(deployment), [
+      lovelace(2_000_000),
+      {
+        unit: deployment.core.registryNodeCs + coveringNode.key,
+        quantity: "1",
+      },
+    ]);
+    const p = {
+      ...base([covering]),
+      bond,
+      covering,
+      coveringNode,
+    };
+    const hex = await buildRegisterTx(p);
+    const b = inspectMintOnly(p, hex);
+    const nodeAddr = nodeAddress(deployment);
+
+    // Continuation of the covering node first, then the new bond node.
+    const continued = b.outputs[0];
+    if (!continued) throw new Error("expected the continuation node output");
+    expect(continued.address).toBe(nodeAddr);
+    const created = b.outputs[1];
+    if (!created) throw new Error("expected the new bond node output");
+    expect(created.address).toBe(nodeAddr);
+    expect(
+      created.amount.find(
+        (a) => a.unit === deployment.core.registryNodeCs + bond.cipPolicy,
+      ),
+    ).toBeDefined();
+    expect(deserializeTx(hex).body()).toBeDefined();
+  });
+});
+
+describe("bond deposit mints certificate step 0 into the vault", () => {
+  it("vault gains the principal and the certificate is minted", async () => {
+    const vault = utxo(tx("d1"), vaultAddress(bond), [
+      lovelace(5_000_000),
+      { unit: bond.vaultNftCs + config.vaultNftName, quantity: "1" },
+    ]);
+    const p = {
+      ...base([vault]),
+      bond,
+      vault,
+      node,
+      depositorStakeHash: HOLDER_KEY,
+      depositorIsScript: false,
+      start: 1_000,
+      validHereafterSlot: 10,
+    };
+    const hex = await buildBondDepositTx(p);
+    const b = inspectMintOnly(p, hex);
+
+    const vaultOut = b.outputs.find((o) => o.address === vaultAddress(bond));
+    if (!vaultOut) throw new Error("expected the vault output");
+    const vaultAda = vaultOut.amount.find((a) => a.unit === "lovelace");
+    if (!vaultAda) throw new Error("expected lovelace in the vault output");
+    expect(BigInt(vaultAda.quantity)).toBe(
+      5_000_000n + BigInt(config.principal),
+    );
+    // The certificate lands at the depositor's PLB address.
+    expect(
+      b.outputs.some((o) =>
+        o.amount.some(
+          (a) => a.unit === bond.cipPolicy + stepName(0) && a.quantity === "1",
+        ),
+      ),
+    ).toBe(true);
+    expect(deserializeTx(hex).body()).toBeDefined();
+  });
+});
+
+describe("authorize delegates to transfer with the commit written", () => {
+  it("keeps the same holder address and writes the commit", async () => {
+    const cert = certUtxo(0);
+    const p = {
+      ...base([cert]),
+      bond,
+      node,
+      certificate: cert,
+      commit: { kind: "key" as const, hash: PAYER_KEY },
+      datum: holderDatum,
+      holderStakeHash: HOLDER_KEY,
+      holderIsScript: false,
+    };
+    const hex = await buildAuthorizeTx(p);
+    expect(deserializeTx(hex).body()).toBeDefined();
+    // Same recipient as the spent certificate (self-transfer).
+    const out = p.txBuilder.meshTxBuilderBody.outputs[0];
+    if (!out) throw new Error("expected the certificate transfer output");
+    expect(out.address).toBe(cert.output.address);
+  });
+});
+
+describe("redeem burns coupons and pays the payouts", () => {
+  it("pays the payout addresses and drains the vault by the coupon value", async () => {
+    const vault = utxo(tx("d2"), vaultAddress(bond), [
+      lovelace(50_000_000),
+      { unit: bond.vaultNftCs + config.vaultNftName, quantity: "1" },
+    ]);
+    const payout: Payout = {
+      address: PAYER,
+      amount: 1040n,
+    };
+    const p = {
+      ...base([vault, couponUtxo(1, 1)]),
+      bond,
+      vault,
+      coupons: [couponUtxo(1, 1)],
+      payouts: [payout],
+    };
+    const hex = await buildRedeemTx(p);
+    const b = inspectMintOnly(p, hex);
+
+    const payer = b.outputs.find((o) => o.address === PAYER);
+    if (!payer)
+      throw new Error("expected a change output at the payer's address");
+    const payerAda = payer.amount.find((a) => a.unit === "lovelace");
+    if (!payerAda) throw new Error("expected lovelace in the payer output");
+    expect(BigInt(payerAda.quantity)).toBeGreaterThanOrEqual(2_000_000n);
+    const vaultOut = b.outputs.find((o) => o.address === vaultAddress(bond));
+    if (!vaultOut) throw new Error("expected the vault output");
+    const vaultAda = vaultOut.amount.find((a) => a.unit === "lovelace");
+    if (!vaultAda) throw new Error("expected lovelace in the vault output");
+    const couponValue = config.amounts[0];
+    if (couponValue === undefined) {
+      throw new Error("no coupon amount configured for step 1");
+    }
+    expect(BigInt(vaultAda.quantity)).toBe(50_000_000n - BigInt(couponValue));
+    expect(deserializeTx(hex).body()).toBeDefined();
+  });
+});
+
+describe("owner graduation burns the final name and mints the principal coupon", () => {
+  it("sends the principal coupon to the coupon address", async () => {
+    const cert = certUtxo(config.amounts.length);
+    const p = {
+      ...base([cert]),
+      bond,
+      node,
+      certificate: cert,
+      step: config.amounts.length,
+      couponAddress: PAYER,
+      holderStakeHash: HOLDER_KEY,
+      holderIsScript: false,
+      validFromSlot: 0,
+    };
+    const hex = await buildGraduateOwnerTx(p);
+    const b = inspect(p.txBuilder, hex, cert);
+
+    const couponOut = b.outputs.find((o) => o.address === PAYER);
+    if (!couponOut) throw new Error("expected the coupon output at the payer");
+    expect(
+      couponOut.amount.find(
+        (a) => a.unit === bond.cntPolicy + couponName(config.principal),
+      )?.quantity,
+    ).toBe("1");
+    expect(deserializeTx(hex).body()).toBeDefined();
+  });
 });

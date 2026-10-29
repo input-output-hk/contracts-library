@@ -5,26 +5,25 @@
  * authority.
  */
 
-import { mConStr0, type Asset, type UTxO } from "@meshsdk/core";
-
 import {
+  type CoreConfig,
+  type CoreDeployment,
+  type CoreRefs,
   EX_UNITS,
   registryNodeToData,
   rewardAddressOf,
   scriptAddressOf,
   scriptHashOf,
-  type CoreConfig,
-  type CoreDeployment,
-  type CoreRefs,
 } from "@contracts-library/meshjs";
+import { type Asset, mConStr0, type UTxO } from "@meshsdk/core";
 
 import {
+  type Account,
   collateralOf,
-  makeProvider,
+  type makeProvider,
   newTxBuilderManualExUnits,
   signAndSubmit,
   waitForTx,
-  type Account,
 } from "../devnet";
 import { issuanceMintCompiledCode } from "./blueprint";
 import {
