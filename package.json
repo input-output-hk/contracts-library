@@ -7,7 +7,7 @@
   "scripts": {
     "format": "biome format --write .",
     "format:check": "biome format .",
-    "lint:check": "biome lint .",
+    "lint:check": "biome lint --error-on-warnings .",
     "blueprint:check": "node scripts/blueprint-sync.mjs --check",
     "blueprint:update": "node scripts/blueprint-sync.mjs --write",
     "prepare": "husky"
