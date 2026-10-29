@@ -1,32 +1,32 @@
-import { afterAll, beforeAll, expect, test } from "vitest";
 import {
-  TrixDevnet,
-  DEVNET_POLL,
-  unwrapCborBytes,
-  type ChainTip,
-  type DevnetKitFactory,
-  type DevnetUtxo,
-  type DevnetWallet,
-} from "../../devnet/utils";
-import {
-  SETTINGS_TOKEN_NAME,
   nftNameFromRef,
+  type ProposalParams,
   pollEffectScript,
   proposalScript,
   proposalScriptAddress,
+  SETTINGS_TOKEN_NAME,
+  type SettingsParams,
+  type StakeParams,
   settingsScript,
   settingsScriptAddress,
   stakeScript,
   stakeScriptAddress,
+  type VoteParams,
   voteScript,
   voteScriptAddress,
-  type ProposalParams,
-  type SettingsParams,
-  type StakeParams,
-  type VoteParams,
 } from "@contracts-library/meshjs";
-import { Party, type SubmittedTx, type TxBuilder } from "tx3-sdk";
 import { applyCborEncoding, resolveScriptHash } from "@meshsdk/core";
+import { Party, type SubmittedTx, type TxBuilder } from "tx3-sdk";
+import { afterAll, beforeAll, expect, test } from "vitest";
+import {
+  type ChainTip,
+  DEVNET_POLL,
+  type DevnetKitFactory,
+  type DevnetUtxo,
+  type DevnetWallet,
+  TrixDevnet,
+  unwrapCborBytes,
+} from "../../devnet/utils";
 import { Client } from "../codegen/ts-client/dao-governance/protocol";
 
 const ADA = 1_000_000n;
@@ -647,10 +647,8 @@ async function lifecycleToTally(): Promise<{
   const startTime = created.startTime;
   const proposalTokenName = created.tokenName;
   const proposal1 = created.utxo;
-  const posA2 = created.stakeUtxo;
 
   // 3. B co-signs, reaching the accept threshold (20 + 10 = 30).
-  const beforeStake2 = await snapshot(inst.stakeAddr);
   const beforeProposal2 = await snapshot(inst.proposalAddr);
   await confirm(
     inst
@@ -672,7 +670,6 @@ async function lifecycleToTally(): Promise<{
       } as unknown as Parameters<Client["cosign"]>[0])
       .env(inst.env),
   );
-  const [posB2] = await addedSince(inst.stakeAddr, beforeStake2);
   const [proposal2] = await addedSince(inst.proposalAddr, beforeProposal2);
 
   // 4. Accept the draft (still within the draft window).
