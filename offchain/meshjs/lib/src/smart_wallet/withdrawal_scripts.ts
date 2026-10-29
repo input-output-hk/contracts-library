@@ -12,8 +12,6 @@
  */
 
 import {
-  applyParamsToScript,
-  type Data,
   type MeshTxBuilder,
   mConStr0,
   type PlutusScript,
@@ -21,6 +19,8 @@ import {
   serializeRewardAddress,
 } from "@meshsdk/core";
 import { CredentialType, Serialization } from "@meshsdk/core-cst";
+
+import { applyScript } from "../cip113/core";
 
 import {
   assetAllowListCode,
@@ -31,7 +31,6 @@ import {
   fullRecipientDenyListCode,
   paymentStakingAllowListCode,
   paymentStakingDenyListCode,
-  plutusVersion,
   spendingLimitCode,
   spendingPeriodLimitCode,
   spendingWindowCode,
@@ -191,14 +190,6 @@ function patchTxBuilderSerializer(
 }
 
 /** Parameterized `spending_limit` script: net outflow stays below `bound`. */
-/** Apply a withdraw-script's static code to its parameter list. */
-function applyScript(code: string, params: Data[]): PlutusScript {
-  return {
-    code: applyParamsToScript(code, params, "Mesh"),
-    version: plutusVersion,
-  };
-}
-
 export function spendingLimitScript(params: SpendingLimitParams): PlutusScript {
   return applyScript(spendingLimitCode, spendingLimitParamsToData(params));
 }

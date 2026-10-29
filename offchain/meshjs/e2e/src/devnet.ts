@@ -21,6 +21,8 @@ import {
 } from "@meshsdk/core";
 import { Serialization } from "@meshsdk/core-cst";
 
+export type { YaciProvider };
+
 // `INDEXER_URL` is the convention used by the shared devnet lifecycle script.
 export const STORE_URL =
   process.env.YACI_STORE_URL ??
@@ -238,6 +240,18 @@ export async function devnetReachable(): Promise<boolean> {
   }
 }
 
+/**
+ * Probed once at module import so every suite shares a single reachability
+ * check (and its warning) instead of five.
+ */
+export const REACHABLE = await devnetReachable();
+if (!REACHABLE) {
+  console.warn(
+    `[e2e] Skipping all e2e tests: no Yaci devnet at ${STORE_URL}. ` +
+      `Run \`npm run test:devnet\` (or start one and set INDEXER_URL / YACI_STORE_URL).`,
+  );
+}
+
 interface Tip {
   slot: number;
   /** POSIX seconds (Blockfrost-compatible). */
@@ -427,4 +441,27 @@ export async function registerStakeCredential(
     .complete();
   const hash = await payer.wallet.submitTx(await payer.wallet.signTx(tx, true));
   await waitForTx(provider, hash);
+}
+
+/**
+ * The collateral → change → select → sign → submit tail the "raw attack" txs
+ * share: builders wire the malicious body themselves and close the same way.
+ */
+export async function finishRawTx(
+  provider: YaciProvider,
+  txBuilder: MeshTxBuilder,
+  signer: Account,
+): Promise<string> {
+  const col = await collateralOf(signer);
+  const unsigned = await txBuilder
+    .txInCollateral(
+      col.input.txHash,
+      col.input.outputIndex,
+      col.output.amount,
+      col.output.address,
+    )
+    .changeAddress(signer.address)
+    .selectUtxosFrom(await signer.wallet.getUtxos())
+    .complete();
+  return provider.submitTx(await signer.wallet.signTx(unsigned, true));
 }
