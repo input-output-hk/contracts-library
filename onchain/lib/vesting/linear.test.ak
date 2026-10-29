@@ -1,3 +1,4 @@
+use aiken/collection/list
 use aiken/fuzz
 use aiken/interval
 use cardano/address.{
