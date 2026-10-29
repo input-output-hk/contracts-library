@@ -17,21 +17,19 @@
  * point `TRIX_BIN` at a specific binary.
  */
 
-import { spawn, type ChildProcess } from "node:child_process";
-import { connect } from "node:net";
-import { existsSync, readFileSync, rmSync } from "node:fs";
+import { type ChildProcess, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
+import { existsSync, readFileSync, rmSync } from "node:fs";
+import { connect } from "node:net";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-
+import { cst, MeshTxBuilder, serializeRewardAddress } from "@meshsdk/core";
 import { ed25519 } from "@noble/curves/ed25519";
 import { blake2b } from "@noble/hashes/blake2b";
 import { bech32 } from "bech32";
-import { cst, MeshTxBuilder, serializeRewardAddress } from "@meshsdk/core";
 import { Ed25519Signer, Party, PollConfig } from "tx3-sdk";
-
-import { FAUCET } from "./faucet";
 import { Client } from "../settings/codegen/ts-client/config-parameter-management/protocol"; // trix codegen ts-client
+import { FAUCET } from "./faucet";
 
 /** Poll config tuned for the devnet's block interval. */
 export const DEVNET_POLL = new PollConfig(60, 1000);
@@ -282,8 +280,9 @@ export class TrixDevnet {
     });
 
     const fail = (message: string): Error => {
+      const pid = proc.pid;
       try {
-        process.kill(-proc.pid!, "SIGKILL");
+        if (pid !== undefined) process.kill(-pid, "SIGKILL");
       } catch {
         // already gone
       }
@@ -663,8 +662,9 @@ export class TrixDevnet {
 
   /** Stop the node (and its whole process tree) and remove trix's state. */
   stop(): void {
+    const pid = this.proc.pid;
     try {
-      process.kill(-this.proc.pid!, "SIGTERM");
+      if (pid !== undefined) process.kill(-pid, "SIGTERM");
     } catch {
       // already gone
     }
