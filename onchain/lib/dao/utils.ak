@@ -2,12 +2,10 @@ use aiken/builtin
 use aiken/collection/dict
 use aiken/collection/list
 use aiken/collection/pairs
-use aiken/crypto.{ScriptHash, blake2b_256}
-use cardano/address.{Address, Script}
+use aiken/crypto.{blake2b_256}
+use cardano/address.{Address}
 use cardano/assets.{AssetName, PolicyId, Value, has_any_nft, has_nft_strict}
-use cardano/transaction.{
-  Input, Output, OutputReference, Spend, Transaction, Withdraw,
-}
+use cardano/transaction.{Input, Output, OutputReference, Spend, Transaction}
 use dao/types.{DaoSettings}
 use settings/utils.{get_settings_datum}
 
@@ -34,14 +32,6 @@ pub fn find_continuation_output(
 /// delegating the detailed checks to that sibling's own validator.
 pub fn spend_redeemer(self: Transaction, ref: OutputReference) -> Data {
   expect Some(r) = pairs.get_first(self.redeemers, Spend(ref))
-  r
-}
-
-/// The redeemer data attached to this script's own reward withdrawal
-/// (withdraw-0 convention). Lets a script read the intent declared by whoever
-/// triggered its execution.
-pub fn withdraw_redeemer(self: Transaction, own_hash: ScriptHash) -> Data {
-  expect Some(r) = pairs.get_first(self.redeemers, Withdraw(Script(own_hash)))
   r
 }
 
