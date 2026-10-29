@@ -20,7 +20,6 @@ import {
   type SlotConfig,
   serializePlutusScript,
   type UTxO,
-  unixTimeToEnclosingSlot,
 } from "@meshsdk/core";
 
 import { applyAuthorization, type ScriptAuthorizer } from "../authorization";
@@ -29,6 +28,7 @@ import {
   enclosingSlotBound,
   finalizeTx,
   networkIdOf,
+  slotBound,
 } from "../common";
 import { compiledCode, plutusVersion, typedCompiledCode } from "./blueprint";
 import {
@@ -254,11 +254,11 @@ export async function buildApplyTx(p: ApplyParams): Promise<string> {
 
   const network = p.network ?? "preprod";
   const networkId = networkIdOf(network);
-  const slotConfig = p.customSlotConfig ?? SLOT_CONFIG_NETWORK[network];
-  const lowerBoundSlot = unixTimeToEnclosingSlot(p.now, slotConfig);
-  const slotStartMs =
-    slotConfig.zeroTime +
-    (lowerBoundSlot - slotConfig.zeroSlot) * slotConfig.slotLength;
+  const { slot: lowerBoundSlot, startMs: slotStartMs } = slotBound(
+    network,
+    p.now,
+    p.customSlotConfig,
+  );
 
   if (slotStartMs < p.datum.nextApply) {
     throw new Error(
