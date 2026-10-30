@@ -12,6 +12,8 @@ export {
   cancelRedeemer,
   vestedQuantity,
   requiredRemainder,
+  sortVestingBundle,
+  assertValidBundle,
 } from "./datum";
 export {
   vestingScript,

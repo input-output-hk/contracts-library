@@ -41,7 +41,7 @@ const datum: VestingDatum = {
 };
 ```
 
-`policyId: ""` / `assetName: ""` is ada. Quantities are `bigint`. The `locker` can recover anything still locked after `recoveryTime`.
+`policyId: ""` / `assetName: ""` is ada. Quantities are `bigint`. The `vesting` list must be strictly ascending by `(policyId, assetName)` with no duplicates and no negative totals, or the instance can never be claimed (only recovered by the locker). `buildLockTx` checks this; use `sortVestingBundle` to put entries in order. The `locker` can recover anything still locked after `recoveryTime`.
 
 ## Full example
 

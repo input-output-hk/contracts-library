@@ -26,7 +26,7 @@
     "vitest": "^4.1.10"
   },
   "blueprint": {
-    "vesting": "95da21788eb1f59f51aad9669eb8c8b7081ab618c1f29b871925894a",
+    "vesting": "22de5b9b3db7c2e9f7cef943d5c8a6e667193114328c9676276a8bb1",
     "dao.proposal": "0222c427016359c662a5ec9da8548cd502ede975dfaee74127c4f44a",
     "dao.stake": "2590ef411a0d1524b803dd00fdc4cb47b0424d3f4054501cef00e975",
     "dao.vote": "159c194c38c731f22357da05d3f7ddd1078e80067222340a55789bf1",
