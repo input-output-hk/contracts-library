@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { requiredRemainder, vestedQuantity } from "../../src/vesting/datum";
+import {
+  assertValidBundle,
+  requiredRemainder,
+  sortVestingBundle,
+  vestedQuantity,
+} from "../../src/vesting/datum";
 import type { VestingDatum } from "../../src/vesting/types";
 
 describe("vestedQuantity (mirrors onchain lib/vesting/linear.ak)", () => {
@@ -60,5 +65,68 @@ describe("requiredRemainder", () => {
   it("requires the whole bundle before start", () => {
     const r = requiredRemainder(datum, 1000);
     expect(r.map((a) => a.total)).toEqual([100n, 10n]);
+  });
+});
+
+describe("vesting bundle well-formedness (mirrors onchain bundle_well_formed)", () => {
+  const policyA = "cd".repeat(28);
+  const policyB = "ef".repeat(28);
+  const ada = { policyId: "", assetName: "", total: 100n };
+
+  it("accepts a strictly ascending bundle, ada first", () => {
+    expect(() =>
+      assertValidBundle([
+        ada,
+        { policyId: policyA, assetName: "41", total: 1n },
+        { policyId: policyA, assetName: "42", total: 0n },
+        { policyId: policyB, assetName: "", total: 5n },
+      ]),
+    ).not.toThrow();
+    expect(() => assertValidBundle([])).not.toThrow();
+  });
+
+  it("rejects duplicates", () => {
+    const t = { policyId: policyA, assetName: "41", total: 1n };
+    expect(() => assertValidBundle([t, t])).toThrow(/strictly ascending/);
+  });
+
+  it("rejects duplicates that differ only in hex case", () => {
+    expect(() =>
+      assertValidBundle([
+        { policyId: policyA, assetName: "4a", total: 1n },
+        { policyId: policyA, assetName: "4A", total: 1n },
+      ]),
+    ).toThrow(/strictly ascending/);
+  });
+
+  it("rejects unsorted entries", () => {
+    expect(() =>
+      assertValidBundle([
+        { policyId: policyB, assetName: "", total: 1n },
+        { policyId: policyA, assetName: "", total: 1n },
+      ]),
+    ).toThrow(/strictly ascending/);
+  });
+
+  it("rejects negative totals", () => {
+    expect(() => assertValidBundle([{ ...ada, total: -1n }])).toThrow(
+      /negative total/,
+    );
+  });
+
+  it("sortVestingBundle puts entries in validator order", () => {
+    const sorted = sortVestingBundle([
+      { policyId: policyB, assetName: "", total: 1n },
+      { policyId: policyA, assetName: "42", total: 1n },
+      ada,
+      { policyId: policyA, assetName: "41", total: 1n },
+    ]);
+    expect(sorted.map((a) => a.policyId + a.assetName)).toEqual([
+      "",
+      `${policyA}41`,
+      `${policyA}42`,
+      policyB,
+    ]);
+    expect(() => assertValidBundle(sorted)).not.toThrow();
   });
 });
