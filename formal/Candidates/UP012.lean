@@ -1,4 +1,6 @@
 import Workflow.Generator.Basic
+import Formal.TxModels.Definitions.TxM007
+import Formal.TxModels.Definitions.TxM008
 import Formal.TxModels.Definitions.TxM009
 import Formal.Universal.Properties
 import Formal.Properties.Universal.UP012.Definition

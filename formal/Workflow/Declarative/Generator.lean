@@ -71,7 +71,7 @@ def generate (propertyId : String) (property : Property) (model : Model) (target
     s!"theorem {job.name} :\n    {job.statement} := by\n  unfold {definition}\n  blaster\n"
   let checks := String.intercalate "\n" [
     "-- Generated from property-owned Run.lean and the selected native model.",
-    "import Blaster", "import Formal.Universal.Properties",
+    "import Blaster", "import Formal.Universal.Execution",
     s!"import {property.definitionModule}", s!"import {property.runModule}", s!"import {modulePrefix}.Types",
     s!"import {modulePrefix}.Tx", "", "set_option Elab.async false", "",
     s!"namespace {modulePrefix}", "open CardanoLedgerApi.V3 (validScriptContext)", "",

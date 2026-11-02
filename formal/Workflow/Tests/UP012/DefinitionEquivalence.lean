@@ -1,4 +1,6 @@
 import Formal.Properties.Universal.UP012.Definition
+import Formal.TxModels.Definitions.TxM007
+import Formal.TxModels.Definitions.TxM008
 
 /-! Frozen expanded formulas from the pre-refactor UP012 declarations.
 These kernel-checked equivalences do not invoke the SMT tactic. -/

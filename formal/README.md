@@ -7,8 +7,8 @@ proofs are *about the spec* (the source of truth), not about any one
 implementation. See [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md) §2.
 
 For Plutus UPV (Universal Property Verifier), use the
-[CLI quickstart](Workflow/Docs/USER-GUIDE.md), which uses the installed Lean/Z3 tools
-directly. From `formal/`, `./plutus-upv test` runs all workflow tests with verbose
+[CLI quickstart](Workflow/Docs/USER-GUIDE.md), which uses Python discovery and the installed Lean/Z3 tools.
+From `formal/`, `./plutus-upv test` runs all workflow tests with verbose
 logs; `./plutus-upv run ...` verifies properties of a supplied compiled validator.
 The guide includes passing, failing, and inconclusive examples.
 
@@ -22,7 +22,7 @@ backend invoked via the `blaster` tactic.
 formal/
 ├── lakefile.toml            # depends on Blaster + PlutusCore + CardanoLedgerApi
 ├── lean-toolchain           # pinned Lean version
-├── flake.nix                # elan + Z3 4.15.2 + gawk
+├── flake.nix                # elan + Python + Z3 4.15.2 + gawk
 ├── justfile                 # build -> flats -> verify pipeline
 ├── scripts/
 │   └── annotate-blaster-logs.awk

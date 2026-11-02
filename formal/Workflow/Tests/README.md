@@ -24,7 +24,7 @@ stops the run; a suite failure allows the remaining independent suites to run.
 Only a complete successful test run returns zero. Expected negative controls
 print FAIL or INCONCLUSIVE without making their enclosing suite fail.
 
-The aggregate command registers 20 suites, including component units, metadata,
+The aggregate command registers 24 suites, including component units, metadata,
 run evidence, selection, shared source capture/compilation, relative review links,
 output controls, and installer/launcher checks. It also runs real app/core solver cases, runner failure
 controls, Input-to-Generator type-checking, Executor/Reporter solver controls, and
@@ -44,6 +44,10 @@ lake exe workflow_up015_tests
 lake exe workflow_single_check_tests
 lake exe workflow_app_tests
 lake exe workflow_selection_tests
+lake exe workflow_property_discovery_tests
+lake exe workflow_declarative_tests
+lake exe workflow_declarative_up015_tests
+lake exe workflow_public_cli_tests
 lake exe workflow_sources_tests
 lake exe workflow_review_tests
 ```
@@ -79,7 +83,7 @@ sources, compiler artifacts, logs, and reports appear only in the local ignored
 where supporting definitions live.
 
 `workflow_preparation_tests` adds pure compatibility and compiled-program admission
-coverage. The aggregate now registers 20 suites. The new runtime scenarios in
+coverage. The aggregate now registers 24 suites. The new runtime scenarios in
 UP012 use `preparation-demo`; the full UP-012 suite and the public CLI produced
 the expected positive, negative, and failed-applicability outcomes. Existing vault-demo
 expectations remain 30 selected combinations and 45 generated Lean files; this

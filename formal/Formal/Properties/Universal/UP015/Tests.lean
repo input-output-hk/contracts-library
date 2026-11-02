@@ -119,6 +119,6 @@ end Formal.Properties.Universal.UP015.Tests
 
 def main (args : List String) : IO Unit := do
   match args with
-  | ["--unit"] => Formal.Properties.Universal.UP015.Tests.unit
+  | [] | ["--unit"] => Formal.Properties.Universal.UP015.Tests.unit
   | ["--negative-control"] => Formal.Properties.Universal.UP015.Tests.negativeControl
   | _ => throw (IO.userError "Usage: UP015/Tests.lean --unit|--negative-control")

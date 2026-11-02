@@ -47,4 +47,4 @@ Claim and Cancel property definitions.
 [Run.lean](Run.lean) owns the experimental model list and run instructions.
 Adding an existing compatible model changes only that list. [Tests.lean](Tests.lean)
 checks parity with the legacy adapter. The [experiment guide](../../../../Workflow/Declarative/README.md)
-explains discovery and the separate command; the installed CLI retains its existing path.
+explains discovery and the public command and the compatibility paths.

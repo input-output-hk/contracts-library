@@ -111,6 +111,14 @@ def run : IO Unit := do
   rejected "unexpected selection contents" (selectChecks defaults registry (some "{}"))
   rejected "conflicting programmatic filters"
     (selectChecks { fileRequest with properties := #["UP-001"] } registry (some "{}"))
+  check "disabled known properties need no compiled implementations"
+    ((← accepted "selective registry"
+      (selectChecks fileRequest #[registry[2]]
+        (some "{\"UP-012\": true, \"UP-001\": false}")
+        (some #["UP-001", "UP-012"]))) == #[registry[2]])
+  rejected "an enabled property cannot silently lack its prepared checks"
+    (selectChecks fileRequest #[registry[2]]
+      (some "{\"UP-001\": true}") (some #["UP-001", "UP-012"]))
   IO.println "Selection checks passed."
 
 end Workflow.Tests.Unit.Selection

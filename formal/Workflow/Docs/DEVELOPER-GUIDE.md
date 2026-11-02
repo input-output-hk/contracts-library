@@ -16,18 +16,23 @@ constructors and their metadata in individual `Definitions/TxMNNN.lean` modules.
 Its index exports metadata as JSON for the reader. Shared model helpers and vesting
 types stay at the bank root; the bank imports no workflow modules.
 
-[Candidates/Catalogue.lean](../../Candidates/Catalogue.lean) composes fixed executable
-adapters. UP-001 uses [Candidates/UP001.lean](../../Candidates/UP001.lean); UP-012
-uses [Candidates/UP012.lean](../../Candidates/UP012.lean) with the
-[pinned test profile](../Tests/UP012/Profile.lean). UP-015 uses
-[Candidates/UP015.lean](../../Candidates/UP015.lean) with its
-[Claim reversal profile](../Tests/UP015/Profile.lean). The vesting profiles share
-the same artifact guard and support generation in
-[Profiles/LinearVesting.lean](../Tests/Profiles/LinearVesting.lean). Metadata does not choose code.
-[App/ProductCLI.lean](../App/ProductCLI.lean) supplies `registeredChecks` and the
-exact `loadCheck` resolver to generic [App/Run.lean](../App/Run.lean).
-[App/CLI.lean](../App/CLI.lean) and [App/Main.lean](../App/Main.lean) retain the
-legacy `universal` executable and its bundled provider path.
+The public [ProductCLI](../App/ProductCLI.lean) delegates run preparation to
+[Launcher](../Declarative/Launcher.lean). The shared discovery helper evaluates
+selected property `Run.lean` files, reads their actual model lists, and compiles
+only the selected exports. [Declarative/Catalogue.lean](../Declarative/Catalogue.lean)
+validates those discovered records and supplies the existing callable core. The
+[execution guide](../Declarative/README.md) describes model conventions and limits.
+
+UP-012 and UP-015 own their run declarations beside their definitions. The model
+bank exports runnable builders without importing workflow code. Generic evaluator
+helpers live in `Formal/Universal/Execution.lean`, without a model-bank aggregate
+dependency. `Formal/Universal/Properties.lean` keeps legacy purpose aliases.
+
+[LegacyUP001](../Declarative/LegacyUP001.lean) preserves the existing UP-001 purpose
+generator, model metadata, and combination records. The older
+[Candidates/Catalogue.lean](../../Candidates/Catalogue.lean), candidate adapters,
+and test profiles remain for `universal` and regression comparisons. The public
+UP-012/UP-015 path no longer calls their model-specific adapter/profile branches.
 
 The product app repeats the callable core for exact property/version/model
 identities. Legacy providers can still emit several combinations in a plan.
@@ -39,7 +44,7 @@ Preserve each definition's actual domain, bounds, and restrictions when adapting
 | --- | --- | --- |
 | Property | Each property's `metadata.json` in Formal/Properties | [Record schema](../../Formal/Properties/property-definition.schema.json), [Metadata/Property.lean](../Metadata/Property.lean) |
 | Transaction model | Metadata beside its native constructor, exported through the model index | [Model schema](../../Formal/TxModels/transaction-model.schema.json), [Metadata/TxModel.lean](../Metadata/TxModel.lean) |
-| Combined check | [Generic bindings](../../Candidates/combined-checks.json), [UP-012 vesting bindings](../Tests/UP012/combined-checks.json), or [UP-015 Claim binding](../Tests/UP015/combined-checks.json) | [Combined-check schema](../Metadata/combined-check.schema.json), [Metadata/TxModel.lean](../Metadata/TxModel.lean) |
+| Combined check | Property-owned `Run.lean` plus the selected native model for the public UP-012/UP-015 path; [generic bindings](../../Candidates/combined-checks.json) for legacy UP-001 | [Combined-check schema](../Metadata/combined-check.schema.json), [Metadata/TxModel.lean](../Metadata/TxModel.lean) |
 
 The property record groups identity (`id`, `definition_version`, `title`,
 `category`), explanation (`summary`, `claim`, `purpose`), scope
@@ -66,7 +71,8 @@ unknown keys. Individual-field optionality and list-cardinality policy remain
 open. Structural validity does not make a record runnable or establish a theorem.
 
 Runtime association resolves the selected property ID/version uniquely against
-fixed code. A supplied primary must match the index. The combined check must match
+the discovered run declaration, or the fixed legacy implementation. A supplied
+primary must match the run's statement declaration or legacy entry. The combined check must match
 the property and registered model ID, and the model's Plutus version must match
 the target. Missing, ambiguous, or inconsistent selected bindings fail preparation.
 References are informational: the workflow does not fetch, import, or execute them.

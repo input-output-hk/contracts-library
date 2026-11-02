@@ -56,6 +56,6 @@ python3 scripts/run_properties.py Workflow/Tests/UP012/Inputs/plutus.json --chec
 lake env lean --run Formal/Properties/Universal/UP015/Tests.lean --negative-control
 ```
 
-The installed CLI retains its legacy path. Model coverage, applicability,
+The public CLI uses these run instructions. Model coverage, applicability,
 and proof bounds remain as described above.
 The [validation record](VALIDATION.md) reports goal parity and actual proof/control results.
