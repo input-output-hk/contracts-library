@@ -16,8 +16,9 @@ The bindings use TxM-007 (Claim), TxM-008 (Cancel), and TxM-009
 `validScriptContext` predicate, and explicit rejection within 1,000,000 CEK steps.
 The runtime adapter allows two exact compiled linear-vesting artifacts: the
 original PR #55 fixture and the reviewed vault-demo build using Aiken 1.1.21 with
-stdlib 3.0.0. TxM-009 uses a separate profile pinned to two exact vault artifacts.
-Unknown artifacts remain unsupported. These are three applications of one property,
+stdlib 3.0.0. TxM-009 uses reusable structural admission and validates the actual compiled
+program; it requires no artifact allowlist entry. Unknown schema constraints
+remain unsupported for that model. These are three applications of one property,
 with separate applicability obligations. Owner, signer, and recipient vary
 independently in TxM-009; no owner-equals-signer premise is added.
 

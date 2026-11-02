@@ -5,7 +5,7 @@ compiled Plutus validators using ordinary Lean code and configured proof tools.
 The prototype supports the documented Aiken-style Plutus V3 blueprint profile.
 The app processes all logical validators and all ten registered property/model
 combinations by default, with optional validator/property filters and a property
-switch file. UP-012 supports pinned vesting and vault profiles; UP-015 uses
+switch file. UP-012 supports pinned vesting profiles and reusable TxM-009 preparation; UP-015 uses
 the pinned vesting profile. UP-001, these profiles, and their models support prototype
 testing; their broader definitions and coverage still need review.
 

@@ -12,3 +12,5 @@ blueprints/build caches are local; workflow run files stay under `formal/output/
 The app and aggregate tests do not build these Aiken sources automatically.
 The vesting adapter accepts two exact test artifacts and rejects unknown compiled
 code. This manual source project does not establish general property/model readiness.
+
+- [preparation-demo](preparation-demo): three manually compiled programs with the same input schema and different authorization logic, used by the reusable TxM-009 pilot.

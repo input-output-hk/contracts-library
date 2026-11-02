@@ -1,13 +1,13 @@
 import Workflow.Tests.Profiles.LinearVesting
-import Workflow.Tests.Profiles.Vault
+import Workflow.Preparation.TxM009
 import Candidates.UP012
 
 namespace Workflow.Tests.UP012.Profile
 
 open Workflow Workflow.Generator
 
-/-! Pinned vesting and vault scenarios use the shared UP-012 property and applicability goals.
-Preparation accepts exact supported artifacts and emits native transaction aliases.
+/-! Pinned vesting and structurally admitted TxM-009 targets share the UP-012 goals.
+Preparation emits the actual program and native transaction aliases.
 -/
 
 private def buildSelected (target : TargetDescription) (modulePrefix : String)
@@ -15,13 +15,14 @@ private def buildSelected (target : TargetDescription) (modulePrefix : String)
   let (modules, modelId) ← match selectedModelId with
     | some modelId => do
       let modules ← if modelId == Formal.TxModels.TxM009.metadata.id then
-          Workflow.Tests.Profiles.Vault.support target modulePrefix
+          Workflow.Preparation.TxM009.support target modulePrefix
         else Workflow.Tests.Profiles.LinearVesting.support target modulePrefix (some modelId)
       pure (modules, some modelId)
     | none =>
-      match Workflow.Tests.Profiles.Vault.support target modulePrefix with
+      match Workflow.Preparation.TxM009.support target modulePrefix with
       | .ok modules => pure (modules, some Formal.TxModels.TxM009.metadata.id)
       | .error vaultError =>
+        unless vaultError.kind == .unsupported do throw vaultError
         match Workflow.Tests.Profiles.LinearVesting.support target modulePrefix none with
         | .ok modules => pure (modules, none)
         | .error vestingError =>
@@ -40,10 +41,10 @@ private def buildSelected (target : TargetDescription) (modulePrefix : String)
       | none => Candidates.UP012.notes
       | some id => Candidates.UP012.notesForModel id }
 
-/-- Select the exact supported artifact family and its bounded experimental checks. -/
+/-- Select reusable spending preparation or the existing pinned vesting scenario. -/
 def provider : Provider := { id := "UP-012", generate := fun target modulePrefix => buildSelected target modulePrefix none }
 
-/-- Bind one native action model to its exact artifact guard. -/
+/-- Bind one native model to its supported preparation path. -/
 def providerForModel (selectedModelId : String) : Except Error Provider := do
   unless Candidates.UP012.modelIds.contains selectedModelId do
     throw ⟨.unsupported, s!"UP-012 has no registered model {selectedModelId}"⟩

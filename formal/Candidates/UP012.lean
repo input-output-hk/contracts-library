@@ -80,7 +80,7 @@ def vestingModelIds : Array String := #[claimModelId, cancelModelId]
 def modelIds : Array String := vestingModelIds.push spendModelId
 
 private def vaultScope : String :=
-  "Experimental pinned vault spend profile: one script input with owner datum, one key output, " ++
+  "TxM-009 spending profile admitted by declared input encodings: one script input with key datum, one key output, " ++
   "and one symbolic signer independent of the owner. Remove the first signer; preserve " ++
   "validScriptContext premises and the 1,000,000-step bound. Removal requires bounded " ++
   "explicit rejection; applicability is checked separately."

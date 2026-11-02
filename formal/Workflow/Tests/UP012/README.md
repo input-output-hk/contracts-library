@@ -19,7 +19,7 @@ lake exe workflow_up012_tests --unit
 
 `--unit` runs only unit coverage. The default suite also runs
 [VaultTests.lean](VaultTests.lean), which checks the two pinned real vault
-artifacts through TxM-009: normal vault PASS, buggy vault FAIL, and
+artifacts through reusable TxM-009 preparation: normal vault PASS, buggy vault FAIL, and
 applicability PASS for both are the expected outcomes. These expectations do not
 replace execution evidence. The existing vesting identity control remains.
 
@@ -48,14 +48,20 @@ the first key. The original bound is 1,000,000 steps, and `rejectedWithin` requi
 an error or non-unit halt within the bound. Exhaustion does not establish rejection.
 Both vesting applicability statements remain separate required jobs.
 
-[Profiles/Vault.lean](../Profiles/Vault.lean) separately prepares two exact vault
-artifacts for native TxM-009. It uses the same shared property and validity predicate,
-with the same 1,000,000-step bound and one property/applicability pair. Its one script
-input has an inline key datum and only ADA; its single key-recipient output
-receives input ADA minus the fee. The redeemer is `Constr 0 []`. Owner, signer,
-and recipient vary independently. Selecting TxM-009 requires this profile;
-selecting TxM-007/008 requires the vesting profile. The legacy provider selects
-the supported family, while the original four-vesting-job `checks`/`jobs` API stays unchanged.
+[Profiles/Vault.lean](../Profiles/Vault.lean) is a compatibility shim for
+[reusable TxM-009 preparation](../../Preparation/TxM009.lean). It uses the same
+shared property, validity predicate, 1,000,000-step bound, and native constructor.
+The datum is `Constr 0 [B owner]`, the redeemer is `Constr 0 []`, and owner,
+signer, and recipient vary independently. Selected TxM-009 checks use the reusable
+path; the original four-vesting-job `checks`/`jobs` API remains vesting scoped.
+
+[ReusableTests.lean](ReusableTests.lean) uses the fixed
+[reusable.json](Inputs/reusable.json) snapshot from the manually built
+[preparation-demo](../Projects/preparation-demo) project. Three programs share the
+same input schema but have different logic. Expected outcomes are PASS for
+`controller_gate`, FAIL for `missing_signature`, and failed applicability with
+ERROR for `never_accept`. The last case must never become PASS. Runtime validation
+of these new scenarios passed, including the always-rejecting applicability control.
 
 For this example, assume the baseline contains only the intended required signer,
 with no unrelated extra signers. The models enforce one signer, but do not infer

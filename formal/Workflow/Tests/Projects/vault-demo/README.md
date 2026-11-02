@@ -45,7 +45,7 @@ UP-012's two vesting combinations and UP-015's one combination are SKIPPED for t
 vaults because their compiled artifacts are outside the vesting allowlist.
 TxM-009 adds one UP-012 signer-removal combination for each vault: normal PASS
 and buggy FAIL, each qualified by applicability. That combination is SKIPPED
-for vesting. The property does not establish correct-owner authorization.
+for vesting because its six-field datum is incompatible with TxM-009's one-field datum. The property does not establish correct-owner authorization.
 
 ## Inspect the output
 
@@ -86,7 +86,8 @@ the installed environment, so the folder is not an independent replay bundle.
 The properties, native models, and artifact-specific adapters remain distinct.
 The vesting adapter recognizes two exact compiled artifacts: the original PR #55
 fixture and this reviewed Aiken 1.1.21/stdlib 3.0.0 build. Other compiled code stays
-unsupported. This allowlist does not make the adapter generic or establish general
+unsupported for TxM-007/008. TxM-009 instead uses reusable structural admission.
+Admission does not establish general
 readiness of UP-001, UP-012, UP-015, or their models.
 
 The app's exit code describes completion and retention. A deliberately failing

@@ -63,4 +63,12 @@ TxM-009 models one script input with an inline `Constr 0 [B owner]` datum,
 one key-recipient output containing input ADA minus the fee, a fixed
 `Constr 0 []` redeemer, and one signer. Owner, signer, and recipient vary
 independently. This native structural model is separate from the executable
-profile that pins two exact vault artifacts; it does not imply ledger reachability.
+reusable preparation path in `Workflow.Preparation.TxM009`; it does not imply ledger reachability.
+
+[Requirements.lean](Requirements.lean) defines `DataShape.bytes`,
+`DataShape.constr`, and `SpendingInputs`. `TxM009.inputs` declares its datum and
+redeemer encodings independently of the four descriptive metadata fields. These
+requirements describe every value the constructor can produce; compatibility
+must not narrow that family to fit a validator schema. New models can declare
+requirements in Lean and add a preparation binding without redesigning the
+JavaScript or JSON catalogue.

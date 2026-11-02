@@ -91,7 +91,7 @@ tracks their wider migration and other branches.
 | UP-001 spend, when undeclared | [TxM-006 / EverySpend](../../Formal/TxModels/Definitions/TxM006.lean) |
 | UP-012 Claim | [Shared UP012 definition](../../Formal/Properties/Universal/UP012/Definition.lean), [TxM-007](../../Formal/TxModels/Definitions/TxM007.lean) |
 | UP-012 Cancel | [TxM-008](../../Formal/TxModels/Definitions/TxM008.lean) |
-| UP-012 key-datum spend | [TxM-009](../../Formal/TxModels/Definitions/TxM009.lean), [exact vault preparation](../Tests/Profiles/Vault.lean) |
+| UP-012 key-datum spend | [TxM-009](../../Formal/TxModels/Definitions/TxM009.lean), [reusable preparation](../Preparation/TxM009.lean) |
 | UP-015 Claim output reversal | [UP015 definition](../../Formal/Properties/Universal/UP015/Definition.lean), the same [TxM-007](../../Formal/TxModels/Definitions/TxM007.lean) |
 
 Every* models expose full `TxInfo` and purpose fields; the theorem supplies a raw
@@ -109,8 +109,8 @@ Its `validScriptContext` conditions are explicit premises, not guarantees of the
 constructor or evidence of ledger reachability. The adapter accepts two exact
 unparameterized vesting artifacts: the original PR #55 fixture and the reviewed
 vault-demo build using Aiken 1.1.21 with stdlib 3.0.0. Unknown compiled code remains
-unsupported for those models. TxM-009 uses separate exact two-vault preparation
-in `Tests/Profiles/Vault.lean`, with the same validity predicate and 1,000,000-step
+unsupported for those models. TxM-009 uses reusable structural preparation in `Preparation/TxM009.lean`,
+with `Tests/Profiles/Vault.lean` retained as a compatibility shim, with the same validity predicate and 1,000,000-step
 bound. Owner, signer, and recipient remain independent. The selected model chooses
 the profile; the legacy provider chooses the supported family and preserves the
 original four-vesting-job `checks`/`jobs` API. The catalogue remains Lean-owned.
@@ -358,3 +358,35 @@ human-friendly report consumes retained results in future
 [issue #83](https://github.com/no-witness-labs/contracts-library/issues/83); its
 contents and format remain undecided. UP-012's intended universal redesign stays
 in [issue #33](https://github.com/no-witness-labs/contracts-library/issues/33).
+
+## Reusable TxM-009 admission
+
+`Formal.TxModels.Requirements` records data encodings separately from descriptive
+model metadata. `TxM009.inputs` requires a constructor-zero datum with one bytes
+field and an empty constructor-zero redeemer. A developer declares a model's
+complete encoding requirements in Lean and supplies its preparation binding;
+the Lean-owned catalogue and its ten registered combinations remain unchanged.
+
+`Workflow.Preparation.Compatibility.check` is pure and conservative. It requires
+V3, no parameters, and exactly one declared spending handler; other handlers may
+coexist. Its supported schema subset is ANY (`{}`), bytes, constructors with
+matching indices and field counts, and singleton `anyOf`. It resolves local
+`#/definitions/...` references with `~0`/`~1` escaping, rejects percent-encoded
+URI fragments and cycles,
+and limits traversal depth to 128. It ignores `title`, `description`, and
+`$comment`. Unknown validation keywords, missing inputs, unresolved references,
+and ambiguous unions produce an unsupported reason and SKIPPED. Admission never
+narrows the transaction model's domain. Field labels do not infer owners or roles.
+
+`Workflow.Preparation.Program.support` validates the whole CBOR and Flat encoding
+of the actual compiled program. It computes the Blake2b-224 script hash with V3
+tag 3. It canonicalizes lowercase hex; it does not trust the supplied hash or
+recognize code through an allowlist. `Workflow.Preparation.TxM009` then emits
+aliases to the unchanged native model. The existing property, validity premises,
+and fuel remain unchanged. TxM-007/008 and UP-015 retain their exact artifact guards.
+
+A new compiled program can therefore use this binding without an allowlist edit.
+The match is structural only: it does not establish security roles, correct-owner
+authorization, ledger reachability, or broader property coverage. General parameter
+support, full schema translation, and property semantics remain deferred. The pilot is
+an implementation checkpoint for #96 linked to #88, not a complete typed generator.

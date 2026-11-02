@@ -235,8 +235,8 @@ and key-datum spend (TxM-009). Each contains a property
 and linked applicability obligation. They use the **1,000,000-step** bound and
 fixed one-signer models. The adapter accepts two exact vesting artifacts: the original
 PR #55 fixture and the reviewed vault-demo build using Aiken 1.1.21 with stdlib
-3.0.0 for TxM-007/008. TxM-009 separately accepts the two exact vault artifacts
-from the UP-001 fixtures and demo. Unsupported artifact/model pairs appear as
+3.0.0 for TxM-007/008. TxM-009 uses reusable structural admission for compatible unparameterized V3
+spending targets, without adding compiled-artifact allowlist entries. Unsupported artifact/model pairs appear as
 SKIPPED in the app, with an unsupported reason. Owner, signer, and recipient vary independently in
 TxM-009; passing does not establish correct-owner authorization. Its intended universal meaning remains
 separate work in [issue #33](https://github.com/no-witness-labs/contracts-library/issues/33).
@@ -290,3 +290,18 @@ assertions match. The test command returns zero only when all required suites
 ran and passed. Independent suites continue after a test failure; a build failure
 stops execution so stale binaries cannot produce a false success. The
 [test index](../Tests/README.md) lists focused commands and legacy scenario tests.
+
+To exercise reusable TxM-009 admission from `formal/`:
+
+```sh
+plutus-upv run Workflow/Tests/UP012/Inputs/reusable.json controller_gate.controller_gate --check UP-012 --timeout-ms 300000
+```
+
+Check the snapshot's validator titles if choosing another target. `--check UP-012`
+selects the property and scans all three registered model combinations; it does
+not select a client model ID. For this target, TxM-007/008 are expected to be
+SKIPPED by their exact vesting guards. TxM-009 admits compatible unparameterized
+V3 spending schemas and validates compiled code. Structural admission does not
+infer who must sign or establish general authorization safety. The new fixtures
+passed their scenario tests: signer enforcement produces PASS, omitted enforcement
+produces FAIL, and the never-accepting control cannot establish applicability.

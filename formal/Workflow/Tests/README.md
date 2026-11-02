@@ -24,7 +24,7 @@ stops the run; a suite failure allows the remaining independent suites to run.
 Only a complete successful test run returns zero. Expected negative controls
 print FAIL or INCONCLUSIVE without making their enclosing suite fail.
 
-The aggregate command registers 19 suites, including component units, metadata,
+The aggregate command registers 20 suites, including component units, metadata,
 run evidence, selection, shared source capture/compilation, relative review links,
 output controls, and installer/launcher checks. It also runs real app/core solver cases, runner failure
 controls, Input-to-Generator type-checking, Executor/Reporter solver controls, and
@@ -51,7 +51,7 @@ lake exe workflow_review_tests
 | Scenario | Coverage | Definition/model source |
 | --- | --- | --- |
 | [UP001](UP001/README.md) | Passing and failing vaults, invalid input, and timeout | `Candidates.UP001` and fixed demo inputs |
-| [UP012](UP012/README.md) | Four original vesting propositions, native TxM-009 normal/buggy vault checks, unsupported-profile handling, and a semantic negative control | `Candidates.UP012` plus test-owned vesting and vault profiles |
+| [UP012](UP012/README.md) | Four original vesting propositions, native TxM-009 vault and reusable preparation checks, unsupported-profile handling, and a semantic negative control | `Candidates.UP012` plus test-owned vesting and vault profiles |
 | [UP015](UP015/README.md) | Claim output swap, nonidentity applicability, shared-model app scenarios, unsupported-profile handling, and a counterfactual rejection control | `Candidates.UP015`, native TxM-007, and shared test-only linear-vesting preparation |
 
 The UP001/UP012 scenario harnesses preserve the legacy `universal` CLI contract.
@@ -77,3 +77,10 @@ Inputs and expected declarations are permanent test fixtures. Generated Lean
 sources, compiler artifacts, logs, and reports appear only in the local ignored
 `formal/output/` folders after a CLI run. The [file map](../Docs/DEVELOPER-GUIDE.md#generated-goals-and-supporting-files) shows
 where supporting definitions live.
+
+`workflow_preparation_tests` adds pure compatibility and compiled-program admission
+coverage. The aggregate now registers 20 suites. The new runtime scenarios in
+UP012 use `preparation-demo`; the full UP-012 suite and the public CLI produced
+the expected positive, negative, and failed-applicability outcomes. Existing vault-demo
+expectations remain 30 selected combinations and 45 generated Lean files; this
+pilot has not rerun that demo.

@@ -78,13 +78,22 @@ def runUnit : IO Unit := do
         datum := none, redeemer := none, declaredHash := none }
     let parameter : ArgumentDescription :=
       { schema := Json.mkObj [("dataType", .str "integer")], title := none, description := none }
+    check "input-compatible new compiled code requires no artifact registration"
+      ((generateOne configured { target with compiledCode := "480100002221200101" }
+        "Generated.NewProgram").toOption.isSome)
+    check "an unrelated declared purpose does not prevent spending preparation"
+      ((generateOne configured { target with handlers := target.handlers.push extraPurpose }
+        "Generated.AdditionalPurpose").toOption.isSome)
+    match generateOne configured { target with compiledCode := target.compiledCode ++ "00" }
+        "Generated.InvalidProgram" with
+    | .error error =>
+      check "malformed prepared code is an error rather than an unsupported schema"
+        (error.kind == .invalidPlan)
+    | .ok _ => throw (IO.userError "trailing compiled bytes were accepted")
     for unsupported in [
-        { target with compiledCode := target.compiledCode ++ "00" },
-        { target with compiledCode := "480100002221200101" },
         { target with plutusVersion := "v2" },
         { target with parameters := some #[parameter] },
-        { target with handlers := #[] },
-        { target with handlers := target.handlers.push extraPurpose }] do
+        { target with handlers := #[] }] do
       match generateOne configured unsupported "Generated.Vault" with
       | .error error => check "unsupported vault mutation is explicit" (error.kind == .unsupported)
       | .ok _ => throw (IO.userError "unsupported vault mutation accepted")
