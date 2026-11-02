@@ -120,6 +120,10 @@ These apply to any contract:
 
 ## Candidate checks
 
+See [UP-002 preparation, bounds, and standalone proof jobs](docs/UP002.md).
+The files below define the historical propositions; `lake build Universal`
+typechecks their models without running the separate solver jobs.
+
 | Candidate | Validator/action | Lean file |
 | --- | --- | --- |
 | UP-002 | Linear vesting / Claim | [NoSignatureClaim.lean](Universal/Demo/Linear_vesting/NoSignatureClaim.lean) |
