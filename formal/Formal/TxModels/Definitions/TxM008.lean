@@ -1,4 +1,6 @@
 import Formal.TxModels.VestingTypes
+import Formal.TxModels.Runnable
+import Formal.TxModels.Artifacts.LinearVesting
 
 /-! Experimental vesting cancel model from PR #55 at f5cbda7df624f2496dd2e6fe354a0cd15365b923. -/
 
@@ -49,5 +51,12 @@ def metadata : Metadata := {
   title := "Experimental vesting Cancel context"
   plutus_version := "v3"
   description := "Baseline Cancel contexts for the pinned linear-vesting test profile. Two inputs spend the vesting position and the signer's ADA; one output returns the vested asset and ADA change to the signer. There is exactly one signer and one vested asset under the fixed policy policyA. Keys, amounts, times, and other leaf values vary. The model uses the typed Cancel redeemer and a vesting datum with key credentials. It constructs ADA change as input ADA minus the fee. Reference inputs, mint, certificates, withdrawals, votes, proposals, and the datum map are empty; the validity interval has a lower bound and no upper bound." }
+
+/-- Discoverable execution information; the transaction constructor above is unchanged. -/
+def runnable : Runnable := {
+  metadata
+  context := ``cancel
+  admission := .pinnedSpending #[Artifacts.LinearVesting.referenceCompiledCode,
+    Artifacts.LinearVesting.aiken1121CompiledCode] }
 
 end Formal.TxModels.TxM008

@@ -41,3 +41,10 @@ The adapter unfolds the shared definition before invoking Blaster. Workflow test
 keep the previous expanded formulas as independent equivalence/negative-control
 fixtures. Model applications stay in the binding/test layer rather than separate
 Claim and Cancel property definitions.
+
+## Property-owned execution experiment
+
+[Run.lean](Run.lean) owns the experimental model list and run instructions.
+Adding an existing compatible model changes only that list. [Tests.lean](Tests.lean)
+checks parity with the legacy adapter. The [experiment guide](../../../../Workflow/Declarative/README.md)
+explains discovery and the separate command; the installed CLI retains its existing path.
