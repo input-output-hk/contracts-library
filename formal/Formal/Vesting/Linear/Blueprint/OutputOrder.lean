@@ -24,15 +24,15 @@ theorem reverseOutputs_claim :
       validScriptContext (withOutputs (claim p) (outputsOf (claim p)).reverse) = true →
       accepts ledgerFuel (withOutputs (claim p) (outputsOf (claim p)).reverse) := by blaster
 
-/-- `reverseOutputs_claim` applies: some valid accepted `claim` transaction gives a valid changed
-    transaction, so the check above does not hold only vacuously. -/
+/-- Legacy applicability: some valid accepted Claim has a valid reversal.
+    This formula does not require the output list to change. -/
 theorem reverseOutputs_claim_applies :
     ∃ p,
       validScriptContext (claim p) = true ∧
       accepts ledgerFuel (claim p) ∧
       validScriptContext (withOutputs (claim p) (outputsOf (claim p)).reverse) = true := by blaster
 
-/-- A `cancel` transaction with its outputs in reverse order is still accepted. -/
+/-- Reversing Cancel's singleton output list leaves it unchanged and preserves acceptance. -/
 theorem reverseOutputs_cancel :
     ∀ p,
       validScriptContext (cancel p) = true →
@@ -40,8 +40,8 @@ theorem reverseOutputs_cancel :
       validScriptContext (withOutputs (cancel p) (outputsOf (cancel p)).reverse) = true →
       accepts ledgerFuel (withOutputs (cancel p) (outputsOf (cancel p)).reverse) := by blaster
 
-/-- `reverseOutputs_cancel` applies: some valid accepted `cancel` transaction gives a valid
-    changed transaction, so the check above does not hold only vacuously. -/
+/-- Legacy applicability: some valid accepted Cancel has a valid reversal.
+    Cancel has one output, so this does not establish a nontrivial reorder. -/
 theorem reverseOutputs_cancel_applies :
     ∃ p,
       validScriptContext (cancel p) = true ∧
@@ -57,15 +57,15 @@ theorem rotateOutputs_claim :
       validScriptContext (rotateOutputs (claim p)) = true →
       accepts ledgerFuel (rotateOutputs (claim p)) := by blaster
 
-/-- `rotateOutputs_claim` applies: some valid accepted `claim` transaction gives a valid changed
-    transaction, so the check above does not hold only vacuously. -/
+/-- Legacy applicability: some valid accepted Claim has a valid rotation.
+    This formula does not require the output list to change. -/
 theorem rotateOutputs_claim_applies :
     ∃ p,
       validScriptContext (claim p) = true ∧
       accepts ledgerFuel (claim p) ∧
       validScriptContext (rotateOutputs (claim p)) = true := by blaster
 
-/-- A `cancel` transaction with its first output moved to the end is still accepted. -/
+/-- Rotating Cancel's singleton output list leaves it unchanged and preserves acceptance. -/
 theorem rotateOutputs_cancel :
     ∀ p,
       validScriptContext (cancel p) = true →
@@ -73,8 +73,8 @@ theorem rotateOutputs_cancel :
       validScriptContext (rotateOutputs (cancel p)) = true →
       accepts ledgerFuel (rotateOutputs (cancel p)) := by blaster
 
-/-- `rotateOutputs_cancel` applies: some valid accepted `cancel` transaction gives a valid
-    changed transaction, so the check above does not hold only vacuously. -/
+/-- Legacy applicability: some valid accepted Cancel has a valid rotation.
+    Cancel has one output, so this does not establish a nontrivial reorder. -/
 theorem rotateOutputs_cancel_applies :
     ∃ p,
       validScriptContext (cancel p) = true ∧
