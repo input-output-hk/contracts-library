@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
 """Generate Lean types, copy compiled CBOR, or generate selected candidate checks.
 
-Type generation supports Plutus V3. --check otherPurpose or malformedRedeemer
-adds Checks.lean without transaction shapes. See formal/docs/BLUEPRINT.md for scope.
+Type generation supports Plutus V3. --check selects otherPurpose,
+malformedRedeemer, or returnDatum without transaction shapes.
+See formal/docs/BLUEPRINT.md for supported inputs and output files.
 
 The blueprint translator is extracted from sayyadirfanali's universal-checks
 branch at 99a5734f0e036b6abfb4c3f121a298e35fa2eff6 (fork PR #44).
 """
 
 import argparse
+import hashlib
 import json
 import re
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -424,7 +427,7 @@ def redeemer_kind(t):
             "map": "map", "data": "any"}.get(t[0], "constructors")
 
 
-def generate(bp, name, prefix, scripts_dir):
+def generate(bp, name, prefix, scripts_dir, inline_script=False):
     """Pass 1: (the lines of Types.lean without the closing `end`, ValidatorInfo)."""
     entries = find_entries(bp, name)
     head = ".".join(entries[0]["title"].split(".")[:2])
@@ -511,7 +514,11 @@ def generate(bp, name, prefix, scripts_dir):
     L.append("")
     # `#import_uplc` may declare at the root namespace, so the name carries the validator's.
     script = camel(validator)[:1].lower() + camel(validator)[1:] + "Script"
-    L.append(f'#import_uplc {script} PlutusV3 single_cbor_hex "{cbor_path}"')
+    if inline_script:
+        L += [f"abbrev {script} : PlutusCore.UPLC.PlutusScript.PlutusScript :=",
+              f'  ⟨.PlutusV3, singleCborEncodedScriptFromHexM "{compiled_code(entries)}"⟩']
+    else:
+        L.append(f'#import_uplc {script} PlutusV3 single_cbor_hex "{cbor_path}"')
     L.append("")
     L.append(f"def program : Program := {script}.script")
     L.append("")
@@ -735,6 +742,97 @@ def malformed_redeemer_checks(info):
     return lines + declarations + [f"end {info.prefix}"]
 
 
+
+def require_return_datum_schema(tr, schema, visiting=()):
+    """Refuse constraints or recursion that the existing decoder would not enforce."""
+    annotations = {"title", "description", "$comment"}
+    if "$ref" in schema:
+        if set(schema) - annotations - {"$ref"}:
+            raise ExtractError("returnDatum does not support constrained references")
+        key, resolved = tr.resolve(schema)
+        if key in visiting:
+            raise ExtractError("returnDatum does not support recursive datum schemas")
+        require_return_datum_schema(tr, resolved, visiting + (key,))
+        if key in LEDGER_TYPES and tr.ledger_layout_matches(resolved, LEDGER_TYPES[key][1]):
+            expected = {
+                "Credential": {0: [("bytes",)], 1: [("bytes",)]},
+                "StakingCredential": {0: [("ledger", "Credential")], 1: [("int",)] * 3},
+                "Address": {0: [("ledger", "Credential"), ("option", ("ledger", "StakingCredential"))]},
+                "TxOutRef": {0: [("bytes",), ("int",)]}
+            }[LEDGER_TYPES[key][0]]
+            for ctor in resolved["anyOf"]:
+                actual = [tr.ty(field, key) for field in ctor.get("fields", [])]
+                if actual != expected[ctor["index"]]:
+                    raise ExtractError(f"returnDatum cannot use the ledger decoder for {key}")
+        return
+    if "anyOf" in schema:
+        allowed, children = {"anyOf"}, schema["anyOf"]
+        indices = [child.get("index") for child in children]
+        if not children or len(indices) != len(set(indices)):
+            raise ExtractError("returnDatum requires distinct constructor tags in a nonempty union")
+    else:
+        kind = schema.get("dataType")
+        allowed = {"dataType"} if kind is not None else set()
+        children = []
+        if kind == "constructor":
+            allowed |= {"index", "fields"}
+            children = schema.get("fields", [])
+        elif kind == "list":
+            allowed.add("items")
+            items = schema.get("items", {})
+            if items == []:
+                raise ExtractError("returnDatum does not support empty tuple schemas")
+            children = items if isinstance(items, list) else [items]
+        elif kind == "map":
+            allowed |= {"keys", "values"}
+            children = [schema.get("keys", {}), schema.get("values", {})]
+    unsupported = set(schema) - annotations - allowed
+    if unsupported:
+        raise ExtractError(f"returnDatum does not support datum constraints: {', '.join(sorted(unsupported))}")
+    for child in children:
+        require_return_datum_schema(tr, child, visiting)
+
+
+def return_datum_checks(bp, info):
+    """UP-006 over every output of every model-valid accepted context, without shapes."""
+    if bp.get("preamble", {}).get("plutusVersion") != "v3":
+        raise ExtractError("returnDatum requires an explicit Plutus V3 blueprint")
+    entries = find_entries(bp, info.head)
+    if any(e.get("parameters") for e in entries):
+        raise ExtractError("returnDatum requires an applied snapshot with no remaining blueprint parameters")
+    if info.datum_type is None:
+        raise ExtractError("returnDatum requires a declared spending datum schema")
+    schema = next(e["datum"]["schema"] for e in entries if e["title"].endswith(".spend"))
+    require_return_datum_schema(Translator(bp.get("definitions", {})), schema)
+    code = compiled_code(entries)
+    if not isinstance(code, str) or not re.fullmatch(r"(?:[0-9a-fA-F]{2})+", code):
+        raise ExtractError("returnDatum requires nonempty compiledCode hex")
+    digest = hashlib.blake2b(b"\x03" + bytes.fromhex(code), digest_size=28).digest()
+    if any(not isinstance(e.get("hash"), str) or e["hash"].lower() != digest.hex() for e in entries):
+        raise ExtractError("returnDatum: blueprint hash does not match the Plutus V3 compiledCode")
+    octets = ", ".join(str(n) for n in digest)
+    decoder = dec(info.datum_type, "datum", Fresh())
+    return ["set_option Elab.async false", "",
+            "open CardanoLedgerApi.V3 (ScriptContext validScriptContext)",
+            "open Formal.Universal.Properties (ledgerFuel)",
+            "open Formal.Universal.ReturnDatum (allReturnDatumsValid)", "",
+            "/-- Script identity computed from compiledCode and checked against the blueprint. -/",
+            "def returnDatumScriptHash : ByteString :=",
+            f"  ⟨String.mk (([{octets}] : List Nat).map Char.ofNat)⟩", "",
+            "/-- Schema-aware decoding; inline datum presence is checked separately by the helper. -/",
+            "def returnDatumConforms (datum : Data) : Bool :=",
+            f"  ({decoder} : Option SpendDatum).isSome", "",
+            "/-- Every matching output of an accepted modeled transaction has a conforming inline datum.",
+            "    Includes optional outputs and all positions; acceptance uses the existing CEK step bound. -/",
+            "def returnDatumGoal : Prop :=",
+            "  ∀ (ctx : ScriptContext), validScriptContext ctx = true →",
+            "    accepts ledgerFuel ctx →",
+            "    allReturnDatumsValid returnDatumScriptHash returnDatumConforms",
+            "      ctx.scriptContextTxInfo.txInfoOutputs = true", "",
+            "theorem returnDatum : returnDatumGoal := by blaster", "",
+            f"end {info.prefix}"]
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("blueprint", nargs="?")
@@ -743,7 +841,8 @@ def main():
     ap.add_argument("--scripts", default="Scripts", help="directory for the .cbor file, as seen by Lean")
     output = ap.add_mutually_exclusive_group()
     output.add_argument("--cbor-only", action="store_true", help="copy compiledCode as hex and print its path")
-    output.add_argument("--check", choices=["otherPurpose", "malformedRedeemer"], help="also write Checks.lean for this family")
+    output.add_argument("--check", choices=["otherPurpose", "malformedRedeemer", "returnDatum"],
+                        help="also write Checks.lean for this family")
     ap.add_argument("--translation", action="store_true", help="print the translation table and exit")
     a = ap.parse_args()
     if a.translation:
@@ -760,23 +859,36 @@ def main():
             path.write_text(compiled_code(entries))
             print(path)
             return
-        lines, info = generate(bp, a.validator, module_prefix(a.out), a.scripts)
+        prefix = module_prefix(a.out)
+        if a.check == "returnDatum":
+            prefix += ".ReturnDatum"
+        lines, info = generate(bp, a.validator, prefix, a.scripts, inline_script=a.check == "returnDatum")
+        checks = (["import Blaster", "import Formal.Universal.ReturnDatum"] + lines
+                  + return_datum_checks(bp, info)) if a.check == "returnDatum" else None
     except (ExtractError, KeyError, json.JSONDecodeError) as e:
         sys.exit(f"process_blueprint: {e}")
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    target = out / "Types.lean"
-    target.write_text("\n".join(lines + [f"end {info.prefix}"]) + "\n")
-    print(f"wrote {target}")
-    if a.check:
+    if a.check == "returnDatum":
         target = out / "Checks.lean"
-        checks = other_purpose_checks(info) if a.check == "otherPurpose" else malformed_redeemer_checks(info)
-        target.write_text("\n".join(checks) + "\n")
+        with tempfile.TemporaryDirectory(prefix=".return-datum-", dir=out) as staging:
+            temporary = Path(staging) / "Checks.lean"
+            temporary.write_text("\n".join(checks) + "\n")
+            temporary.replace(target)
         print(f"wrote {target}")
-        if a.check == "otherPurpose" and {h.purpose for h in info.handlers} == set(PURPOSES):
-            print("otherPurpose: no undeclared purposes; no checks apply")
-        elif a.check == "malformedRedeemer" and not any(MALFORMED[h.redeemer_kind] for h in info.handlers):
-            print("malformedRedeemer: no typed redeemer cases; no checks generated")
+    else:
+        target = out / "Types.lean"
+        target.write_text("\n".join(lines + [f"end {info.prefix}"]) + "\n")
+        print(f"wrote {target}")
+        if a.check:
+            target = out / "Checks.lean"
+            checks = other_purpose_checks(info) if a.check == "otherPurpose" else malformed_redeemer_checks(info)
+            target.write_text("\n".join(checks) + "\n")
+            print(f"wrote {target}")
+            if a.check == "otherPurpose" and {h.purpose for h in info.handlers} == set(PURPOSES):
+                print("otherPurpose: no undeclared purposes; no checks apply")
+            elif a.check == "malformedRedeemer" and not any(MALFORMED[h.redeemer_kind] for h in info.handlers):
+                print("malformedRedeemer: no typed redeemer cases; no checks generated")
     for warning in info.warnings:
         print(f"warning: {warning}")
 

@@ -1,5 +1,6 @@
-"""Stdlib-only regression tests for blueprint extraction and UP-001/UP-005 generation."""
+"""Stdlib-only regression tests for blueprint extraction and UP-001/UP-005/UP-006 generation."""
 import copy
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -340,12 +341,147 @@ class BlueprintFoundationTests(unittest.TestCase):
     def test_cli_rejects_unsupported_or_conflicting_check_options(self):
         for args in (("--check", "someAccepted"), ("--check", "unknown"),
                      ("--cbor-only", "--check", "otherPurpose"),
-                     ("--cbor-only", "--check", "malformedRedeemer")):
+                     ("--cbor-only", "--check", "malformedRedeemer"),
+                     ("--cbor-only", "--check", "returnDatum")):
             with self.subTest(args=args), tempfile.TemporaryDirectory() as root:
                 result = self.cli(root, *args)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertFalse((Path(root) / "Formal").exists())
                 self.assertFalse((Path(root) / "Scripts").exists())
+
+
+    def return_source(self):
+        lines, info = BLUEPRINT.generate(self.blueprint, "example", "Formal.Fixture.Blueprint.ReturnDatum",
+                                         "Scripts", inline_script=True)
+        return "\n".join(["import Blaster", "import Formal.Universal.ReturnDatum"] + lines
+                          + BLUEPRINT.return_datum_checks(self.blueprint, info)) + "\n"
+
+    def use_matching_hash(self):
+        for entry in self.blueprint["validators"]:
+            entry["hash"] = hashlib.blake2b(b"\x03" + bytes.fromhex(entry["compiledCode"]), digest_size=28).hexdigest()
+
+    def test_return_datum_full_context_and_output_list(self):
+        self.use_matching_hash()
+        source = self.return_source()
+        self.assertIn("∀ (ctx : ScriptContext), validScriptContext ctx = true →", source)
+        self.assertIn("accepts ledgerFuel ctx →", source)
+        self.assertIn("ctx.scriptContextTxInfo.txInfoOutputs = true", source)
+        self.assertIn("allReturnDatumsValid returnDatumScriptHash returnDatumConforms", source)
+        for absent in (".Tx", "firstContinuation", "redirectContinuations", "reindexOutputDatum", "sorry",
+                       "import Formal.Fixture.Blueprint.Types", "#import_uplc"):
+            self.assertNotIn(absent, source)
+
+    def test_return_datum_hash_is_the_compiled_snapshot_hash(self):
+        self.use_matching_hash()
+        digest = bytes.fromhex(self.blueprint["validators"][0]["hash"])
+        self.assertIn(", ".join(str(n) for n in digest), self.return_source())
+        self.blueprint["validators"][1]["hash"] = "00" * 28
+        with self.assertRaisesRegex(BLUEPRINT.ExtractError, "hash does not match"):
+            self.return_source()
+
+    def test_return_datum_rejects_missing_hash(self):
+        self.use_matching_hash()
+        del self.blueprint["validators"][0]["hash"]
+        with self.assertRaisesRegex(BLUEPRINT.ExtractError, "hash does not match"):
+            self.return_source()
+
+    def test_return_datum_uses_schema_aware_map_decoder(self):
+        self.use_matching_hash()
+        self.blueprint["validators"][0]["datum"]["schema"] = {
+            "dataType": "map", "keys": {"dataType": "bytes"}, "values": {"dataType": "integer"}}
+        source = self.return_source()
+        self.assertIn("match datum with | Data.Map", source)
+        self.assertIn("Option SpendDatum", source)
+        self.assertNotIn("IsData.fromData datum : Option SpendDatum", source)
+
+    def test_return_datum_uses_schema_aware_tuple_decoder(self):
+        self.use_matching_hash()
+        self.blueprint["validators"][0]["datum"]["schema"] = {
+            "dataType": "list", "items": [{"dataType": "integer"}, {"dataType": "bytes"}]}
+        self.assertIn("match datum with | Data.List [", self.return_source())
+
+    def test_return_datum_refuses_remaining_parameters_on_any_entry(self):
+        self.use_matching_hash()
+        self.blueprint["validators"][1]["parameters"] = [
+            {"title": "owner", "schema": {"dataType": "bytes"}}]
+        with self.assertRaisesRegex(BLUEPRINT.ExtractError, "remaining blueprint parameters"):
+            self.return_source()
+
+    def test_return_datum_refuses_missing_spending_datum(self):
+        self.use_matching_hash()
+        del self.blueprint["validators"][0]["datum"]
+        with self.assertRaisesRegex(BLUEPRINT.ExtractError, "declared spending datum"):
+            self.return_source()
+
+    def test_return_datum_refuses_recursive_datum(self):
+        self.use_matching_hash()
+        self.blueprint["definitions"]["fixture/types/Datum"]["anyOf"][0]["fields"].append(
+            {"title": "recursive", "$ref": "#/definitions/fixture~1types~1Datum"})
+        with self.assertRaisesRegex(BLUEPRINT.ExtractError, "recursive datum"):
+            self.return_source()
+
+    def test_return_datum_refuses_untranslated_constraints(self):
+        self.use_matching_hash()
+        self.blueprint["validators"][0]["datum"]["schema"] = {"dataType": "integer", "minimum": 0}
+        with self.assertRaisesRegex(BLUEPRINT.ExtractError, "datum constraints: minimum"):
+            self.return_source()
+
+    def test_return_datum_refuses_ambiguous_constructor_tags(self):
+        self.use_matching_hash()
+        constructors = self.blueprint["definitions"]["fixture/types/Datum"]["anyOf"]
+        constructors.append(dict(copy.deepcopy(constructors[0]), title="OtherDatum"))
+        with self.assertRaisesRegex(BLUEPRINT.ExtractError, "distinct constructor tags"):
+            self.return_source()
+
+    def test_return_datum_refuses_empty_tuple_schema(self):
+        self.use_matching_hash()
+        self.blueprint["validators"][0]["datum"]["schema"] = {"dataType": "list", "items": []}
+        with self.assertRaisesRegex(BLUEPRINT.ExtractError, "empty tuple"):
+            self.return_source()
+
+    def test_return_datum_refuses_nonstandard_ledger_fields(self):
+        self.use_matching_hash()
+        self.blueprint["definitions"]["cardano/address/Credential"] = {"anyOf": [
+            {"dataType": "constructor", "index": n, "fields": [{"dataType": "integer"}]}
+            for n in (0, 1)]}
+        self.blueprint["validators"][0]["datum"]["schema"] = {"$ref": "#/definitions/cardano~1address~1Credential"}
+        with self.assertRaisesRegex(BLUEPRINT.ExtractError, "ledger decoder"):
+            self.return_source()
+
+    def test_return_datum_cli_writes_checks_without_touching_author_files(self):
+        self.use_matching_hash()
+        with tempfile.TemporaryDirectory() as root:
+            out = Path(root) / "Formal/Fixture/Blueprint"
+            out.mkdir(parents=True)
+            (out / "Tx.lean").write_text("-- author content\n")
+            (out / "Types.lean").write_text("-- existing types\n")
+            result = self.cli(root, "--out", "Formal/Fixture/Blueprint", "--check", "returnDatum")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual((out / "Checks.lean").read_text(), self.return_source())
+            self.assertEqual((out / "Types.lean").read_text(), "-- existing types\n")
+            self.assertEqual((out / "Tx.lean").read_text(), "-- author content\n")
+            self.assertEqual({p.name for p in out.iterdir()}, {"Checks.lean", "Types.lean", "Tx.lean"})
+
+    def test_return_datum_cli_needs_no_external_cbor_or_types(self):
+        self.use_matching_hash()
+        with tempfile.TemporaryDirectory() as root:
+            result = self.cli(root, "--out", "Formal/Fixture/Blueprint", "--check", "returnDatum")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            out = Path(root) / "Formal/Fixture/Blueprint"
+            self.assertEqual({p.name for p in out.iterdir()}, {"Checks.lean"})
+            self.assertFalse((Path(root) / "Scripts").exists())
+            self.assertEqual((out / "Checks.lean").read_text(), self.return_source())
+
+    def test_return_datum_failure_preserves_existing_generated_files(self):
+        with tempfile.TemporaryDirectory() as root:
+            out = Path(root) / "Formal/Fixture/Blueprint"
+            out.mkdir(parents=True)
+            for name in ("Types.lean", "Checks.lean"):
+                (out / name).write_text("-- previous output\n")
+            result = self.cli(root, "--out", "Formal/Fixture/Blueprint", "--check", "returnDatum")
+            self.assertNotEqual(result.returncode, 0)
+            for name in ("Types.lean", "Checks.lean"):
+                self.assertEqual((out / name).read_text(), "-- previous output\n")
 
 
 if __name__ == "__main__":
