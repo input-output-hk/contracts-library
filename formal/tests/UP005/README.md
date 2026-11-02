@@ -90,7 +90,10 @@ ignores the context and returns unit. It retains the same eight formulas and
 `EverySpend` contexts, malformed terms, `ledgerFuel`, and negated acceptance are
 unchanged. The known constructor indices come from the pinned blueprint, whose
 schema the fixture checks. The standalone commands do not run a Python generator
-or the workflow app. The existing generator and its tests remain unchanged.
+or the workflow app. The shared legacy generator now combines the UP-001,
+UP-005, and UP-006 families; its retained regression run passed all 47 tests.
+That reconciliation changes the generator, its tests, and shared documentation,
+but introduces no Python dependency into these standalone Lean commands.
 
 Checkpoint 2 covers:
 
@@ -105,6 +108,25 @@ and broader malformed-form coverage, remain open under
 ## Recorded validation
 
 Standalone validation on 2026-11-02 used the commands above with JSON diagnostics.
-The source-artifact/schema check passed. Eight original-scope obligations returned Valid in 75.413 seconds, exit 0. The accepting control produced eight Falsified observations with counterexamples in 63.432 seconds, expected exit 1. All eight original theorem axiom listings exclude sorryAx.
-Standard Lean axioms and Blaster's SMT trust remain. These are scoped candidate
-results; app integration is not part of this checkpoint.
+The source-artifact/schema check passed.
+
+| Run | Observations | Elapsed time | Exit status |
+| --- | --- | --- | --- |
+| Original checks | 8 `Valid` | 75.413 seconds | 0 |
+| Always-accepting control | 8 `Falsified`, each with a counterexample | 63.432 seconds | 1, expected |
+
+All eight original theorem axiom listings exclude `sorryAx`; each lists `propext`,
+`Classical.choice`, `Quot.sound`, and `Blaster.Tactic.blasterProven`. The support
+build retained the existing dependency warning in `PlutusCore.UPLC.CekMachine`.
+
+The local `candidate-checkpoint-1` evidence archive retains the raw logs,
+receipts, and a source inventory with SHA-256 hashes. This source directory
+contains no generated evidence records. The receipts record elapsed time
+and exit status, not a source commit.
+Post-run comparison found the checks, control, fixture, shared `Properties.lean`,
+blueprint, toolchain, and dependency manifest byte-identical to standalone commit
+`b655a3e7ef7c4d353e51a986963028d4d304c0e3`. This source comparison supports reuse
+of the retained observations; it is not a new solver run or final combined build.
+
+Final shared-source compatibility and combined build checks remain delivery gates.
+App integration and broader model coverage remain checkpoint-2 work.
