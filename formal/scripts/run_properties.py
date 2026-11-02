@@ -86,7 +86,7 @@ def properties_for(root, entries, selected):
     return properties
 
 
-def models_for(root, identities, runnable=True):
+def models_for(root, identities):
     models = []
     for identity in dict.fromkeys(identities):
         match = re.fullmatch(r"TxM-([0-9]+)", identity)
@@ -96,12 +96,11 @@ def models_for(root, identities, runnable=True):
         path = root / "Formal/TxModels/Definitions" / (stem + ".lean")
         if not path.is_file():
             raise ValueError(f"unknown model: {identity}")
-        if runnable and not re.search(
+        if not re.search(
                 r"^[ \t]*def runnable\s*:\s*(?:Formal\.TxModels\.)?Runnable\s*:=",
                 path.read_text(), re.MULTILINE):
             raise ValueError(f"{identity}: missing runnable export")
-        export = "runnable" if runnable else "metadata"
-        models.append((module_name(root, path), f"Formal.TxModels.{stem}.{export}"))
+        models.append((module_name(root, path), f"Formal.TxModels.{stem}.runnable"))
     return models
 
 
@@ -112,34 +111,26 @@ def property_entries(properties):
         for module, name, definition, metadata in properties) + "]"
 
 
-def imports(properties, models=(), legacy=False):
-    return list(dict.fromkeys([p[0] for p in properties] + [m[0] for m in models] +
-                            (["Workflow.Declarative.LegacyUP001"] if legacy else [])))
+def imports(properties, models=()):
+    return list(dict.fromkeys([p[0] for p in properties] + [m[0] for m in models]))
 
 
-def plan_source(properties, legacy):
-    modules = ["Workflow.Declarative.Discovery"] + imports(properties, legacy=legacy)
-    legacy_ids = "(Workflow.Declarative.LegacyUP001.checks.map (·.modelId))" if legacy else "#[]"
+def plan_source(properties):
+    modules = ["Workflow.Declarative.Discovery"] + imports(properties)
     return "\n".join("import " + name for name in modules) + \
         "\n\ndef main : IO UInt32 :=\n  Workflow.Declarative.Discovery.describe\n    " + \
-        property_entries(properties) + "\n    " + legacy_ids + "\n"
+        property_entries(properties) + "\n"
 
 
-def bootstrap(properties, models, legacy_models=(), known=(), snapshot=None, index=None):
-    legacy = bool(legacy_models)
-    modules = ["Workflow.Declarative.CLI"] + imports(properties, list(models) + list(legacy_models), legacy)
+def bootstrap(properties, models, known=(), snapshot=None, index=None):
+    modules = ["Workflow.Declarative.CLI"] + imports(properties, models)
     model_entries = "#[" + ",\n      ".join(
         "{ moduleName := " + quoted(module) + ", runnable := " + name + " }"
         for module, name in models) + "]"
-    checks = "Workflow.Declarative.LegacyUP001.checks" if legacy else "#[]"
-    loader = "(Workflow.Declarative.LegacyUP001.loadCheck #[" + ", ".join(
-        name for _, name in legacy_models) + "])" if legacy else \
-        '(fun _ => pure (.error "unknown legacy check"))'
     optional = lambda path: "(some " + quoted(str(path)) + ")" if path else "none"
     return "\n".join("import " + name for name in modules) + \
         "\n\ndef main (args : List String) : IO UInt32 :=\n  Workflow.Declarative.main\n    " + \
-        property_entries(properties) + "\n    " + model_entries + " args\n    " + \
-        checks + "\n    " + loader + "\n    #[" + ", ".join(map(quoted, known)) + "]\n    " + \
+        property_entries(properties) + "\n    " + model_entries + " args\n    #[" + ", ".join(map(quoted, known)) + "]\n    " + \
         optional(snapshot) + "\n    " + optional(index) + "\n"
 
 
@@ -155,9 +146,6 @@ def preparation_budget(args):
 
 def main(args):
     root = Path(__file__).resolve().parents[1]
-    include_legacy = args[:1] == ["--include-legacy"]
-    if include_legacy:
-        args = args[1:]
     output = root / "output"
     output.mkdir(exist_ok=True)
     folder = Path(tempfile.mkdtemp(prefix="discovery.", dir=output))
@@ -200,14 +188,13 @@ def main(args):
             return stdout
 
         entries, metadata_errors = candidates(root)
-        known = list(dict.fromkeys((["UP-001"] if include_legacy else []) + [p[0] for p in entries]))
+        known = list(dict.fromkeys(p[0] for p in entries))
         selected, selection_source = selection(args, known)
         if metadata_errors and not any(flag in args for flag in ["--check", "--checks-file"]):
             raise ValueError("; ".join(metadata_errors))
         if not known:
             raise ValueError("no property Run.lean files discovered")
         properties = properties_for(root, entries, selected)
-        legacy = include_legacy and "UP-001" in selected and not any(p[0] == "UP-001" for p in entries)
         snapshot = None
         if selection_source is not None:
             snapshot = folder / "checks.json"
@@ -216,26 +203,23 @@ def main(args):
                        "selection_snapshot": str(snapshot) if snapshot else None,
                        "ignored_metadata_errors": metadata_errors})
         planner = folder / "Plan.lean"
-        planner.write_text(plan_source(properties, legacy))
-        modules = ["Workflow.Declarative.Discovery"] + imports(properties, legacy=legacy)
+        planner.write_text(plan_source(properties))
+        modules = ["Workflow.Declarative.Discovery"] + imports(properties)
         step("properties-build", ["lake", "build", *dict.fromkeys(modules)])
         manifest = json.loads(step("models-plan", ["lake", "env", "lean", "--run", str(planner)]))
         record["selected_models"] = manifest
         models = models_for(root, manifest["models"])
-        legacy_models = models_for(root, manifest["legacy_models"], runnable=False)
-        modules = ["Workflow.Declarative.CLI"] + imports(properties, models + legacy_models, legacy)
+        modules = ["Workflow.Declarative.CLI"] + imports(properties, models)
         step("models-build", ["lake", "build", *dict.fromkeys(modules)])
         driver = folder / "Bootstrap.lean"
-        driver.write_text(bootstrap(properties, models, legacy_models, known, snapshot, index_path))
+        driver.write_text(bootstrap(properties, models, known, snapshot, index_path))
         sources = [root / p[3] for p in properties]
         sources += [root / (p[2].replace(".", "/") + ".lean") for p in properties]
-        sources += [root / (p[0].replace(".", "/") + ".lean") for p in properties + models + legacy_models]
+        sources += [root / (p[0].replace(".", "/") + ".lean") for p in properties + models]
         record["source_hashes"] = {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest()
                                    for p in sources}
         record["state"] = "ready"
         save()
-        if not include_legacy:
-            print(f"Discovery bootstrap: {driver}", flush=True)
         result = subprocess.run(["lake", "env", "lean", "--run", str(driver), *args], cwd=root)
         record.update({"state": "finished", "exit_code": result.returncode})
         save()

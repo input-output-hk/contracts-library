@@ -188,14 +188,27 @@ class PublicCLIIntegration(unittest.TestCase):
         self.counts(result, "never_accept.never_accept", [0, 0, 2, 1, 0])
 
     @unittest.skipUnless(PROOFS, "add --proofs to run bounded real validators")
-    def test_i_legacy_up001_and_declarative_selection_together(self):
-        result = self.invoke("legacy-up001", [
+    def test_i_property_owned_up001_and_up015_together(self):
+        result = self.invoke("property-owned-up001", [
             "run", ROOT / "Workflow/Tests/UP001/Inputs/plutus.json", "--check", "UP-001",
             "--check", "UP-015", "--timeout-ms", "300000"])
-        _, _, checks = self.output(result)
+        root, _, checks = self.output(result)
         self.assertEqual(len(checks), 14)
         self.counts(result, "vault.vault", [5, 0, 2, 0, 0])
         self.counts(result, "vault_buggy.vault_buggy", [0, 5, 2, 0, 0])
+        discovery = json.loads((root / "discovery.json").read_text())
+        self.assertNotIn("legacy_models", discovery["selected_models"])
+        self.assertEqual(discovery["selected_models"]["properties"][0]["id"], "UP-001")
+        sources = json.loads((root / "sources/index.json").read_text())
+        modules = [entry["module"] for entry in sources["sources"]]
+        self.assertIn("Formal.Properties.Universal.UP001.Run", modules)
+        self.assertFalse(any(name.startswith("Candidates.") for name in modules))
+        for validator, observation in [("vault.vault", "valid"), ("vault_buggy.vault_buggy", "falsified")]:
+            for number, purpose in enumerate(["mint", "withdraw", "publish", "vote", "propose"], 1):
+                check = checks[(validator, "UP-001", f"TxM-{number:03}")]
+                self.assertEqual([(row["name"], row["observed"]) for row in check["obligations"]],
+                                 [("otherPurpose_" + purpose, observation)])
+            self.assertEqual(checks[(validator, "UP-001", "TxM-006")]["obligations"], [])
 
     def test_j_default_selection_preserves_all_available_checks(self):
         data = json.loads((ROOT / "Workflow/Tests/UP001/Inputs/plutus.json").read_text())
@@ -212,6 +225,42 @@ class PublicCLIIntegration(unittest.TestCase):
         self.assertTrue(all(value["status"] == "INCONCLUSIVE" and not value["obligations"]
                             for value in checks.values()))
         self.counts(result, "vault.vault", [0, 0, 10, 0, 0])
+
+    def purpose_fixture(self, purposes):
+        data = json.loads((ROOT / "Workflow/Tests/UP012/Inputs/reusable.json").read_text())
+        source = next(entry for entry in data["validators"]
+                      if entry["title"] == "never_accept.never_accept.spend")
+        data["validators"] = [dict(source, title="never_accept.never_accept." + purpose)
+                              for purpose in purposes]
+        path = self.evidence / ("purposes-" + "-".join(purposes) + ".json")
+        path.write_text(json.dumps(data))
+        return path
+
+    def test_k_all_declared_purposes_have_no_obligations(self):
+        path = self.purpose_fixture(["spend", "mint", "withdraw", "publish", "vote", "propose"])
+        result = self.invoke("all-declared-purposes", ["run", path, "--check", "UP-001"])
+        root, index, checks = self.output(result)
+        self.assertEqual(len(checks), 6)
+        self.assertTrue(all(value["status"] == "INCONCLUSIVE" and not value["obligations"]
+                            for value in checks.values()))
+        self.assertFalse(list(root.glob("validators/*/*/execution.json")))
+        self.assertTrue(all(row["not_run"] == "not_applicable" for row in index["validators"][0]["checks"]))
+        self.counts(result, "never_accept.never_accept", [0, 0, 6, 0, 0])
+
+    @unittest.skipUnless(PROOFS, "add --proofs to run bounded real validators")
+    def test_l_all_six_native_purposes_prove_on_an_always_rejecting_program(self):
+        path = self.purpose_fixture(["else"])
+        result = self.invoke("all-undeclared-purposes", [
+            "run", path, "--check", "UP-001", "--timeout-ms", "300000"])
+        root, _, checks = self.output(result)
+        self.assertEqual(len(checks), 6)
+        names = {"otherPurpose_" + purpose for purpose in
+                 ["spend", "mint", "withdraw", "publish", "vote", "propose"]}
+        self.assertEqual({row["name"] for value in checks.values() for row in value["obligations"]}, names)
+        self.assertTrue(all(value["status"] == "PASS" and len(value["obligations"]) == 1 and
+                            value["obligations"][0]["observed"] == "valid" for value in checks.values()))
+        self.assertEqual(len(list(root.glob("validators/*/*/Generated/Checks.lean"))), 6)
+        self.counts(result, "never_accept.never_accept", [6, 0, 0, 0, 0])
 
 
 if __name__ == "__main__":

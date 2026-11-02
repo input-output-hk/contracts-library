@@ -1,5 +1,8 @@
 # Public CLI integration validation
 
+This historical record describes `0e176dd`. UP-001 now has its own
+[run declaration](../../Formal/Properties/Universal/UP001/Run.lean).
+
 The `feat/declarative-cli-integration` branch builds on `f14d71e`. The public
 `plutus-upv run` command now selects property-owned UP-012/UP-015 declarations;
 UP-001 uses its existing generator through a compatibility bridge.

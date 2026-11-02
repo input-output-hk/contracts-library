@@ -46,7 +46,7 @@ class PropertyDiscoveryTests(unittest.TestCase):
         self.assertFalse((self.root / "Candidates").exists())
 
     def test_planning_does_not_import_models(self):
-        text = discovery.plan_source(self.properties(), False)
+        text = discovery.plan_source(self.properties())
         self.assertNotIn("import Formal.TxModels.Definitions", text)
         self.assertIn("Discovery.describe", text)
 
@@ -126,9 +126,20 @@ class PropertyDiscoveryTests(unittest.TestCase):
 
     def test_real_properties_have_no_direct_model_imports(self):
         root = SCRIPT.parents[1]
-        for code in ["UP012", "UP015"]:
+        for code in ["UP001", "UP012", "UP015"]:
             source = (root / f"Formal/Properties/Universal/{code}/Run.lean").read_text()
             self.assertNotIn("import Formal.TxModels.Definitions.", source)
+
+    def test_all_real_properties_use_the_same_discovery_path(self):
+        root = SCRIPT.parents[1]
+        entries, errors = discovery.candidates(root)
+        self.assertEqual(errors, [])
+        self.assertTrue({"UP-001", "UP-012", "UP-015"}.issubset({identity for identity, _ in entries}))
+        text = discovery.plan_source(discovery.properties_for(root, entries, ["UP-001"]))
+        self.assertIn("import Formal.Properties.Universal.UP001.Run", text)
+        self.assertNotIn("Candidates", text)
+        self.assertNotIn("LegacyUP001", text)
+        self.assertNotIn("import Formal.TxModels.Definitions", text)
 
     def test_preparation_deadline_kills_the_build_process_group_and_retains_logs(self):
         tools = self.root / "tools"

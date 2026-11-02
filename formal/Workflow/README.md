@@ -45,7 +45,7 @@ The final human-friendly report remains separate work in
 | [Formal/Properties](../Formal/Properties/README.md) | Native primary definitions, metadata, and category/code indexes |
 | [Formal/TxModels](../Formal/TxModels/README.md) | Native context constructors and their metadata |
 | [Declarative/](Declarative/README.md) | Selected property-run discovery, model imports, and shared goal generation |
-| `Candidates/` | Legacy generation adapters and regression comparisons; UP-001 still reuses its purpose generator |
+| `Candidates/` | Legacy generation adapters for `universal` and regression comparisons |
 
 The component entry modules and `Workflow.lean` remain public imports.
 The components receive explicit inputs and do not import candidate or scenario

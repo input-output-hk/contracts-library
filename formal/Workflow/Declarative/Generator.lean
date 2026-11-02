@@ -21,6 +21,9 @@ private def admit (target : TargetDescription) (model : Model) : Except Error Un
   unless target.plutusVersion == model.runnable.metadata.plutus_version do
     throw ⟨.unsupported, "model and validator have different Plutus versions"⟩
   match model.runnable.admission with
+  | .unparameterizedV3 =>
+    unless target.plutusVersion == "v3" && (target.parameters.getD #[]).isEmpty do
+      throw ⟨.unsupported, "the model requires an unparameterized Plutus V3 program"⟩
   | .spending inputs =>
     Preparation.Compatibility.check target inputs
       |>.mapError fun message => ⟨.unsupported, s!"{model.runnable.metadata.id}: {message}"⟩
@@ -43,6 +46,12 @@ def generate (propertyId : String) (property : Property) (model : Model) (target
     throw ⟨.invalidPlan, "invalid model, property, or theorem declaration name"⟩
   if run.fuel == 0 then throw ⟨.invalidPlan, "the property must declare a positive CEK bound"⟩
   admit target model
+  let skip ← run.skipReason target model
+  if let some reason := skip then
+    return { targetName := target.name, modules := #[], jobs := #[], notes := #[reason] }
+  let suffix := run.theoremSuffix model
+  unless identifier suffix do
+    throw ⟨.invalidPlan, "invalid property theorem suffix"⟩
   let types ← Preparation.Program.support target modulePrefix
     |>.mapError fun message => ⟨.invalidPlan, message⟩
   let tx := String.intercalate "\n" [
@@ -51,7 +60,7 @@ def generate (propertyId : String) (property : Property) (model : Model) (target
     s!"namespace {modulePrefix}",
     s!"abbrev {context} := {model.runnable.context}",
     s!"end {modulePrefix}", ""]
-  let name := s!"{run.theoremPrefix}_{context}"
+  let name := s!"{run.theoremPrefix}_{suffix}"
   let moduleName := s!"{modulePrefix}.Checks"
   let scope := run.scope ++ " Model: " ++ model.runnable.metadata.description
   let main : CheckJob := {

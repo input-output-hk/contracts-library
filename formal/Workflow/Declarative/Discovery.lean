@@ -5,7 +5,7 @@ namespace Workflow.Declarative.Discovery
 open Lean
 
 /-- Evaluate actual Run.lean declarations before importing any selected model implementations. -/
-def describe (properties : Array Property) (legacyModels : Array String := #[]) : IO UInt32 := do
+def describe (properties : Array Property) : IO UInt32 := do
   let mut descriptions : Array Json := #[]
   let mut models : Array String := #[]
   for property in properties do
@@ -16,8 +16,7 @@ def describe (properties : Array Property) (legacyModels : Array String := #[]) 
     for model in property.run.models do
       unless models.contains model do models := models.push model
   IO.println (Json.mkObj [
-    ("properties", .arr descriptions), ("models", toJson models),
-    ("legacy_models", toJson legacyModels)]).compress
+    ("properties", .arr descriptions), ("models", toJson models)]).compress
   return 0
 
 end Workflow.Declarative.Discovery

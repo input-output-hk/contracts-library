@@ -21,6 +21,7 @@ def defaultSuites : Array Suite := #[
   ⟨"Single-check core and app solver checks", "workflow_single_check_tests"⟩,
   ⟨"CLI selection checks", "workflow_selection_tests"⟩,
   ⟨"Selected property/model discovery", "workflow_property_discovery_tests"⟩,
+  ⟨"Property-owned UP-001 purpose selection and model bindings", "workflow_declarative_up001_tests"⟩,
   ⟨"Property-owned UP-012 goal and model bindings", "workflow_declarative_tests"⟩,
   ⟨"Property-owned UP-015 goal and model bindings", "workflow_declarative_up015_tests"⟩,
   ⟨"Public declarative CLI smoke checks", "workflow_public_cli_tests"⟩,

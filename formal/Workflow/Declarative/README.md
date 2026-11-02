@@ -1,9 +1,9 @@
 # Property-owned execution
 
 The normal `plutus-upv run` command uses property-owned run instructions for
-[UP-012](../../Formal/Properties/Universal/UP012/Run.lean) and
-[UP-015](../../Formal/Properties/Universal/UP015/Run.lean). UP-001 retains its
-existing implementation through a narrow compatibility bridge. The earlier
+[UP-001](../../Formal/Properties/Universal/UP001/Run.lean),
+[UP-012](../../Formal/Properties/Universal/UP012/Run.lean), and
+[UP-015](../../Formal/Properties/Universal/UP015/Run.lean). The earlier
 `universal` executable remains available for comparison.
 
 ```mermaid
@@ -24,8 +24,7 @@ python3 scripts/run_properties.py --list
 ./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-012 --check UP-015 --timeout-ms 300000
 ```
 
-The helper's `--list` shows property-owned combinations. The public command also
-includes the legacy UP-001 purpose combinations.
+The helper's `--list` and the public command use the same discovered combinations.
 
 The public launcher calls `scripts/run_properties.py` internally. Discovery reads
 property identities, then compiles and evaluates only the requested `Run.lean`
@@ -55,14 +54,15 @@ validation and lookup, without named property/model cases.
 ## Conventions and limits
 
 Models retain their original Lean input types and context builders. The small
-export identifies a builder and its input admission policy. The property owns
-the goal arguments, expected theorem names, CEK bound, and applicability link.
+export identifies a builder, its input admission policy, and an optional fixed
+purpose. The property owns the goal arguments, expected theorem names, CEK bound,
+applicability link, and any target/model skip rule.
 Lean checks the resulting goal applications during verification.
 
 The run format supplies one primary Valid goal, optional Valid applicability,
 and a selected model builder as the final property argument. Model admission
-supports the existing pinned vesting fixtures and
-the existing conservative unparameterized V3 spending-schema matcher. This
+supports the existing pinned vesting fixtures, the conservative unparameterized
+V3 spending-schema matcher, and raw unparameterized V3 contexts. This
 selection change does not widen their transaction domains or prove new security
 claims. Other property signatures or admission methods may need shared tooling
 extensions. Supporting arbitrary Lean definitions is not a claim of this prototype.
@@ -77,21 +77,24 @@ An explicitly selected property no longer compiles unrelated run files or model
 exports. Invalid unused sources therefore do not block it. A selected source
 that fails to compile still stops preparation with retained diagnostics. Default
 selection includes all available properties, and ordinary explicit Lean imports
-remain real dependencies. UP-001 keeps its existing fixed purpose dependencies
-until its authoring path migrates.
+remain real dependencies. UP-001 selects its six raw purpose models through the
+same discovery path. Its run declaration skips models whose purpose has a
+declared handler. Skipping creates no modules, proof observations, or passing verdict.
 
 ## Validation
 
 ```sh
 python3 -I -B -m unittest discover -s tests -p test_property_discovery.py
 lake exe workflow_declarative_tests
+lake exe workflow_declarative_up001_tests
 python3 -I -B tests/test_public_declarative_cli.py
 # Include bounded real validators and controls:
 python3 -I -B tests/test_public_declarative_cli.py --proofs
 ```
 
 The Lean checks compare each generated statement and applicability job with the
-existing UP-012 adapter, including model identity and fuel equivalence. Discovery
+existing adapters, including model identity and fuel equivalence. UP-001 checks
+all six families, declared-purpose skipping, and unsupported-input admission. Discovery
 tests also add a model/property in an isolated temporary fixture without a central
 registration file. Runtime evidence belongs under `output/`; do not infer proof
 success from the unit tests alone.

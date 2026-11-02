@@ -10,7 +10,7 @@ def run (args : List String) : IO UInt32 := do
     try
       let process ← IO.Process.spawn {
         cmd := "python3"
-        args := #["scripts/run_properties.py", "--include-legacy"] ++ args.toArray }
+        args := #["scripts/run_properties.py"] ++ args.toArray }
       return ← process.wait
     catch error =>
       IO.eprintln s!"Could not start property discovery (python3 is required): {error}"

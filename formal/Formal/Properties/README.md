@@ -32,9 +32,9 @@ different models alone do not create different candidate IDs. Transaction models
 remain in the [model bank](../TxModels/README.md).
 
 Property-owned run declarations select models and define goal arguments for the
-shared execution engine. Models expose one native `runnable` declaration. UP-001
-keeps its earlier adapter until its own migration; the indexes remain available
-for legacy tools and metadata consumers.
+shared execution engine. UP-001, UP-012, and UP-015 use this path. Models expose
+one native `runnable` declaration; the indexes remain available for legacy tools
+and metadata consumers.
 The registered UP-001, UP-012, and UP-015 bindings are experimental workflow
 scenarios. Registration and metadata validation do not establish general property
 or model readiness. Their wider definitions remain tracked in issues #23, #33,
