@@ -13,6 +13,7 @@ structure Suite where
 def defaultSuites : Array Suite := #[
   ⟨"Input unit checks", "workflow_input_tests"⟩,
   ⟨"Generator unit checks", "workflow_generator_tests"⟩,
+  ⟨"Reusable input compatibility and program preparation", "workflow_preparation_tests"⟩,
   ⟨"Executor unit checks", "workflow_executor_tests"⟩,
   ⟨"Reporter unit checks", "workflow_reporter_tests"⟩,
   ⟨"Property metadata checks", "workflow_metadata_tests"⟩,
