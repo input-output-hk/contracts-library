@@ -1,4 +1,4 @@
-"""Stdlib-only regression tests for blueprint extraction and UP-005 generation."""
+"""Stdlib-only regression tests for blueprint extraction and UP-001/UP-005 generation."""
 import copy
 import importlib.util
 import json
@@ -170,6 +170,77 @@ class BlueprintFoundationTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Schema form", result.stdout)
 
+    def other_purpose_source(self):
+        _, info = BLUEPRINT.generate(self.blueprint, "example", "Formal.Fixture.Blueprint", "Scripts")
+        return "\n".join(BLUEPRINT.other_purpose_checks(info)) + "\n"
+
+    def test_other_purpose_preserves_unrestricted_original_claims(self):
+        for declared in BLUEPRINT.PURPOSES:
+            with self.subTest(declared=declared):
+                self.blueprint["validators"][0]["title"] = f"fixture.example.{declared}"
+                source = self.other_purpose_source()
+                self.assertEqual(source.count("theorem otherPurpose_"), 5)
+                self.assertNotIn(f"theorem otherPurpose_{declared}", source)
+                for purpose, ctx in BLUEPRINT.EVERY.items():
+                    if purpose != declared:
+                        self.assertIn(f"theorem otherPurpose_{purpose} :\n"
+                                      f"    ∀ (r : Data) (t : {ctx}),\n"
+                                      f"      ¬ accepts ledgerFuel ({ctx}.ctx t r) := by blaster", source)
+                for absent in (".Tx", "someAccepted", "validScriptContext", "rejects ledgerFuel", "sorry"):
+                    self.assertNotIn(absent, source)
+
+    def test_other_purpose_keeps_parameters_open(self):
+        self.blueprint["validators"][0]["parameters"] = [
+            {"title": "owner", "schema": {"dataType": "bytes"}}
+        ]
+        source = self.other_purpose_source()
+        self.assertEqual(source.count("(p : Params)"), 5)
+        self.assertIn("¬ accepts ledgerFuel p (EveryMint.ctx t r)", source)
+        self.assertNotIn("honestParams", source)
+
+    def test_other_purpose_skips_multiple_declared_handlers(self):
+        mint = copy.deepcopy(self.blueprint["validators"][0])
+        mint["title"] = "fixture.example.mint"
+        self.blueprint["validators"].append(mint)
+        source = self.other_purpose_source()
+        self.assertEqual(source.count("theorem otherPurpose_"), 4)
+        self.assertNotIn("theorem otherPurpose_spend", source)
+        self.assertNotIn("theorem otherPurpose_mint", source)
+
+    def test_other_purpose_reports_when_no_goals_apply(self):
+        entry = self.blueprint["validators"][0]
+        self.blueprint["validators"] = [dict(entry, title=f"fixture.example.{p}")
+                                        for p in BLUEPRINT.PURPOSES]
+        self.assertNotIn("theorem ", self.other_purpose_source())
+        with tempfile.TemporaryDirectory() as root:
+            result = self.cli(root, "--check", "otherPurpose")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("no undeclared purposes; no checks apply", result.stdout)
+            checks = (Path(root) / "Formal/Blueprint/Checks.lean").read_text()
+            self.assertIn("no UP-001 goals apply", checks)
+
+    def test_cli_other_purpose_needs_no_transaction_file(self):
+        with tempfile.TemporaryDirectory() as root:
+            result = self.cli(root, "--out", "Formal/Fixture/Blueprint", "--check", "otherPurpose")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            out = Path(root) / "Formal/Fixture/Blueprint"
+            self.assertEqual({p.name for p in out.iterdir()}, {"Types.lean", "Checks.lean"})
+            self.assertEqual((out / "Checks.lean").read_text(), self.other_purpose_source())
+            self.assertEqual((out / "Types.lean").read_text(), self.generated())
+
+    def test_cli_other_purpose_preserves_author_files(self):
+        with tempfile.TemporaryDirectory() as root:
+            out = Path(root) / "Formal/Fixture/Blueprint"
+            out.mkdir(parents=True)
+            for name in ("Tx.lean", "General.lean", "Honest.lean"):
+                (out / name).write_text("-- author content\n")
+            (out / "Checks.lean").write_text("-- previous generated checks\n")
+            result = self.cli(root, "--out", "Formal/Fixture/Blueprint", "--check", "otherPurpose")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual((out / "Checks.lean").read_text(), self.other_purpose_source())
+            for name in ("Tx.lean", "General.lean", "Honest.lean"):
+                self.assertEqual((out / name).read_text(), "-- author content\n")
+
     def check_source(self):
         _, info = BLUEPRINT.generate(self.blueprint, "example", "Formal.Fixture.Blueprint", "Scripts")
         return "\n".join(BLUEPRINT.malformed_redeemer_checks(info)) + "\n"
@@ -267,7 +338,9 @@ class BlueprintFoundationTests(unittest.TestCase):
                 self.assertEqual((out / name).read_text(), "-- author content\n")
 
     def test_cli_rejects_unsupported_or_conflicting_check_options(self):
-        for args in (("--check", "unknown"), ("--cbor-only", "--check", "malformedRedeemer")):
+        for args in (("--check", "someAccepted"), ("--check", "unknown"),
+                     ("--cbor-only", "--check", "otherPurpose"),
+                     ("--cbor-only", "--check", "malformedRedeemer")):
             with self.subTest(args=args), tempfile.TemporaryDirectory() as root:
                 result = self.cli(root, *args)
                 self.assertNotEqual(result.returncode, 0)
