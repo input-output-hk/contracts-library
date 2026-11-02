@@ -1,4 +1,4 @@
-# Blueprint extraction and candidate checks
+# Blueprint type and CBOR extraction
 
 This foundation extracts the type-generation pass from
 [sayyadirfanali's work in PR #44](https://github.com/no-witness-labs/contracts-library/pull/44)
