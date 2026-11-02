@@ -11,7 +11,7 @@ time, with a locker recovery window after vesting completes.
 |---|---|
 | On-chain validator | [`onchain/validators/linear_vesting.ak`](../../onchain/validators/linear_vesting.ak) (+ composable predicates in [`onchain/lib/vesting/`](../../onchain/lib/vesting/)) |
 | MeshJS builders | [`offchain/meshjs/lib/src/vesting/`](../../offchain/meshjs/lib/src/vesting/) ([README](../../offchain/meshjs/lib/src/vesting/README.md)) |
-| Tx3 protocol + client | [`offchain/tx3/vesting/`](../../offchain/tx3/vesting/) (planned) |
+| Tx3 protocol + client | [`offchain/tx3/vesting/`](../../offchain/tx3/vesting/) |
 | Compiled blueprint | [`onchain/plutus.json`](../../onchain/plutus.json) |
 
 ## Contents
@@ -130,9 +130,25 @@ the right slot.
 
 ## Off-chain usage: Tx3
 
-The Tx3 implementation is a planned placeholder
-([`offchain/tx3/vesting/README.md`](../../offchain/tx3/vesting/README.md)); it
-will mirror the same action set against the pinned blueprint.
+The Tx3 protocol ([`offchain/tx3/vesting/main.tx3`](../../offchain/tx3/vesting/main.tx3))
+exposes four transaction templates against the pinned blueprint; generate a
+TypeScript client with `trix codegen --plugin ts-client`:
+
+```ts
+await client.lock({ ada_total, vesting_datum });                    // lock an instance
+await client.claim({ vesting_ref, vesting_datum, required_ada, since_slot });
+await client.claimFull({ vesting_ref, since_slot });                // now >= end_time
+await client.cancel({ vesting_ref, since_slot });                   // now > recovery_time
+```
+
+Bind `Locker`/`Beneficiary` to the wallets owning the datum's key credentials
+and `Vesting` to the script address. `since_slot` sets the validity lower
+bound — the on-chain `now`; compute `required_ada` from the *start time of
+that slot* with the MeshJS `vestedQuantity` helper. The Tx3 reference covers
+the key-authorized, ada-only, single-input paths (see the
+[protocol README](../../offchain/tx3/vesting/README.md) for scope notes);
+script credentials, multi-asset bundles, and batched claims go through the
+MeshJS builders.
 
 ## Gotchas and safety notes
 
@@ -156,5 +172,6 @@ will mirror the same action set against the pinned blueprint.
 - [Spec](spec.md) — behavior, invariants, threat model, must-accept/reject rules.
 - [MeshJS builders](../../offchain/meshjs/lib/src/vesting/README.md) — API and
   worked examples.
-- [Tx3 implementation](../../offchain/tx3/vesting/README.md) — planned.
+- [Tx3 implementation](../../offchain/tx3/vesting/README.md) — protocol,
+  templates, and devnet tests.
 - [Blueprint](../../onchain/plutus.json) — compiled validator and schemas.
