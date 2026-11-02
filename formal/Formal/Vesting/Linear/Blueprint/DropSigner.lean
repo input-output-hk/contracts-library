@@ -16,8 +16,8 @@ open CardanoLedgerApi.IsData.Class (IsData)
 open CardanoLedgerApi.V3 (Address Credential PubKeyHash StakingCredential TxOutRef validScriptContext)
 open Formal.Universal.Properties
 
-/-- A `claim` transaction with its first signatory removed is rejected. Every signatory key is a
-    leaf, so this covers removing any one. -/
+/-- A `claim` transaction with its sole signatory removed is rejected.
+    The key is symbolic, but this model contains exactly one signatory. -/
 theorem dropSigner_claim :
     ∀ p,
       validScriptContext (claim p) = true →
@@ -36,8 +36,8 @@ theorem dropSigner_claim_applies :
       validScriptContext (withSignatories (claim p) (signatoriesOf (claim p)).tail) = true
         := by blaster
 
-/-- A `cancel` transaction with its first signatory removed is rejected. Every signatory key is a
-    leaf, so this covers removing any one. -/
+/-- A `cancel` transaction with its sole signatory removed is rejected.
+    The key is symbolic, but this model contains exactly one signatory. -/
 theorem dropSigner_cancel :
     ∀ p,
       validScriptContext (cancel p) = true →
