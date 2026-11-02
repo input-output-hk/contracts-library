@@ -1,5 +1,5 @@
 import Blaster
-import Formal.Universal.Properties
+import Formal.Universal.CandidateHelpers
 import Formal.Vesting.Linear.Blueprint.Types
 import Formal.Vesting.Linear.Blueprint.Tx
 
