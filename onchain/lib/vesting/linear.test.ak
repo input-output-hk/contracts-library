@@ -1,9 +1,6 @@
-use aiken/collection/list
 use aiken/fuzz
 use aiken/interval
-use cardano/address.{
-  Address, Script, VerificationKey, from_script, with_delegation_key,
-}
+use cardano/address.{Address, VerificationKey, from_script, with_delegation_key}
 use cardano/assets.{Value}
 use cardano/transaction.{
   DatumHash, InlineDatum, Input, Output, OutputReference, Transaction,
@@ -22,6 +19,8 @@ const beneficiary_key =
   #"11111111111111111111111111111111111111111111111111111111"
 
 const locker_key = #"44444444444444444444444444444444444444444444444444444444"
+
+const auth_script = #"22222222222222222222222222222222222222222222222222222222"
 
 const token_policy = #"33333333333333333333333333333333333333333333333333333333"
 
