@@ -73,3 +73,40 @@ export function requiredRemainder(
     }))
     .filter((a) => a.total > 0n);
 }
+
+/** Byte-wise order on `(policyId, assetName)`, matching the on-chain check. */
+function compareAssetKey(a: VestedAsset, b: VestedAsset): number {
+  const cmp = (x: string, y: string) => {
+    const [l, r] = [x.toLowerCase(), y.toLowerCase()];
+    return l < r ? -1 : l > r ? 1 : 0;
+  };
+  return cmp(a.policyId, b.policyId) || cmp(a.assetName, b.assetName);
+}
+
+/**
+ * Returns a copy of `vesting` sorted into the order the validator requires
+ * (byte-wise by policy id, then asset name; ada first). Does not merge
+ * duplicates: `assertValidBundle` still rejects them.
+ */
+export function sortVestingBundle(vesting: VestedAsset[]): VestedAsset[] {
+  return [...vesting].sort(compareAssetKey);
+}
+
+/**
+ * Throws unless `vesting` is well-formed (spec §3.1): keys strictly ascending
+ * (so no asset appears twice) and every total non-negative. A bundle that
+ * breaks this can never be claimed; only the locker can recover it after
+ * `recoveryTime`.
+ */
+export function assertValidBundle(vesting: VestedAsset[]): void {
+  vesting.forEach((a, i) => {
+    if (a.total < 0n) {
+      throw new Error(`Invalid vesting bundle: negative total at index ${i}`);
+    }
+    if (i > 0 && compareAssetKey(vesting[i - 1], a) >= 0) {
+      throw new Error(
+        `Invalid vesting bundle: entries must be strictly ascending by (policyId, assetName) with no duplicates (index ${i}); use sortVestingBundle`,
+      );
+    }
+  });
+}
