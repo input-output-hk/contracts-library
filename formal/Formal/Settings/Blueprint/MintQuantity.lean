@@ -1,4 +1,4 @@
--- DRAFT: UNCOMPILED / UNEXECUTED. These statements are not proved.
+-- Preserved propositions and concrete controls; standalone proof checks live in tests/UP016.
 import Formal.Settings.Blueprint.Tx
 
 namespace Formal.Settings.Blueprint
@@ -8,7 +8,7 @@ open PlutusCore.UPLC.Term (Const)
 open CardanoLedgerApi.V3 (ScriptContext validScriptContext)
 open Formal.Universal.Properties (ledgerFuel)
 
-/-- Proposed rejection statement only. No proof, tactic, or axiom is attached. -/
+/-- Rejection proposition; its standalone proof invocation does not alter this definition. -/
 def quantityIncreaseRejects : Prop :=
   ∀ (p : MintLeaves) (delta : Int),
     delta > 0 →
@@ -17,7 +17,7 @@ def quantityIncreaseRejects : Prop :=
     validScriptContext (changed p delta) = true →
     rejects ledgerFuel (changed p delta)
 
-/-- Proposed non-vacuity statement for all premises above; not yet proved. -/
+/-- Applicability proposition covering all premises of the rejection claim. -/
 def quantityIncreaseApplies : Prop :=
   ∃ (p : MintLeaves) (delta : Int),
     delta > 0 ∧
@@ -25,7 +25,7 @@ def quantityIncreaseApplies : Prop :=
     accepts ledgerFuel (original p) ∧
     validScriptContext (changed p delta) = true
 
--- Concrete fixture for a later, separately authorized execution.
+-- Concrete fixture retained from the original candidate.
 def probe : MintLeaves :=
   { ada0 := 3000000, ada1 := 2000000, fee := 200000,
     validFrom := 0, current := 0 }
@@ -45,7 +45,7 @@ def executionOutcome (ctx : ScriptContext) (fuel : Nat) : String :=
       | some (.Halt _) => "non_unit_halt"
       | some _ => "unexpected_nonterminal"
 
-/-- Unexecuted controls for a supplied fixture and fuel. Keep these runtime arguments
+/-- Concrete controls for a supplied fixture and fuel. Keep these runtime arguments
 explicit so closed CEK evaluations cannot be hoisted into module initialization. -/
 def concreteAssertions (p : MintLeaves) (fuel : Nat) : List (String × Bool) :=
   let h := original p

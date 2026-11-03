@@ -1,4 +1,4 @@
--- DRAFT: UNCOMPILED / UNEXECUTED. Review before compiling or evaluating.
+-- Fixed Settings Mint model. See README.md for scope and validation status.
 import Formal.Settings.Blueprint.Types
 
 namespace Formal.Settings.Blueprint
