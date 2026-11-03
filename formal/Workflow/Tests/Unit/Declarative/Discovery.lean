@@ -1,4 +1,6 @@
 import Workflow.Declarative.Discovery
+-- The typed bootstrap fixture imports this module from the prepared build tree.
+import Workflow.Declarative.CLI
 import Workflow.Declarative.Launcher
 import Workflow.Tests.Support
 
