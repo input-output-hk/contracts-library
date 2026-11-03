@@ -26,6 +26,11 @@ name = "CardanoLedgerApi"
 git = "https://github.com/input-output-hk/CardanoLedgerApiBlaster"
 rev = "main"
 
+# Universal-property demo: generated obligations, built on their own.
+[[lean_lib]]
+name = "Universal"
+globs = ["Universal.+"]
+
 [[lean_lib]]
 name = "Formal"
 
