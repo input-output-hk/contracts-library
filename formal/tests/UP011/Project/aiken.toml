@@ -1,0 +1,11 @@
+name = "no-witness-labs/up011-negative-control"
+version = "0.0.0"
+compiler = "v1.1.21"
+plutus = "v3"
+license = "Apache-2.0"
+description = "UP-011 control that requires a continuation datum but ignores its address"
+
+[[dependencies]]
+name = "aiken-lang/stdlib"
+version = "v3.0.0"
+source = "github"
