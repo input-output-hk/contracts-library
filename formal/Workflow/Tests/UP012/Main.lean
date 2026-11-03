@@ -2,6 +2,7 @@ import Workflow.Tests.Support
 import Workflow.Tests.UP012.Tests
 import Workflow.Tests.UP012.NegativeControl
 import Workflow.Tests.UP012.VaultTests
+import Workflow.Tests.UP012.ReusableTests
 
 open Workflow.Tests.Support
 
@@ -9,6 +10,7 @@ def main (args : List String) : IO Unit := do
   Workflow.Tests.UP012.Tests.run
   if args == ["--unit"] then
     Workflow.Tests.UP012.VaultTests.runUnit
+    Workflow.Tests.UP012.ReusableTests.runUnit
     return ()
   let passing ← invoke "Workflow/Tests/UP012/Inputs/plutus.json" "linear_vesting.linear_vesting"
     (some "UP-012") 300000
@@ -36,4 +38,5 @@ def main (args : List String) : IO Unit := do
   check "UP012 attempts have separate output directories" (passing.directory != unsupported.directory)
   Workflow.Tests.UP012.NegativeControl.run
   Workflow.Tests.UP012.VaultTests.run
+  Workflow.Tests.UP012.ReusableTests.run
   IO.println "UP012 whole-workflow checks passed."

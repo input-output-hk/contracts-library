@@ -86,8 +86,8 @@ were not rerun. This documentation refresh adds no new proof-suite result.
 UP-012 comes from its separate candidate PR #55 and issue #33. It removes the
 first signer in supplied vesting and key-datum spend shapes and includes applicability statements.
 It is separate from PR #47's UP-002 no-signature checks. Its current adapters use
-the pinned vesting artifacts and fixed Claim/Cancel models, plus two exact vault
-artifacts using native TxM-009; broader applicability
+the pinned vesting artifacts and fixed Claim/Cancel models, plus structurally compatible spending targets
+using native TxM-009; broader applicability
 and its intended universal meaning remain open.
 
 ## Reviewed UP-001 scope
@@ -165,3 +165,11 @@ owner decisions.
 [old-predicates]: https://github.com/no-witness-labs/contracts-library/blob/0dde8ae76e3f8a239bf06685f72327aed4a7c3ef/formal/Formal/Common.lean
 [new-provider]: ../../Candidates/UP001.lean
 [new-contexts]: https://github.com/no-witness-labs/contracts-library/blob/d3bce414a3417b9227fa92f1e0a33672d2829749/formal/Formal/Universal/Properties.lean
+
+The TxM-009 pilot adds reusable structural admission under `Workflow/Preparation`.
+It keeps the native constructor, property, fuel, and ten-combination Lean catalogue.
+Compatible compiled programs need no allowlist entries, but schema compatibility
+alone establishes no security role or coverage claim. The supported subset and
+conservative rejection behavior are described in the developer guide. This is a
+#96 implementation checkpoint related to #88; general parameters, full schema
+translation, and property semantics remain deferred.

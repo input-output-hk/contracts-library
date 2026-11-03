@@ -1,4 +1,5 @@
 import Formal.TxModels.Common
+import Formal.TxModels.Requirements
 
 namespace Formal.TxModels.TxM009
 
@@ -6,6 +7,10 @@ open PlutusCore.Data (Data)
 open PlutusCore.ByteString (ByteString)
 open CardanoLedgerApi.V3 (ScriptContext)
 open Formal.TxModels.TxBuilder
+
+def inputs : SpendingInputs := {
+  datum := .constr 0 [.bytes]
+  redeemer := .constr 0 [] }
 
 structure SpendLeaves where
   owner : ByteString

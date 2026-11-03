@@ -1,6 +1,9 @@
 [
   {
-    "property": { "id": "UP-012", "definition_version": 1 },
+    "property": {
+      "id": "UP-012",
+      "definition_version": 1
+    },
     "tx_model": "TxM-007",
     "limitations": [
       "Experimental pinned linear-vesting Claim profile only; this check does not establish general authorization safety.",
@@ -10,7 +13,10 @@
     ]
   },
   {
-    "property": { "id": "UP-012", "definition_version": 1 },
+    "property": {
+      "id": "UP-012",
+      "definition_version": 1
+    },
     "tx_model": "TxM-008",
     "limitations": [
       "Experimental pinned linear-vesting Cancel profile only; this check does not establish general authorization safety.",
@@ -20,10 +26,13 @@
     ]
   },
   {
-    "property": { "id": "UP-012", "definition_version": 1 },
+    "property": {
+      "id": "UP-012",
+      "definition_version": 1
+    },
     "tx_model": "TxM-009",
     "limitations": [
-      "Experimental support for the normal and deliberately buggy vault artifacts in the workflow fixtures; unknown compiled code remains unsupported by this adapter.",
+      "Experimental reusable admission for unparameterized Plutus V3 targets with exactly one declared spending handler and compatible datum/redeemer encodings. Unsupported, missing, unresolved, or ambiguous schema constraints produce SKIPPED with a reason. Structural admission does not infer security roles or establish general authorization safety.",
       "Covers one script input, one public-key output, ADA only, a one-field owner-bytes inline datum, a fixed empty constructor redeemer, and exactly one baseline signer. Other transaction geometries, asset layouts, and datum/redeemer encodings are not covered.",
       "Example assumption: the baseline contains only the intended required signer, with no unrelated extras. Owner, signer, and recipient vary independently; this model does not impose owner equality or infer which key the protocol ought to require.",
       "The property removes the sole signer and requires explicit rejection within 1,000,000 CEK steps. Applicability separately requires a model-valid accepted original and a model-valid changed context. These premises do not establish full ledger reachability or correct-owner authorization."
