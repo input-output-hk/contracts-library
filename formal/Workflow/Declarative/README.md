@@ -1,105 +1,116 @@
 # Property-owned execution
 
-The normal `plutus-upv run` command uses property-owned run instructions for
+The public `plutus-upv run` command discovers maintained run declarations for
 [UP-001](../../Formal/Properties/Universal/UP001/Run.lean),
 [UP-012](../../Formal/Properties/Universal/UP012/Run.lean), and
-[UP-015](../../Formal/Properties/Universal/UP015/Run.lean). The earlier
-`universal` executable remains available for comparison.
+[UP-015](../../Formal/Properties/Universal/UP015/Run.lean). Lean handles discovery,
+selection, model preparation, and application launch. The earlier `universal`
+executable remains available for compatibility and regression comparisons.
+
+`Definition.lean` states the reusable property. Its sibling `Run.lean` supplies
+execution instructions and one list of enabled models. Each list entry names a
+model and records the reviewed limitations of that property/model pairing.
+Models keep their existing context builders and export one `runnable` description
+from `Formal/TxModels/Definitions/TxMNNN.lean`.
 
 ```mermaid
 flowchart TD
-    R["Property folder<br/>Definition.lean + Run.lean + metadata.json"]
-    M["TxModels/Definitions/TxMNNN.lean<br/>Existing builder + runnable export"]
-    R --> D["Select requested properties<br/>Evaluate their Run.lean declarations"]
-    D --> S["Compile the model names returned by Lean"]
+    R["Property folder<br/>Definition + Run + metadata + tests"]
+    M["Native model<br/>Context builder + runnable export"]
+    R --> D["Lean discovery<br/>Select properties and evaluate run declarations"]
+    D --> S["Compile only the named model exports"]
     M --> S
     S --> G["Shared generator<br/>Types.lean + Tx.lean + Checks.lean"]
-    G --> V["Existing workflow engine<br/>Qualified results + source snapshots"]
+    G --> V["Existing engine and Assessor<br/>Qualified results + retained evidence"]
 ```
 
 From `formal/`:
 
 ```sh
-python3 scripts/run_properties.py --list
 ./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-012 --check UP-015 --timeout-ms 300000
 ```
 
-The helper's `--list` and the public command use the same discovered combinations.
-
-The public launcher calls `scripts/run_properties.py` internally. Discovery reads
-property identities, then compiles and evaluates only the requested `Run.lean`
-files. Lean returns their actual model lists; the launcher does not parse those
-lists from source text. It compiles only those model exports and creates a
-bootstrap under `output/discovery.*/`. Generated checks import the property's
-`Run.lean`, so its instructions follow the saved source snapshots.
-
-Preparation has one deadline, at least 30 seconds and otherwise the requested
-execution budget. A preparation timeout terminates the build process group. Each
-actual validator/check combination keeps its existing separate execution budget.
-The app retains preparation diagnostics in `discovery.json`; a startup failure
-prints the separate preparation evidence path. Selection-file snapshots preserve
-the exact bytes used for both planning and execution, including line endings.
+## Authoring contract
 
 | Author action | File to edit |
 | --- | --- |
-| Write the rule and applicability predicate | The property's `Definition.lean` |
-| Enable an existing compatible model | Only the `models` list in its `Run.lean` |
-| Describe the property | Its `metadata.json` |
-| Create a model | Its native model file, including one `runnable` export |
+| State the rule, applicability, and reusable helpers | The property's `Definition.lean` |
+| Enable a compatible model and describe pairing limitations | The `models` entries in its `Run.lean` |
+| Describe the property and supporting references | Its `metadata.json` |
+| Maintain property controls | Its property-folder tests |
+| Create a model | Its native model file, with context builder, metadata, and `runnable` export |
 
-Authors select models in the property folder. The shared command supplies
-imports, goal templates, and registration. `Catalogue.lean` here contains generic
-validation and lookup, without named property/model cases.
+An enabled-model entry uses `ModelUse`: `id` selects the native model and
+`limitations` retains the pairing's reviewed coverage and interpretation limits.
+The shared catalogue derives registration from this list. It has no named
+property or model cases, and descriptions alone cannot enable a check.
 
-## Conventions and limits
+For example, changing one property's model list can enable an existing compatible
+model. Authors still review whether that pairing makes sense and retain its
+limitations; automatic registration does not infer security relevance.
 
-Models retain their original Lean input types and context builders. The small
-export identifies a builder, its input admission policy, and an optional fixed
-purpose. The property owns the goal arguments, expected theorem names, CEK bound,
-applicability link, and any target/model skip rule.
-Lean checks the resulting goal applications during verification.
+A model's `Runnable` identifies its builder, input-admission policy, and optional
+fixed purpose. The property owns its primary goal, optional applicability goal,
+CEK bound, theorem names, and any target/model skip rule. Current model input
+types, constructors, statements, applicability links, and bounds retain their
+existing meanings. Lean checks the generated applications.
 
-The run format supplies one primary Valid goal, optional Valid applicability,
-and a selected model builder as the final property argument. Model admission
-supports the existing pinned vesting fixtures, the conservative unparameterized
-V3 spending-schema matcher, and raw unparameterized V3 contexts. This
-selection change does not widen their transaction domains or prove new security
-claims. Other property signatures or admission methods may need shared tooling
-extensions. Supporting arbitrary Lean definitions is not a claim of this prototype.
+UP-001 uses its six native purpose models through this same route. Its property
+run skips purposes declared by an admitted target. A skip generates no modules,
+proof observations, or passing verdict.
 
-Discovery uses conventional paths, namespaces, and a top-level
-`runnable` export declaration. Lean type-checks the generated bootstrap; malformed
-or ambiguous registrations fail. The checkout-backed CLI requires Python 3.9 or newer, Lean, and the documented
-proof tools. The installer checks for Python and the Nix development shell includes
-it. Managed standalone packaging remains separate work.
+## Discovery and retained evidence
 
-An explicitly selected property no longer compiles unrelated run files or model
-exports. Invalid unused sources therefore do not block it. A selected source
-that fails to compile still stops preparation with retained diagnostics. Default
-selection includes all available properties, and ordinary explicit Lean imports
-remain real dependencies. UP-001 selects its six raw purpose models through the
-same discovery path. Its run declaration skips models whose purpose has a
-declared handler. Skipping creates no modules, proof observations, or passing verdict.
+The launcher scans conventional property paths and metadata identities, then
+applies the existing CLI selection rules. It compiles and evaluates only the
+selected `Run.lean` declarations to obtain their actual model lists. It then
+compiles those model exports and writes the application bootstrap in a fresh
+`output/discovery.*/` directory. It does not parse model lists from Lean source.
+Generated checks import the selected property's `Run.lean`, preserving those
+instructions in the source evidence.
 
-## Validation
+Preparation has one deadline, at least 30 seconds and otherwise the requested
+execution budget. A timeout terminates the preparation process group. Each
+validator/check combination retains its separate execution budget.
+Selection-file snapshots preserve the exact bytes used during planning and
+execution, including line endings. Successful runs retain `discovery.json`;
+startup errors retain preparation indexes and logs and produce no proof verdict.
+
+An explicitly selected property avoids unrelated run files and model exports.
+Broken unselected sources therefore do not block it. A selected source that fails
+to compile stops preparation with diagnostics. Default selection requests all
+available properties. Explicit Lean imports remain real dependencies, so property
+run declarations should avoid importing concrete model modules directly.
+
+## Scope and validation
+
+The current format supplies one primary Valid goal, an optional Valid
+applicability goal, and a selected model builder as the final argument. Admission
+supports the existing pinned vesting artifacts, conservative unparameterized V3
+spending-schema matching, and raw unparameterized V3 contexts. Other property
+signatures or admission methods may need a later shared extension.
+
+The command uses a source checkout and the documented Lean/Z3 tools. It requires
+no Python runtime or Nix. The separate legacy blueprint translator keeps its own
+tooling requirements; managed standalone packaging remains separate work.
+
+Focused checks from `formal/`:
 
 ```sh
-python3 -I -B -m unittest discover -s tests -p test_property_discovery.py
+lake exe workflow_property_discovery_tests
+lake exe workflow_public_cli_tests
 lake exe workflow_declarative_tests
 lake exe workflow_declarative_up001_tests
-python3 -I -B tests/test_public_declarative_cli.py
-# Include bounded real validators and controls:
-python3 -I -B tests/test_public_declarative_cli.py --proofs
+lake exe workflow_declarative_up015_tests
+./plutus-upv test
 ```
 
-The Lean checks compare each generated statement and applicability job with the
-existing adapters, including model identity and fuel equivalence. UP-001 checks
-all six families, declared-purpose skipping, and unsupported-input admission. Discovery
-tests also add a model/property in an isolated temporary fixture without a central
-registration file. Runtime evidence belongs under `output/`; do not infer proof
-success from the unit tests alone.
+These suites cover discovery/selection behavior, model-list enablement, generated
+goal and binding parity, reviewed limitation retention, and the existing workflow
+controls. Unit success alone does not establish a property for a supplied target.
+Fresh validation must record the actual source/dependency revisions and distinguish
+expected negative controls from unexpected test failures.
 
-The [local validation record](VALIDATION.md) records the one-file model-list
-change, existing-goal comparisons, and real positive/negative/applicability controls.
-The [CLI integration record](INTEGRATION.md) covers selective compilation and
-testing through the public command.
+[VALIDATION.md](VALIDATION.md) and [INTEGRATION.md](INTEGRATION.md) preserve earlier
+prototype results. Their Python-era runs are historical evidence; they do not
+validate the current Lean-only implementation or changed dependency combination.

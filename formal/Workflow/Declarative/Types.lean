@@ -12,9 +12,15 @@ structure Goal where
   definition : Lean.Name
   arguments : Array String
 
+/-- One enabled model and the reviewed limitations of this property/model pairing. -/
+structure ModelUse where
+  id : String
+  limitations : Array String := #[]
+  deriving Inhabited, BEq, Repr
+
 /-- Property-owned instructions. Adding an existing model changes only `models`. -/
 structure PropertyRun where
-  models : Array String
+  models : Array ModelUse
   statement : Goal
   applicability : Option Goal := none
   theoremPrefix : String
@@ -26,6 +32,9 @@ structure PropertyRun where
   /-- Preserve property-specific theorem names independently of the context alias. -/
   theoremSuffix : Model → String := fun model =>
     (model.runnable.context.toString.splitOn ".").getLast!
+
+/-- Discovery reads the enabled IDs from the same list that owns their limitations. -/
+def PropertyRun.modelIds (run : PropertyRun) : Array String := run.models.map (·.id)
 
 /-- Discovery supplies file locations; authors do not repeat them in their declarations. -/
 structure Property where

@@ -72,7 +72,8 @@ def selectValidators (selectors names : Array String) : Except String (Array Str
     selected := selected.push candidates[0]!
   return names.filter selected.contains
 
-private def selectedProperties (request : Request) (known : Array String)
+/-- Resolve property switches independently of compiling their executable bindings. -/
+def selectedProperties (request : Request) (known : Array String)
     (fileSource : Option String) : Except String (Array String) := do
   if request.checksFile.isSome then
     unless request.properties.isEmpty do throw "--check and --checks-file cannot be combined"

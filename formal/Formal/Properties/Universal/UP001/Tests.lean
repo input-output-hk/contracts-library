@@ -23,9 +23,12 @@ private def models : Array Model := #[
   { moduleName := "Formal.TxModels.Definitions.TxM005", runnable := TxModels.TxM005.runnable },
   { moduleName := "Formal.TxModels.Definitions.TxM006", runnable := TxModels.TxM006.runnable }]
 
+private def modelUse (id : String) : ModelUse :=
+  (UP001.run.models.find? (·.id == id)).getD { id }
+
 private def property : Property := {
   -- This compatibility fixture covers the six original families, independently of new enabled models.
-  run := { UP001.run with models := Candidates.UP001.modelIds }
+  run := { UP001.run with models := Candidates.UP001.modelIds.map modelUse }
   runModule := "Formal.Properties.Universal.UP001.Run"
   definitionModule := "Formal.Properties.Universal.UP001.Definition"
   metadataPath := "Formal/Properties/Universal/UP001/metadata.json" }
@@ -34,14 +37,15 @@ private def normalize (statement : String) : String :=
   String.intercalate " " (statement.splitOn " " |>.filter (!·.isEmpty))
 
 def runTests : IO Unit := do
+  let reviewed ← IO.ofExcept (← CombinedCheck.read "Formal/Properties/Universal/UP001/Tests/Expected/combined-checks.json")
   let catalogue ← IO.ofExcept (← Catalogue.load #[property] models)
   check "all six purpose models retain their existing registry order"
     (catalogue.checks.map (·.modelId) == Candidates.UP001.modelIds)
   check "the reviewed bound and absence of applicability remain explicit"
     (UP001.run.fuel == 5000000 && UP001.run.applicability.isNone)
-  let initial := { property with run := { UP001.run with models := #["TxM-001"] } }
+  let initial := { property with run := { UP001.run with models := #[modelUse "TxM-001"] } }
   let before ← IO.ofExcept (← Catalogue.load #[initial] models)
-  let extended := { initial with run := { initial.run with models := initial.run.models.push "TxM-006" } }
+  let extended := { initial with run := { initial.run with models := initial.run.models.push (modelUse "TxM-006") } }
   let after ← IO.ofExcept (← Catalogue.load #[extended] models)
   check "adding only a model name enables the new combination"
     (before.checks.size == 1 && after.checks.map (·.modelId) == #["TxM-001", "TxM-006"])
@@ -53,6 +57,10 @@ def runTests : IO Unit := do
   for model in models do
     let id : CheckId := { propertyId := "UP-001", definitionVersion := 1, modelId := model.runnable.metadata.id }
     let configured ← IO.ofExcept (catalogue.loadCheck id)
+    let some expected := reviewed.find? (fun entry => entry.txModelId? == some id.modelId)
+      | throw (IO.userError "missing reviewed combination fixture")
+    check s!"{id.modelId}: the full reviewed property/model limitations are preserved"
+      (configured.context.binding.combinedCheck == expected)
     let plan ← IO.ofExcept ((Generator.generateOne configured target "Generated.Parity").mapError toString)
     let prior ← IO.ofExcept ((Candidates.UP001.providerForModel id.modelId).mapError toString)
     let old ← IO.ofExcept ((prior.generate target "Generated.Parity").mapError toString)

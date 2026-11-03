@@ -17,7 +17,7 @@ def run (options : Options) (deadline : Nat) (args : Array String)
     let attempted : Invocation := {
       command := options.timeoutCommand
       args := #["--signal=KILL", duration (deadline - started), options.leanCommand] ++ args
-      cwd := ← IO.currentDir
+      cwd := options.workingDirectory.getD (← IO.currentDir)
       environment }
     let observed : ProcessObservation ← try
       let output ← IO.Process.output {

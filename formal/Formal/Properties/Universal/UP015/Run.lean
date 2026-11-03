@@ -5,7 +5,13 @@ namespace Formal.Properties.Universal.UP015
 
 /-- Reuse the existing Claim model through the shared execution path. -/
 def run : Workflow.Declarative.PropertyRun := {
-  models := #["TxM-007"]
+  models := #[
+    { id := "TxM-007", limitations := #[
+      "Experimental pinned linear-vesting Claim profile only; broader candidate and model design remains open.",
+      "Reverses the model's two outputs while preserving the redeemer and other context fields. This covers one swap, not arbitrary output counts or permutations.",
+      "Uses the existing one-signer, one-asset Claim geometry and a 1,000,000-step acceptance bound. Model validity and applicability do not establish deployed-ledger reachability.",
+      "Applicability requires an accepted model-valid context whose changed output list is different and still model-valid. No duplicate rotation or singleton Cancel check is included.",
+      "Index-sensitive protocols may correctly reject a reorder without a corresponding redeemer update; this check is not a universal security requirement."] }]
   statement := {
     definition := ``statement
     arguments := #["validScriptContext", "(accepts {fuel})"] }

@@ -2,8 +2,8 @@
 
 Property definitions live here by category and stable code. Each property folder
 contains its primary `Definition.lean`, descriptive `metadata.json`, and README.
-UP-012 and UP-015 also own `Run.lean` and tests; the public CLI discovers those
-run declarations without a manual central registration entry.
+UP-001, UP-012, and UP-015 also own `Run.lean` and tests; the public CLI discovers
+those run declarations without a manual central registration entry.
 Folder names use Lean module spelling such as `UP001`; metadata keeps `UP-001`.
 
 ```text
@@ -15,9 +15,9 @@ Properties/
   Universal/
     README.md
     Index.lean
-    UP001/{Definition.lean, metadata.json, README.md}
-    UP012/{Definition.lean, metadata.json, README.md}
-    UP015/{Definition.lean, metadata.json, README.md}
+    UP001/{Definition.lean, Run.lean, metadata.json, README.md, Tests.lean}
+    UP012/{Definition.lean, Run.lean, metadata.json, README.md, Tests.lean}
+    UP015/{Definition.lean, Run.lean, metadata.json, README.md, Tests.lean}
 ```
 
 [Index.lean](Index.lean) references category indexes. Each category index imports
@@ -32,7 +32,9 @@ different models alone do not create different candidate IDs. Transaction models
 remain in the [model bank](../TxModels/README.md).
 
 Property-owned run declarations select models and define goal arguments for the
-shared execution engine. UP-001, UP-012, and UP-015 use this path. Models expose
+shared execution engine. Each enabled `ModelUse` entry contains a model `id` and
+that pairing's reviewed `limitations`; this one list controls registration.
+UP-001, UP-012, and UP-015 use this path. Models expose
 one native `runnable` declaration; the indexes remain available for legacy tools
 and metadata consumers.
 The registered UP-001, UP-012, and UP-015 bindings are experimental workflow

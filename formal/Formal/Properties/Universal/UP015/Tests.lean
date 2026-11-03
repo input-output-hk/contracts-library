@@ -43,9 +43,13 @@ example {A : Type} (accepts : Nat → CardanoLedgerApi.V3.ScriptContext → Prop
         (accepts Formal.Universal.Properties.ledgerFuel) context := Iff.rfl
 
 def unit : IO Unit := do
+  let reviewed ← IO.ofExcept (← CombinedCheck.read "Formal/Properties/Universal/UP015/Tests/Expected/combined-checks.json")
+  let [expected] := reviewed.toList | throw (IO.userError "missing reviewed combination fixture")
   let catalogue ← IO.ofExcept (← Catalogue.load #[property] #[model])
   check "UP-015 registers using only its property-owned declaration" (catalogue.checks == #[id])
   let configured ← IO.ofExcept (catalogue.loadCheck id)
+  check "the full reviewed property/model limitations are preserved"
+    (configured.context.binding.combinedCheck == expected)
   let previous ← IO.ofExcept (← Candidates.Catalogue.loadCheck "UP-015" 1 "TxM-007")
   let input ← IO.ofExcept ((← Input.read fixture "linear_vesting.linear_vesting").mapError toString)
   let generated ← IO.ofExcept ((Generator.generateOne configured input.target "Generated.UP015").mapError toString)
@@ -66,7 +70,7 @@ def unit : IO Unit := do
   | .error error => check "the existing model admission boundary remains" (error.kind == .unsupported)
   | .ok _ => throw (IO.userError "UP-015 admitted the unsupported vault/model combination")
   let other : Property := {
-    run := { UP012.run with models := #["TxM-007"] }
+    run := { UP012.run with models := UP012.run.models.filter (·.id == "TxM-007") }
     runModule := "Formal.Properties.Universal.UP012.Run"
     definitionModule := "Formal.Properties.Universal.UP012.Definition"
     metadataPath := "Formal/Properties/Universal/UP012/metadata.json" }

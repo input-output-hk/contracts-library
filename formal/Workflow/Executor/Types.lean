@@ -76,6 +76,8 @@ structure Options where
   prepareImports : Option (GenerationPlan → IO String) := none
   leanCommand : String := "lean"
   timeoutCommand : String := "timeout"
+  /-- Override the child working directory without mutating the parent process. -/
+  workingDirectory : Option System.FilePath := none
   /-- Parent for fresh run directories; none uses the system temporary directory. -/
   outputRoot : Option System.FilePath := none
   /-- An existing empty workspace reserved by the coordinator, when supplied. -/

@@ -12,6 +12,9 @@ TxModels/
   Index.lean
   Common.lean
   VestingTypes.lean
+  Runnable.lean
+  Artifacts/
+    LinearVesting.lean
   Definitions/
     TxM001.lean
     ...
@@ -24,6 +27,7 @@ TxModels/
 | [Common.lean](Common.lean) | Metadata fields, context assembly, and transaction builders |
 | [VestingTypes.lean](VestingTypes.lean) | Types, encodings, and datum helpers for the experimental vesting models |
 | [Runnable.lean](Runnable.lean) | Native builder, admission policy, and optional fixed script purpose |
+| [Artifacts/LinearVesting.lean](Artifacts/LinearVesting.lean) | Retained compiled-artifact allowlist shared by the vesting model exports |
 | `Definitions/TxMNNN.lean` | One model implementation and its metadata |
 
 The model IDs and constructors below belong to the `Formal.TxModels` namespace:
@@ -53,9 +57,11 @@ models; their constructor does not establish the property's validity premises.
 Property/model combinations own the resulting check's limitations.
 
 To add a runnable model, create its `Definitions/TxMNNN.lean` module with its
-constructor, metadata, and one `runnable` export. Enable it by adding its ID to a
-compatible property's `Run.lean` model list. Discovery supplies the imports and
-binding. Update `Index.lean` when legacy metadata consumers also need the model.
+constructor, metadata, and one `runnable` export. Enable it through a `ModelUse`
+entry in a compatible property's `Run.lean`: `id` selects the model, and
+`limitations` records that pairing's reviewed coverage and interpretation limits.
+Shared Lean discovery supplies the imports and binding from this one list.
+Update `Index.lean` when legacy metadata consumers also need the model.
 The index does not infer compatibility or select executable code.
 
 The six raw purpose models use `unparameterizedV3` admission and identify their
@@ -78,5 +84,5 @@ reusable preparation path in `Workflow.Preparation.TxM009`; it does not imply le
 redeemer encodings independently of the four descriptive metadata fields. These
 requirements describe every value the constructor can produce; compatibility
 must not narrow that family to fit a validator schema. New models can declare
-requirements in Lean and add a preparation binding without redesigning the
-JavaScript or JSON catalogue.
+requirements in Lean and export the matching admission policy without changing
+a central catalogue.

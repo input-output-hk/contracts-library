@@ -15,7 +15,25 @@ private def skipDeclaredPurpose (target : TargetDescription) (model : Model) :
 
 /-- Enable native purpose models by name; the property owns the undeclared-purpose rule. -/
 def run : PropertyRun := {
-  models := #["TxM-006", "TxM-001", "TxM-002", "TxM-003", "TxM-004", "TxM-005"]
+  models := #[
+    { id := "TxM-006", limitations := #[
+      "Covers spending invocations; other script purposes require separate checks.",
+      "A counterexample may not correspond to a ledger-valid transaction."] },
+    { id := "TxM-001", limitations := #[
+      "Covers minting invocations; other script purposes require separate checks.",
+      "A counterexample may not correspond to a ledger-valid transaction."] },
+    { id := "TxM-002", limitations := #[
+      "Covers reward withdrawal invocations; other script purposes require separate checks.",
+      "A counterexample may not correspond to a ledger-valid transaction."] },
+    { id := "TxM-003", limitations := #[
+      "Covers certifying invocations; other script purposes require separate checks.",
+      "A counterexample may not correspond to a ledger-valid transaction."] },
+    { id := "TxM-004", limitations := #[
+      "Covers voting invocations; other script purposes require separate checks.",
+      "A counterexample may not correspond to a ledger-valid transaction."] },
+    { id := "TxM-005", limitations := #[
+      "Covers proposing invocations; other script purposes require separate checks.",
+      "A counterexample may not correspond to a ledger-valid transaction."] }]
   statement := { definition := ``statement, arguments := #["(accepts {fuel})"] }
   theoremPrefix := "otherPurpose"
   theoremSuffix := fun model => model.runnable.purpose.map (·.name) |>.getD "unknown"

@@ -37,7 +37,7 @@ def generate (propertyId : String) (property : Property) (model : Model) (target
     (modulePrefix : String) : Except Error GenerationPlan := do
   let run := property.run
   let modelId := model.runnable.metadata.id
-  unless run.models.contains modelId do
+  unless run.modelIds.contains modelId do
     throw ⟨.unsupported, s!"model {modelId} is not enabled by this property"⟩
   let context := contextAlias model
   unless identifier context && identifier run.theoremPrefix &&

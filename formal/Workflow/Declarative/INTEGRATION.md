@@ -1,5 +1,11 @@
 # Public CLI integration validation
 
+This file preserves historical prototype evidence. The current Lean-only authoring
+path is documented in [README.md](README.md). The results below used their recorded
+source and dependency revisions, including the earlier Python coordinator; they
+do not establish validation of the current implementation. Fresh results will be
+recorded separately after the approved checks complete.
+
 This historical record describes `0e176dd`. UP-001 now has its own
 [run declaration](../../Formal/Properties/Universal/UP001/Run.lean).
 

@@ -23,6 +23,9 @@ private def property (run : PropertyRun) : Property := {
   definitionModule := "Formal.Properties.Universal.UP012.Definition"
   metadataPath := "Formal/Properties/Universal/UP012/metadata.json" }
 
+private def modelUse (id : String) : ModelUse :=
+  (UP012.run.models.find? (·.id == id)).getD { id }
+
 private def normalize (statement : String) : String :=
   String.intercalate " " ((statement.replace "1000000" "ledgerFuel").splitOn " "
     |>.filter (!·.isEmpty))
@@ -35,10 +38,11 @@ example {A : Type} (accepts rejects : Nat → CardanoLedgerApi.V3.ScriptContext 
         (rejects Formal.Universal.Properties.ledgerFuel) context := Iff.rfl
 
 def runTests : IO Unit := do
-  let initial := { UP012.run with models := #["TxM-007", "TxM-008"] }
+  let reviewed ← IO.ofExcept (← CombinedCheck.read "Formal/Properties/Universal/UP012/Tests/Expected/combined-checks.json")
+  let initial := { UP012.run with models := #[modelUse "TxM-007", modelUse "TxM-008"] }
   let before ← IO.ofExcept (← Catalogue.load #[property initial] models)
   check "the property list determines the registry" (before.checks.size == 2)
-  let extended := { initial with models := initial.models.push "TxM-009" }
+  let extended := { initial with models := initial.models.push (modelUse "TxM-009") }
   let after ← IO.ofExcept (← Catalogue.load #[property extended] models)
   check "adding only a model name enables the third combination"
     (after.checks.map (·.modelId) == #["TxM-007", "TxM-008", "TxM-009"])
@@ -51,6 +55,10 @@ def runTests : IO Unit := do
     let input ← IO.ofExcept ((← Input.read fixture selector).mapError toString)
     let id : CheckId := { propertyId := "UP-012", definitionVersion := 1, modelId }
     let configured ← IO.ofExcept (after.loadCheck id)
+    let some expected := reviewed.find? (fun entry => entry.txModelId? == some id.modelId)
+      | throw (IO.userError "missing reviewed combination fixture")
+    check s!"{id.modelId}: the full reviewed property/model limitations are preserved"
+      (configured.context.binding.combinedCheck == expected)
     let previous ← IO.ofExcept (← Candidates.Catalogue.loadCheck "UP-012" 1 modelId)
     let plan ← IO.ofExcept ((Generator.generateOne configured input.target "Generated.Experiment").mapError toString)
     let old ← IO.ofExcept ((Generator.generateOne previous input.target "Generated.Experiment").mapError toString)
@@ -69,8 +77,8 @@ def runTests : IO Unit := do
       "Generated.Unsupported"
     check s!"{modelId}: unsupported inputs stop before proving" versionError.toOption.isNone
   for invalid in [
-      { extended with models := #["TxM-999"] },
-      { extended with models := #["TxM-007", "TxM-007"] },
+      { extended with models := #[modelUse "TxM-999"] },
+      { extended with models := #[modelUse "TxM-007", modelUse "TxM-007"] },
       { extended with statement := { extended.statement with definition := ``Nat.add } }] do
     check "bad model names, duplicate selections, and wrong definitions are rejected"
       (← Catalogue.load #[property invalid] models).toOption.isNone

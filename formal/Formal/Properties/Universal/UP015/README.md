@@ -16,9 +16,11 @@ payout outputs. Acceptance uses the existing 1,000,000 CEK-step allowance; this 
 not a ledger CPU or memory budget.
 The original input remains `Workflow/Tests/UP012/Inputs/plutus.json`; the second
 snapshot is `Workflow/Tests/Profiles/Inputs/linear-vesting-aiken-1.1.21.json`.
-Shared test-only artifact
-validation and model preparation live in `Workflow/Tests/Profiles/LinearVesting.lean`.
-The property definition, native model, and evaluation bound remain unchanged.
+The native model reads its artifact allowlist from
+[Artifacts/LinearVesting.lean](../../../TxModels/Artifacts/LinearVesting.lean).
+Shared program preparation supplies the executed artifact. The test profile
+retains the earlier comparison path. The property definition, native model,
+and evaluation bound remain unchanged.
 
 The applicability obligation requires a valid accepted original, a valid reversed
 context, and an output list that differs after reversal. This last
@@ -27,10 +29,12 @@ The primary acceptance proposition and evaluation bound remain unchanged. An
 identity transformation cannot supply this applicability witness.
 
 [metadata.json](metadata.json) records the property's identity and scope.
-[Candidates.UP015](../../../../Candidates/UP015.lean) generates
-`reverseOutputs_claim` and its linked `reverseOutputs_claim_applies` obligation.
-The adapter unfolds the native definition before invoking Blaster. The source
-candidate is PR #62 at `7c5dce717ca1d2b1d975c1c1b044bc48c07e0687`.
+[Run.lean](Run.lean) instructs the shared generator to emit `reverseOutputs_claim`
+and its linked `reverseOutputs_claim_applies` obligation. The generator unfolds
+the native definition before invoking Blaster.
+[Candidates.UP015](../../../../Candidates/UP015.lean) remains a legacy comparison
+adapter. The source candidate is PR #62 at
+`7c5dce717ca1d2b1d975c1c1b044bc48c07e0687`.
 
 This integration excludes the singleton Cancel reversal and the duplicate
 two-output rotation. It does not cover wider output permutations, arbitrary
@@ -40,22 +44,23 @@ general audit readiness.
 General definition, model-authoring, and integration work remains open in issues
 #23, #33, #36, #89, and #96.
 
-## Property-owned execution experiment
+## Property-owned execution
 
 [Run.lean](Run.lean) selects TxM-007 and declares the goals for the shared
-experimental generator. Adding this property requires no shared generator,
-discovery, catalogue, or model changes. [Tests.lean](Tests.lean) checks parity
-with the legacy adapter and runs a labeled counterfactual rejection control.
+Lean generator. Its `ModelUse` entry owns the model `id` and reviewed pairing
+`limitations`. [Tests.lean](Tests.lean) checks goal parity with the legacy adapter
+and exact retention of the reviewed combination record. It also provides a
+labeled counterfactual rejection control.
 
 From `formal/`:
 
 ```sh
-lake build Formal.Properties.Universal.UP015.Tests
-lake env lean --run Formal/Properties/Universal/UP015/Tests.lean --unit
-python3 scripts/run_properties.py Workflow/Tests/UP012/Inputs/plutus.json --check UP-015 --timeout-ms 300000
-lake env lean --run Formal/Properties/Universal/UP015/Tests.lean --negative-control
+lake exe workflow_declarative_up015_tests
+./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-015 --timeout-ms 300000
 ```
 
-The public CLI uses these run instructions. Model coverage, applicability,
-and proof bounds remain as described above.
-The [validation record](VALIDATION.md) reports goal parity and actual proof/control results.
+The public CLI evaluates these run instructions and compiles the selected model
+through shared Lean discovery. Model coverage, applicability, and proof bounds
+remain as described above. The [validation record](VALIDATION.md) preserves
+historical goal-parity and proof/control evidence at its recorded revisions;
+it does not establish fresh validation of the current Lean-only implementation.

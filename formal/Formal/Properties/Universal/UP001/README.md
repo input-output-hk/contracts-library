@@ -4,9 +4,10 @@
 satisfies the configured acceptance predicate. [metadata.json](metadata.json)
 records the maintained definition's identity, explanation, scope, and references.
 
-[Run.lean](Run.lean) enables the six native purpose models by name. The shared
-discovery command supplies their imports and execution bindings. Add an existing
-compatible model by editing only this file's `models` list.
+[Run.lean](Run.lean) enables the six native purpose models through its `models`
+entries. Each `ModelUse` entry owns the model `id` and the reviewed limitations
+of that property/model pairing. Shared Lean discovery supplies imports and
+execution bindings from this one list.
 
 The run declaration checks each purpose absent from the selected validator's
 declared handlers, using the corresponding open transaction model. It supplies
@@ -22,10 +23,13 @@ expanded formulas.
 
 [Tests.lean](Tests.lean) compares all six generated goals with the earlier
 generator. It also checks model-list selection, declared-purpose skipping,
-unsupported inputs, and missing purpose metadata. Run it from `formal/`:
+unsupported inputs, missing purpose metadata, and exact preservation of the
+reviewed combination records. Run it from `formal/`:
 
 ```sh
 lake exe workflow_declarative_up001_tests
 ```
 
-[VALIDATION.md](VALIDATION.md) records the migration checks and retained evidence.
+[VALIDATION.md](VALIDATION.md) preserves earlier migration checks and their
+recorded source/dependency revisions. Fresh Lean-only validation is recorded
+separately after the current checks complete.

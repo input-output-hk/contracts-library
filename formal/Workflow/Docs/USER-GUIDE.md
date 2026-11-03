@@ -14,7 +14,7 @@ human-friendly final report remains future work in
 
 ## Prepare once
 
-Have Lean **4.24.0**, Python **3.9 or newer**, Z3 **4.15.2**, GNU coreutils (`timeout`, `mktemp`,
+Have Lean **4.24.0**, Z3 **4.15.2**, GNU coreutils (`timeout`, `mktemp`,
 `date`, and `sha256sum`), and Git on `PATH`. From the repository root:
 
 ```sh

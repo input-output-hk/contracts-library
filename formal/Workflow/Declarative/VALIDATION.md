@@ -1,5 +1,11 @@
 # UP-012 experiment results
 
+This file preserves historical prototype evidence. The current Lean-only authoring
+path is documented in [README.md](README.md). The results below used their recorded
+source and dependency revisions, including the earlier Python coordinator; they
+do not establish validation of the current implementation. Fresh results will be
+recorded separately after the approved checks complete.
+
 Local validation on the experiment branch, based on `80fb78f`. This validates the
 new authoring path for UP-012, without completing the full migration in issue #110.
 
