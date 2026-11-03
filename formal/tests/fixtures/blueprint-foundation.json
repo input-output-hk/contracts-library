@@ -1,0 +1,91 @@
+{
+  "preamble": {
+    "title": "Synthetic translator fixture; not an executable validator",
+    "plutusVersion": "v3",
+    "compiler": {
+      "name": "Aiken",
+      "version": "fixture"
+    }
+  },
+  "validators": [
+    {
+      "title": "fixture.example.spend",
+      "datum": {
+        "schema": {
+          "$ref": "#/definitions/fixture~1types~1Datum"
+        }
+      },
+      "redeemer": {
+        "schema": {
+          "$ref": "#/definitions/fixture~1types~1Redeemer"
+        }
+      },
+      "compiledCode": "4100",
+      "hash": "fixture-hash"
+    },
+    {
+      "title": "fixture.example.else",
+      "compiledCode": "4100",
+      "hash": "fixture-hash"
+    }
+  ],
+  "definitions": {
+    "fixture/types/Datum": {
+      "anyOf": [
+        {
+          "title": "Datum",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "amount",
+              "dataType": "integer"
+            },
+            {
+              "title": "owner",
+              "dataType": "bytes"
+            },
+            {
+              "title": "tags",
+              "dataType": "list",
+              "items": {
+                "dataType": "integer"
+              }
+            },
+            {
+              "title": "attributes",
+              "dataType": "map",
+              "keys": {
+                "dataType": "bytes"
+              },
+              "values": {
+                "dataType": "integer"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "fixture/types/Redeemer": {
+      "anyOf": [
+        {
+          "title": "Use",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        },
+        {
+          "title": "Cancel",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": [
+            {
+              "title": "reason",
+              "dataType": "bytes"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

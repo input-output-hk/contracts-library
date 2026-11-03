@@ -1,0 +1,5 @@
+import Blaster
+
+theorem good : ∀ x : Int, x = x := by blaster
+
+theorem bad : ∀ x : Int, x = 0 := by blaster

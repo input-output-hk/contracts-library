@@ -1,0 +1,68 @@
+{
+  "schema_version": 2,
+  "identity": {
+    "id": "UP-012",
+    "definition_version": 1,
+    "title": "Experimental signer-removal rejection",
+    "category": "universal"
+  },
+  "explanation": {
+    "summary": "Check bounded explicit rejection after removing the sole signer from fixed Claim, Cancel, and key-datum spend scenarios.",
+    "claim": "For each modeled Claim, Cancel, or key-datum spend transaction, if the original context satisfies the model's validScriptContext predicate and is accepted within 1,000,000 CEK steps, its signer list is nonempty, and removing its first signer preserves that predicate, the changed context is explicitly rejected within the same bound. Separate model-specific obligations check that the premises have a witness.",
+    "purpose": "Exercise signer-removal checks and their applicability qualification in pinned vesting examples and structurally compatible TxM-009 spending inputs."
+  },
+  "scope": {
+    "relevance_conditions": [
+      "Relevant to acceptance dependence on the sole signer in the fixed Claim, Cancel, and key-datum spend shapes.",
+      "The current workflow binding is an experimental integration test, rather than a general required-signer audit for client validators."
+    ],
+    "preconditions": [
+      "The original modeled context satisfies validScriptContext and is accepted within the 1,000,000-step allowance.",
+      "The original signer list is nonempty.",
+      "Example assumption: the baseline contains only the intended required signer, with no unrelated extra signers. This describes the scenario's intended use; it is not an additional Lean premise or a requirement inferred by the tool.",
+      "The context with its first signer removed still satisfies validScriptContext."
+    ],
+    "limitations": [
+      "TxM-007/008 accept two exact unparameterized Plutus V3 linear-vesting artifacts. TxM-009 admits unparameterized V3 targets with exactly one declared spending handler whose datum and redeemer schemas cover its declared encodings, using a conservative schema subset and validated compiled code. Structural admission does not infer authorization roles or establish security coverage.",
+      "The Claim, Cancel, and key-datum spend shapes each contain one signer. The check does not cover arbitrary transaction shapes or multiple-signer lists.",
+      "Explicit bounded rejection excludes fuel exhaustion; the CEK bound is not a ledger CPU or memory budget.",
+      "The check does not determine which signatures a protocol ought to require or establish general authorization correctness.",
+      "Signer-removal rejection does not prove that the remaining authorization logic requires the correct owner. A validator that accepts any signer can satisfy this check on a one-signer model. Extra signers, alternative authorization, and threshold policies need separate review.",
+      "The property and applicability observations establish only statements within the supplied model; they do not establish transaction reachability on a deployed ledger."
+    ]
+  },
+  "formalization": {
+    "primary": "Formal.Properties.Universal.UP012.statement",
+    "theorems": []
+  },
+  "references": [
+    {
+      "label": "Open required-signer semantics and universal-property suitability review",
+      "target": "https://github.com/no-witness-labs/contracts-library/issues/33"
+    },
+    {
+      "label": "Shared primary property definition and applicability predicate",
+      "target": "formal/Formal/Properties/Universal/UP012/Definition.lean"
+    },
+    {
+      "label": "Legacy comparison property and applicability generator",
+      "target": "formal/Workflow/Tests/Legacy/Candidates/UP012.lean"
+    },
+    {
+      "label": "Vesting and vault model preparation routing",
+      "target": "formal/Workflow/Tests/UP012/Profile.lean"
+    },
+    {
+      "label": "Shared two-artifact allowlist and support preparation",
+      "target": "formal/Workflow/Tests/Profiles/LinearVesting.lean"
+    },
+    {
+      "label": "Original bounded vesting candidate",
+      "target": "https://github.com/no-witness-labs/contracts-library/pull/55"
+    },
+    {
+      "label": "Reusable structural admission and native TxM-009 preparation",
+      "target": "formal/Workflow/Preparation/TxM009.lean"
+    }
+  ]
+}

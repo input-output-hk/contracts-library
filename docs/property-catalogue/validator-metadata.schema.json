@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Validator metadata",
+  "description": "Draft validator snapshot metadata. This schema checks structure, not source provenance or proof acceptance.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "validator_name",
+    "source_repository",
+    "source_commit",
+    "file_name",
+    "sha256",
+    "cbor_hex",
+    "cbor_format",
+    "plutus_version",
+    "parameterization_state",
+    "applied_parameters"
+  ],
+  "properties": {
+    "validator_name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Actual selected validator name; use the full entry title where applicable."
+    },
+    "source_repository": {
+      "type": "string",
+      "pattern": "^https://github\\.com/input-output-hk/[A-Za-z0-9_.-]+/?$",
+      "description": "Canonical HTTPS URL of the IO upstream repository from which this snapshot was obtained."
+    },
+    "source_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{40}$",
+      "description": "Exact full Git commit SHA in the named IO upstream repository."
+    },
+    "file_name": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\\\\\r\\n]+\\.ak$",
+      "description": "Repository-relative .ak source path at source_commit."
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$",
+      "description": "SHA-256 of the raw bytes of file_name at source_commit; not a CBOR digest."
+    },
+    "cbor_hex": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-fA-F]{2})+$",
+      "description": "Full CBOR-encoded validator script, in hex, at the recorded parameterization state."
+    },
+    "cbor_format": {
+      "type": "string",
+      "enum": [
+        "single_cbor_hex",
+        "double_cbor_hex"
+      ],
+      "description": "CBOR wrapping representation of cbor_hex."
+    },
+    "plutus_version": {
+      "type": "string",
+      "enum": [
+        "v1",
+        "v2",
+        "v3"
+      ],
+      "description": "Plutus language version of the recorded compiled validator."
+    },
+    "parameterization_state": {
+      "type": "string",
+      "enum": [
+        "unparameterized",
+        "unapplied",
+        "partially_applied",
+        "fully_applied"
+      ],
+      "description": "No validator parameters exist, none have been applied, some have been applied, or all have been applied."
+    },
+    "applied_parameters": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(?:[0-9a-fA-F]{2})+$",
+        "description": "Complete CBOR hex for one serialized parameter value."
+      },
+      "description": "Exact serialized values already applied to the recorded script, in application order."
+    },
+    "compiler_name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Compiler name, when known. Optional."
+    },
+    "compiler_version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Exact compiler version and build identifier, when known. Optional."
+    }
+  },
+  "if": {
+    "properties": {
+      "parameterization_state": {
+        "enum": [
+          "unparameterized",
+          "unapplied"
+        ]
+      }
+    },
+    "required": [
+      "parameterization_state"
+    ]
+  },
+  "then": {
+    "properties": {
+      "applied_parameters": {
+        "maxItems": 0
+      }
+    }
+  },
+  "else": {
+    "properties": {
+      "applied_parameters": {
+        "minItems": 1
+      }
+    }
+  }
+}
