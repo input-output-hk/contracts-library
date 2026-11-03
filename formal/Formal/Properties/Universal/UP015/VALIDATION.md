@@ -1,5 +1,10 @@
 # UP-015 property-owned execution results
 
+This historical record describes the earlier prototype and its recorded dependency
+versions. Fresh validation of the Lean-only implementation is recorded in
+[Lean-only authoring validation](../../../../Workflow/Declarative/LEAN-VALIDATION.md).
+The earlier results below remain preserved for comparison.
+
 This second-property experiment builds on PR #111 at `0ce20fb`. All changes stay
 inside `Formal/Properties/Universal/UP015/`. The existing shared generator,
 discovery script, catalogue, model exports, UP-012 files, and Lake configuration

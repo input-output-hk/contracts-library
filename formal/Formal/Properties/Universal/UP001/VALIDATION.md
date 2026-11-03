@@ -1,5 +1,10 @@
 # UP-001 run migration validation
 
+This historical record describes the earlier prototype and its recorded dependency
+versions. Fresh validation of the Lean-only implementation is recorded in
+[Lean-only authoring validation](../../../../Workflow/Declarative/LEAN-VALIDATION.md).
+The earlier results below remain preserved for comparison.
+
 The property body and six original model bodies match `0e176dd` byte for byte.
 The new runtime exports supply each model's context builder, admission policy,
 and fixed purpose. The public command uses `Run.lean` for all three properties.

@@ -111,6 +111,7 @@ controls. Unit success alone does not establish a property for a supplied target
 Fresh validation must record the actual source/dependency revisions and distinguish
 expected negative controls from unexpected test failures.
 
+[LEAN-VALIDATION.md](LEAN-VALIDATION.md) records the fresh Lean-only results.
 [VALIDATION.md](VALIDATION.md) and [INTEGRATION.md](INTEGRATION.md) preserve earlier
 prototype results. Their Python-era runs are historical evidence; they do not
 validate the current Lean-only implementation or changed dependency combination.
