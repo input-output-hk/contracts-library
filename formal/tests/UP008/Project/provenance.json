@@ -1,0 +1,16 @@
+{
+  "compiler": "v1.1.21+42babe5",
+  "plutusVersion": "v3",
+  "stdlib": "v3.0.0",
+  "title": "enforcing.enforcing.spend",
+  "scriptHash": "e21ca2707f829187d132ebade676ffabe0bcb43cb191625ee4143e5f",
+  "compiledCodeBytes": 487,
+  "compiledCodeSha256": "4b0eebc6d75e70ab045b98d2c4ba3ae09cb689b98fe8d4f881122e4ba712f7db",
+  "sources": {
+    "validators/enforcing.ak": "09675058708cb376b8560dcb33b49c3612837a4c3641724dd323a07297c2d56e",
+    "aiken.toml": "6ce05f697ac862022b9f9001ba4acb35081c04c39743ada51877fcd704cd1d5d",
+    "aiken.lock": "1c39ab261e3a6811d31868ba430d81a6a6012347ad5904262f04b7c441824091"
+  },
+  "blueprint": "tests/UP008/Inputs/control.json",
+  "blueprintSha256": "2c2a087023f824ebc5911e2dd7fc046dff1a3cb8b9cd8f00ab3376e3003972f1"
+}

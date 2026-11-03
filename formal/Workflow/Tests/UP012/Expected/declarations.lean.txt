@@ -1,0 +1,11 @@
+theorem dropSigner_claim :
+Formal.Properties.Universal.UP012.statement validScriptContext (accepts ledgerFuel) (rejects ledgerFuel) claim := by blaster
+
+theorem dropSigner_claim_applies :
+Formal.Properties.Universal.UP012.applicability validScriptContext (accepts ledgerFuel) claim := by blaster
+
+theorem dropSigner_cancel :
+Formal.Properties.Universal.UP012.statement validScriptContext (accepts ledgerFuel) (rejects ledgerFuel) cancel := by blaster
+
+theorem dropSigner_cancel_applies :
+Formal.Properties.Universal.UP012.applicability validScriptContext (accepts ledgerFuel) cancel := by blaster

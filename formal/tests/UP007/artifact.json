@@ -1,0 +1,18 @@
+{
+  "purpose": "UP-007 synthetic continuation stake enforcement control",
+  "compiler": "aiken v1.1.21+42babe5",
+  "plutusVersion": "v3",
+  "validatorTitle": "stake_control.stake_control.spend",
+  "scriptHashHex": "d94e30a6868bb280eba4c6479283a5cfd60f78d40698410ed383a590",
+  "compiledCodeSha256": "abc6eed17dbb88e30994ed39acc730c53d639ed30d3093866f47141a38de033c",
+  "sourceSha256": {
+    "Project/validators/stake_control.ak": "a67e06e386c4ac673a28b6176b400c2ad93c7b4930bf1887835e5661cdfd96a6",
+    "Project/aiken.toml": "c2a5ab388263eb5207af80dc3359e8ace50a55f87d7ccede2380e28b876b9e9d",
+    "Project/aiken.lock": "1c39ab261e3a6811d31868ba430d81a6a6012347ad5904262f04b7c441824091"
+  },
+  "fixture": "Control.lean",
+  "model": "Formal.Vesting.Linear.Blueprint.claim",
+  "cekStepBound": 1000000,
+  "blueprint": "Inputs/control.json",
+  "blueprintSha256": "babbcfb1dcbf8d406d44c46a95e83307462cb771d4f20ab2cc123dc96776aa0c"
+}

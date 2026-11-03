@@ -1,0 +1,67 @@
+{
+  "schema_version": 2,
+  "identity": {
+    "id": "UP-015",
+    "definition_version": 1,
+    "title": "Experimental Claim output-reversal acceptance",
+    "category": "universal"
+  },
+  "explanation": {
+    "summary": "Check bounded acceptance after swapping the two outputs in the fixed vesting Claim integration scenario.",
+    "claim": "For each modeled Claim transaction, if the original context satisfies validScriptContext and is accepted within 1,000,000 CEK steps, and reversing its outputs preserves that validity predicate, the changed context is accepted within the same bound. A separate applicability obligation requires a valid accepted original with a valid reversal whose output list actually differs.",
+    "purpose": "Exercise output reversal and its nontrivial applicability qualification in the pinned vesting integration example."
+  },
+  "scope": {
+    "relevance_conditions": [
+      "Relevant to output-order independence in the pinned linear-vesting Claim transaction shape.",
+      "The current workflow binding is an experimental integration test."
+    ],
+    "preconditions": [
+      "The original modeled context satisfies validScriptContext and is accepted within the 1,000,000-step allowance.",
+      "The context with its outputs reversed still satisfies validScriptContext.",
+      "The separate applicability witness must have an output list that differs after reversal."
+    ],
+    "limitations": [
+      "The current adapter shares UP-012's two exact unparameterized Plutus V3 linear-vesting artifacts: the original PR #55 fixture and the reviewed vault-demo build using Aiken 1.1.21 with stdlib 3.0.0. Unknown compiled artifacts remain unsupported; this is not a generic validator adapter.",
+      "TxM-007 has two outputs, one signer, and one vested asset. Reversal swaps those two outputs; wider permutations and arbitrary transaction shapes are outside this check.",
+      "The 1,000,000 CEK-step allowance is not a ledger CPU or memory budget.",
+      "Applicability strengthens the original PR #62 support goal by requiring the output list to change. The primary acceptance proposition is unchanged.",
+      "The binding excludes the singleton Cancel reversal and the duplicate two-output rotation scenario.",
+      "These modeled obligations do not establish deployed-ledger reachability, behavior of index-sensitive validators, or general audit readiness."
+    ]
+  },
+  "formalization": {
+    "primary": "Formal.Properties.Universal.UP015.statement",
+    "theorems": []
+  },
+  "references": [
+    {
+      "label": "Shared primary property definition and nontrivial applicability predicate",
+      "target": "formal/Formal/Properties/Universal/UP015/Definition.lean"
+    },
+    {
+      "label": "Claim property and applicability proposition generator",
+      "target": "formal/Candidates/UP015.lean"
+    },
+    {
+      "label": "Fixed vesting Claim transaction model",
+      "target": "formal/Formal/TxModels/Definitions/TxM007.lean"
+    },
+    {
+      "label": "Pinned shared vesting artifact guard and support preparation",
+      "target": "formal/Workflow/Tests/Profiles/LinearVesting.lean"
+    },
+    {
+      "label": "Experimental Claim output-reversal workflow profile",
+      "target": "formal/Workflow/Tests/UP015/Profile.lean"
+    },
+    {
+      "label": "Original bounded output-order candidate",
+      "target": "https://github.com/no-witness-labs/contracts-library/blob/7c5dce717ca1d2b1d975c1c1b044bc48c07e0687/formal/Formal/Vesting/Linear/Blueprint/OutputOrder.lean"
+    },
+    {
+      "label": "Original output-order pull request",
+      "target": "https://github.com/no-witness-labs/contracts-library/pull/62"
+    }
+  ]
+}

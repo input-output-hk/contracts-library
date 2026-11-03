@@ -1,0 +1,50 @@
+{
+  "schema_version": 2,
+  "identity": {
+    "id": "UP-001",
+    "definition_version": 1,
+    "title": "Bounded nonacceptance for undeclared purposes",
+    "category": "universal"
+  },
+  "explanation": {
+    "summary": "Check that a validator does not accept on its undeclared purposes within 5,000,000 CEK steps.",
+    "claim": "For each undeclared Plutus V3 purpose, every raw redeemer and every context in the corresponding Every* domain fail to produce unit-valued acceptance with a 5,000,000-step CEK allowance.",
+    "purpose": "Detect acceptance on a purpose outside the blueprint's declared handlers when those declarations represent the intended allowed purposes."
+  },
+  "scope": {
+    "relevance_conditions": [
+      "The blueprint's declared purposes accurately describe the purposes on which the validator is intended to accept.",
+      "Acceptance through a fallback handler on another purpose would violate the intended purpose policy."
+    ],
+    "preconditions": [],
+    "limitations": [
+      "Fuel exhaustion satisfies this nonacceptance claim; it does not establish explicit rejection or termination.",
+      "No ledger-validity hypothesis is imposed. The quantified transaction contexts can include cases that the ledger would reject.",
+      "The current binding supports unparameterized Plutus V3 validators and the generic per-purpose Every* context domains.",
+      "The claim does not establish behavior beyond the stated CEK allowance or compliance with ledger CPU and memory budgets.",
+      "If every supported purpose has a declared handler, this binding generates no obligations and supplies no passing verdict."
+    ]
+  },
+  "formalization": {
+    "primary": "Formal.Properties.Universal.UP001.statement",
+    "theorems": []
+  },
+  "references": [
+    {
+      "label": "Primary bounded nonacceptance definition",
+      "target": "formal/Formal/Properties/Universal/UP001/Definition.lean"
+    },
+    {
+      "label": "Maintained proposition generator and execution binding",
+      "target": "formal/Candidates/UP001.lean"
+    },
+    {
+      "label": "Per-purpose context domains and shared evaluation helpers",
+      "target": "formal/Formal/Universal/Properties.lean"
+    },
+    {
+      "label": "Original candidate source before the reviewed workflow bound change",
+      "target": "https://github.com/no-witness-labs/contracts-library/pull/49"
+    }
+  ]
+}
