@@ -1,4 +1,4 @@
-import Workflow.App.Main
+import Workflow.Tests.Legacy.Main
 
 open Lean Workflow
 
@@ -30,7 +30,7 @@ private structure Saved where
 private def runCase (args : List String)
     (resolver := resolve) : IO Saved := do
   let before ← directories
-  let code ← Main.run resolver args
+  let code ← Workflow.Tests.Legacy.Main.run resolver args
   check "control has the expected inconclusive outcome" (code == 2)
   let created := (← directories).filter (!before.contains ·)
   let [directory] := created.toList | throw (IO.userError "expected one fresh run directory")

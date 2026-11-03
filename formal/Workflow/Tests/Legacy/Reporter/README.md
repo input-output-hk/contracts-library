@@ -1,14 +1,14 @@
-# Reporter component (legacy)
+# Legacy report fixture
 
-Reporter retains the legacy `universal` CLI's plain-text summary, JSON report, and exit
+This test-only formatter retains the older bundled workflow's plain-text summary, JSON report, and exit
 code. Assessment of expectations, applicability, and evidence now belongs to
-[Assessor](../Assessor/README.md); `Reporter.build` delegates to that shared policy.
+[Assessor](../../../Assessor/README.md); `Reporter.build` delegates to that shared policy.
 The callable core returns one CheckResult. A later client Reporter will combine
 those records and provide final branding; that presentation is not implemented here.
 
 The product `plutus-upv` app uses Assessor results directly for its terminal
 summary and run files. Its combination counts and operational exit codes differ
-from this legacy interface; see the [user guide](../Docs/USER-GUIDE.md).
+from this legacy interface; see the [user guide](../../../Docs/USER-GUIDE.md).
 The final human-friendly report remains [issue #83](https://github.com/no-witness-labs/contracts-library/issues/83).
 
 ## Outcomes
@@ -69,7 +69,7 @@ discipline; it does not certify arbitrary dependencies between proof declaration
 Workflow reports now retain the selected property-definition snapshot, including
 its definition version, explanations, and stated limits. Executor retains the
 same snapshot in its manifest; a mismatch makes the report inconclusive. See the
-[developer guide](../Docs/DEVELOPER-GUIDE.md#metadata-and-schemas). Each job also
+[developer guide](../../../Docs/DEVELOPER-GUIDE.md#metadata-and-schemas). Each job also
 retains its model/combined-check snapshots and submitted statement. Applicability
 must use the same binding as its linked property obligation. The agreed metadata
 contracts remain part of [issue #65](https://github.com/no-witness-labs/contracts-library/issues/65).
@@ -80,10 +80,10 @@ This legacy report format retains all obligation rows in its supplied plan.
 
 ## API
 
-Import `Workflow.Reporter` and use:
+Import `Workflow.Tests.Legacy.Reporter` and use:
 
-- `Workflow.Reporter.build plan execution` to construct a report from typed data.
-- `Workflow.Reporter.failure target message` for an input or preparation error.
+- `Workflow.Tests.Legacy.Reporter.build plan execution` to construct a report from typed data.
+- `Workflow.Tests.Legacy.Reporter.failure target message` for an input or preparation error.
 - `report.text`, `report.toJson`, and `report.exitCode` for presentation and CI.
 - `report.write directory` to save `report.txt` and `report.json`.
 
@@ -91,16 +91,16 @@ The component reads no blueprint, starts no process, and queries no solver.
 Writing is explicit; the caller chooses and owns the output directory. Raw
 diagnostics and generated sources remain in Executor's evidence directory.
 
-## Legacy command
+## Internal test driver
 
 With the pinned dependencies and tools prepared, run from `formal/`:
 
 ```sh
-lake exe universal /path/to/plutus.json module.validator --check UP-001 --timeout-ms 120000
+lake exe workflow_legacy_fixture /path/to/plutus.json module.validator --check UP-001 --timeout-ms 120000
 ```
 
-The legacy `Workflow.Main` entry point connects Input, Generator, Executor, and
-Reporter, which delegates assessment to Assessor. The application supplies the candidate resolver through its composition index;
+The legacy `Workflow.Tests.Legacy.Main` entry point connects Input, Generator, Executor, and
+Reporter, which delegates assessment to Assessor. The fixture supplies the legacy candidate resolver;
 the default remains UP-001. The first provider supports unparameterized
 UP-001 targets. The command requires the prepared `LEAN_PATH` supplied by
 `lake exe` and performs no dependency installation.
@@ -132,7 +132,7 @@ the arithmetic controls in `Workflow/Tests/Unit/Fixtures/`.
 From `formal/`:
 
 ```sh
-lake build Workflow workflow_reporter_tests workflow_reporter_integration universal
+lake build Workflow workflow_reporter_tests workflow_reporter_integration workflow_legacy_fixture
 lake exe workflow_reporter_tests
 lake exe workflow_reporter_integration
 ```
@@ -149,6 +149,6 @@ support row and a linked Valid property INCONCLUSIVE, retaining their raw result
 The four-component vesting command also ran with a 5,000 ms execution budget. All
 five jobs remained INCONCLUSIVE, and the process returned exit code 2. That
 short run supplies no passing result for vesting. The original 1,000,000-step
-[120-second run](../Docs/VALIDATION.md) completed all five checks in 82.1 seconds and
+[120-second run](../../../Docs/VALIDATION.md) completed all five checks in 82.1 seconds and
 returned zero with matching results. The history separately records the later
 5,000,000-step checkpoint and its scope.

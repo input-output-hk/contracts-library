@@ -32,7 +32,7 @@ identity transformation cannot supply this applicability witness.
 [Run.lean](Run.lean) instructs the shared generator to emit `reverseOutputs_claim`
 and its linked `reverseOutputs_claim_applies` obligation. The generator unfolds
 the native definition before invoking Blaster.
-[Candidates.UP015](../../../../Candidates/UP015.lean) remains a legacy comparison
+[Workflow.Tests.Legacy.Candidates.UP015](../../../../Workflow/Tests/Legacy/Candidates/UP015.lean) remains a legacy comparison
 adapter. The source candidate is PR #62 at
 `7c5dce717ca1d2b1d975c1c1b044bc48c07e0687`.
 

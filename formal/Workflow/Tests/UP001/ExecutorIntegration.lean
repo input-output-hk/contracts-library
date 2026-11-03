@@ -1,6 +1,6 @@
 import Workflow.Input
 import Workflow.Generator
-import Candidates.UP001
+import Workflow.Tests.Legacy.Candidates.UP001
 import Workflow.Tests.Unit.Executor.Controls
 import Formal.Universal.Properties
 
@@ -20,7 +20,7 @@ def run (args : List String) : IO Unit := do
     let input ← match ← Input.read path selector with
       | .ok value => pure value
       | .error error => throw (IO.userError (toString error))
-    let plan ← match Generator.generate Candidates.UP001.provider input.target "Executed.Validator" with
+    let plan ← match Generator.generate Workflow.Tests.Legacy.Candidates.UP001.provider input.target "Executed.Validator" with
       | .ok value => pure value
       | .error error => throw (IO.userError (toString error))
     let result ← Workflow.Tests.Unit.Executor.Controls.execute plan leanPath budget

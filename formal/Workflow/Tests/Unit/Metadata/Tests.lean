@@ -1,5 +1,5 @@
 import Workflow.Metadata.Property
-import Candidates.Catalogue
+import Workflow.Tests.Legacy.Candidates.Catalogue
 import Workflow.Tests.Unit.Metadata.Models
 import Workflow.Tests.Unit.Metadata.Bindings
 
@@ -168,30 +168,30 @@ def run : IO Unit := do
     check "single-record reader reports unavailable files"
       ((← PropertyDefinition.readRecord missing).toOption.isNone)
   let registered ← catalogueRecord
-  let selected ← IO.ofExcept (Candidates.Catalogue.withDefinitions none #[registered])
+  let selected ← IO.ofExcept (Workflow.Tests.Legacy.Candidates.Catalogue.withDefinitions none #[registered])
   check "binding accepts a partial descriptive record with the registered identity"
     (selected.id == "UP-001" && selected.propertyDefinition == some registered)
   let alternate ← catalogueRecord "UP-001" 2
-  let exact ← IO.ofExcept (Candidates.Catalogue.withDefinitions (some "UP-001") #[alternate, registered])
+  let exact ← IO.ofExcept (Workflow.Tests.Legacy.Candidates.Catalogue.withDefinitions (some "UP-001") #[alternate, registered])
   check "binding selects its exact definition version rather than the first record"
     (exact.propertyDefinition == some registered)
   for invalidDefinitions in [#[], #[incomplete], #[alternate], #[registered, registered],
       #[(← catalogueRecord "UP-001" 1 (some "Other.unregistered"))]] do
     check "missing, duplicate, mismatched, or wrong-primary records cannot relabel code"
-      ((Candidates.Catalogue.withDefinitions (some "UP-001") invalidDefinitions).toOption.isNone)
+      ((Workflow.Tests.Legacy.Candidates.Catalogue.withDefinitions (some "UP-001") invalidDefinitions).toOption.isNone)
   check "metadata cannot register a new executable provider"
-    ((Candidates.Catalogue.withDefinitions (some "UP-unknown") #[(← catalogueRecord "UP-unknown")]).toOption.isNone)
+    ((Workflow.Tests.Legacy.Candidates.Catalogue.withDefinitions (some "UP-unknown") #[(← catalogueRecord "UP-unknown")]).toOption.isNone)
   for (id, primary) in [("UP-001", "Formal.Properties.Universal.UP001.statement"),
       ("UP-012", "Formal.Properties.Universal.UP012.statement"),
       ("UP-015", "Formal.Properties.Universal.UP015.statement")] do
-    let provider ← IO.ofExcept (← Candidates.Catalogue.loadProvider (some id))
+    let provider ← IO.ofExcept (← Workflow.Tests.Legacy.Candidates.Catalogue.loadProvider (some id))
     check s!"maintained {id} record binds to its registered version and primary"
       (provider.propertyDefinition.any fun metadata => metadata.id? == some id &&
         metadata.version? == some 1 && metadata.primary? == some primary)
   let target : TargetDescription := {
     name := "fixture.target", plutusVersion := "v3", compiledCode := "480100002221200101"
     handlers := #[], parameters := none, definitions := none, compiler := none }
-  let plain ← IO.ofExcept ((Generator.generate Candidates.UP001.provider target "Metadata.Control").mapError toString)
+  let plain ← IO.ofExcept ((Generator.generate Workflow.Tests.Legacy.Candidates.UP001.provider target "Metadata.Control").mapError toString)
   let described ← IO.ofExcept ((Generator.generate selected target "Metadata.Control").mapError toString)
   check "metadata does not change generated mathematical sources or observations requested"
     (plain.modules.map (·.source) == described.modules.map (·.source) &&

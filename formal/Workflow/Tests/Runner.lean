@@ -15,7 +15,7 @@ def defaultSuites : Array Suite := #[
   ⟨"Generator unit checks", "workflow_generator_tests"⟩,
   ⟨"Reusable input compatibility and program preparation", "workflow_preparation_tests"⟩,
   ⟨"Executor unit checks", "workflow_executor_tests"⟩,
-  ⟨"Reporter unit checks", "workflow_reporter_tests"⟩,
+  ⟨"Legacy report fixture checks", "workflow_reporter_tests"⟩,
   ⟨"Property metadata checks", "workflow_metadata_tests"⟩,
   ⟨"Run evidence checks", "workflow_evidence_tests"⟩,
   ⟨"Single-check core and app solver checks", "workflow_single_check_tests"⟩,
@@ -32,7 +32,7 @@ def defaultSuites : Array Suite := #[
   ⟨"Test-runner controls", "workflow_runner_tests"⟩,
   ⟨"Input-to-Generator integration", "workflow_generator_integration"⟩,
   ⟨"Executor solver integration", "workflow_executor_integration"⟩,
-  ⟨"Reporter solver integration", "workflow_reporter_integration"⟩,
+  ⟨"Legacy report fixture solver integration", "workflow_reporter_integration"⟩,
   ⟨"UP-001 whole-workflow scenario", "workflow_up001_tests"⟩,
   ⟨"UP-012 whole-workflow scenario", "workflow_up012_tests"⟩,
   ⟨"UP-015 shared-model output-swap scenario", "workflow_up015_tests"⟩]

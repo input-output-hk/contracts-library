@@ -2,7 +2,7 @@
 
 [UP012/Definition.lean](../../../Formal/Properties/Universal/UP012/Definition.lean)
 owns the shared signer-removal statement and applicability predicate.
-[Candidates/UP012.lean](../../../Candidates/UP012.lean) instantiates them for Claim
+[Legacy UP-012 provider](../Legacy/Candidates/UP012.lean) instantiates them for Claim
 and Cancel, plus native TxM-009 key-datum spend. The original vesting API
 preserves the four claims from PR #55 at
 `f5cbda7df624f2496dd2e6fe354a0cd15365b923`. [Profile.lean](Profile.lean) composes

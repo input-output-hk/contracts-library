@@ -1,5 +1,10 @@
 # Validation history
 
+This document preserves earlier checkpoint evidence. The `universal` user command
+is now retired; retained comparison code is under `Workflow/Tests/Legacy`.
+Use the current [user guide](USER-GUIDE.md) for supported commands.
+
+
 The checkpoints below preserve their original claims, bounds, and measurements.
 They refer to the code layouts and capabilities at those revisions. Consult the
 [overview](../README.md) and [user guide](USER-GUIDE.md) for current operation.

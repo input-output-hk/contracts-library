@@ -37,8 +37,8 @@ dependency. `Formal/Universal/Properties.lean` keeps legacy purpose aliases.
 [UP001/Run.lean](../../Formal/Properties/Universal/UP001/Run.lean) owns the rule
 that skips declared purposes. The shared generator returns no modules or goals
 for those pairs, so they receive no passing verdict. The older
-[Candidates/Catalogue.lean](../../Candidates/Catalogue.lean), candidate adapters,
-and test profiles remain for `universal` and regression comparisons.
+[Legacy comparison catalogue](../Tests/Legacy/Candidates/Catalogue.lean), candidate adapters,
+and test profiles remain only for regression comparisons under `Tests/Legacy`.
 
 The product app repeats the callable core for exact property/version/model
 identities. Legacy providers can still emit several combinations in a plan.
@@ -50,7 +50,7 @@ Preserve each definition's actual domain, bounds, and restrictions when adapting
 | --- | --- | --- |
 | Property | Each property's `metadata.json` in Formal/Properties | [Record schema](../../Formal/Properties/property-definition.schema.json), [Metadata/Property.lean](../Metadata/Property.lean) |
 | Transaction model | Metadata beside its native constructor, exported through the model index | [Model schema](../../Formal/TxModels/transaction-model.schema.json), [Metadata/TxModel.lean](../Metadata/TxModel.lean) |
-| Combined check | Property-owned `Run.lean` plus the selected native model; [generic bindings](../../Candidates/combined-checks.json) remain for `universal` | [Combined-check schema](../Metadata/combined-check.schema.json), [Metadata/TxModel.lean](../Metadata/TxModel.lean) |
+| Combined check | Property-owned `Run.lean` plus the selected native model; [older bindings](../Tests/Legacy/Candidates/combined-checks.json) serve comparison tests | [Combined-check schema](../Metadata/combined-check.schema.json), [Metadata/TxModel.lean](../Metadata/TxModel.lean) |
 
 The property record groups identity (`id`, `definition_version`, `title`,
 `category`), explanation (`summary`, `claim`, `purpose`), scope
@@ -209,22 +209,22 @@ general model authoring and candidate integration stay in #89 and #96.
 
 ## Module paths and validation
 
-Existing workflow declaration names remain available. Reporter status/row types
-are compatibility aliases to Assessor. Update module imports to these paths:
+The public app uses the core modules below. Legacy driver and formatter modules
+are test fixtures under `Workflow.Tests.Legacy`; their status/row types still
+alias Assessor for independent comparisons.
 
 | Former import | Current import |
 | --- | --- |
-| `Workflow.Main` | `Workflow.App.Main` |
 | `Workflow.ProductCLI` | `Workflow.App.ProductCLI` |
-| `Workflow.CLI` | `Workflow.App.CLI` |
 | `Workflow.Types` | `Workflow.Types.Target` |
 | `Workflow.Jobs` | `Workflow.Types.Jobs` |
 | `Workflow.PropertyDefinition` | `Workflow.Metadata.Property` |
 | `Workflow.ModelMetadata` | `Workflow.Metadata.TxModel` |
 
-Public component imports and `import Workflow` remain available. Executables
-remain `plutus-upv` and `universal`; Lake roots now point into App/. Imports in
-other branches must follow this table when integrating the cleanup.
+Public component imports and `import Workflow` remain available. The public
+executable is `plutus-upv`; comparisons use the internal `workflow_legacy_fixture`
+target. The old `universal` executable is retired. Imports in other branches
+must follow this table when integrating the cleanup.
 
 Use component tests while changing their contracts, then run `./plutus-upv test`
 from `formal/`. The [test index](../Tests/README.md) lists focused commands and
@@ -368,8 +368,9 @@ replay remains deferred.
 An interrupted run can leave the last successfully saved index unfinished.
 Product exit `0` means normal app completion/retention, including ordinary FAIL
 or INCONCLUSIVE results. Input, preparation, catalogue, app, or storage errors use
-exit `2`. The legacy `universal` entry point keeps its earlier report formats and
-verdict-based `0`/`1`/`2` exits.
+exit `2`. The former `universal` client command is retired. Independent provider and report
+comparisons live in `Workflow/Tests/Legacy`; their internal fixture driver is
+used by workflow tests.
 
 The app owns terminal presentation independently of final reporting. The separate
 human-friendly report consumes retained results in future

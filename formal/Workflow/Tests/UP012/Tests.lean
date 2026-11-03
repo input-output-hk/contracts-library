@@ -2,7 +2,7 @@ import Workflow.Tests.UP012.DefinitionEquivalence
 import Workflow.Generator
 import Workflow.Input
 import Workflow.Tests.UP012.Profile
-import Candidates.Catalogue
+import Workflow.Tests.Legacy.Candidates.Catalogue
 
 open Lean Workflow
 open Workflow.Generator
@@ -49,8 +49,8 @@ def run : IO Unit := do
   check "UP-012 instantiates the shared property and applicability definitions" (signerDeclarations.trim == signerGolden.trim)
   check "UP-012 embeds code instead of reading Scripts"
     (signerPlan.modules.all fun source => (source.source.splitOn "#import_uplc").length == 1)
-  check "UP-001 remains the default provider" ((Candidates.Catalogue.selectProvider none).toOption.map (·.id) == some "UP-001")
-  check "UP-012 is selectable" ((Candidates.Catalogue.selectProvider (some "UP-012")).toOption.map (·.id) == some "UP-012")
+  check "UP-001 remains the default provider" ((Workflow.Tests.Legacy.Candidates.Catalogue.selectProvider none).toOption.map (·.id) == some "UP-001")
+  check "UP-012 is selectable" ((Workflow.Tests.Legacy.Candidates.Catalogue.selectProvider (some "UP-012")).toOption.map (·.id) == some "UP-012")
   for unsupported in [target, { vesting with parameters := some #[parameter] },
       { vesting with plutusVersion := "v2" }, { vesting with handlers := #[] }] do
     match generate Workflow.Tests.UP012.Profile.provider unsupported "Generated.Unsupported" with

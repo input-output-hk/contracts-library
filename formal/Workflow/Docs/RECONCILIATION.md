@@ -1,5 +1,10 @@
 # PR #47 reconciliation
 
+This document preserves earlier checkpoint evidence. The `universal` user command
+is now retired; retained comparison code is under `Workflow/Tests/Legacy`.
+Use the current [user guide](USER-GUIDE.md) for supported commands.
+
+
 This delivery comparison records the referenced checkpoints and remaining gaps.
 Its historical source paths may differ from the current
 [module map](DEVELOPER-GUIDE.md#module-paths-and-validation). Keep the original
@@ -78,7 +83,7 @@ The [old generator][old-generator] implements the reference behavior. Current
 contracts live in the [Input](../Input/README.md), [Generator](../Generator/README.md),
 [Executor](../Executor/README.md), and [Assessor](../Assessor/README.md) guides.
 The [developer guide](DEVELOPER-GUIDE.md) maps native definitions, models, bindings,
-and app composition. [Reporter](../Reporter/README.md) retains the legacy reporting
+and app composition. [Reporter](../Tests/Legacy/Reporter/README.md) retains the legacy reporting
 API; final client-report design remains separate. The comparison uses source
 inspection and earlier modular-provider experiments; PR #47's original proofs
 were not rerun. This documentation refresh adds no new proof-suite result.
@@ -163,7 +168,7 @@ owner decisions.
 
 [old-generator]: https://github.com/no-witness-labs/contracts-library/blob/0dde8ae76e3f8a239bf06685f72327aed4a7c3ef/formal/scripts/GenUniversalChecks.lean
 [old-predicates]: https://github.com/no-witness-labs/contracts-library/blob/0dde8ae76e3f8a239bf06685f72327aed4a7c3ef/formal/Formal/Common.lean
-[new-provider]: ../../Candidates/UP001.lean
+[new-provider]: ../Tests/Legacy/Candidates/UP001.lean
 [new-contexts]: https://github.com/no-witness-labs/contracts-library/blob/d3bce414a3417b9227fa92f1e0a33672d2829749/formal/Formal/Universal/Properties.lean
 
 The TxM-009 pilot adds reusable structural admission under `Workflow/Preparation`.

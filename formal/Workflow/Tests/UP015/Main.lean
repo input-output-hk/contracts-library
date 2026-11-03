@@ -14,7 +14,7 @@ private def runApp (blueprint selector : String) (ids : Array CheckId) : IO App.
   let leanPath := (← IO.getEnv "LEAN_PATH").getD ""
   check "app scenarios receive a prepared Lean search path" (!leanPath.trim.isEmpty)
   let run ← App.Run.runWith ids
-    (fun id => Candidates.Catalogue.loadCheck id.propertyId id.definitionVersion id.modelId)
+    (fun id => Workflow.Tests.Legacy.Candidates.Catalogue.loadCheck id.propertyId id.definitionVersion id.modelId)
     { path := blueprint, validators := #[selector], timeoutMs := 300000 }
     { executorOptions := { leanPath }, outputRoot := "output" }
   IO.print run.text
@@ -47,7 +47,7 @@ private def passing : IO System.FilePath := do
   let mut directories : Array System.FilePath := #[]
   for selected in run.validators[0]!.checks do
     let some result := selected.result | throw (IO.userError "missing selected result")
-    let configured ← IO.ofExcept (← Candidates.Catalogue.loadCheck
+    let configured ← IO.ofExcept (← Workflow.Tests.Legacy.Candidates.Catalogue.loadCheck
       selected.id.propertyId selected.id.definitionVersion selected.id.modelId)
     let names := if selected.id.propertyId == "UP-012" then
       #["dropSigner_claim", "dropSigner_claim_applies"]

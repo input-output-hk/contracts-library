@@ -1,6 +1,6 @@
 # UP-001 workflow scenario
 
-This scenario uses [Candidates/UP001.lean](../../../Candidates/UP001.lean) and
+This scenario uses [Legacy UP-001 provider](../Legacy/Candidates/UP001.lean) and
 its existing 5,000,000-step non-acceptance claim. It keeps raw redeemer data and
 the full per-purpose contexts. Fuel exhaustion satisfies this bounded claim.
 

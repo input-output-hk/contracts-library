@@ -51,7 +51,7 @@ private def discoveryCases : IO Unit := IO.FS.withTempDir fun root => do
     ((has driver "import Formal.TxModels.Definitions.TxM777") &&
       (has driver "Formal.TxModels.TxM777.runnable"))
   check "bootstrap has no central candidate or legacy bridge import"
-    (!(has driver "Candidates.") && !(has driver "LegacyUP001"))
+    (!(has driver "Workflow.Tests.Legacy.") && !(has driver "LegacyUP001"))
   IO.FS.writeBinFile (root / "Formal/TxModels/Definitions/TxM999.lean")
     (ByteArray.mk #[255, 254, 0])
   let selected ← Workflow.Declarative.Discovery.modelsFor root #["TxM-777"]
@@ -376,7 +376,7 @@ private def maintainedProperties : IO Unit := do
   let plan := Workflow.Declarative.Discovery.planSource properties
   check "UP001 uses its run declaration without central adapters"
     ((has plan "Formal.Properties.Universal.UP001.Run") &&
-      !(has plan "Candidates.") && !(has plan "LegacyUP001"))
+      !(has plan "Workflow.Tests.Legacy.") && !(has plan "LegacyUP001"))
 
 def run : IO Unit := do
   discoveryCases

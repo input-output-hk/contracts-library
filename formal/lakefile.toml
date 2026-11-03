@@ -42,10 +42,6 @@ name = "Formal"
 [[lean_lib]]
 name = "Workflow"
 
-# Candidate definitions and composition references, outside the reusable engine.
-[[lean_lib]]
-name = "Candidates"
-
 [[lean_exe]]
 name = "workflow_input_tests"
 root = "Workflow.Tests.Unit.Input.Tests"
@@ -115,8 +111,8 @@ name = "workflow_installation_tests"
 root = "Workflow.Tests.Unit.Installation.Tests"
 
 [[lean_exe]]
-name = "universal"
-root = "Workflow.App.CLI"
+name = "workflow_legacy_fixture"
+root = "Workflow.Tests.Legacy.Driver"
 
 [[lean_exe]]
 name = "plutus-upv"

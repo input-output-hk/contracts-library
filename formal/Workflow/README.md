@@ -37,15 +37,16 @@ The final human-friendly report remains separate work in
 | [Generator/](Generator/README.md) | Pure generation of Lean modules and declared check jobs |
 | [Executor/](Executor/README.md) | Isolated runs, process deadlines, diagnostics, and evidence |
 | [Assessor/](Assessor/README.md) | Expected/observed comparison, applicability, and one-check results |
-| [Reporter/](Reporter/README.md) | Legacy report/CLI compatibility and the later client-report boundary |
+| [Tests/Legacy/](Tests/Legacy/README.md) | Independent older providers, report fixtures, and their internal test driver |
 | `App/` | CLI selection, blueprint orchestration, run files/index, and terminal rendering |
 | `Types/` | Shared target/input and generation/job contracts |
 | `Metadata/` | Property/model metadata readers and binding validation |
+| [Declarative/](Declarative/README.md) | Property-owned discovery, shared model binding, and generation |
+| `Preparation/` | Reusable program decoding and model-input compatibility checks |
 | [Tests/](Tests/README.md) | Component controls and the UP001/UP012 workflow scenarios |
 | [Formal/Properties](../Formal/Properties/README.md) | Native primary definitions, metadata, and category/code indexes |
 | [Formal/TxModels](../Formal/TxModels/README.md) | Native context constructors and their metadata |
 | [Declarative/](Declarative/README.md) | Selected property-run discovery, model imports, and shared goal generation |
-| `Candidates/` | Legacy generation adapters for `universal` and regression comparisons |
 
 Each property owns its run declaration and enabled model entries beside its
 definition, metadata, and tests. An entry names a compatible model and retains
@@ -105,8 +106,9 @@ The three outputs have separate responsibilities:
 The product exits `0` when orchestration and retention complete, including ordinary
 FAIL/INCONCLUSIVE outcomes, and `2` for input/preparation/catalogue/app/storage
 errors. An empty enabled selection is a no-op that establishes no property.
-The legacy `universal` executable preserves its bundled providers, report files,
-and verdict-based `0`/`1`/`2` exits for compatibility.
+The older bundled providers and report contract are retained only in
+[legacy test fixtures](Tests/Legacy/README.md). `plutus-upv` is the public
+command; the old `universal` executable is retired.
 
 Additional input formats, typed parameter application, and property-design
 improvements remain separate work. Issue #39 tracks the workflow; #33 tracks

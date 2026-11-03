@@ -45,8 +45,8 @@
       "target": "formal/Formal/Properties/Universal/UP012/Definition.lean"
     },
     {
-      "label": "Maintained original property and applicability proposition generator",
-      "target": "formal/Candidates/UP012.lean"
+      "label": "Legacy comparison property and applicability generator",
+      "target": "formal/Workflow/Tests/Legacy/Candidates/UP012.lean"
     },
     {
       "label": "Vesting and vault model preparation routing",

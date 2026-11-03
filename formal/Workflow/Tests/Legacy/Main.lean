@@ -1,11 +1,12 @@
 import Workflow
+import Workflow.Tests.Legacy.Reporter
 
-namespace Workflow.Main
+namespace Workflow.Tests.Legacy.Main
 
 open Lean
 
 private def usage : String :=
-  "usage: plutus-upv run BLUEPRINT VALIDATOR [--check PROPERTY_ID] [--timeout-ms MILLISECONDS]"
+  "usage: workflow_legacy_fixture BLUEPRINT VALIDATOR [--check PROPERTY_ID] [--timeout-ms MILLISECONDS]"
 
 private def outputRoot : System.FilePath := "output"
 
@@ -41,7 +42,7 @@ private def parseOptions : List String → Request → Except String Request
     parseOptions rest { request with budgetMs := budget }
   | _, _ => .error usage
 
-private def finish (report : Reporter.Report) (invocation : Invocation)
+private def finish (report : Workflow.Tests.Legacy.Reporter.Report) (invocation : Invocation)
     (source : Option String := none) : IO UInt32 := do
   try
     let directory ← match report.evidenceDirectory with
@@ -66,19 +67,19 @@ private def runRequest (resolveProvider : Option String → IO (Except String Ge
   let definition := providerResult.toOption.bind (·.propertyDefinition)
   let input ← match inputResult with
     | .ok value => pure value
-    | .error error => return ← finish (Reporter.failure request.selector (toString error) definition) invocation source
+    | .error error => return ← finish (Workflow.Tests.Legacy.Reporter.failure request.selector (toString error) definition) invocation source
   let provider ← match providerResult with
     | .ok value => pure value
-    | .error message => return ← finish (Reporter.failure input.target.name message) invocation source
+    | .error message => return ← finish (Workflow.Tests.Legacy.Reporter.failure input.target.name message) invocation source
   let plan ← match Generator.generate provider input.target "Generated" with
     | .ok value => pure value
-    | .error error => return ← finish (Reporter.failure input.target.name (toString error) definition) invocation source
+    | .error error => return ← finish (Workflow.Tests.Legacy.Reporter.failure input.target.name (toString error) definition) invocation source
   let leanPath := (← IO.getEnv "LEAN_PATH").getD ""
   let result ← match ← Executor.run plan {
       leanPath, budgetMs := request.budgetMs, outputRoot := some outputRoot } with
     | .ok value => pure value
-    | .error message => return ← finish (Reporter.failure input.target.name message definition) invocation source
-  finish (Reporter.build plan result) invocation source
+    | .error message => return ← finish (Workflow.Tests.Legacy.Reporter.failure input.target.name message definition) invocation source
+  finish (Workflow.Tests.Legacy.Reporter.build plan result) invocation source
 
 def run (resolveProvider : Option String → IO (Except String Generator.Provider))
     (args : List String) : IO UInt32 := do
@@ -87,8 +88,8 @@ def run (resolveProvider : Option String → IO (Except String Generator.Provide
   | ["--help"] => IO.println usage; return 0
   | path :: selector :: rest =>
     match parseOptions rest { path, selector } with
-    | .error message => finish (Reporter.failure selector message) invocation
+    | .error message => finish (Workflow.Tests.Legacy.Reporter.failure selector message) invocation
     | .ok request => runRequest resolveProvider request { invocation with request := some request }
-  | _ => finish (Reporter.failure "unselected" usage) invocation
+  | _ => finish (Workflow.Tests.Legacy.Reporter.failure "unselected" usage) invocation
 
-end Workflow.Main
+end Workflow.Tests.Legacy.Main

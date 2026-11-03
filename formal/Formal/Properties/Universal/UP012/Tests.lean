@@ -6,7 +6,7 @@ import Workflow.Declarative.Catalogue
 import Workflow.Input
 import Workflow.Tests.UP012.Profile
 import Workflow.Tests.Support
-import Candidates.Catalogue
+import Workflow.Tests.Legacy.Candidates.Catalogue
 
 namespace Formal.Properties.Universal.UP012.Tests
 
@@ -59,7 +59,7 @@ def runTests : IO Unit := do
       | throw (IO.userError "missing reviewed combination fixture")
     check s!"{id.modelId}: the full reviewed property/model limitations are preserved"
       (configured.context.binding.combinedCheck == expected)
-    let previous ← IO.ofExcept (← Candidates.Catalogue.loadCheck "UP-012" 1 modelId)
+    let previous ← IO.ofExcept (← Workflow.Tests.Legacy.Candidates.Catalogue.loadCheck "UP-012" 1 modelId)
     let plan ← IO.ofExcept ((Generator.generateOne configured input.target "Generated.Experiment").mapError toString)
     let old ← IO.ofExcept ((Generator.generateOne previous input.target "Generated.Experiment").mapError toString)
     check s!"{modelId}: main and applicability jobs preserve identities and formulae"

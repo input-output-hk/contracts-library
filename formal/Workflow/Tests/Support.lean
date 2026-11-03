@@ -52,7 +52,7 @@ def showCompilerLogs (directory : System.FilePath) : IO Unit := do
 def invoke (blueprint selector : String) (checkId : Option String) (budgetMs : Nat)
     (label := "CLI workflow") (expected := "") : IO CLIRun := do
   let selection := checkId.map (fun id => #["--check", id]) |>.getD #[]
-  let arguments := #["exe", "universal", blueprint, selector] ++ selection ++
+  let arguments := #["exe", "workflow_legacy_fixture", blueprint, selector] ++ selection ++
     #["--timeout-ms", toString budgetMs]
   startCase label expected ("lake " ++ String.intercalate " " arguments.toList) budgetMs
   let original ← IO.FS.readFile blueprint

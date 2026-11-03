@@ -3,7 +3,7 @@ import Workflow.Tests.UP015.DefinitionEquivalence
 import Workflow.Tests.UP015.Profile
 import Workflow.Tests.UP012.Profile
 import Workflow.Tests.Support
-import Candidates.Catalogue
+import Workflow.Tests.Legacy.Candidates.Catalogue
 
 namespace Workflow.Tests.UP015.Tests
 
@@ -43,13 +43,13 @@ def run : IO Unit := do
     check s!"{fixture}: UP015 embeds the exact accepted code and its known hash"
       (((types.source.splitOn s!"def program : Program := singleCborEncodedScriptFromHexM {reprStr input.target.compiledCode}").length == 2) &&
        ((types.source.splitOn s!"def scriptHashHex : String := {reprStr expectedHash}").length == 2))
-    let signerConfigured ← IO.ofExcept (← Candidates.Catalogue.loadCheck "UP-012" 1 "TxM-007")
+    let signerConfigured ← IO.ofExcept (← Workflow.Tests.Legacy.Candidates.Catalogue.loadCheck "UP-012" 1 "TxM-007")
     let signerSelected ← IO.ofExcept ((generateOne signerConfigured input.target
       "Generated.Selected").mapError toString)
     check "UP015 only emits the Claim model alias"
       (((tx.source.splitOn "abbrev claim :=").length == 2) &&
        ((tx.source.splitOn "abbrev cancel :=").length == 1))
-    let configured ← IO.ofExcept (← Candidates.Catalogue.loadCheck "UP-015" 1 "TxM-007")
+    let configured ← IO.ofExcept (← Workflow.Tests.Legacy.Candidates.Catalogue.loadCheck "UP-015" 1 "TxM-007")
     let selected ← IO.ofExcept ((generateOne configured input.target "Generated.Selected").mapError toString)
     check "UP012 and UP015 exact selections prepare identical validator and model modules"
       (signerSelected.modules[0]?.map (·.source) == selected.modules[0]?.map (·.source) &&
@@ -58,7 +58,7 @@ def run : IO Unit := do
       (selected.jobs.all fun job => job.binding == some configured.context.binding)
     for model in ["TxM-008", "TxM-unknown"] do
       check "UP015 rejects unsupported model selection"
-        ((← Candidates.Catalogue.loadCheck "UP-015" 1 model).toOption.isNone)
+        ((← Workflow.Tests.Legacy.Candidates.Catalogue.loadCheck "UP-015" 1 model).toOption.isNone)
     let parameter : ArgumentDescription :=
       { schema := Json.mkObj [("dataType", .str "integer")], title := none, description := none }
     for target in [

@@ -50,20 +50,15 @@ these links explicitly, without relying on naming conventions in the engine.
 
 ## Candidate composition
 
-The current CLI uses [Candidates/Catalogue.lean](../../Candidates/Catalogue.lean)
-through [App/ProductCLI.lean](../App/ProductCLI.lean). The generic orchestration entry point receives
-the resolver as an argument. Additional catalogue formats and selection modes
-remain design work.
+The public CLI uses property-owned run declarations through
+[App/ProductCLI.lean](../App/ProductCLI.lean) and the
+[shared declarative generator](../Declarative/Generator.lean). Each property
+selects its compatible models and reviewed pairing limitations.
 
-`App/CLI.lean` retains the legacy `universal` executable as a compatibility entry point.
-
-Generation adapters live in [Candidates/UP001.lean](../../Candidates/UP001.lean)
-and [Candidates/UP012.lean](../../Candidates/UP012.lean), plus
-[Candidates/UP015.lean](../../Candidates/UP015.lean). They instantiate the native
-primary statements and unfold them before invoking Blaster. The experimental
-artifact guard lives in [shared test-only preparation](../Tests/Profiles/LinearVesting.lean).
-Tests retain expanded legacy formulas for kernel-checked equivalence and the
-independent signer-identity negative control.
+Independent older providers remain under
+[Tests/Legacy/Candidates](../Tests/Legacy/Candidates/) for regression comparison.
+They are test fixtures rather than a second public authoring route. The retired
+`universal` command is no longer registered.
 
 The agreed direction is to supply reusable models with property definitions and
 accept the validator as an input. Definitions have versions and can run with

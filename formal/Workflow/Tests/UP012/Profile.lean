@@ -1,6 +1,6 @@
 import Workflow.Tests.Profiles.LinearVesting
 import Workflow.Preparation.TxM009
-import Candidates.UP012
+import Workflow.Tests.Legacy.Candidates.UP012
 
 namespace Workflow.Tests.UP012.Profile
 
@@ -28,25 +28,25 @@ private def buildSelected (target : TargetDescription) (modulePrefix : String)
         | .error vestingError =>
           throw ⟨.unsupported, s!"{vestingError.message}; {vaultError.message}"⟩
   let checks ← match modelId with
-    | none => pure (Candidates.UP012.checks modulePrefix)
-    | some id => Candidates.UP012.checksForModel id modulePrefix
+    | none => pure (Workflow.Tests.Legacy.Candidates.UP012.checks modulePrefix)
+    | some id => Workflow.Tests.Legacy.Candidates.UP012.checksForModel id modulePrefix
   let jobs ← match modelId with
-    | none => pure (Candidates.UP012.jobs modulePrefix)
-    | some id => Candidates.UP012.jobsForModel id modulePrefix
+    | none => pure (Workflow.Tests.Legacy.Candidates.UP012.jobs modulePrefix)
+    | some id => Workflow.Tests.Legacy.Candidates.UP012.jobsForModel id modulePrefix
   return {
     targetName := target.name
     modules := modules.push checks
     jobs
     notes := match modelId with
-      | none => Candidates.UP012.notes
-      | some id => Candidates.UP012.notesForModel id }
+      | none => Workflow.Tests.Legacy.Candidates.UP012.notes
+      | some id => Workflow.Tests.Legacy.Candidates.UP012.notesForModel id }
 
 /-- Select reusable spending preparation or the existing pinned vesting scenario. -/
 def provider : Provider := { id := "UP-012", generate := fun target modulePrefix => buildSelected target modulePrefix none }
 
 /-- Bind one native model to its supported preparation path. -/
 def providerForModel (selectedModelId : String) : Except Error Provider := do
-  unless Candidates.UP012.modelIds.contains selectedModelId do
+  unless Workflow.Tests.Legacy.Candidates.UP012.modelIds.contains selectedModelId do
     throw ⟨.unsupported, s!"UP-012 has no registered model {selectedModelId}"⟩
   return { id := "UP-012", generate := fun target modulePrefix => buildSelected target modulePrefix (some selectedModelId) }
 

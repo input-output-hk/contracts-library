@@ -9,7 +9,7 @@ import Workflow.Declarative.Catalogue
 import Workflow.Input
 import Workflow.Tests.Support
 import Workflow.Tests.UP001.DefinitionEquivalence
-import Candidates.UP001
+import Workflow.Tests.Legacy.Candidates.UP001
 
 namespace Formal.Properties.Universal.UP001.Tests
 
@@ -28,7 +28,7 @@ private def modelUse (id : String) : ModelUse :=
 
 private def property : Property := {
   -- This compatibility fixture covers the six original families, independently of new enabled models.
-  run := { UP001.run with models := Candidates.UP001.modelIds.map modelUse }
+  run := { UP001.run with models := Workflow.Tests.Legacy.Candidates.UP001.modelIds.map modelUse }
   runModule := "Formal.Properties.Universal.UP001.Run"
   definitionModule := "Formal.Properties.Universal.UP001.Definition"
   metadataPath := "Formal/Properties/Universal/UP001/metadata.json" }
@@ -40,7 +40,7 @@ def runTests : IO Unit := do
   let reviewed ← IO.ofExcept (← CombinedCheck.read "Formal/Properties/Universal/UP001/Tests/Expected/combined-checks.json")
   let catalogue ← IO.ofExcept (← Catalogue.load #[property] models)
   check "all six purpose models retain their existing registry order"
-    (catalogue.checks.map (·.modelId) == Candidates.UP001.modelIds)
+    (catalogue.checks.map (·.modelId) == Workflow.Tests.Legacy.Candidates.UP001.modelIds)
   check "the reviewed bound and absence of applicability remain explicit"
     (UP001.run.fuel == 5000000 && UP001.run.applicability.isNone)
   let initial := { property with run := { UP001.run with models := #[modelUse "TxM-001"] } }
@@ -62,7 +62,7 @@ def runTests : IO Unit := do
     check s!"{id.modelId}: the full reviewed property/model limitations are preserved"
       (configured.context.binding.combinedCheck == expected)
     let plan ← IO.ofExcept ((Generator.generateOne configured target "Generated.Parity").mapError toString)
-    let prior ← IO.ofExcept ((Candidates.UP001.providerForModel id.modelId).mapError toString)
+    let prior ← IO.ofExcept ((Workflow.Tests.Legacy.Candidates.UP001.providerForModel id.modelId).mapError toString)
     let old ← IO.ofExcept ((prior.generate target "Generated.Parity").mapError toString)
     let [current] := plan.jobs.toList | throw (IO.userError "expected one generated UP-001 job")
     let [previous] := old.jobs.toList | throw (IO.userError "expected one legacy UP-001 job")
