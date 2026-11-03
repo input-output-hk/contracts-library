@@ -59,4 +59,19 @@ if UPV_TEST_BUILD_EXIT=9 bash "$upv_formal/install.sh" --bin-dir "$upv_temp/fail
 fi
 test ! -e "$upv_temp/failed/plutus-upv"
 test ! -L "$upv_temp/failed/plutus-upv"
+
+mkdir -p -- "$upv_temp/without-python"
+for upv_tool in lake z3 timeout mktemp date readlink dirname; do
+  ln -s -- "$(command -v "$upv_tool")" "$upv_temp/without-python/$upv_tool"
+done
+if PATH="$upv_temp/without-python" /bin/bash "$upv_formal/install.sh" \
+    --bin-dir "$upv_temp/missing-python" >"$upv_temp/missing-python.log" 2>&1; then
+  printf 'Installer accepted missing Python\n' >&2
+  exit 1
+fi
+case $(cat "$upv_temp/missing-python.log") in
+  *'Missing required tool: python3'*) ;;
+  *) printf 'Installer did not explain its Python prerequisite\n' >&2; exit 1 ;;
+esac
+test ! -e "$upv_temp/missing-python/plutus-upv"
 printf 'Installer and launcher checks passed.\n'

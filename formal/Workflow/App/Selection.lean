@@ -92,9 +92,14 @@ private def selectedProperties (request : Request) (known : Array String)
 
 /-- Select only registered pairings, preserving registry order and exact versions. -/
 def selectChecks (request : Request) (registry : Array CheckId)
-    (fileSource : Option String) : Except String (Array CheckId) := do
+    (fileSource : Option String) (knownProperties : Option (Array String) := none) :
+    Except String (Array CheckId) := do
   let registry := unique registry
-  let selected ← selectedProperties request (unique (registry.map (·.propertyId))) fileSource
+  let known := knownProperties.getD (unique (registry.map (·.propertyId)))
+  let selected ← selectedProperties request known fileSource
+  for property in selected do
+    unless registry.any (·.propertyId == property) do
+      throw s!"no checks were prepared for selected property: {property}"
   return registry.filter fun check => selected.contains check.propertyId
 
 end Workflow.App

@@ -39,3 +39,23 @@ indices. These modeled checks do not establish deployed-ledger reachability or
 general audit readiness.
 General definition, model-authoring, and integration work remains open in issues
 #23, #33, #36, #89, and #96.
+
+## Property-owned execution experiment
+
+[Run.lean](Run.lean) selects TxM-007 and declares the goals for the shared
+experimental generator. Adding this property requires no shared generator,
+discovery, catalogue, or model changes. [Tests.lean](Tests.lean) checks parity
+with the legacy adapter and runs a labeled counterfactual rejection control.
+
+From `formal/`:
+
+```sh
+lake build Formal.Properties.Universal.UP015.Tests
+lake env lean --run Formal/Properties/Universal/UP015/Tests.lean --unit
+python3 scripts/run_properties.py Workflow/Tests/UP012/Inputs/plutus.json --check UP-015 --timeout-ms 300000
+lake env lean --run Formal/Properties/Universal/UP015/Tests.lean --negative-control
+```
+
+The public CLI uses these run instructions. Model coverage, applicability,
+and proof bounds remain as described above.
+The [validation record](VALIDATION.md) reports goal parity and actual proof/control results.

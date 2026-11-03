@@ -21,7 +21,7 @@ case ${1:-} in
   *) printf 'Unknown argument: %s\n' "$1" >&2; exit 2 ;;
 esac
 
-for upv_tool in lake z3 timeout mktemp date readlink; do
+for upv_tool in lake python3 z3 timeout mktemp date readlink; do
   if ! command -v "$upv_tool" >/dev/null 2>&1; then
     printf 'Missing required tool: %s. See Workflow/Docs/USER-GUIDE.md.\n' "$upv_tool" >&2
     exit 1

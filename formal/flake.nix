@@ -31,6 +31,7 @@
             # reads ./lean-toolchain (leanprover/lean4:v4.24.0) and fetches it.
             pkgs.elan
             pkgs.coreutils # GNU timeout supervises Executor process groups.
+            pkgs.python3 # Selected property/model discovery behind the public CLI.
             z3
             pkgs.gawk   # `just verify` pipes lake output through annotate-blaster-logs.awk
           ];

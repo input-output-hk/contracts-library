@@ -14,7 +14,7 @@ human-friendly final report remains future work in
 
 ## Prepare once
 
-Have Lean **4.24.0**, Z3 **4.15.2**, GNU coreutils (`timeout`, `mktemp`,
+Have Lean **4.24.0**, Python **3.9 or newer**, Z3 **4.15.2**, GNU coreutils (`timeout`, `mktemp`,
 `date`, and `sha256sum`), and Git on `PATH`. From the repository root:
 
 ```sh
@@ -34,7 +34,8 @@ Lean environment. From `formal/`, `lake exe plutus-upv ...` also works.
 
 The first build can download and compile dependencies. Lake uses revisions in
 the committed `lake-manifest.json`; reserve `lake update` for intentional upgrades.
-The launcher also builds the command when needed.
+The launcher also builds the command when needed and prepares selected checks
+internally. Users keep the same command.
 
 ## Run and select work
 
@@ -69,7 +70,7 @@ plutus-upv run Workflow/Tests/UP001/Inputs/plutus.json vault.vault --check UP-00
 
 `--validator` and `--check` may repeat. Use the full `module.validator` name or an
 unambiguous short name. Entries for several handlers form one logical target.
-Selection preserves blueprint/catalogue order and runs each combination once.
+Selection preserves blueprint and property-declaration order and runs each combination once.
 The app captures the blueprint once and prepares each selected validator once.
 A malformed compiled artifact produces that validator's preparation error while
 other validators continue. Invalid shared JSON/title structure stops discovery.
@@ -129,6 +130,7 @@ Each invocation creates a fresh local folder:
 output/run.<timestamp>.<unique-id>/
 ├── README.md
 ├── run.json
+├── discovery.json                     # selected preparation steps and retained diagnostics
 ├── sources/
 │   ├── index.json
 │   ├── Formal/                          # imported project Lean sources and compiled modules
@@ -149,6 +151,11 @@ output/run.<timestamp>.<unique-id>/
                 ├── Checks.lean
                 └── compiler outputs and logs
 ```
+
+Preparation diagnostics also remain under `output/discovery.<unique-id>/`.
+If a selected source cannot compile, the command exits with code 2 and prints
+that evidence path before verification starts. Broken unselected sources do not
+block explicitly selected checks.
 
 Earlier runs remain intact, and Git ignores the output. Folder names encode
 characters such as `/`; `run.json` preserves canonical validator names.
