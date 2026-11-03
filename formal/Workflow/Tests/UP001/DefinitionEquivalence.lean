@@ -1,4 +1,5 @@
 import Formal.Properties.Universal.UP001.Definition
+import Formal.Universal.Properties
 
 namespace Workflow.Tests.UP001.DefinitionEquivalence
 

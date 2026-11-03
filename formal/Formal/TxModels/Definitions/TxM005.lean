@@ -1,4 +1,5 @@
 import Formal.TxModels.Common
+import Formal.TxModels.Runnable
 
 namespace Formal.TxModels
 
@@ -20,6 +21,13 @@ def metadata : Metadata := {
   title := "Open proposal context"
   plutus_version := "v3"
   description := "Proposing contexts with arbitrary transaction information, proposal index, proposal procedure, and redeemer. The constructor fixes the script purpose to proposing and adds no ledger-validity conditions." }
+
+/-- Expose the unchanged context family to property-owned runs. -/
+def runnable : Runnable := {
+  metadata
+  context := ``EveryPropose.ctx
+  admission := .unparameterizedV3
+  purpose := some .propose }
 
 end TxM005
 end Formal.TxModels

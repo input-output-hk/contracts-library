@@ -1,36 +1,14 @@
-import PlutusCore.UPLC
-import CardanoLedgerApi
-import Formal.TxModels.Index
+import Formal.Universal.Execution
+import Formal.TxModels.Definitions.TxM001
+import Formal.TxModels.Definitions.TxM002
+import Formal.TxModels.Definitions.TxM003
+import Formal.TxModels.Definitions.TxM004
+import Formal.TxModels.Definitions.TxM005
+import Formal.TxModels.Definitions.TxM006
 
-/-! Execution and script-context helpers used by generated blueprint checks.
-Extracted from fork PR #44 at 99a5734f0e036b6abfb4c3f121a298e35fa2eff6.
--/
+/-! Compatibility aliases for existing purpose models and transaction builders. -/
 
 namespace Formal.Universal.Properties
-
-open PlutusCore.UPLC.Term (Program Term Const)
-open PlutusCore.UPLC.CekMachine (State step initialState applyParams)
-open PlutusCore.Data (Data)
-open CardanoLedgerApi.V3
-
-/-- CEK step bound used by generated checks; not a ledger CPU or memory budget. -/
-abbrev ledgerFuel : Nat := 1000000
-
-/-- `none` means the step bound was exhausted before a halt or error. -/
-def runFor : State → Nat → Option State
-  | .Halt v, _ => some (.Halt v)
-  | .Error, _ => some .Error
-  | _, 0 => none
-  | s, n + 1 => runFor (step default s) n
-
-/-- Error or a non-unit halt within `fuel` steps. Exhaustion is not rejection. -/
-def rejectedWithin (p : Program) (args : List Term) (fuel : Nat) : Prop :=
-  match p with
-  | .Program _ body =>
-      match runFor (initialState (applyParams body args)) fuel with
-      | some .Error => True
-      | some (.Halt v) => v ≠ .VCon Const.Unit
-      | _ => False
 
 /-- Compatibility names for the models now owned by Formal.TxModels. -/
 abbrev mkCtx := Formal.TxModels.mkCtx
@@ -53,10 +31,6 @@ abbrev EveryVote.ctx := Formal.TxModels.EveryVote.ctx
 abbrev EveryPropose := Formal.TxModels.EveryPropose
 abbrev EveryPropose.ctx := Formal.TxModels.EveryPropose.ctx
 
-def signatoriesOf (h : ScriptContext) : List PubKeyHash := h.scriptContextTxInfo.txInfoSignatories
-
-def withSignatories (h : ScriptContext) (sigs : List PubKeyHash) : ScriptContext :=
-  { h with scriptContextTxInfo := { h.scriptContextTxInfo with txInfoSignatories := sigs } }
 
 end Formal.Universal.Properties
 

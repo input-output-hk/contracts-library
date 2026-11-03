@@ -1,4 +1,6 @@
 import Formal.TxModels.VestingTypes
+import Formal.TxModels.Runnable
+import Formal.TxModels.Artifacts.LinearVesting
 
 /-! Experimental vesting claim model from PR #55 at f5cbda7df624f2496dd2e6fe354a0cd15365b923. -/
 
@@ -52,5 +54,12 @@ def metadata : Metadata := {
   title := "Experimental vesting Claim context"
   plutus_version := "v3"
   description := "Baseline Claim contexts for the pinned linear-vesting test profile. Two inputs spend the vesting position and the signer's ADA; two outputs continue the position and pay the signer. There is exactly one signer and one vested asset under the fixed policy policyA. Keys, amounts, times, and other leaf values vary. The model uses the typed Claim redeemer and a vesting datum with key credentials. It constructs the asset payout as total minus kept and the ADA change from inputs minus continuation and fee. Reference inputs, mint, certificates, withdrawals, votes, proposals, and the datum map are empty; the validity interval has a lower bound and no upper bound." }
+
+/-- Discoverable execution information; the transaction constructor above is unchanged. -/
+def runnable : Runnable := {
+  metadata
+  context := ``claim
+  admission := .pinnedSpending #[Artifacts.LinearVesting.referenceCompiledCode,
+    Artifacts.LinearVesting.aiken1121CompiledCode] }
 
 end Formal.TxModels.TxM007

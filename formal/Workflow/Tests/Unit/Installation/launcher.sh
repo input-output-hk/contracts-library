@@ -59,4 +59,20 @@ if UPV_TEST_BUILD_EXIT=9 bash "$upv_formal/install.sh" --bin-dir "$upv_temp/fail
 fi
 test ! -e "$upv_temp/failed/plutus-upv"
 test ! -L "$upv_temp/failed/plutus-upv"
+
+mkdir -p -- "$upv_temp/without-python"
+for upv_tool in bash lake z3 timeout mktemp date readlink dirname mkdir ln; do
+  ln -s -- "$(command -v "$upv_tool")" "$upv_temp/without-python/$upv_tool"
+done
+if PATH="$upv_temp/without-python" /bin/bash -c 'command -v python3' >/dev/null 2>&1; then
+  printf 'Restricted test PATH unexpectedly contains Python\n' >&2
+  exit 1
+fi
+PATH="$upv_temp/without-python" /bin/bash "$upv_formal/install.sh" \
+  --bin-dir "$upv_temp/no-python" >"$upv_temp/no-python.log" 2>&1
+test "$(readlink -f -- "$upv_temp/no-python/plutus-upv")" = "$upv_formal/plutus-upv"
+mapfile -t upv_actual < <(cd -- "$upv_caller" && PATH="$upv_temp/without-python" \
+  "$upv_temp/no-python/plutus-upv" run)
+test "${upv_actual[0]}" = "$upv_formal"
+test "${upv_actual[4]}" = "$upv_caller/plutus.json"
 printf 'Installer and launcher checks passed.\n'

@@ -14,20 +14,31 @@ also contain applicability predicates, helpers, and lemmas.
 The [transaction-model bank](../../Formal/TxModels/README.md) owns native context
 constructors and their metadata in individual `Definitions/TxMNNN.lean` modules.
 Its index exports metadata as JSON for the reader. Shared model helpers and vesting
-types stay at the bank root; the bank imports no workflow modules.
+types stay at the bank root. Runnable exports use the shared target-purpose type;
+native constructors keep their existing ledger input types.
 
-[Candidates/Catalogue.lean](../../Candidates/Catalogue.lean) composes fixed executable
-adapters. UP-001 uses [Candidates/UP001.lean](../../Candidates/UP001.lean); UP-012
-uses [Candidates/UP012.lean](../../Candidates/UP012.lean) with the
-[pinned test profile](../Tests/UP012/Profile.lean). UP-015 uses
-[Candidates/UP015.lean](../../Candidates/UP015.lean) with its
-[Claim reversal profile](../Tests/UP015/Profile.lean). The vesting profiles share
-the same artifact guard and support generation in
-[Profiles/LinearVesting.lean](../Tests/Profiles/LinearVesting.lean). Metadata does not choose code.
-[App/ProductCLI.lean](../App/ProductCLI.lean) supplies `registeredChecks` and the
-exact `loadCheck` resolver to generic [App/Run.lean](../App/Run.lean).
-[App/CLI.lean](../App/CLI.lean) and [App/Main.lean](../App/Main.lean) retain the
-legacy `universal` executable and its bundled provider path.
+The public [ProductCLI](../App/ProductCLI.lean) delegates run preparation to
+[Launcher](../Declarative/Launcher.lean). Lean discovery scans property paths, applies
+the shared selection rules, and evaluates
+selected property `Run.lean` files, reads their actual model lists, and compiles
+only the selected exports. [Declarative/Catalogue.lean](../Declarative/Catalogue.lean)
+validates those discovered records and supplies the existing callable core. The
+[execution guide](../Declarative/README.md) describes model conventions and limits.
+
+UP-001, UP-012, and UP-015 own their run declarations beside their definitions.
+Each `models` entry names an enabled native model through `ModelUse.id` and retains
+that pairing's reviewed `limitations`. This one list controls execution enablement;
+authoring a descriptive record does not independently register a check.
+Model exports identify native builders, admission requirements, and an optional
+fixed purpose using the shared target types. Generic evaluator
+helpers live in `Formal/Universal/Execution.lean`, without a model-bank aggregate
+dependency. `Formal/Universal/Properties.lean` keeps legacy purpose aliases.
+
+[UP001/Run.lean](../../Formal/Properties/Universal/UP001/Run.lean) owns the rule
+that skips declared purposes. The shared generator returns no modules or goals
+for those pairs, so they receive no passing verdict. The older
+[Candidates/Catalogue.lean](../../Candidates/Catalogue.lean), candidate adapters,
+and test profiles remain for `universal` and regression comparisons.
 
 The product app repeats the callable core for exact property/version/model
 identities. Legacy providers can still emit several combinations in a plan.
@@ -39,7 +50,7 @@ Preserve each definition's actual domain, bounds, and restrictions when adapting
 | --- | --- | --- |
 | Property | Each property's `metadata.json` in Formal/Properties | [Record schema](../../Formal/Properties/property-definition.schema.json), [Metadata/Property.lean](../Metadata/Property.lean) |
 | Transaction model | Metadata beside its native constructor, exported through the model index | [Model schema](../../Formal/TxModels/transaction-model.schema.json), [Metadata/TxModel.lean](../Metadata/TxModel.lean) |
-| Combined check | [Generic bindings](../../Candidates/combined-checks.json), [UP-012 vesting bindings](../Tests/UP012/combined-checks.json), or [UP-015 Claim binding](../Tests/UP015/combined-checks.json) | [Combined-check schema](../Metadata/combined-check.schema.json), [Metadata/TxModel.lean](../Metadata/TxModel.lean) |
+| Combined check | Property-owned `Run.lean` plus the selected native model; [generic bindings](../../Candidates/combined-checks.json) remain for `universal` | [Combined-check schema](../Metadata/combined-check.schema.json), [Metadata/TxModel.lean](../Metadata/TxModel.lean) |
 
 The property record groups identity (`id`, `definition_version`, `title`,
 `category`), explanation (`summary`, `claim`, `purpose`), scope
@@ -56,9 +67,11 @@ stable. Construction facts belong in the description. The Plutus version describ
 the context format; execution semantics also depend on the configured proof tools.
 
 A combined check contains `property: {id, definition_version}`, `tx_model`, and
-`limitations`. It explains how the model constrains that property's coverage or
-interpretation. One model may serve several properties, and one property may use
-several models through distinct combinations.
+`limitations`. Its public-run limitations come from the selected entry in the
+property's `Run.lean`, preserving the reviewed assumptions and caveats of that
+pairing. Property scope and model descriptions remain distinct sources of context.
+One model may serve several properties, and one property may use several models
+through distinct combinations.
 
 Schemas and readers check known fields and types, preserving omitted fields,
 explicit empty strings, and empty lists. They reject wrong types, nulls, and
@@ -66,7 +79,8 @@ unknown keys. Individual-field optionality and list-cardinality policy remain
 open. Structural validity does not make a record runnable or establish a theorem.
 
 Runtime association resolves the selected property ID/version uniquely against
-fixed code. A supplied primary must match the index. The combined check must match
+the discovered run declaration. A supplied primary must match the run's statement
+declaration. The combined check must match
 the property and registered model ID, and the model's Plutus version must match
 the target. Missing, ambiguous, or inconsistent selected bindings fail preparation.
 References are informational: the workflow does not fetch, import, or execute them.
@@ -98,29 +112,30 @@ Every* models expose full `TxInfo` and purpose fields; the theorem supplies a ra
 redeemer. [Common.mkCtx](../../Formal/TxModels/Common.lean) assembles the context.
 UP-001 selects only purposes absent from the target's declared handlers, applying
 acceptance within 5,000,000 steps. The registry contains all six purpose models;
-selecting a declared-purpose model produces an empty INCONCLUSIVE attempt with
-an explanation. It adds no ledger-validity premise.
+selecting a declared-purpose model produces an empty attempt with an explanation
+and appears as SKIPPED in the product app. It adds no ledger-validity premise.
 
 UP-012 applies one primary statement and a supporting applicability predicate to
 Claim, Cancel, and key-datum spend. Each of the three combinations has a property
 and linked applicability obligation, for six obligations across all three. Baseline models have one signer;
 the property removes it to construct a second context outside that baseline family.
 Its `validScriptContext` conditions are explicit premises, not guarantees of the
-constructor or evidence of ledger reachability. The adapter accepts two exact
+constructor or evidence of ledger reachability. The native model admission accepts two exact
 unparameterized vesting artifacts: the original PR #55 fixture and the reviewed
 vault-demo build using Aiken 1.1.21 with stdlib 3.0.0. Unknown compiled code remains
-unsupported for those models. TxM-009 uses reusable structural preparation in `Preparation/TxM009.lean`,
-with `Tests/Profiles/Vault.lean` retained as a compatibility shim, with the same validity predicate and 1,000,000-step
-bound. Owner, signer, and recipient remain independent. The selected model chooses
-the profile; the legacy provider chooses the supported family and preserves the
-original four-vesting-job `checks`/`jobs` API. The catalogue remains Lean-owned.
+unsupported for those models. TxM-009 declares its spending-input requirements
+in its native `runnable` export, using shared structural admission and program
+preparation. Owner, signer, and recipient remain independent. The public path uses
+the same validity predicate and 1,000,000-step bound. Legacy test/profile adapters
+retain their earlier comparison APIs; the product does not import those profiles.
 
 UP-015 reuses that exact artifact from `Workflow/Tests/UP012/Inputs/plutus.json`
 and the same native Claim constructor. Its primary proposition preserves bounded
 acceptance after output reversal. Applicability also requires the output list to
 change, excluding identity-mutation witnesses. The two-output model makes reversal
-a swap. Shared vesting preparation stays test-only; it supplies no general model
-authoring or broader validator support.
+a swap. The model-owned artifact allowlist and shared program preparation provide
+the public execution path. They supply no general model authoring or broader
+validator support.
 
 Both vesting properties share the two-artifact allowlist. The reviewed demo build
 has an independent snapshot at
@@ -138,8 +153,8 @@ clears official metadata when changing the property proposition.
 
 | Per-check generated file | Contents |
 | --- | --- |
-| `Generated/Types.lean` | Embedded compiled program, argument conversion, acceptance predicate; the vesting profiles also alias native data/redeemer types and define rejection |
-| `Generated/Tx.lean` (UP-012/UP-015) | Aliases for the selected native Claim/Cancel or key-datum spend model types and constructors |
+| `Generated/Types.lean` | Embedded compiled program, context argument conversion, and bounded acceptance/rejection predicates |
+| `Generated/Tx.lean` | Alias for the selected native context constructor |
 | `Generated/Checks.lean` | Concrete target/model theorem expressions and tactic calls |
 
 [Formal/Universal/Properties.lean](../../Formal/Universal/Properties.lean) retains
@@ -220,20 +235,23 @@ appropriate applicability/integrity tests; adding metadata alone cannot run a ch
 ## Callable single-check API
 
 Import `Workflow.App.Verification` for separately callable preparation and one-check
-verification. Preparation returns the source snapshot and an intake result. A
+verification. Supply the catalogue prepared from selected property-owned run
+declarations. Preparation returns the source snapshot and an intake result. A
 configured engine holds operational settings once; `verifyOne` takes the prepared
 validator and configured check as its two logical inputs.
 
 ```lean
 import Workflow.App.Verification
-import Candidates.Catalogue
+import Workflow.Declarative.Catalogue
 
 open Workflow
 
-def verifyMint (leanPath : String) : IO Assessor.CheckResult := do
+def verifyMint (catalogue : Declarative.Catalogue) (leanPath : String) :
+    IO Assessor.CheckResult := do
   let preparation ← Verification.prepare "Workflow/Tests/UP001/Inputs/plutus.json" "vault.vault"
   let prepared ← IO.ofExcept (preparation.result.mapError toString)
-  let check ← IO.ofExcept (← Candidates.Catalogue.loadCheck "UP-001" 1 "TxM-001")
+  let check ← IO.ofExcept (catalogue.loadCheck {
+    propertyId := "UP-001", definitionVersion := 1, modelId := "TxM-001" })
   let engine : Verification.Engine := {
     options := { leanPath, budgetMs := 120000, outputRoot := some "output" } }
   engine.verifyOne prepared check

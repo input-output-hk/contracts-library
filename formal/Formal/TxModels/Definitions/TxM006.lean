@@ -1,4 +1,5 @@
 import Formal.TxModels.Common
+import Formal.TxModels.Runnable
 
 namespace Formal.TxModels
 
@@ -20,6 +21,13 @@ def metadata : Metadata := {
   title := "Open spending context"
   plutus_version := "v3"
   description := "Spending contexts with arbitrary transaction information, spent-output reference, optional datum, and redeemer. The constructor fixes the script purpose to spending and adds no ledger-validity conditions." }
+
+/-- Expose the unchanged context family to property-owned runs. -/
+def runnable : Runnable := {
+  metadata
+  context := ``EverySpend.ctx
+  admission := .unparameterizedV3
+  purpose := some .spend }
 
 end TxM006
 end Formal.TxModels

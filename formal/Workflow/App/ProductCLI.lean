@@ -1,6 +1,6 @@
 import Workflow.App.Run
 import Workflow.Tests.Runner
-import Candidates.Catalogue
+import Workflow.Declarative.Launcher
 
 private def help : String :=
   "Plutus UPV: Universal Property Verifier\n" ++
@@ -19,7 +19,6 @@ def main (args : List String) : IO UInt32 := do
   | [] | ["--help"] | ["help"] => IO.print help; return 0
   | ["run", "--help"] | ["test", "--help"] => IO.print help; return 0
   | "run" :: rest =>
-    Workflow.App.Run.run Candidates.Catalogue.registeredChecks
-      (fun id => Candidates.Catalogue.loadCheck id.propertyId id.definitionVersion id.modelId) rest
+    Workflow.Declarative.Launcher.run rest
   | ["test"] => Workflow.Tests.Runner.run
   | _ => IO.eprint help; return 2

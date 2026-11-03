@@ -1,4 +1,4 @@
-import Formal.Universal.Properties
+import Formal.Universal.Execution
 
 namespace Formal.Properties.Universal.UP001
 

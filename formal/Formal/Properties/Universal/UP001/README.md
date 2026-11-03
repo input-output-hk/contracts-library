@@ -4,7 +4,12 @@
 satisfies the configured acceptance predicate. [metadata.json](metadata.json)
 records the maintained definition's identity, explanation, scope, and references.
 
-The current adapter checks each purpose absent from the selected validator's
+[Run.lean](Run.lean) enables the six native purpose models through its `models`
+entries. Each `ModelUse` entry owns the model `id` and the reviewed limitations
+of that property/model pairing. Shared Lean discovery supplies imports and
+execution bindings from this one list.
+
+The run declaration checks each purpose absent from the selected validator's
 declared handlers, using the corresponding open transaction model. It supplies
 acceptance within 5,000,000 CEK steps. Fuel exhaustion satisfies nonacceptance;
 this does not establish explicit rejection. The models add no ledger-validity
@@ -15,3 +20,16 @@ Registered bindings determine the actual target, family, and evaluator bound.
 The adapter unfolds the shared definition before invoking Blaster. Kernel-checked
 equivalences in the workflow tests compare all six applications to the previous
 expanded formulas.
+
+[Tests.lean](Tests.lean) compares all six generated goals with the earlier
+generator. It also checks model-list selection, declared-purpose skipping,
+unsupported inputs, missing purpose metadata, and exact preservation of the
+reviewed combination records. Run it from `formal/`:
+
+```sh
+lake exe workflow_declarative_up001_tests
+```
+
+[VALIDATION.md](VALIDATION.md) preserves earlier migration checks and their
+recorded source/dependency revisions. Fresh Lean-only validation is recorded
+separately after the current checks complete.

@@ -1,4 +1,5 @@
 import Formal.TxModels.Common
+import Formal.TxModels.Runnable
 
 namespace Formal.TxModels
 
@@ -19,6 +20,13 @@ def metadata : Metadata := {
   title := "Open withdrawal context"
   plutus_version := "v3"
   description := "Reward withdrawal contexts with arbitrary transaction information, credential, and redeemer. The constructor fixes the script purpose to rewarding and adds no ledger-validity conditions." }
+
+/-- Expose the unchanged context family to property-owned runs. -/
+def runnable : Runnable := {
+  metadata
+  context := ``EveryWithdraw.ctx
+  admission := .unparameterizedV3
+  purpose := some .withdraw }
 
 end TxM002
 end Formal.TxModels

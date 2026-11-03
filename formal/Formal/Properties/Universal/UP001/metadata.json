@@ -35,8 +35,8 @@
       "target": "formal/Formal/Properties/Universal/UP001/Definition.lean"
     },
     {
-      "label": "Maintained proposition generator and execution binding",
-      "target": "formal/Candidates/UP001.lean"
+      "label": "Property-owned model selection and run configuration",
+      "target": "formal/Formal/Properties/Universal/UP001/Run.lean"
     },
     {
       "label": "Per-purpose context domains and shared evaluation helpers",

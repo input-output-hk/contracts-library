@@ -11,6 +11,12 @@ open Lean
 structure Options where
   executorOptions : Executor.Options
   outputRoot : System.FilePath := "output"
+  /-- Discovery may compile only selected properties while retaining all known selectors. -/
+  knownProperties : Option (Array String) := none
+  /-- Preserve the exact selection-file bytes captured before discovery. -/
+  selectionSource : Option String := none
+  /-- Keep preparation diagnostics with the app's own run evidence. -/
+  discoverySource : Option String := none
 
 abbrev safeName := Workflow.App.safeName
 
@@ -117,6 +123,12 @@ def runWith (registry : Array CheckId)
     Sources.prepare session plan
   try
     save run
+    if let some discovery := options.discoverySource then
+      writeText (directory / "discovery.json") discovery
+      run := { run with options := run.options.setObjVal! "discovery_snapshot" (.str "discovery.json") }
+      save run
+    if options.selectionSource.isSome && request.checksFile.isNone then
+      throw (IO.userError "captured selection bytes require --checks-file")
     let source ← IO.FS.readFile request.path
     writeText (directory / "input.json") source
     run := { run with input := some "input.json" }
@@ -124,12 +136,15 @@ def runWith (registry : Array CheckId)
     let fileSource ← match request.checksFile with
       | none => pure none
       | some path => do
-        let contents ← IO.FS.readFile path
+        let contents ← match options.selectionSource with
+          | some contents => pure contents
+          | none => IO.FS.readFile path
         writeText (directory / "checks.json") contents
         run := { run with options := run.options.setObjVal! "selection_snapshot" (.str "checks.json") }
         pure (some contents)
-    let selected ← IO.ofExcept (selectChecks request registry fileSource)
-    if registry.isEmpty then throw (IO.userError "no check implementations are registered")
+    let selected ← IO.ofExcept (selectChecks request registry fileSource options.knownProperties)
+    if registry.isEmpty && options.knownProperties.isNone then
+      throw (IO.userError "no check implementations are registered")
     let folders := selected.map checkFolder
     unless folders.toList.eraseDups.length == folders.size do
       throw (IO.userError "registered check identities have colliding output folder names")

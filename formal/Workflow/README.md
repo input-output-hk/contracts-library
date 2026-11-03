@@ -44,7 +44,14 @@ The final human-friendly report remains separate work in
 | [Tests/](Tests/README.md) | Component controls and the UP001/UP012 workflow scenarios |
 | [Formal/Properties](../Formal/Properties/README.md) | Native primary definitions, metadata, and category/code indexes |
 | [Formal/TxModels](../Formal/TxModels/README.md) | Native context constructors and their metadata |
-| `Candidates/` | Registered generation and composition adapters |
+| [Declarative/](Declarative/README.md) | Selected property-run discovery, model imports, and shared goal generation |
+| `Candidates/` | Legacy generation adapters for `universal` and regression comparisons |
+
+Each property owns its run declaration and enabled model entries beside its
+definition, metadata, and tests. An entry names a compatible model and retains
+the reviewed limitations of that pairing. Native models export their builders
+and admission requirements; shared Lean discovery prepares only the selected
+properties and models.
 
 The component entry modules and `Workflow.lean` remain public imports.
 The components receive explicit inputs and do not import candidate or scenario
@@ -52,7 +59,8 @@ implementations. Application composition supplies those dependencies.
 
 ## Supported behavior and limits
 
-- The runtime uses ordinary code, without AI services or Nix.
+- Property discovery, model preparation, and execution use Lean code with the
+  configured proof tools. The runtime requires no AI services, Python, or Nix.
 - Input accepts a blueprint with embedded compiled code and explicit Plutus
   version. It decodes the program before generation. Standalone CBOR and function
   targets need their own input contracts.

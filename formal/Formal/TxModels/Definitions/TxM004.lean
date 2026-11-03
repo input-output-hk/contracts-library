@@ -1,4 +1,5 @@
 import Formal.TxModels.Common
+import Formal.TxModels.Runnable
 
 namespace Formal.TxModels
 
@@ -19,6 +20,13 @@ def metadata : Metadata := {
   title := "Open voting context"
   plutus_version := "v3"
   description := "Voting contexts with arbitrary transaction information, voter, and redeemer. The constructor fixes the script purpose to voting and adds no ledger-validity conditions." }
+
+/-- Expose the unchanged context family to property-owned runs. -/
+def runnable : Runnable := {
+  metadata
+  context := ``EveryVote.ctx
+  admission := .unparameterizedV3
+  purpose := some .vote }
 
 end TxM004
 end Formal.TxModels

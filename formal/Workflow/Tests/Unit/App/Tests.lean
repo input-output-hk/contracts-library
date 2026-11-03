@@ -285,6 +285,27 @@ private def selectionChecks (temporary path : System.FilePath) : IO Unit := do
   ensure "selection snapshot is retained"
     ((← IO.FS.readFile (run.directory / "checks.json")) == "{\"fixture\": false, \"other\": true}")
   assertSaved run
+  let frozen := "{\"fixture\": true, \"other\": false}"
+  let frozenOptions := { (← options (temporary / "frozen-selection")) with
+    knownProperties := some #["fixture", "other"]
+    selectionSource := some frozen
+    discoverySource := some "{\"state\":\"ready\"}" }
+  let frozenRun ← Run.runWith #[identity "TxM-valid"] load selected frozenOptions
+  ensure "discovery's captured selection determines the actual work"
+    (frozenRun.finished && frozenRun.exitCode == 0 &&
+     frozenRun.validators[0]!.checks.map (·.id) == #[identity "TxM-valid"])
+  ensure "retained selection bytes match discovery rather than a changed input file"
+    ((← IO.FS.readFile (frozenRun.directory / "checks.json")) == frozen)
+  ensure "preparation diagnostics follow the run's evidence"
+    ((← IO.FS.readFile (frozenRun.directory / "discovery.json")) == "{\"state\":\"ready\"}")
+  assertSaved frozenRun
+  let emptyPrepared ← Run.runWith #[] load selected { frozenOptions with
+    outputRoot := temporary / "empty-prepared-selection"
+    selectionSource := some "{\"fixture\": false, \"other\": false}" }
+  ensure "no enabled properties needs no compiled check registry"
+    (emptyPrepared.finished && emptyPrepared.exitCode == 0 &&
+     emptyPrepared.validators.all (·.checks.isEmpty) && contains emptyPrepared.text "No checks selected")
+  assertSaved emptyPrepared
   IO.FS.writeFile switches "{}"
   let empty ← Run.runWith registry load selected (← options (temporary / "empty"))
   ensure "an explicitly empty selection is a visible successful no-op"

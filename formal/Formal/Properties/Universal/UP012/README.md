@@ -14,7 +14,7 @@ context must be rejected. Applicability requires a witness to those premises.
 The bindings use TxM-007 (Claim), TxM-008 (Cancel), and TxM-009
 (single-signer key-datum spend), the model's
 `validScriptContext` predicate, and explicit rejection within 1,000,000 CEK steps.
-The runtime adapter allows two exact compiled linear-vesting artifacts: the
+Native model admission allows two exact compiled linear-vesting artifacts: the
 original PR #55 fixture and the reviewed vault-demo build using Aiken 1.1.21 with
 stdlib 3.0.0. TxM-009 uses reusable structural admission and validates the actual compiled
 program; it requires no artifact allowlist entry. Unknown schema constraints
@@ -41,3 +41,21 @@ The adapter unfolds the shared definition before invoking Blaster. Workflow test
 keep the previous expanded formulas as independent equivalence/negative-control
 fixtures. Model applications stay in the binding/test layer rather than separate
 Claim and Cancel property definitions.
+
+## Property-owned execution
+
+[Run.lean](Run.lean) owns the run instructions and enabled model entries. Each
+`ModelUse` entry names a model through `id` and retains the reviewed `limitations`
+of that pairing. Shared Lean discovery supplies imports and execution bindings
+from this one list. [Tests.lean](Tests.lean) checks goal parity with the legacy
+adapter and exact retention of the reviewed combination records.
+
+From `formal/`:
+
+```sh
+lake exe workflow_declarative_tests
+./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-012 --timeout-ms 300000
+```
+
+The [execution guide](../../../../Workflow/Declarative/README.md) describes
+discovery, the public command, and retained compatibility paths.
