@@ -1,0 +1,46 @@
+{
+  "preamble": {
+    "title": "no-witness-labs/up010-output-control",
+    "description": "UP-010 negative control accepting exactly spending contexts with a script output",
+    "version": "0.0.0",
+    "plutusVersion": "v3",
+    "compiler": {
+      "name": "Aiken",
+      "version": "v1.1.21+42babe5"
+    },
+    "license": "Apache-2.0"
+  },
+  "validators": [
+    {
+      "title": "output_dependent.output_dependent.spend",
+      "datum": {
+        "title": "_datum",
+        "schema": {
+          "$ref": "#/definitions/Data"
+        }
+      },
+      "redeemer": {
+        "title": "_redeemer",
+        "schema": {
+          "$ref": "#/definitions/Data"
+        }
+      },
+      "compiledCode": "58a501010029800aba2aba1aab9faab9eaab9dab9a48888896600264646644b30013370e900118031baa0018994c004c028006601460160032259800800c5284566002b30013370e900118049baa300c300a3754601860146ea8c030006294629410084528c4cc008008c03400500820164888cc004004dd618069807180718059baa300d00818039baa0018b200a30070013007300800130070013003375400f149a26cac8009",
+      "hash": "c988dd668151710cdb060a1509185ab5301a7ec151a7373dcbc00b2d"
+    },
+    {
+      "title": "output_dependent.output_dependent.else",
+      "redeemer": {
+        "schema": {}
+      },
+      "compiledCode": "58a501010029800aba2aba1aab9faab9eaab9dab9a48888896600264646644b30013370e900118031baa0018994c004c028006601460160032259800800c5284566002b30013370e900118049baa300c300a3754601860146ea8c030006294629410084528c4cc008008c03400500820164888cc004004dd618069807180718059baa300d00818039baa0018b200a30070013007300800130070013003375400f149a26cac8009",
+      "hash": "c988dd668151710cdb060a1509185ab5301a7ec151a7373dcbc00b2d"
+    }
+  ],
+  "definitions": {
+    "Data": {
+      "title": "Data",
+      "description": "Any Plutus data."
+    }
+  }
+}
