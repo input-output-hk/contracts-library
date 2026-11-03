@@ -19,3 +19,5 @@ use `plutus-upv run` and `plutus-upv test` for normal work.
 Property formulas, model constructors, bounds, and reviewed limitation records
 retain their existing meanings. This code is frozen comparison material, rather
 than a second registration path to extend when adding a property.
+
+[Validation](VALIDATION.md) records the cleanup's local regression and fidelity checks.
