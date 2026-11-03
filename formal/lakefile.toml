@@ -24,7 +24,7 @@ rev = "main"
 [[require]]
 name = "CardanoLedgerApi"
 git = "https://github.com/input-output-hk/CardanoLedgerApiBlaster"
-rev = "main"
+rev = "7b743afcd64c1d2fc6c7ef24b2a260b8b31828fc"
 
 # Universal-property demo: generated obligations, built on their own.
 [[lean_lib]]
