@@ -40,8 +40,8 @@
       "target": "formal/Formal/Properties/Universal/UP015/Definition.lean"
     },
     {
-      "label": "Claim property and applicability proposition generator",
-      "target": "formal/Candidates/UP015.lean"
+      "label": "Legacy Claim property and applicability comparison generator",
+      "target": "formal/Workflow/Tests/Legacy/Candidates/UP015.lean"
     },
     {
       "label": "Fixed vesting Claim transaction model",

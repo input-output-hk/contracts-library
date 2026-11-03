@@ -1,7 +1,7 @@
-import Workflow.Reporter
+import Workflow.Tests.Legacy.Reporter
 
 open Lean Workflow
-open Workflow.Reporter
+open Workflow.Tests.Legacy.Reporter
 
 namespace Workflow.Tests.Unit.Reporter
 

@@ -1,4 +1,4 @@
-import Candidates.Catalogue
+import Workflow.Tests.Legacy.Candidates.Catalogue
 import Workflow.Input
 
 open Lean Workflow
@@ -44,10 +44,10 @@ def run : IO Unit := do
   let definitions ← Formal.Properties.Index.entries.mapM fun entry => do
     IO.ofExcept (← PropertyDefinition.readRecord entry.metadataPath)
   let models ← IO.ofExcept (TransactionModel.parseList Formal.TxModels.Index.toJson)
-  let combinations ← IO.ofExcept (← CombinedCheck.read "Candidates/combined-checks.json")
-  let provider ← IO.ofExcept (Candidates.Catalogue.withBindings (some "UP-001")
+  let combinations ← IO.ofExcept (← CombinedCheck.read "Workflow/Tests/Legacy/Candidates/combined-checks.json")
+  let provider ← IO.ofExcept (Workflow.Tests.Legacy.Candidates.Catalogue.withBindings (some "UP-001")
     definitions models combinations)
-  let loaded ← IO.ofExcept (← Candidates.Catalogue.loadProvider (some "UP-001"))
+  let loaded ← IO.ofExcept (← Workflow.Tests.Legacy.Candidates.Catalogue.loadProvider (some "UP-001"))
   check "native index loading and pure catalogue association retain identical snapshots"
     (loaded.propertyDefinition == provider.propertyDefinition && loaded.bindings == provider.bindings)
   check "UP001 registration loads six model combinations"
@@ -55,7 +55,7 @@ def run : IO Unit := do
 
   let allPurposes := purposeModels.map (fun (purpose, _, _) => purpose)
   let allJobs ← generated provider target
-  let plainAll ← generated Candidates.UP001.provider target
+  let plainAll ← generated Workflow.Tests.Legacy.Candidates.UP001.provider target
   check "no declared purposes emits six bound property obligations"
     (allJobs.bindingsRequired && allJobs.jobs.size == 6 && allJobs.validateBindings.isOk)
   check "binding all UP001 models preserves generated source and propositions"
@@ -72,7 +72,7 @@ def run : IO Unit := do
     check s!"only undeclared {purpose.name} generates a check"
       (onlyMissing.jobs.size == 1 && onlyMissing.jobs.all (fun job => boundTo job "UP-001" modelId))
     check s!"metadata preserves the single-purpose {purpose.name} source"
-      (sameProgram (← generated Candidates.UP001.provider input) onlyMissing)
+      (sameProgram (← generated Workflow.Tests.Legacy.Candidates.UP001.provider input) onlyMissing)
   let spendingTarget := target #[.spend]
   let spendingPlan ← generated provider spendingTarget
   check "the spend-only example retains the five nonspending model checks"
@@ -84,17 +84,17 @@ def run : IO Unit := do
      noJobs.bindingsRequired && noJobs.validateBindings.isOk)
 
   check "unregistered property cannot obtain executable model bindings"
-    (!(Candidates.Catalogue.withBindings (some "UP-unknown") definitions models combinations).isOk)
+    (!(Workflow.Tests.Legacy.Candidates.Catalogue.withBindings (some "UP-unknown") definitions models combinations).isOk)
   for missing in [#[], models.filter (fun model => model.id? != some "TxM-001")] do
     check "registered provider rejects a missing maintained model"
-      (!(Candidates.Catalogue.withBindings (some "UP-001") definitions missing combinations).isOk)
+      (!(Workflow.Tests.Legacy.Candidates.Catalogue.withBindings (some "UP-001") definitions missing combinations).isOk)
   check "registered provider rejects duplicated model records"
-    (!(Candidates.Catalogue.withBindings (some "UP-001") definitions (models ++ models) combinations).isOk)
+    (!(Workflow.Tests.Legacy.Candidates.Catalogue.withBindings (some "UP-001") definitions (models ++ models) combinations).isOk)
   for missing in [#[], combinations.filter (fun item => item.txModelId? != some "TxM-001")] do
     check "registered provider rejects a missing combination"
-      (!(Candidates.Catalogue.withBindings (some "UP-001") definitions models missing).isOk)
+      (!(Workflow.Tests.Legacy.Candidates.Catalogue.withBindings (some "UP-001") definitions models missing).isOk)
   check "registered provider rejects duplicated combinations"
-    (!(Candidates.Catalogue.withBindings (some "UP-001") definitions models
+    (!(Workflow.Tests.Legacy.Candidates.Catalogue.withBindings (some "UP-001") definitions models
       (combinations ++ combinations)).isOk)
   let wrongVersion : CombinedCheck := { value := Json.mkObj [
     ("property", Json.mkObj [("id", .str "UP-001"), ("definition_version", toJson (2 : Int))]),
@@ -102,13 +102,13 @@ def run : IO Unit := do
   let wrongVersionChecks := combinations.map fun item =>
     if item.txModelId? == some "TxM-001" then wrongVersion else item
   check "another property version cannot substitute for the registered combination"
-    (!(Candidates.Catalogue.withBindings (some "UP-001") definitions models wrongVersionChecks).isOk)
+    (!(Workflow.Tests.Legacy.Candidates.Catalogue.withBindings (some "UP-001") definitions models wrongVersionChecks).isOk)
 
   let v2Model : TransactionModel := { value := Json.mkObj [
     ("id", .str "TxM-001"), ("plutus_version", .str "v2")] }
   let wrongFormatModels := models.map fun model =>
     if model.id? == some "TxM-001" then v2Model else model
-  let wrongFormatProvider ← IO.ofExcept (Candidates.Catalogue.withBindings (some "UP-001")
+  let wrongFormatProvider ← IO.ofExcept (Workflow.Tests.Legacy.Candidates.Catalogue.withBindings (some "UP-001")
     definitions wrongFormatModels combinations)
   check "model language mismatch fails generation against a V3 target"
     (!(Generator.generate wrongFormatProvider spendingTarget "Generated.MetadataBinding").isOk)
@@ -154,7 +154,7 @@ def run : IO Unit := do
 
   let vesting ← IO.ofExcept ((← Input.read "Workflow/Tests/UP012/Inputs/plutus.json"
     "linear_vesting.linear_vesting").mapError toString)
-  let vestingProvider ← IO.ofExcept (← Candidates.Catalogue.loadProvider (some "UP-012"))
+  let vestingProvider ← IO.ofExcept (← Workflow.Tests.Legacy.Candidates.Catalogue.loadProvider (some "UP-012"))
   let vestingPlan ← generated vestingProvider vesting.target
   check "UP012 preserves four obligations across two combinations"
     (vestingPlan.bindingsRequired && vestingPlan.jobs.size == 4 &&

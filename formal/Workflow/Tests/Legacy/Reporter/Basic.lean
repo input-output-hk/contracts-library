@@ -1,6 +1,6 @@
 import Workflow.Assessor.Basic
 
-namespace Workflow.Reporter
+namespace Workflow.Tests.Legacy.Reporter
 
 open Lean
 
@@ -127,4 +127,4 @@ def Report.write (report : Report) (directory : System.FilePath) : IO Unit := do
   IO.FS.writeFile (directory / "report.json") (report.toJson.pretty ++ "\n")
   IO.FS.writeFile (directory / "report.txt") report.text
 
-end Workflow.Reporter
+end Workflow.Tests.Legacy.Reporter

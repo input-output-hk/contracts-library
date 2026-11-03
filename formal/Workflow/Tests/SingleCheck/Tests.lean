@@ -1,7 +1,7 @@
 import Workflow.App.Verification
 import Workflow.App.Run
 import Workflow.Tests.Support
-import Candidates.Catalogue
+import Workflow.Tests.Legacy.Candidates.Catalogue
 
 namespace Workflow.Tests.SingleCheck
 
@@ -16,7 +16,7 @@ private def prepared (path selector : String) : IO InputResult := do
   IO.ofExcept (preparation.result.mapError toString)
 
 private def loaded (property model : String) : IO ConfiguredCheck :=
-  do IO.ofExcept (← Candidates.Catalogue.loadCheck property 1 model)
+  do IO.ofExcept (← Workflow.Tests.Legacy.Candidates.Catalogue.loadCheck property 1 model)
 
 private def generated (configured : ConfiguredCheck) (target : TargetDescription) : IO GenerationPlan :=
   IO.ofExcept ((generateOne configured target "Generated.SingleCheck").mapError toString)
@@ -93,7 +93,7 @@ private def adapterChecks : IO Unit := do
       ("UP-001", 1, "TxM-007"), ("UP-012", 1, "TxM-001"),
       ("UP-012", 1, "TxM-unknown")] do
     ensure "unknown property/version/model combinations cannot select executable code"
-      ((← Candidates.Catalogue.loadCheck property version model).toOption.isNone)
+      ((← Workflow.Tests.Legacy.Candidates.Catalogue.loadCheck property version model).toOption.isNone)
   IO.println "Single-check adapter selection checks passed."
 
 private def fixtureContext (modelId := "TxM-fixture") : IO CheckContext := do
@@ -404,7 +404,7 @@ private def realCase (property model blueprint selector : String) (budget : Nat)
   ensure "real core tests receive a prepared Lean search path" (!leanPath.trim.isEmpty)
   let id : CheckId := { propertyId := property, definitionVersion := 1, modelId := model }
   let run ← App.Run.runWith #[id]
-    (fun selected => Candidates.Catalogue.loadCheck selected.propertyId selected.definitionVersion selected.modelId)
+    (fun selected => Workflow.Tests.Legacy.Candidates.Catalogue.loadCheck selected.propertyId selected.definitionVersion selected.modelId)
     { path := blueprint, validators := #[selector], timeoutMs := budget }
     { executorOptions := { leanPath }, outputRoot := "output" }
   ensure "real app run finishes and stores its selected result" (run.finished && run.exitCode == 0)

@@ -212,8 +212,8 @@ results are still retained; start a fresh run after correcting the source proble
 | `2` | Input, validator preparation, catalogue, app, or storage errors prevented normal completion/retention |
 
 A zero exit code does not assert that properties passed; inspect the table and
-result files. The legacy `lake exe universal BLUEPRINT VALIDATOR ...` command
-retains verdict-based `0`/`1`/`2` exits and its earlier report files.
+result files. The former `universal` entry point is retired. Use `plutus-upv run` for
+verification and `plutus-upv test` for local workflow checks.
 
 ## Property scope and examples
 

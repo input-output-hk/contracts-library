@@ -1,6 +1,6 @@
 import Workflow.Input
 import Workflow.Generator
-import Candidates.UP001
+import Workflow.Tests.Legacy.Candidates.UP001
 import Formal.Universal.Properties
 
 open Workflow
@@ -36,7 +36,7 @@ private def exercise (directory : System.FilePath) (leanPath : String)
   let input ← match ← Input.read path selector with
     | .ok value => pure value
     | .error error => throw (IO.userError (toString error))
-  let plan ← match Workflow.Generator.generate Candidates.UP001.provider input.target modulePrefix with
+  let plan ← match Workflow.Generator.generate Workflow.Tests.Legacy.Candidates.UP001.provider input.target modulePrefix with
     | .ok value => pure value
     | .error error => throw (IO.userError (toString error))
   unless plan.status == .ready && plan.jobs.size == 5 do

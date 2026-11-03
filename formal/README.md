@@ -1,10 +1,7 @@
-# Formal proofs
+# Formal verification
 
-Machine-checked proofs of the contract **specifications** under [`docs/<contract>/spec.md`](../docs).
-This is a fourth artifact alongside `onchain/`, `offchain/`, and the spec
-(`docs/<contract>/spec.md`): the
-proofs are *about the spec* (the source of truth), not about any one
-implementation. See [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md) §2.
+This Lake project contains the Plutus UPV app, reusable property and transaction
+model banks, and contract-specific specification proofs.
 
 For Plutus UPV (Universal Property Verifier), use the
 [CLI quickstart](Workflow/Docs/USER-GUIDE.md). The app uses Lean for property discovery,
@@ -19,24 +16,26 @@ backend invoked via the `blaster` tactic.
 
 ## Layout
 
-```
+```text
 formal/
-├── lakefile.toml            # depends on Blaster + PlutusCore + CardanoLedgerApi
-├── lean-toolchain           # pinned Lean version
-├── flake.nix                # optional elan + Z3 4.15.2 + gawk environment
-├── justfile                 # build -> flats -> verify pipeline
-├── scripts/
-│   └── annotate-blaster-logs.awk
-├── Formal.lean              # root; imports every contract aggregator
-└── Formal/
-    ├── Common.lean          # shared `validatorAccepts` / `validatorRejects`
-    └── Vesting/
-        ├── Linear.lean      # aggregator for the vesting/linear contract
-        └── Linear/
-            ├── Spec.lean          # pure model: `vested`, datum encoding (no UPLC)
-            ├── Completeness.lean  # spec ⇒ accepts (§8); `#import_uplc`s the flat
-            ├── Soundness.lean     # accepts ⇒ spec (§9) + shared context scaffold
-            └── Robustness.lean    # rejection theorems incl. no-double-satisfaction
+├── plutus-upv / install.sh  # public command and checkout-backed installation
+├── lakefile.toml           # libraries, executable targets, and dependencies
+├── lean-toolchain          # pinned Lean version
+├── Formal/
+│   ├── Properties/         # property definitions, run instructions, metadata, tests
+│   ├── TxModels/           # reusable transaction models and their metadata
+│   ├── Universal/          # evaluator/ledger theory and shared helpers
+│   ├── Vesting/            # specification proofs and standalone checkpoints
+│   ├── Vault/              # standalone hashed-datum checkpoint
+│   └── Settings/           # standalone minting checkpoint
+├── Workflow/
+│   ├── App/                # current CLI and orchestration
+│   ├── Input/, Generator/, Executor/, Assessor/
+│   └── Tests/Legacy/       # older providers, reports, and internal fixture driver
+├── Universal/              # earlier harness/demo prototype
+├── tests/                  # standalone candidate and translator tests/fixtures
+├── docs/                   # foundation and standalone-check documentation
+└── scripts/                # shared translation and proof utility scripts
 ```
 
 Each contract gets its own `Completeness`/`Soundness`/`Robustness` under its
@@ -44,9 +43,11 @@ folder, because the properties differ per contract. The layout follows
 `francolq/aiken-good-practices` (`order-book/verify`). Every theorem carries a
 doc comment citing the spec section it discharges (e.g. `§9 B1`).
 
-## Prerequisites
+## Specification-proof tooling
 
-The easiest path is **Nix**: `flake.nix` provides the whole toolchain.
+For the contract-specific proof pipeline below, the existing optional Nix
+environment supplies its tools. The Plutus UPV command uses the prepared
+Lean/Z3 environment described in its [user guide](Workflow/Docs/USER-GUIDE.md).
 
 ```bash
 cd formal
@@ -66,7 +67,7 @@ Without Nix, install manually:
   [Blaster README](https://github.com/input-output-hk/Lean-blaster);
   `z3 --version` should report `Z3 version 4.15.2`.
 
-## Build
+## Specification-proof pipeline
 
 The `justfile` in this directory drives the whole pipeline (compile Aiken →
 dump UPLC → encode to flat → check proofs):
@@ -83,11 +84,16 @@ Or directly, inside the dev shell:
 cd formal
 # (in `nix develop`, or with elan + z3 on PATH)
 lake update      # fetch Blaster + PlutusCore + CardanoLedgerApi
-lake build       # type-check all modules and run every `blaster` proof
+lake build       # build the Formal specification-proof target
 ```
 
 A failing `blaster` goal can be debugged with its options, e.g.
 `blaster (verbose: 1)` or `blaster (gen-cex: 1)` to print a counterexample.
+
+## Contract specification proofs
+
+These proofs accompany `onchain/`, `offchain/`, and the contract specifications
+under `docs/<contract>/spec.md`. See [the architecture](../docs/ARCHITECTURE.md) §2.
 
 ## How each contract is verified
 

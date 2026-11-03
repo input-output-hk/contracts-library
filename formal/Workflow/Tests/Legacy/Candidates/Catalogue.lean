@@ -1,4 +1,4 @@
-import Candidates.UP001
+import Workflow.Tests.Legacy.Candidates.UP001
 import Workflow.Metadata.Property
 import Workflow.Tests.UP012.Profile
 import Workflow.Tests.UP015.Profile
@@ -6,7 +6,7 @@ import Formal.TxModels.Index
 import Formal.Properties.Index
 import Workflow.Generator.Single
 
-namespace Candidates.Catalogue
+namespace Workflow.Tests.Legacy.Candidates.Catalogue
 
 open Workflow.Generator
 
@@ -18,21 +18,21 @@ private structure Registration where
   checksPath : System.FilePath
 
 private def registrations : Array Registration := #[
-  { provider := Candidates.UP001.provider
+  { provider := Workflow.Tests.Legacy.Candidates.UP001.provider
     entry := Formal.Properties.Universal.Index.up001
-    modelIds := Candidates.UP001.modelIds
-    providerForModel := Candidates.UP001.providerForModel
-    checksPath := "Candidates/combined-checks.json" },
+    modelIds := Workflow.Tests.Legacy.Candidates.UP001.modelIds
+    providerForModel := Workflow.Tests.Legacy.Candidates.UP001.providerForModel
+    checksPath := "Workflow/Tests/Legacy/Candidates/combined-checks.json" },
   { provider := Workflow.Tests.UP012.Profile.provider
     entry := Formal.Properties.Universal.Index.up012
-    modelIds := Candidates.UP012.modelIds
+    modelIds := Workflow.Tests.Legacy.Candidates.UP012.modelIds
     providerForModel := Workflow.Tests.UP012.Profile.providerForModel
-    checksPath := "Workflow/Tests/UP012/combined-checks.json" },
+    checksPath := "Workflow/Tests/Legacy/Candidates/UP012-combined-checks.json" },
   { provider := Workflow.Tests.UP015.Profile.provider
     entry := Formal.Properties.Universal.Index.up015
-    modelIds := Candidates.UP015.modelIds
+    modelIds := Workflow.Tests.Legacy.Candidates.UP015.modelIds
     providerForModel := Workflow.Tests.UP015.Profile.providerForModel
-    checksPath := "Workflow/Tests/UP015/combined-checks.json" }]
+    checksPath := "Workflow/Tests/Legacy/Candidates/UP015-combined-checks.json" }]
 
 def registeredChecks : Array Workflow.CheckId :=
   registrations.flatMap fun registration =>
@@ -144,4 +144,4 @@ def loadCheck (propertyId : String) (definitionVersion : Int) (modelId : String)
     let binding ← Workflow.CheckBinding.resolve definition modelId models checks
     return { context := { propertyDefinition := definition, binding }, generate := selected.generate }
 
-end Candidates.Catalogue
+end Workflow.Tests.Legacy.Candidates.Catalogue

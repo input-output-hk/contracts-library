@@ -1,6 +1,6 @@
 import Workflow.Tests.UP001.DefinitionEquivalence
 import Workflow.Generator
-import Candidates.UP001
+import Workflow.Tests.Legacy.Candidates.UP001
 
 open Lean Workflow
 open Workflow.Generator
@@ -19,7 +19,7 @@ private def target (purposes : Array Purpose := #[.spend]) : TargetDescription :
 
 private def accepted (input : TargetDescription) (modulePrefix := "Generated.Positive") :
     IO GenerationPlan := do
-  match generate Candidates.UP001.provider input modulePrefix with
+  match generate Workflow.Tests.Legacy.Candidates.UP001.provider input modulePrefix with
   | .ok plan => return plan
   | .error error => throw (IO.userError s!"unexpected generator error: {error}")
 
@@ -53,14 +53,14 @@ def run : IO Unit := do
   check "explicit empty parameter list is supported" (emptyParams.jobs.size == 5)
   let parameter : ArgumentDescription :=
     { schema := Json.mkObj [("dataType", .str "integer")], title := none, description := none }
-  match generate Candidates.UP001.provider { target with parameters := some #[parameter] } "Generated.Params" with
+  match generate Workflow.Tests.Legacy.Candidates.UP001.provider { target with parameters := some #[parameter] } "Generated.Params" with
   | .error error => check "parameters are explicitly unsupported" (error.kind == .unsupported)
   | .ok _ => throw (IO.userError "parameterized target silently changed scope")
-  match generate Candidates.UP001.provider { target with plutusVersion := "v2" } "Generated.Version" with
+  match generate Workflow.Tests.Legacy.Candidates.UP001.provider { target with plutusVersion := "v2" } "Generated.Version" with
   | .error error => check "unsupported version is explicit" (error.kind == .unsupported)
   | .ok _ => throw (IO.userError "unsupported version accepted")
   for invalid in ["", ".Broken", "lower.Case", "Generated.Type", "Generated.X;#eval"] do
-    match generate Candidates.UP001.provider target invalid with
+    match generate Workflow.Tests.Legacy.Candidates.UP001.provider target invalid with
     | .error error => check "unsafe module prefix rejected" (error.kind == .invalidNamespace)
     | .ok _ => throw (IO.userError s!"unsafe module prefix accepted: {invalid}")
 

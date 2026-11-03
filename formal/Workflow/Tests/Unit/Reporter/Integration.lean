@@ -1,4 +1,4 @@
-import Workflow.Reporter
+import Workflow.Tests.Legacy.Reporter
 import Workflow.Executor
 import Blaster
 
@@ -19,7 +19,7 @@ def main : IO Unit := do
     let result ← match ← Executor.run plan { leanPath := environment.stdout.trim, budgetMs := 15000 } with
       | .ok value => pure value
       | .error message => throw (IO.userError message)
-    let report := Reporter.build plan result
+    let report := Workflow.Tests.Legacy.Reporter.build plan result
     let expectedCode : UInt32 := if expectedBad == .falsified then 0 else 1
     unless report.exitCode == expectedCode do
       throw (IO.userError s!"unexpected report exit code: {report.text}")
@@ -39,7 +39,7 @@ def main : IO Unit := do
   let result ← match ← Executor.run qualifiedPlan { leanPath := environment.stdout.trim, budgetMs := 15000 } with
     | .ok value => pure value
     | .error message => throw (IO.userError message)
-  let report := Reporter.build qualifiedPlan result
+  let report := Workflow.Tests.Legacy.Reporter.build qualifiedPlan result
   unless report.exitCode == 2 && report.rows.size == 2 &&
       report.rows.all (·.status == .inconclusive) &&
       report.rows.any (fun row => row.job.name == "good" && row.observed == some .valid) &&

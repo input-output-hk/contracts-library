@@ -1,6 +1,6 @@
 import Workflow.App.Run
 import Workflow.Tests.Support
-import Candidates.Catalogue
+import Workflow.Tests.Legacy.Candidates.Catalogue
 
 namespace Workflow.Tests.UP012.ReusableTests
 
@@ -25,7 +25,7 @@ private partial def relabel : Json → Json
   | other => other
 
 def runUnit : IO Unit := do
-  let configured ← IO.ofExcept (← Candidates.Catalogue.loadCheck "UP-012" 1 "TxM-009")
+  let configured ← IO.ofExcept (← Workflow.Tests.Legacy.Candidates.Catalogue.loadCheck "UP-012" 1 "TxM-009")
   for index in [:targets.size] do
     let target := (← IO.ofExcept ((← Input.read fixture targets[index]!).mapError toString)).target
     let plan ← IO.ofExcept ((generateOne configured target "Generated.Reusable").mapError toString)
@@ -62,12 +62,12 @@ def run : IO Unit := do
   startCase "UP012: reusable preparation on three new programs"
     "controller PASS; missing signature FAIL; never accepts INCONCLUSIVE displayed ERROR"
     "App.Run.runWith [UP-012 v1 / TxM-009], reusable fixture" 300000
-  let configured ← IO.ofExcept (← Candidates.Catalogue.loadCheck "UP-012" 1 "TxM-009")
+  let configured ← IO.ofExcept (← Workflow.Tests.Legacy.Candidates.Catalogue.loadCheck "UP-012" 1 "TxM-009")
   let leanPath := (← IO.getEnv "LEAN_PATH").getD ""
   check "reusable tests receive a prepared Lean search path" (!leanPath.trim.isEmpty)
   let id : CheckId := { propertyId := "UP-012", definitionVersion := 1, modelId := "TxM-009" }
   let run ← App.Run.runWith #[id]
-    (fun selected => Candidates.Catalogue.loadCheck selected.propertyId selected.definitionVersion selected.modelId)
+    (fun selected => Workflow.Tests.Legacy.Candidates.Catalogue.loadCheck selected.propertyId selected.definitionVersion selected.modelId)
     { path := fixture, validators := targets, timeoutMs := 300000 }
     { executorOptions := { leanPath }, outputRoot := "output" }
   check "reusable run finishes all three programs" (run.finished && run.exitCode == 0 && run.validators.size == 3)

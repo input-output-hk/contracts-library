@@ -1,7 +1,7 @@
 import Workflow.App.Run
 import Workflow.Tests.Support
 import Workflow.Tests.UP012.Profile
-import Candidates.Catalogue
+import Workflow.Tests.Legacy.Candidates.Catalogue
 import Formal.TxModels.Definitions.TxM009
 
 namespace Workflow.Tests.UP012.VaultTests
@@ -19,7 +19,7 @@ private def fixture := "Workflow/Tests/UP001/Inputs/plutus.json"
 private def names := #["dropSigner_spend", "dropSigner_spend_applies"]
 
 private def load : IO ConfiguredCheck :=
-  do IO.ofExcept (← Candidates.Catalogue.loadCheck "UP-012" 1 "TxM-009")
+  do IO.ofExcept (← Workflow.Tests.Legacy.Candidates.Catalogue.loadCheck "UP-012" 1 "TxM-009")
 
 private def source (plan : GenerationPlan) (suffix : String) : IO String := do
   let some result := plan.modules.find? (·.name.endsWith suffix)
@@ -69,7 +69,7 @@ def runUnit : IO Unit := do
     check "explicit empty parameters are supported"
       ((generateOne configured empty "Generated.Vault").toOption.isSome)
     for model in ["TxM-007", "TxM-008"] do
-      let vestingCheck ← IO.ofExcept (← Candidates.Catalogue.loadCheck "UP-012" 1 model)
+      let vestingCheck ← IO.ofExcept (← Workflow.Tests.Legacy.Candidates.Catalogue.loadCheck "UP-012" 1 model)
       match generateOne vestingCheck target "Generated.UnsupportedVault" with
       | .error error => check s!"{model} rejects a vault target" (error.kind == .unsupported)
       | .ok _ => throw (IO.userError s!"{model} accepted a vault target")
@@ -128,7 +128,7 @@ def run : IO Unit := do
   check "vault solver tests receive a prepared Lean search path" (!leanPath.trim.isEmpty)
   let id : CheckId := { propertyId := "UP-012", definitionVersion := 1, modelId := "TxM-009" }
   let run ← App.Run.runWith #[id]
-    (fun selected => Candidates.Catalogue.loadCheck selected.propertyId selected.definitionVersion selected.modelId)
+    (fun selected => Workflow.Tests.Legacy.Candidates.Catalogue.loadCheck selected.propertyId selected.definitionVersion selected.modelId)
     { path := fixture, validators := #["vault.vault", "vault_buggy.vault_buggy"], timeoutMs := 300000 }
     { executorOptions := { leanPath }, outputRoot := "output" }
   check "vault run completes with both selected validators" (run.finished && run.exitCode == 0 && run.validators.size == 2)

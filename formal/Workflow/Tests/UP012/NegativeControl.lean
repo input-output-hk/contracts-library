@@ -1,3 +1,4 @@
+import Workflow.Tests.Legacy.Reporter
 import Workflow
 import Workflow.Tests.Support
 import Workflow.Tests.UP012.Profile
@@ -54,7 +55,7 @@ private def provider (legacyDeclarations : String) : Generator.Provider :=
 def run : IO Unit := do
   startCase "UP012: retain-signer identity control"
     "FAIL/1; two property FAIL rows and two applicability PASS rows (intentional negative control)"
-    "direct API: Generator.generate, Executor.run, Reporter.build" 300000
+    "direct API: Generator.generate, Executor.run, Workflow.Tests.Legacy.Reporter.build" 300000
   let input ← IO.ofExcept ((← Input.read "Workflow/Tests/UP012/Inputs/plutus.json"
     "linear_vesting.linear_vesting").mapError toString)
   let legacy ← IO.FS.readFile "Workflow/Tests/UP012/Expected/legacy-declarations.lean.txt"
@@ -63,7 +64,7 @@ def run : IO Unit := do
     leanPath := (← IO.getEnv "LEAN_PATH").getD ""
     outputRoot := some "output"
     budgetMs := 300000 })
-  let report := Reporter.build plan execution
+  let report := Workflow.Tests.Legacy.Reporter.build plan execution
   let some directory := execution.directory
     | throw (IO.userError "identity control: missing output directory")
   IO.FS.writeFile (directory / "input.json") input.sourceText

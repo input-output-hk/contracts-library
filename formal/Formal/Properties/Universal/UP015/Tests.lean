@@ -5,9 +5,9 @@ import Formal.TxModels.Definitions.TxM007
 import Workflow.Declarative.Catalogue
 import Workflow.Executor
 import Workflow.Input
-import Workflow.Reporter
+import Workflow.Tests.Legacy.Reporter
 import Workflow.Tests.Support
-import Candidates.Catalogue
+import Workflow.Tests.Legacy.Candidates.Catalogue
 
 namespace Formal.Properties.Universal.UP015.Tests
 
@@ -50,7 +50,7 @@ def unit : IO Unit := do
   let configured ← IO.ofExcept (catalogue.loadCheck id)
   check "the full reviewed property/model limitations are preserved"
     (configured.context.binding.combinedCheck == expected)
-  let previous ← IO.ofExcept (← Candidates.Catalogue.loadCheck "UP-015" 1 "TxM-007")
+  let previous ← IO.ofExcept (← Workflow.Tests.Legacy.Candidates.Catalogue.loadCheck "UP-015" 1 "TxM-007")
   let input ← IO.ofExcept ((← Input.read fixture "linear_vesting.linear_vesting").mapError toString)
   let generated ← IO.ofExcept ((Generator.generateOne configured input.target "Generated.UP015").mapError toString)
   let old ← IO.ofExcept ((Generator.generateOne previous input.target "Generated.UP015").mapError toString)
@@ -99,7 +99,7 @@ def negativeControl : IO Unit := do
     leanPath := (← IO.getEnv "LEAN_PATH").getD ""
     outputRoot := some "output"
     budgetMs := 300000 })
-  let report := Reporter.build plan execution
+  let report := Workflow.Tests.Legacy.Reporter.build plan execution
   let some directory := execution.directory | throw (IO.userError "missing control evidence")
   IO.FS.writeFile (directory / "input.json") input.sourceText
   report.write directory
