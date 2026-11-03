@@ -31,6 +31,10 @@ rev = "7b743afcd64c1d2fc6c7ef24b2a260b8b31828fc"
 name = "Universal"
 globs = ["Universal.+"]
 
+[[lean_exe]]
+name = "up016_verify_artifact"
+root = "tests.UP016.VerifyArtifact"
+
 [[lean_lib]]
 name = "Formal"
 
