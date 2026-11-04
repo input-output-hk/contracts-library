@@ -232,6 +232,19 @@ test rejects_deposit_unsigned() {
   !spend(d, Deposit, tx)
 }
 
+test rejects_deposit_continuation_reference_script() fail {
+  let d = stake_datum(None, [])
+  let out = Output { ..pos_output(20, d), reference_script: Some(stake_hash) }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [pos_input(20)],
+    outputs: [out],
+    extra_signatories: [owner_hash],
+    validity_range: interval.after(500),
+  }
+  spend(d, Deposit, tx)
+}
+
 // ------------------------------------------------------------------ Delegate
 
 test delegate_ok() {
@@ -441,6 +454,43 @@ test rejects_vote_when_not_voting_stage() {
     mint: assets.from_asset(vote_policy, token_name_from_ref(pos_ref()), 1),
     extra_signatories: [owner_hash],
     validity_range: interval.between(start, unlock),
+  }
+  !spend(d, VoteProposal { proposal_id: prop_nft, voted_option: 1 }, tx)
+}
+
+test vote_at_deadline_keeps_lock() {
+  let start = 500
+  let unlock = start + 1000 + 2000
+  let new_lock = Lock { proposal_id: prop_nft, unlock_time: unlock, stake: 20 }
+  let d = stake_datum(None, [])
+  let out = pos_output(20, stake_datum(None, [new_lock]))
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [pos_input(20)],
+    reference_inputs: [settings_input(), proposal_ref_voting(start)],
+    outputs: [out],
+    mint: assets.from_asset(vote_policy, token_name_from_ref(pos_ref()), 1),
+    extra_signatories: [owner_hash],
+    validity_range: interval.between(unlock, unlock),
+  }
+  spend(d, VoteProposal { proposal_id: prop_nft, voted_option: 1 }, tx)
+}
+
+test rejects_second_vote_with_live_lock() {
+  let start = 500
+  let unlock = start + 1000 + 2000
+  let existing = Lock { proposal_id: prop_nft, unlock_time: unlock, stake: 20 }
+  let new_lock = Lock { proposal_id: prop_nft, unlock_time: unlock, stake: 20 }
+  let d = stake_datum(None, [existing])
+  let out = pos_output(20, stake_datum(None, [existing, new_lock]))
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [pos_input(20)],
+    reference_inputs: [settings_input(), proposal_ref_voting(start)],
+    outputs: [out],
+    mint: assets.from_asset(vote_policy, token_name_from_ref(pos_ref()), 1),
+    extra_signatories: [owner_hash],
+    validity_range: interval.between(start, start + 500),
   }
   !spend(d, VoteProposal { proposal_id: prop_nft, voted_option: 1 }, tx)
 }
