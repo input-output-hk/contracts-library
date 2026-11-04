@@ -16,13 +16,20 @@ import {
   type Network,
   type PlutusScript,
   resolveScriptHash,
+  SLOT_CONFIG_NETWORK,
   type SlotConfig,
   serializePlutusScript,
   type UTxO,
 } from "@meshsdk/core";
 
 import { applyAuthorization, type ScriptAuthorizer } from "../authorization";
-import { type Credential, finalizeTx, networkIdOf, slotBound } from "../common";
+import {
+  type Credential,
+  enclosingSlotBound,
+  finalizeTx,
+  networkIdOf,
+  slotBound,
+} from "../common";
 import { compiledCode, plutusVersion, typedCompiledCode } from "./blueprint";
 import {
   applyRedeemer,
@@ -38,6 +45,13 @@ import type { SettingsDatum, SettingsParams } from "./types";
 const DEFAULT_MIN_UTXO_LOVELACE = 1_500_000n;
 
 export const SETTINGS_TOKEN_NAME = "73657474696e6773"; // hex-encoded "settings"
+
+/**
+ * The propose transaction's bounded validity window, in slots past the
+ * enclosing slot of `now` (spec §5.b): the validator anchors `next_apply` to
+ * the window's upper bound, which must cover the inclusion slot.
+ */
+export const PROPOSE_WINDOW_SLOTS = 30;
 
 export function settingsScript(params: SettingsParams): PlutusScript {
   const code = applyParamsToScript(compiledCode, paramsToData(params), "Mesh");
@@ -136,22 +150,29 @@ export interface ProposeParams {
   applyDelay: number;
   network?: Network;
   customSlotConfig?: SlotConfig;
+  /** Propose validity window in slots past `now` (default `PROPOSE_WINDOW_SLOTS`). */
+  validityWindowSlots?: number;
 }
 
 export async function buildProposeTx(p: ProposeParams): Promise<string> {
   const network = p.network ?? "preprod";
   const networkId = networkIdOf(network);
-  const { slot: lowerBoundSlot, startMs: slotStartMs } = slotBound(
-    network,
-    p.now,
-    p.customSlotConfig,
-  );
+  const slotConfig = p.customSlotConfig ?? SLOT_CONFIG_NETWORK[network];
+  const { slot: lowerBoundSlot } = enclosingSlotBound(p.now, slotConfig);
+  const upperBoundSlot =
+    lowerBoundSlot + (p.validityWindowSlots ?? PROPOSE_WINDOW_SLOTS);
+
+  // The validator reads the exclusive validity upper bound: the start ms of
+  // the slot after the window's last slot.
+  const upperBoundMs =
+    slotConfig.zeroTime +
+    (upperBoundSlot + 1 - slotConfig.zeroSlot) * slotConfig.slotLength;
   const scriptAddr = settingsScriptAddress(p.script, networkId);
 
   const newDatum: SettingsDatum = {
     current: p.datum.current,
     next: p.newValue,
-    nextApply: slotStartMs + p.applyDelay,
+    nextApply: upperBoundMs + p.applyDelay,
   };
 
   applyAuthorization(p.txBuilder, p.proposeAuth, p.authorizer, networkId);
@@ -169,7 +190,8 @@ export async function buildProposeTx(p: ProposeParams): Promise<string> {
     .txInScript(p.script.code)
     .txOut(scriptAddr, p.settingsUtxo.output.amount)
     .txOutInlineDatumValue(settingsDatumToData(newDatum))
-    .invalidBefore(lowerBoundSlot);
+    .invalidBefore(lowerBoundSlot)
+    .invalidHereafter(upperBoundSlot);
   return finalizeTx(p.txBuilder, {
     collateral: p.collateralUtxo,
     changeAddress: p.changeAddress,
