@@ -51,6 +51,10 @@ import {
 const VALUE_A: Data = mConStr0([1n]);
 const VALUE_B: Data = mConStr0([2n]);
 
+// Short propose validity window (slots) for fast devnet rounds; passed as
+// `validityWindowSlots` below so the expected `nextApply` mirrors the builder.
+const PROPOSE_WINDOW_SLOTS = 10;
+
 describe.skipIf(!REACHABLE)("settings e2e (Yaci devnet)", () => {
   let provider: ReturnType<typeof makeProvider>;
   let slotConfig: SlotConfig;
@@ -147,6 +151,13 @@ describe.skipIf(!REACHABLE)("settings e2e (Yaci devnet)", () => {
     proposedUtxo: UTxO;
   }> {
     const proposeNow = await chainNowMs();
+    const lowerSlot = unixTimeToEnclosingSlot(proposeNow, slotConfig);
+    // Mirrors the builder's anchor: the validator reads the exclusive validity
+    // upper bound — the start ms of the slot after the window's last slot.
+    const nextApply =
+      slotConfig.zeroTime +
+      (lowerSlot + PROPOSE_WINDOW_SLOTS + 1) * slotConfig.slotLength +
+      p.ctx.applyDelay;
     const proposeTx = await buildProposeTx({
       txBuilder: newTxBuilder(provider),
       script: p.ctx.script,
@@ -160,6 +171,7 @@ describe.skipIf(!REACHABLE)("settings e2e (Yaci devnet)", () => {
       collateralUtxo: await collateralOf(p.ctx.proposer),
       proposeAuth: { kind: "key", hash: p.ctx.proposer.keyHash },
       applyDelay: p.ctx.applyDelay,
+      validityWindowSlots: PROPOSE_WINDOW_SLOTS,
       customSlotConfig: slotConfig,
     });
 
@@ -176,7 +188,7 @@ describe.skipIf(!REACHABLE)("settings e2e (Yaci devnet)", () => {
       proposedDatum: {
         current: p.datum.current,
         next: p.newValue ?? VALUE_B,
-        nextApply: proposeNow + p.ctx.applyDelay,
+        nextApply,
       },
       proposedUtxo,
     };

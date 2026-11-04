@@ -73,6 +73,10 @@
   withdrawals: (
     "propose_auth",
   ),
+  validRange: (
+    "lower": [*now*],
+    "upper": [*upper*],
+  ),
   outputs: (
     (
       name: "Settings UTxO",
@@ -96,7 +100,7 @@
     - `settings_hash = hash(settings_validator(seed_utxo, propose_auth, apply_auth, apply_delay, settings_token_name))`
     - `maybe_data`: can be `None` or `Some(data)`
     - `proposed`: the proposed settings data. it is such that `validate_datum(proposed)` is true
-    - `timestamp ≥ now + apply_delay`, where `apply_delay` is the minimum time that must pass before the proposed settings can be applied (the reference builders set `timestamp = now + apply_delay`)
+    - `timestamp ≥ upper + apply_delay`, where `upper` is the propose transaction's validity upper bound and `apply_delay` is the minimum time that must pass before the proposed settings can be applied. The ledger only includes the transaction within its validity range, so `upper` covers the inclusion slot (the reference builders set a bounded validity window and `timestamp = upper + apply_delay`)
   ],
 )
 

@@ -21,6 +21,7 @@ export {
   buildProposeTx,
   type CloseParams,
   type MintParams,
+  PROPOSE_WINDOW_SLOTS,
   type ProposeParams,
   SETTINGS_TOKEN_NAME,
   settingsScript,
