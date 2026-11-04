@@ -332,8 +332,8 @@ await buildVoteTx({
   stakeUtxo: voterPosition,
   stakeDatum: {
     ...voterDatum,
-    locks: pruneExpired([...voterDatum.locks,
-      { proposalId, unlockTime: votingEnd, stake: voterStake }], now),
+    locks: [...pruneExpired(voterDatum.locks, now),
+      { proposalId, unlockTime: votingEnd, stake: voterStake }],
   },
   proposalUtxo,                        // reference input
   proposalDatum,
@@ -557,10 +557,11 @@ Notes:
   `current` can change the DAO's thresholds, timings, and sibling script
   hashes; a malformed `current` halts Create Proposal, Cosign, Vote, and
   Tally until fixed.
-- **One proposal tally per transaction.** A tally's burned-vote count must
-  match the votes counted for that proposal, which precludes tallying two
-  proposals (or mixing in a `Cancel`) in one transaction. The Tx3 `tally`
-  takes exactly one vote per call; the MeshJS builder batches.
+- **One proposal tally per transaction.** Only votes spent with
+  `TallyVote { out_idx }` are counted; a `Cancel`-spent (or redeemer-less)
+  vote halts the tally, which precludes tallying two proposals or mixing in
+  a `Cancel` in one transaction. The Tx3 `tally` takes exactly one vote per
+  call; the MeshJS builder batches.
 - **Vote cancellation has no deadline.** A voter can retract a vote
   mid-voting; the position's stake is freed when the lock expires, not at
   cancel time.
