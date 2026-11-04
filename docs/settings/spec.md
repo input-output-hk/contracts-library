@@ -32,9 +32,11 @@ The way it works is:
 The validators delegate the _meaning_ of the setting value to the
 `validate_datum` predicate: a `True` stub in the reference `settings`
 validator and `Constr(0, [_])` in `settings_typed` (§3.d). Neither constrains
-`apply_delay` (a negative delay would admit immediate applies). The proposer
-anchors the delay, closing is irreversible, and the staking credential is
-frozen at launch. The full list of assumptions and out-of-scope items is §6.a.
+`apply_delay` (a negative delay would admit immediate applies). The delay
+anchors to the propose transaction's validity upper bound, which the ledger
+forces to cover the inclusion slot (§5.b), closing is irreversible, and the
+staking credential is frozen at launch. The full list of assumptions and
+out-of-scope items is §6.a.
 
 ## 3. Glossary
 
@@ -53,7 +55,7 @@ Baked into the script hash (the validator is parameterized by them):
 | `seed_utxo`           | `OutputReference`    | One-shot nonce; must be spent to mint.                                                 |
 | `propose_auth`        | `Credential`         | Who may `Propose`.                                                                     |
 | `apply_auth`          | `Credential`         | Who may launch, `Apply`, and `Close`.                                                  |
-| `apply_delay`         | `Int` (milliseconds) | Minimum delay between when new settings are proposed and when they can be applied.     |
+| `apply_delay`         | `Int` (milliseconds) | Minimum delay between a proposal's on-chain inclusion (its validity upper bound, §5.b) and the earliest apply. |
 | `settings_token_name` | `AssetName`          | Name of the instance NFT under the script's policy.                                    |
 | `validate_datum`      | `fn(Data) -> Bool`   | Predicate admissible setting values must satisfy: `True` in `settings`, `Constr(0, [_])` in `settings_typed` (§3.d). |
 
@@ -127,8 +129,8 @@ A datum is **well-formed** when `next` and `next_apply` are both `None` or both 
 Mint (Launch)    ⊥  ─────────────────────────────────► (d, None, None)
 
 Propose          (d, ·, ·) ──────────────────────────► (d, Some(d′), Some(t))
-                                                            with t ≥ upper + apply_delay,
-                                                            d′ ≠ d and validate_datum(d′)
+                                                             with t ≥ upper + apply_delay,
+                                                             d′ ≠ d and validate_datum(d′)
 
 Apply            (d, Some(d′), Some(t)), now ≥ t ────► (d′, None, None)
 
@@ -141,20 +143,19 @@ Close + Burn     (·, ·, ·) ────────────────�
 
 All possible protocol transactions.
 
-Scripts cannot read a clock; they read the transaction's validity range
-(POSIX milliseconds, slot-start interpretation, see §6.a). Each bound gives a
-guarantee about the real time at which the transaction lands:
+Scripts cannot read a clock; they read the transaction's validity range.
+Throughout this section, `now` ≜ the validity range's **lower bound** and
+`upper` ≜ its **upper bound** (POSIX milliseconds, slot-start interpretation —
+see §6.a). The two temporal rules read opposite bounds:
 
-- `now` ≜ the validity range's **lower bound**. The ledger guarantees the real
-  time is `>= now`. `Apply` requires a finite lower bound and `now >= next_apply`,
-  so the applier cannot commit a proposal before `next_apply` has truly passed.
-- `upper` ≜ the validity range's **upper bound**. The ledger guarantees the real
-  time is `<= upper`. `Propose` requires a finite upper bound and
-  `next_apply >= upper + apply_delay`, so at least `apply_delay` separates the
-  proposal reaching the chain from the change becoming applicable. The lower
-  bound cannot serve here: a proposer may backdate it freely, which would let
-  them anchor the delay in the past and apply at once. A later upper bound only
-  lengthens the delay.
+- **`Propose` MUST have a finite `upper`** (§5.b): the delay anchors to it, so
+  an unbounded-above range is rejected. The ledger only includes a transaction
+  whose validity range covers the actual slot, so `upper` cannot be chosen
+  before the proposal lands on-chain.
+- **`Apply` MUST have a finite `now`**: an unbounded-below range is rejected
+  (there is no meaningful `now`). Because the ledger guarantees the real slot
+  is `>= lower bound`, requiring `now >= next_apply` guarantees the applier
+  cannot commit a proposal before `next_apply` has truly passed.
 
 ### 5.a Deploy Settings
 
@@ -178,12 +179,13 @@ This transaction deploys the **Settings UTxO**, which holds the main protocol pa
 | **Inputs**         | The settings UTxO.                                                                                                                                                                                                                                                                                                     |
 | **Outputs**        | One **continuation** at `out_ix`: address **equal to the spent input's address** (payment and staking part), value = ada + exactly the NFT, **inline datum**, no reference script. Datum = `SettingsDatum { current, next: Some(d), next_apply: Some(t) }` with `t ≥ upper + apply_delay`, `validate_datum(d)` and `d ≠ current`. |
 | **Redeemer**       | spend `Propose { out_ix }`.                                                                                                                                                                                                                                                                                            |
-| **Validity range** | Upper bound **finite**; `next_apply` is anchored on `upper` (§5). |
+| **Validity range** | Upper bound **finite**; `upper` = upper bound anchors the delay (§5).                                                                                                                                                                                                                                                  |
 | **Authorization**  | `propose_auth` satisfied.                                                                                                                                                                                                                                                                                              |
 
 The spent datum's `next`/`next_apply` are **ignored**: proposing always writes a
 fresh pending pair and thereby supersedes any pending proposal (and resets the
-apply deadline to `upper + apply_delay` or later).
+earliest apply time to `upper + apply_delay`; the proposer may choose a later
+`t`).
 
 ### 5.c Apply
 
@@ -219,11 +221,10 @@ Attacks the protocol defends against, each backed by the invariants of §6.b:
   does not require carrying it onward is `Close`. (I1)
 - **Premature apply.** `now >= next_apply` with `now` read from the validity
   lower bound (§5). A proposal cannot be committed before its deadline. (I4)
-- **Backdated proposal.** `next_apply >= upper + apply_delay` with `upper` read
-  from the validity upper bound (§5). A proposer cannot shorten the delay by
-  backdating the transaction: it cannot land after `upper`, so at least
-  `apply_delay` always separates a proposal reaching the chain from its apply.
-  (I4)
+- **Backdated proposals.** The delay anchors to the propose transaction's
+  validity **upper** bound (§5.b): the ledger only includes a transaction whose
+  range covers the actual slot, so backdating the lower bound cannot shorten
+  the enforced delay. (I4, I7)
 - **Instance duplication.** The seed nonce and the mint checks make the NFT
   one-shot: minting `+1` requires spending `seed_utxo`, which can happen once;
   the mint must be exactly one token with the parameterized name. (I2)
@@ -253,11 +254,15 @@ Attacks the protocol defends against, each backed by the invariants of §6.b:
 - **`apply_delay` is trusted at deployment.** The reference validator does not
   constrain it (a negative delay would admit immediate applies); it is part of
   the script hash, so all parties can see it.
-- **The proposer can only lengthen the delay.** `next_apply` must be at least
-  `upper + apply_delay`, but the proposer picks `upper` (and may write a later
-  `next_apply`), so a change can be scheduled further out than `apply_delay`,
-  never sooner. The ledger bounds how far ahead a Plutus transaction's upper
-  bound may lie (its slot-to-time horizon).
+- **The delay anchor is the propose transaction's validity upper bound.** The
+  continuation's `next_apply` must satisfy `t ≥ upper + apply_delay`, where
+  `upper` is the propose transaction's validity upper bound (§5.b). The ledger
+  only includes a transaction whose range covers the actual slot, so `upper`
+  cannot predate the proposal's inclusion: the enforced minimum delay is
+  measured from the proposal landing on-chain, not from a proposer-chosen
+  instant. The reference builders bound the validity window to a small number
+  of slots past `now` and use the minimum, `t = upper + apply_delay`; a
+  proposer can only push an apply later, never earlier.
 - **Closing is irreversible.** After `Close`, no instance can be relaunched at
   this script hash (seed spent, NFT burned).
 - **The staking credential is frozen at launch.** The launch output may pick any
@@ -266,10 +271,11 @@ Attacks the protocol defends against, each backed by the invariants of §6.b:
 - **Consumers are off-chain (or other validators).** The settings validator
   provides no read endpoint; consumers check `current` from the UTxO's datum,
   typically via a reference input (`settings/utils.get_settings_datum`).
-- **Slot/ms rounding.** The ledger's validity bounds are slot-granular; the
-  validator interprets them in milliseconds (slot start time). Off-chain builders
-  must compute `next_apply` from the start of the upper-bound slot (the reference
-  builders do).
+- **Slot/ms rounding.** The ledger's bounds are slot-granular; the validator
+  interprets them in milliseconds (slot-start time; the upper bound is
+  exclusive — the start of the slot after the last valid slot). Off-chain
+  builders must compute `next_apply` from the same conversion of the validity
+  upper bound (the reference builders do).
 
 ### 6.b Invariants
 
@@ -282,19 +288,20 @@ Attacks the protocol defends against, each backed by the invariants of §6.b:
 - **I3 — NFT custody.** Every continuation and the launch output carry exactly
   the NFT and no other multi-asset; the NFT cannot be separated from the state,
   duplicated, or joined by smuggled tokens.
-- **I4 — Delayed apply.** A `Propose` writes `next_apply >= upper +
-  apply_delay`, and an `Apply` is valid only when `now >= next_apply`. Since a
-  propose lands no later than its `upper` and an apply no earlier than its
-  `now`, at least `apply_delay` of real time separates the two.
+- **I4 — Delayed apply.** An `Apply` is valid only when `now >= next_apply` for
+  a pending pair, so a proposal is never committed before its delay has elapsed
+  relative to the proposal's reference time: the validity **upper** bound that
+  anchors the delay (I7), which the ledger forces to cover the inclusion slot.
 - **I5 — Datum well-formedness.** `next` and `next_apply` are always both `None`
   or both `Some`: launch and `Apply` produce the `None` pair and `Propose`
   produces the `Some` pair required by `Apply`.
 - **I6 — No no-op proposals.** A `Propose` whose `d == current` is rejected; the
   setting can only be _changed_, never rewritten.
 - **I7 — State integrity.** `Propose` preserves `current` and writes
-  `next_apply >= upper + apply_delay`; `Apply` promotes the pending `next` to
-  `current` and clears the pair. The continuation datum must equal the expected
-  one exactly.
+  `next_apply ≥ upper + apply_delay` (the reference builders use
+  `upper + apply_delay`, where `upper` is the propose transaction's bounded
+  validity window's end); `Apply` promotes the pending `next` to `current` and
+  clears the pair. The continuation datum must equal the expected one exactly.
 - **I8 — Composability.** The validator asserts only about its own input, the
   seed input (at launch), the mint under its own policy, the single output named
   by `out_ix`, the validity range, and the required authorization. It never
@@ -308,7 +315,7 @@ Attacks the protocol defends against, each backed by the invariants of §6.b:
 > characterization `accepts ⟺ Φ`; §6.d is the `⇒` direction.
 >
 > Throughout, `now ≜ lower_bound(validity_range)`,
-> `upper ≜ upper_bound(validity_range)` (§5), and
+> `upper ≜ upper_bound(validity_range)` (§5) and
 > `policy ≜ hash(validator params)` (§3.b). "The own input" is the contract
 > input being validated.
 
@@ -342,7 +349,7 @@ Returns `True` if **all** of:
   other multi-asset; its datum is **inline**; no reference script.
 - **P4 (continuation datum).** That datum is
   `SettingsDatum { current, next: Some(d), next_apply: Some(t) }` with
-  `t >= upper + apply_delay`, `validate_datum(d)` and `d ≠ current`.
+  `t ≥ upper + apply_delay`, `validate_datum(d)` and `d ≠ current`.
 
 #### `Apply { out_ix }`
 
@@ -398,8 +405,8 @@ the following holds:
   has `next = None` or `next_apply = None`. _(¬A2, I5)_
 - **R5 (tampered continuation datum).** Redeemer is `Propose` or `Apply` and the
   continuation datum differs from the expected one — e.g. a changed `current` on
-  propose, a different `next`, or a `next_apply < upper + apply_delay` (for
-  example, anchored on a backdated lower bound). _(¬P4, ¬A5, I4, I7)_
+  propose, a different `next`, or a `next_apply < upper + apply_delay`. _(¬P4,
+  ¬A5, I7)_
 - **R6 (no-op proposal).** Redeemer is `Propose` and the proposed value equals
   `current`. _(¬P4's `d ≠ current`, I6)_
 - **R7 (invalid setting value).** Redeemer is `Mint`, `Propose`, or `Apply` and
@@ -419,9 +426,6 @@ the following holds:
 - **R11 (malformed mint bundle).** The mint under `policy` does not consist of
   exactly one pair (more than one token minted/burned, or a burn with the wrong
   name/quantity). _(¬M1, ¬C2)_
-- **R12 (unbounded propose).** Redeemer is `Propose` and the validity range has
-  no finite upper bound, so there is no `upper` to anchor the delay on. _(¬P0,
-  I4)_
 
 #### Scope of the formalization
 
@@ -432,9 +436,9 @@ obligation**:
   endpoint fully checks the initial datum and output. What is delegated is the
   _meaning_ of the setting value, via `validate_datum`, which is the constant
   `True` in the reference (§6.a).
-- **Time is modeled as the validity bounds** `now` and `upper`, not a true
-  clock (§5). The ledger guarantees `now ≤ real_slot ≤ upper` and the
-  slot-start millisecond interpretation are axioms.
+- **Time is modeled as the validity lower bound** `now`, not a true clock
+  (§5). The ledger guarantee `real_slot ≥ now` and the slot-start millisecond
+  interpretation are axioms.
 - **The one-shot NFT property** is a lemma about the seed nonce: inputs cannot
   be double-spent (ledger axiom), so `Mint` can pass at most once (R10).
 - **Composability** (I8): the validator quantifies only over its own input, the

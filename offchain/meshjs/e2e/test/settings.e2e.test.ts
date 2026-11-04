@@ -12,8 +12,6 @@ import {
   buildLaunchTx,
   buildProposeTx,
   closeRedeemer,
-  proposalTiming,
-  proposeRedeemer,
   SETTINGS_TOKEN_NAME,
   type SettingsDatum,
   type SettingsParams,
@@ -43,9 +41,7 @@ import {
   makeProvider,
   NETWORK_ID,
   newTxBuilder,
-  PROPOSE_TTL_MS,
   REACHABLE,
-  STORE_URL,
   scriptOutputOf,
   signAndSubmit,
   waitForTx,
@@ -54,6 +50,10 @@ import {
 
 const VALUE_A: Data = mConStr0([1n]);
 const VALUE_B: Data = mConStr0([2n]);
+
+// Short propose validity window (slots) for fast devnet rounds; passed as
+// `validityWindowSlots` below so the expected `nextApply` mirrors the builder.
+const PROPOSE_WINDOW_SLOTS = 10;
 
 describe.skipIf(!REACHABLE)("settings e2e (Yaci devnet)", () => {
   let provider: ReturnType<typeof makeProvider>;
@@ -151,6 +151,13 @@ describe.skipIf(!REACHABLE)("settings e2e (Yaci devnet)", () => {
     proposedUtxo: UTxO;
   }> {
     const proposeNow = await chainNowMs();
+    const lowerSlot = unixTimeToEnclosingSlot(proposeNow, slotConfig);
+    // Mirrors the builder's anchor: the validator reads the exclusive validity
+    // upper bound — the start ms of the slot after the window's last slot.
+    const nextApply =
+      slotConfig.zeroTime +
+      (lowerSlot + PROPOSE_WINDOW_SLOTS + 1) * slotConfig.slotLength +
+      p.ctx.applyDelay;
     const proposeTx = await buildProposeTx({
       txBuilder: newTxBuilder(provider),
       script: p.ctx.script,
@@ -158,13 +165,13 @@ describe.skipIf(!REACHABLE)("settings e2e (Yaci devnet)", () => {
       datum: p.datum,
       newValue: p.newValue ?? VALUE_B,
       now: proposeNow,
-      ttlMs: PROPOSE_TTL_MS,
       outputIndex: 0,
       utxos: await p.ctx.proposer.wallet.getUtxos(),
       changeAddress: p.ctx.proposer.address,
       collateralUtxo: await collateralOf(p.ctx.proposer),
       proposeAuth: { kind: "key", hash: p.ctx.proposer.keyHash },
       applyDelay: p.ctx.applyDelay,
+      validityWindowSlots: PROPOSE_WINDOW_SLOTS,
       customSlotConfig: slotConfig,
     });
 
@@ -181,12 +188,7 @@ describe.skipIf(!REACHABLE)("settings e2e (Yaci devnet)", () => {
       proposedDatum: {
         current: p.datum.current,
         next: p.newValue ?? VALUE_B,
-        nextApply: proposalTiming({
-          now: proposeNow,
-          applyDelay: p.ctx.applyDelay,
-          ttlMs: PROPOSE_TTL_MS,
-          slotConfig,
-        }).nextApply,
+        nextApply,
       },
       proposedUtxo,
     };
@@ -264,59 +266,6 @@ describe.skipIf(!REACHABLE)("settings e2e (Yaci devnet)", () => {
     if (p.requiredSigner) tb.requiredSignerHash(p.requiredSigner);
 
     return finishRawTx(provider, tb, p.signer);
-  }
-
-  /**
-   * A raw propose of `VALUE_B` with explicit validity bounds and `nextApply`,
-   * to probe the timelock anchor directly.
-   */
-  async function rawPropose(p: {
-    ctx: Awaited<ReturnType<typeof setup>>;
-    settingsUtxo: UTxO;
-    datum: SettingsDatum;
-    validFromMs: number;
-    validUntilMs: number;
-    nextApply: number;
-  }): Promise<string> {
-    const tb = newTxBuilder(provider);
-    tb.spendingPlutusScriptV3()
-      .txIn(
-        p.settingsUtxo.input.txHash,
-        p.settingsUtxo.input.outputIndex,
-        p.settingsUtxo.output.amount,
-        p.settingsUtxo.output.address,
-      )
-      .txInInlineDatumPresent()
-      .txInRedeemerValue(proposeRedeemer(0))
-      .txInScript(p.ctx.script.code);
-    tb.txOut(
-      p.ctx.scriptAddr,
-      p.settingsUtxo.output.amount,
-    ).txOutInlineDatumValue(
-      settingsDatumToData({
-        current: p.datum.current,
-        next: VALUE_B,
-        nextApply: p.nextApply,
-      }),
-    );
-    tb.invalidBefore(unixTimeToEnclosingSlot(p.validFromMs, slotConfig))
-      .invalidHereafter(unixTimeToEnclosingSlot(p.validUntilMs, slotConfig))
-      .requiredSignerHash(p.ctx.proposer.keyHash);
-
-    const col = await collateralOf(p.ctx.proposer);
-    const unsigned = await tb
-      .txInCollateral(
-        col.input.txHash,
-        col.input.outputIndex,
-        col.output.amount,
-        col.output.address,
-      )
-      .changeAddress(p.ctx.proposer.address)
-      .selectUtxosFrom(await p.ctx.proposer.wallet.getUtxos())
-      .complete();
-    return provider.submitTx(
-      await p.ctx.proposer.wallet.signTx(unsigned, true),
-    );
   }
 
   /** A raw close attempt that intentionally omits mint/burn. */
@@ -432,46 +381,6 @@ describe.skipIf(!REACHABLE)("settings e2e (Yaci devnet)", () => {
     ).rejects.toThrow();
   });
 
-  it("rejects a propose whose delay is anchored on a backdated lower bound", async () => {
-    const ctx = await setup();
-    const datum = initialDatum();
-    const settingsUtxo = await launchSettings(ctx, datum);
-    const now = await chainNowMs();
-    const validUntilMs = now + PROPOSE_TTL_MS;
-
-    // Backdate the lower bound to genesis and anchor the delay on it: the
-    // proposal would already be applicable. The validator anchors on the upper
-    // bound instead, so this is rejected.
-    const backdated = slotConfig.zeroTime;
-    await expect(
-      rawPropose({
-        ctx,
-        settingsUtxo,
-        datum,
-        validFromMs: backdated,
-        validUntilMs,
-        nextApply: backdated + ctx.applyDelay,
-      }),
-    ).rejects.toThrow();
-
-    // Control: the same transaction anchored on the upper bound is accepted.
-    const { untilMs, nextApply } = proposalTiming({
-      now,
-      applyDelay: ctx.applyDelay,
-      ttlMs: PROPOSE_TTL_MS,
-      slotConfig,
-    });
-    const hash = await rawPropose({
-      ctx,
-      settingsUtxo,
-      datum,
-      validFromMs: backdated,
-      validUntilMs: untilMs,
-      nextApply,
-    });
-    await waitForTx(provider, hash);
-  });
-
   it("rejects raw apply with no pending proposal", async () => {
     const ctx = await setup();
     const datum = initialDatum();
@@ -503,7 +412,6 @@ describe.skipIf(!REACHABLE)("settings e2e (Yaci devnet)", () => {
         datum,
         newValue: VALUE_A,
         now: await chainNowMs(),
-        ttlMs: PROPOSE_TTL_MS,
         outputIndex: 0,
         utxos: await ctx.proposer.wallet.getUtxos(),
         changeAddress: ctx.proposer.address,
@@ -530,7 +438,6 @@ describe.skipIf(!REACHABLE)("settings e2e (Yaci devnet)", () => {
         datum,
         newValue: VALUE_B,
         now: await chainNowMs(),
-        ttlMs: PROPOSE_TTL_MS,
         outputIndex: 0,
         utxos: await ctx.applier.wallet.getUtxos(),
         changeAddress: ctx.applier.address,
@@ -730,7 +637,6 @@ describe.skipIf(!REACHABLE)("settings e2e (Yaci devnet)", () => {
           datum: initialDatum(),
           newValue: 1n, // not Constr(0, [_])
           now: await chainNowMs(),
-          ttlMs: PROPOSE_TTL_MS,
           outputIndex: 0,
           utxos: await ctx.proposer.wallet.getUtxos(),
           changeAddress: ctx.proposer.address,
@@ -754,7 +660,6 @@ describe.skipIf(!REACHABLE)("settings e2e (Yaci devnet)", () => {
           datum: initialDatum(),
           newValue: mConStr1([1n]), // Constr(1, [1]) — not Constr(0, [_])
           now: await chainNowMs(),
-          ttlMs: PROPOSE_TTL_MS,
           outputIndex: 0,
           utxos: await ctx.proposer.wallet.getUtxos(),
           changeAddress: ctx.proposer.address,
@@ -778,7 +683,6 @@ describe.skipIf(!REACHABLE)("settings e2e (Yaci devnet)", () => {
           datum: initialDatum(),
           newValue: mConStr0([]), // Constr(0, []) — right index, wrong arity
           now: await chainNowMs(),
-          ttlMs: PROPOSE_TTL_MS,
           outputIndex: 0,
           utxos: await ctx.proposer.wallet.getUtxos(),
           changeAddress: ctx.proposer.address,
@@ -802,7 +706,6 @@ describe.skipIf(!REACHABLE)("settings e2e (Yaci devnet)", () => {
           datum: initialDatum(),
           newValue: mConStr0([1n, 2n]), // Constr(0, [1, 2]) — right index, wrong arity
           now: await chainNowMs(),
-          ttlMs: PROPOSE_TTL_MS,
           outputIndex: 0,
           utxos: await ctx.proposer.wallet.getUtxos(),
           changeAddress: ctx.proposer.address,

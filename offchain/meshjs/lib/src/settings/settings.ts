@@ -46,6 +46,13 @@ const DEFAULT_MIN_UTXO_LOVELACE = 1_500_000n;
 
 export const SETTINGS_TOKEN_NAME = "73657474696e6773"; // hex-encoded "settings"
 
+/**
+ * The propose transaction's bounded validity window, in slots past the
+ * enclosing slot of `now` (spec §5.b): the validator anchors `next_apply` to
+ * the window's upper bound, which must cover the inclusion slot.
+ */
+export const PROPOSE_WINDOW_SLOTS = 30;
+
 export function settingsScript(params: SettingsParams): PlutusScript {
   const code = applyParamsToScript(compiledCode, paramsToData(params), "Mesh");
   return { code: code, version: plutusVersion };
@@ -86,6 +93,7 @@ export interface MintParams {
   authorizer?: ScriptAuthorizer;
   applyAuth: Credential;
   network?: Network;
+  /** Minimum lovelace on the settings output (default `DEFAULT_MIN_UTXO_LOVELACE`). */
   minUtxoLovelace?: bigint;
 }
 
@@ -132,11 +140,13 @@ export async function buildLaunchTx(p: MintParams): Promise<string> {
 /** Default validity window of a propose transaction: 10 minutes after `now`. */
 export const DEFAULT_PROPOSE_TTL_MS = 10 * 60 * 1000;
 
-/** The upper validity bound of a propose transaction and its `next_apply`. */
+/** The propose transaction's validity window and the `next_apply` it bakes. */
 export interface ProposalTiming {
+  /** Slot passed to `invalidBefore`: the transaction is invalid before it. */
+  sinceSlot: number;
   /** Slot passed to `invalidHereafter`: the transaction is invalid from it on. */
   untilSlot: number;
-  /** POSIX ms the validator sees as the validity range's upper bound. */
+  /** POSIX ms the validator reads as the validity range's exclusive upper bound. */
   untilMs: number;
   /** `untilMs + applyDelay`: the earliest time the proposal can be applied. */
   nextApply: number;
@@ -145,25 +155,26 @@ export interface ProposalTiming {
 /**
  * Timing of a proposal submitted at `now`. The validator anchors the delay on
  * the validity range's upper bound (it requires `next_apply >= upper +
- * apply_delay`), because a transaction cannot land after it. The upper bound
- * is the start of the slot enclosing `now + ttlMs`, which is what the
- * validator sees after `invalidHereafter(untilSlot)`.
+ * apply_delay`), because a transaction cannot land after it. The window is
+ * `ttlMs` of slots past the slot enclosing `now`; the upper bound the
+ * validator sees is the start of the slot after the window's last slot.
  */
 export function proposalTiming(p: {
   now: number;
   applyDelay: number;
   slotConfig: SlotConfig;
+  /** Validity window in ms after `now` (default `DEFAULT_PROPOSE_TTL_MS`). */
   ttlMs?: number;
 }): ProposalTiming {
-  const { slot, startMs } = enclosingSlotBound(
-    p.now + (p.ttlMs ?? DEFAULT_PROPOSE_TTL_MS),
-    p.slotConfig,
+  const { slot: sinceSlot } = enclosingSlotBound(p.now, p.slotConfig);
+  const windowSlots = Math.ceil(
+    (p.ttlMs ?? DEFAULT_PROPOSE_TTL_MS) / p.slotConfig.slotLength,
   );
-  return {
-    untilSlot: slot,
-    untilMs: startMs,
-    nextApply: startMs + p.applyDelay,
-  };
+  const untilSlot = sinceSlot + windowSlots;
+  const untilMs =
+    p.slotConfig.zeroTime +
+    (untilSlot + 1 - p.slotConfig.zeroSlot) * p.slotConfig.slotLength;
+  return { sinceSlot, untilSlot, untilMs, nextApply: untilMs + p.applyDelay };
 }
 
 export interface ProposeParams {
@@ -172,11 +183,7 @@ export interface ProposeParams {
   settingsUtxo: UTxO;
   datum: SettingsDatum;
   newValue: Data;
-  /** Current time (POSIX ms); the transaction stays valid until `now + ttlMs`. */
   now: number;
-  /** Validity window after `now` (default `DEFAULT_PROPOSE_TTL_MS`). The delay
-   * counts from the end of this window, so a longer window delays the apply. */
-  ttlMs?: number;
   outputIndex: number;
   utxos: UTxO[];
   changeAddress: string;
@@ -186,6 +193,10 @@ export interface ProposeParams {
   applyDelay: number;
   network?: Network;
   customSlotConfig?: SlotConfig;
+  /** Propose validity window in slots past `now` (default `PROPOSE_WINDOW_SLOTS`). */
+  validityWindowSlots?: number;
+  /** Validity window in ms after `now`; overrides `validityWindowSlots`. */
+  ttlMs?: number;
 }
 
 export async function buildProposeTx(p: ProposeParams): Promise<string> {
@@ -196,7 +207,9 @@ export async function buildProposeTx(p: ProposeParams): Promise<string> {
     now: p.now,
     applyDelay: p.applyDelay,
     slotConfig,
-    ttlMs: p.ttlMs,
+    ttlMs:
+      p.ttlMs ??
+      (p.validityWindowSlots ?? PROPOSE_WINDOW_SLOTS) * slotConfig.slotLength,
   });
   const scriptAddr = settingsScriptAddress(p.script, networkId);
 
@@ -221,6 +234,7 @@ export async function buildProposeTx(p: ProposeParams): Promise<string> {
     .txInScript(p.script.code)
     .txOut(scriptAddr, p.settingsUtxo.output.amount)
     .txOutInlineDatumValue(settingsDatumToData(newDatum))
+    .invalidBefore(timing.sinceSlot)
     .invalidHereafter(timing.untilSlot);
   return finalizeTx(p.txBuilder, {
     collateral: p.collateralUtxo,
