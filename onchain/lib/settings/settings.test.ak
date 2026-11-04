@@ -29,10 +29,17 @@ const applier = #"22222222222222222222222222222222222222222222222222222222"
 const tx_id =
   #"0000000000000000000000000000000000000000000000000000000000000000"
 
-/// `apply_delay` (ms) and the `now` (validity lower bound) used by the fixtures.
+/// `apply_delay` (ms), the `now` (validity lower bound) and the propose
+/// validity window used by the fixtures: `spend_tx` bounds the range to
+/// `[at, at + window]`, so `upper` is the bound the validator anchors the
+/// propose delay to (spec §5.b).
 const delay = 1000
 
 const now = 1500
+
+const window = 1000
+
+const upper = now + window
 
 fn value_a() -> Data {
   constr_data(0, [i_data(42)])
@@ -89,7 +96,7 @@ fn spend_tx(
     ..placeholder,
     inputs,
     outputs,
-    validity_range: interval.after(at),
+    validity_range: interval.between(at, at + window),
     extra_signatories: signers,
   }
 }
@@ -144,7 +151,7 @@ fn pending() -> SettingsDatum {
 }
 
 fn proposed() -> SettingsDatum {
-  proposed_with(value_b(), now + delay)
+  proposed_with(value_b(), upper + delay)
 }
 
 fn mint_tx() -> Transaction {
@@ -320,26 +327,26 @@ test rejects_propose_tampering() {
     SettingsDatum {
       current: value_b(),
       next: Some(value_b()),
-      next_apply: Some(now + delay),
+      next_apply: Some(upper + delay),
     },
     now,
     [proposer],
   ) && !spend(
     Propose { out_ix: 0 },
     datum(value_a()),
-    proposed_with(value_a(), now + delay),
+    proposed_with(value_a(), upper + delay),
     now,
     [proposer],
   ) && !spend(
     Propose { out_ix: 0 },
     datum(value_a()),
-    proposed_with(value_b(), now + delay - 1),
+    proposed_with(value_b(), upper + delay - 1),
     now,
     [proposer],
   )
 }
 
-test rejects_propose_unbounded_range() fail {
+test rejects_propose_unbounded_upper() fail {
   let d = datum(value_a())
   spend_on_tx(
     Propose { out_ix: 0 },
@@ -348,6 +355,56 @@ test rejects_propose_unbounded_range() fail {
       ..placeholder,
       inputs: [settings_in(d)],
       outputs: [settings_out(proposed(), value_nft())],
+      validity_range: interval.after(now),
+      extra_signatories: [proposer],
+    },
+  )
+}
+
+// V-1 regression: the delay anchors to the *upper* bound. A backdated lower
+// bound no longer shortens the enforced window — a proposal whose next_apply
+// only clears the old lower-anchored floor is rejected.
+test rejects_propose_delay_below_upper_anchor() fail {
+  let d = datum(value_a())
+  spend_on_tx(
+    Propose { out_ix: 0 },
+    d,
+    Transaction {
+      ..placeholder,
+      inputs: [settings_in(d)],
+      outputs: [settings_out(proposed_with(value_b(), delay), value_nft())],
+      validity_range: interval.between(0, upper),
+      extra_signatories: [proposer],
+    },
+  )
+}
+
+test propose_ok_with_backdated_lower_bound() {
+  let d = datum(value_a())
+  spend_on_tx(
+    Propose { out_ix: 0 },
+    d,
+    Transaction {
+      ..placeholder,
+      inputs: [settings_in(d)],
+      outputs: [settings_out(proposed(), value_nft())],
+      validity_range: interval.between(0, upper),
+      extra_signatories: [proposer],
+    },
+  )
+}
+
+// Propose reads only the upper bound: an unbounded-below range is admissible.
+test propose_ok_with_unbounded_lower_bound() {
+  let d = datum(value_a())
+  spend_on_tx(
+    Propose { out_ix: 0 },
+    d,
+    Transaction {
+      ..placeholder,
+      inputs: [settings_in(d)],
+      outputs: [settings_out(proposed(), value_nft())],
+      validity_range: interval.before(upper),
       extra_signatories: [proposer],
     },
   )
@@ -450,6 +507,8 @@ fn delay_scenario() -> Fuzzer<(Int, Int, Int)> {
   )
 }
 
+/// The property anchors the delay to the tx's validity *upper* bound
+/// (`spend_tx` sets `[at, at + window]`), as the validator does (§5.b).
 test prop_propose_requires_minimum_delay(
   (at, delay_ms, next_apply) via delay_scenario(),
 ) {
@@ -476,7 +535,7 @@ test prop_propose_requires_minimum_delay(
     ),
     validate_datum,
   )
-  let expected = next_apply >= at + delay_ms
+  let expected = next_apply >= at + window + delay_ms
   fuzz.label_if(@"accepted", expected)
   fuzz.label_if(@"rejected", !expected)
   accepted == expected
