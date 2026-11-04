@@ -28,8 +28,8 @@
   },
   "blueprint": {
     "vesting": "22de5b9b3db7c2e9f7cef943d5c8a6e667193114328c9676276a8bb1",
-    "dao.proposal": "0222c427016359c662a5ec9da8548cd502ede975dfaee74127c4f44a",
-    "dao.stake": "2590ef411a0d1524b803dd00fdc4cb47b0424d3f4054501cef00e975",
+    "dao.proposal": "f984a5a1df8e20727d87b42141a96e9e7f376c1304197c231fdc97f5",
+    "dao.stake": "088ec0d403e74708e9fa737de40815333c3cf371a7aa7129e23e1ea9",
     "dao.vote": "159c194c38c731f22357da05d3f7ddd1078e80067222340a55789bf1",
     "settings": "fa607ccdefde860144fa4d5270eef3932e5aeed121b2e102e9f3882e",
     "settings_typed": "69f4ddc81b2683185667e7ca25ecba79b5cde9cb1f20ecb3c5520e6b",
