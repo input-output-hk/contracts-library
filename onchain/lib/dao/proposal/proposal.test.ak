@@ -13,10 +13,10 @@ use dao/proposal/spend.{
   validate_end_voting_stage, validate_reject_draft, validate_tally_votes,
 }
 use dao/types.{
-  AcceptDraft, Cosign, CosignProposal, CreateProposal, DaoSettings, EndProposal,
-  EndVotingStage, ProposalDatum, ProposalRedeemer, ProposalStatus,
-  ProposalThresholds, ProposalTimingConfig, RejectDraft, TallyVotes, VoteDatum,
-  Voting,
+  AcceptDraft, Cancel, Cosign, CosignProposal, CreateProposal, DaoSettings,
+  EndProposal, EndVotingStage, ProposalDatum, ProposalRedeemer, ProposalStatus,
+  ProposalThresholds, ProposalTimingConfig, RejectDraft, TallyVote, TallyVotes,
+  VoteDatum, Voting,
 }
 use dao/utils.{get_dao_settings, token_name_from_ref}
 use settings/types as settings_types
@@ -213,6 +213,16 @@ fn refund(lovelace: Int) -> Output {
     datum: NoDatum,
     reference_script: None,
   }
+}
+
+fn tally_r() -> Data {
+  let r: Data = TallyVote { out_idx: 1 }
+  r
+}
+
+fn cancel_r() -> Data {
+  let r: Data = Cancel
+  r
 }
 
 fn spend(d: ProposalDatum, r: ProposalRedeemer, self: Transaction) -> Bool {
@@ -437,6 +447,7 @@ test tally_votes_ok() {
     reference_inputs: [settings_input()],
     outputs: [cont, refund(2_000_000)],
     mint: assets.from_asset(vote_policy, "V", -1),
+    redeemers: [Pair(Spend(vote_ref(2)), tally_r())],
     validity_range: interval.before(start + 6000),
   }
   spend(d, TallyVotes, tx)
@@ -455,9 +466,49 @@ test rejects_tally_without_burn() {
     inputs: [prop_input(d), vote_input(2, 1, 5, 2_000_000)],
     reference_inputs: [settings_input()],
     outputs: [cont, refund(2_000_000)],
+    redeemers: [Pair(Spend(vote_ref(2)), tally_r())],
     validity_range: interval.before(start + 6000),
   }
   !spend(d, TallyVotes, tx)
+}
+
+test rejects_tally_with_cancel_spent_vote() fail {
+  let d = datum(
+    ProposalStatus.Tally { votes: [0, 0] },
+    [effect_hash, effect_hash],
+  )
+  let cont = prop_output(
+    datum(ProposalStatus.Tally { votes: [0, 5] }, [effect_hash, effect_hash]),
+  )
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d), vote_input(2, 1, 5, 2_000_000)],
+    reference_inputs: [settings_input()],
+    outputs: [cont, refund(2_000_000)],
+    mint: assets.from_asset(vote_policy, "V", -1),
+    redeemers: [Pair(Spend(vote_ref(2)), cancel_r())],
+    validity_range: interval.before(start + 6000),
+  }
+  spend(d, TallyVotes, tx)
+}
+
+test rejects_tally_without_vote_redeemer() fail {
+  let d = datum(
+    ProposalStatus.Tally { votes: [0, 0] },
+    [effect_hash, effect_hash],
+  )
+  let cont = prop_output(
+    datum(ProposalStatus.Tally { votes: [0, 5] }, [effect_hash, effect_hash]),
+  )
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d), vote_input(2, 1, 5, 2_000_000)],
+    reference_inputs: [settings_input()],
+    outputs: [cont, refund(2_000_000)],
+    mint: assets.from_asset(vote_policy, "V", -1),
+    validity_range: interval.before(start + 6000),
+  }
+  spend(d, TallyVotes, tx)
 }
 
 // ---------------------------------------------------------------- EndProposal
