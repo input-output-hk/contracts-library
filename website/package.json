@@ -1,0 +1,36 @@
+{
+  "name": "@contracts-library/website",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Documentation and configuration site for ContractsLibrary",
+  "license": "Apache-2.0",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check",
+    "check:llms": "node scripts/check-llms.mjs"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "dependencies": {
+    "@astrojs/markdown-remark": "^7.3.5",
+    "@astrojs/starlight": "^0.42.7",
+    "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource-variable/roboto-mono": "^5.3.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "astro": "^7.3.8",
+    "tailwindcss": "^4.3.3"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.6",
+    "@astrojs/svelte": "^9.0.1",
+    "html-to-image": "^1.11.13",
+    "svelte": "^5.57.3",
+    "tx-diagram-ui": "file:./tx-diagram-ui",
+    "typescript": "^5.9.3",
+    "zod": "^4.6.7"
+  }
+}

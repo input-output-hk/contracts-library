@@ -1,0 +1,61 @@
+---
+import type { ContractStatus } from "../lib/manifest";
+
+interface Props {
+  status: ContractStatus;
+}
+
+const { status } = Astro.props;
+
+const tone: Record<ContractStatus, string> = {
+  Candidate: "neutral",
+  Exploring: "neutral",
+  "Selected: Now": "info",
+  "Selected: Later": "neutral",
+  "In progress": "info",
+  "Ready-to-audit": "success",
+  "Audited / Verified": "success",
+};
+---
+
+<span class:list={["status-badge", tone[status]]}>{status}</span>
+
+<style>
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    font-size: var(--sl-text-xs);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .status-badge::before {
+    content: "";
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 999px;
+    background: currentColor;
+  }
+
+  .neutral {
+    color: var(--sl-color-gray-2);
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .info {
+    color: var(--color-secondary);
+    background: color-mix(in oklab, var(--color-secondary) 12%, transparent);
+    border-color: color-mix(in oklab, var(--color-secondary) 30%, transparent);
+  }
+
+  .success {
+    color: #7ee787;
+    background: rgba(126, 231, 135, 0.1);
+    border-color: rgba(126, 231, 135, 0.3);
+  }
+</style>

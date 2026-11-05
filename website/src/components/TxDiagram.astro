@@ -1,0 +1,23 @@
+---
+import { TransactionDiagram, TransactionDiagramSchema } from "tx-diagram-ui";
+
+interface Props {
+  /** A transaction description; validated at build time. */
+  data: unknown;
+  /** Optional caption rendered under the diagram. */
+  caption?: string;
+}
+
+const { data, caption } = Astro.props;
+
+// Strict schema: unknown keys or a mistyped amount fails the build instead of
+// rendering a misleading diagram.
+const transaction = TransactionDiagramSchema.parse(data);
+---
+
+<!-- `not-content` keeps Starlight's flow-spacing rule out of the diagram: it
+     would otherwise add a top margin to the diagram's internal elements. -->
+<figure class="tx-frame tx-theme not-content">
+  <TransactionDiagram transaction={transaction} title={transaction.title} />
+  {caption && <figcaption class="tx-caption">{caption}</figcaption>}
+</figure>
