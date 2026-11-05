@@ -73,6 +73,8 @@ pub fn validate(
             // Address and datum are carried byte-for-byte.
             vin.output.address == vout.address,
             vin.output.datum == vout.datum,
+            // The continuation never carries a reference script.
+            vout.reference_script == None,
             // Non-ADA assets (including the vault NFT) never leave the vault.
             without_lovelace(vin.output.value) == without_lovelace(vout.value),
             when redeemer is {
