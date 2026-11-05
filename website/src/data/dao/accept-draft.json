@@ -1,0 +1,45 @@
+{
+  "name": "dao-accept-draft",
+  "title": "Accept Draft",
+  "inputs": [
+    {
+      "name": "Proposal UTxO",
+      "address": "proposal_addr",
+      "redeemer": "AcceptDraft",
+      "value": {
+        "proposalNFT": "1"
+      },
+      "datum": {
+        "thresholds": "",
+        "timingConfig": "",
+        "startTime": "",
+        "status": {
+          "Draft": {
+            "cosigningStake": "N"
+          }
+        },
+        "results": ""
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "name": "Proposal UTxO",
+      "address": "proposal_addr",
+      "value": {
+        "proposalNFT": "1"
+      },
+      "datum": {
+        "thresholds": "",
+        "timingConfig": "",
+        "startTime": "",
+        "status": "Voting",
+        "results": ""
+      }
+    }
+  ],
+  "validRange": {
+    "upper": "draft_end"
+  },
+  "notes": "• Anyone can accept once cosigningStake ≥ thresholds.accept.\n• The immutable fields are preserved; only status changes."
+}

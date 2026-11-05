@@ -1,0 +1,75 @@
+---
+title: DAO
+description: Token-weighted governance for a protocol and its treasury — stake, propose, vote, and execute.
+tableOfContents: false
+---
+
+import TxChain from "../../../components/TxChain.astro";
+import lifecycle from "../../../data/dao/lifecycle.json";
+import voteLifecycle from "../../../data/dao/vote-lifecycle.json";
+import { docUrl } from "../../../lib/manifest";
+
+**DAO** is token-weighted governance for a protocol and its treasury. Token
+holders stake a governance token into positions, propose actions, vote with
+weight proportional to their stake, and — once thresholds are met — the winning
+option runs as an **effect** script.
+
+Three cooperating validators guard the state:
+
+| Validator  | UTxO           | Carries                                 |
+| ---------- | -------------- | --------------------------------------- |
+| `stake`    | Stake position | Staked governance tokens and live locks |
+| `proposal` | Proposal       | Draft → Voting → Tally → closed         |
+| `vote`     | Vote artifact  | One holder's vote on one proposal       |
+
+Governance parameters are not compiled in. The validators read them at runtime
+from a [Settings](/contracts/settings) UTxO, so the settings protocol can govern
+the DAO's thresholds, timings and sibling script hashes.
+
+## Proposal lifecycle
+
+The proposal UTxO is the state machine. A stake position creates it, cosigners
+add weight, and once the draft is accepted the poll moves through voting and
+tally. Scroll horizontally to follow the whole cycle.
+
+<TxChain data={lifecycle} />
+
+Voting is a separate path: a position mints a **vote artifact** instead of
+spending the proposal. Tally consumes those artifacts, counts their stake and
+refunds their lovelace. That path has its own short lifecycle.
+
+## Vote lifecycle
+
+Vote creates the vote artifact, Tally consumes it, and Cancel is the other
+terminal path. The chain stops at Tally: the proposal it returns to continues in
+the proposal lifecycle above. The
+[transactions page](/contracts/dao/transactions) shows Vote and Cancel Vote in
+full.
+
+<TxChain data={voteLifecycle} />
+
+## When to use it
+
+- Token-weighted governance of a treasury, a parameter set, or a protocol
+  upgrade.
+- Decisions that need a draft phase, a review window, and a tally that anyone
+  can verify.
+- Cases where keys, multisigs, DAOs or smart wallets should hold the owner,
+  delegatee or settings role — all are pluggable credentials.
+
+**When not to:** if a single key should decide, or if the decision must execute
+instantly, the multi-stage lifecycle is working against you.
+
+## What this does not protect
+
+The full list is in <a href={docUrl("dao/spec.md")}>§6.a of the specification</a>. The three that change how you deploy:
+
+- **The settings authority is trusted.** Whoever can change the Settings
+  UTxO's `current` can change thresholds, timings and sibling script hashes.
+- **Effect scripts are untrusted.** Being listed in `results` proves nothing;
+  each candidate must verify its own victory with `am_i_the_winner`.
+- **Locks freeze the maximum, not the sum.** Free stake is `total − max(lock)`,
+  so the same tokens can back several proposals at once.
+
+Next: [specification & usage](/contracts/dao/guide) ·
+[transactions in detail](/contracts/dao/transactions).

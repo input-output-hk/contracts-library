@@ -116,6 +116,31 @@ export const contracts: Contract[] = [
       },
     ],
   },
+  {
+    slug: "dao",
+    name: "DAO",
+    summary:
+      "Token-weighted governance for a protocol and its treasury: stake, propose, vote, and execute the winning effect.",
+    status: "In progress",
+    category: "Governance",
+    specStatus: "draft",
+    docs: [
+      {
+        file: "dao/spec.md",
+        slug: "spec",
+        title: "Specification",
+        summary:
+          "Defines the stake, proposal, and vote validators, the proposal lifecycle, and the effect-script execution model.",
+      },
+      {
+        file: "dao/usage.md",
+        slug: "usage",
+        title: "Usage guide",
+        summary:
+          "How to deploy the DAO validators, run stake positions, and drive proposals, voting, and tallying with the off-chain builders.",
+      },
+    ],
+  },
 ];
 
 export function getContract(slug: string): Contract | undefined {

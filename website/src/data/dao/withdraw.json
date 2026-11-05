@@ -1,0 +1,47 @@
+{
+  "name": "dao-withdraw",
+  "title": "Withdraw Stake",
+  "inputs": [
+    {
+      "name": "Stake UTxO",
+      "address": "stake_addr",
+      "redeemer": "Withdraw { M }",
+      "value": {
+        "stakeNFT": "1",
+        "stakedToken": "N"
+      },
+      "datum": {
+        "owner": "",
+        "delegatee": "",
+        "lockedBy": "L"
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "name": "Stake UTxO",
+      "address": "stake_addr",
+      "value": {
+        "stakeNFT": "1",
+        "stakedToken": "N - M"
+      },
+      "datum": {
+        "owner": "",
+        "delegatee": "",
+        "lockedBy": "L'"
+      }
+    },
+    {
+      "name": "Owner UTxO",
+      "address": "owner_addr",
+      "value": {
+        "stakedToken": "M"
+      }
+    }
+  ],
+  "signatures": ["owner"],
+  "validRange": {
+    "lower": "T"
+  },
+  "notes": "• lockedStaked = max(lock.stake); freeStaked = N − lockedStaked.\n• M ≤ freeStaked.\n• The continuation prunes expired locks."
+}

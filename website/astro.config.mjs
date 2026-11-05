@@ -82,6 +82,17 @@ export default defineConfig({
                 },
               ],
             },
+            {
+              label: "DAO",
+              items: [
+                { label: "Overview", link: "/contracts/dao" },
+                { label: "Transactions", link: "/contracts/dao/transactions" },
+                {
+                  label: "Specification & usage",
+                  link: "/contracts/dao/guide",
+                },
+              ],
+            },
           ],
         },
         {

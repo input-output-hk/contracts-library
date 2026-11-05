@@ -1,0 +1,70 @@
+{
+  "name": "dao-create-proposal",
+  "title": "Create Proposal",
+  "inputs": [
+    {
+      "name": "Stake UTxO",
+      "address": "stake_addr",
+      "redeemer": "CreateProposal",
+      "value": {
+        "stakeNFT": "1",
+        "stakedToken": "S"
+      },
+      "datum": {
+        "owner": "",
+        "delegatee": "",
+        "lockedBy": "L"
+      }
+    },
+    {
+      "name": "Settings UTxO",
+      "address": "governor_addr",
+      "reference": true,
+      "value": {
+        "settingsNFT": "1"
+      },
+      "datum": {
+        "current": "DaoSettings"
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "name": "Stake UTxO",
+      "address": "stake_addr",
+      "value": {
+        "stakeNFT": "1",
+        "stakedToken": "S"
+      },
+      "datum": {
+        "owner": "",
+        "delegatee": "",
+        "lockedBy": "L + draft lock"
+      }
+    },
+    {
+      "name": "Proposal UTxO",
+      "address": "proposal_addr",
+      "value": {
+        "proposalNFT": "1"
+      },
+      "datum": {
+        "thresholds": "settings.thresholds",
+        "timingConfig": "settings.timings",
+        "startTime": "T",
+        "status": {
+          "Draft": {
+            "cosigningStake": "S"
+          }
+        },
+        "results": "effect hashes"
+      }
+    }
+  ],
+  "mint": [{ "token": "proposalNFT", "amount": "1" }],
+  "signatures": ["owner"],
+  "validRange": {
+    "lower": "T"
+  },
+  "notes": "• The proposal NFT name is hash(stake UTxO reference).\n• S ≥ thresholds.create.\n• The stake continuation records a lock until draft_end.\n• thresholds, timingConfig, startTime and results are frozen at creation."
+}
