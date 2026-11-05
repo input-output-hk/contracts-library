@@ -110,3 +110,69 @@ jobs:
         env:
           REQUIRE_DEVNET: "1"
         run: npm run test:devnet
+
+  tx3-devnet:
+    name: Off-chain tx3 (trix devnet)
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: |
+            offchain/meshjs/lib/package-lock.json
+            offchain/meshjs/e2e/package-lock.json
+            offchain/tx3/package-lock.json
+
+      # The suites drive an ephemeral dolos devnet booted by `trix devnet`
+      # (see offchain/tx3/README.md). tx3up installs the toolchain under
+      # ~/.tx3/<toolchain>/bin.
+      - name: Install the tx3 toolchain (trix, dolos)
+        run: |
+          curl -LsSf https://github.com/tx3-lang/tx3up/releases/latest/download/tx3up-installer.sh | sh
+          export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$PATH"
+          tx3up
+          for d in "$HOME"/.tx3/*/bin; do [ -d "$d" ] && echo "$d" >> "$GITHUB_PATH"; done
+
+      # dolos < 1.4.0 injects Plutus POSIXTime in seconds during mempool
+      # validation, so time-dependent validators fail cryptically
+      # (see offchain/tx3/README.md).
+      - name: Guard dolos >= 1.4.0
+        run: |
+          version="$(dolos --version | grep -oE '[0-9]+(\.[0-9]+)+' | head -n1)"
+          echo "dolos $version"
+          if [ "$(printf '%s\n' "1.4.0" "$version" | sort -V | head -n1)" != "1.4.0" ]; then
+            echo "::error::dolos $version < 1.4.0 — upgrade it (see offchain/tx3/README.md, dolos version requirement)"
+            exit 1
+          fi
+
+      - name: Build library
+        working-directory: offchain/meshjs/lib
+        run: npm ci && npm run build
+
+      - name: Install MeshJS e2e dependencies (vendored CIP-113 helpers)
+        working-directory: offchain/meshjs/e2e
+        run: npm ci
+
+      - name: Generate TypeScript clients (gitignored — absent on a fresh checkout)
+        run: |
+          for dir in offchain/tx3/*/; do
+            if [ -f "${dir}trix.toml" ]; then
+              (cd "$dir" && trix codegen --plugin ts-client)
+            fi
+          done
+
+      - name: Install tx3 dependencies
+        working-directory: offchain/tx3
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: offchain/tx3
+        run: npm run typecheck
+
+      # One ephemeral dolos devnet per suite, booted serially (fixed ports).
+      - name: Run devnet suites
+        working-directory: offchain/tx3
+        run: npm run test:devnet
