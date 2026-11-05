@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+
+# Agent-readable index of this site (https://llmstxt.org).
+# See https://contracts-library.io/llms.txt
+Sitemap: https://contracts-library.io/sitemap-index.xml
