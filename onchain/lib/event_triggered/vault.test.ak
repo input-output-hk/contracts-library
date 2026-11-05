@@ -138,6 +138,43 @@ test top_up_rejects_removing_native_asset() {
   )
 }
 
+test top_up_rejects_continuation_reference_script() {
+  !check(
+    VaultTopUp,
+    Transaction {
+      ..placeholder,
+      inputs: [vault_input(0, 5_000_000, True)],
+      outputs: [
+        Output {
+          ..vault_output(8_000_000, True),
+          reference_script: Some(vault_script),
+        },
+      ],
+    },
+  )
+}
+
+// A continuation may drop a reference script previously attached to the
+// vault: the pin is on the output, not on the input.
+test top_up_ok_drops_reference_script() {
+  check(
+    VaultTopUp,
+    Transaction {
+      ..placeholder,
+      inputs: [
+        Input {
+          ..vault_input(0, 5_000_000, True),
+          output: Output {
+            ..vault_input(0, 5_000_000, True).output,
+            reference_script: Some(vault_script),
+          },
+        },
+      ],
+      outputs: [vault_output(8_000_000, True)],
+    },
+  )
+}
+
 // ------------------------------------------------------------------- redeem
 
 test redeem_rejects_without_nft() {
