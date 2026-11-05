@@ -1,0 +1,88 @@
+---
+title: Transactions in detail
+description: Every action a smart wallet accepts, with the UTxOs, redeemers, certificates and withdrawals each one needs.
+tableOfContents: false
+---
+
+import TxDiagram from "../../../../components/TxDiagram.astro";
+import close from "../../../../data/smart-wallet/close.json";
+import deposit from "../../../../data/smart-wallet/deposit.json";
+import mint from "../../../../data/smart-wallet/mint.json";
+import spend from "../../../../data/smart-wallet/spend.json";
+import updateConfig from "../../../../data/smart-wallet/update-config.json";
+import { docUrl } from "../../../../lib/manifest";
+
+The [overview](/contracts/smart-wallet) shows the wallet lifecycle. Here is
+every action, drawn. The <a href={docUrl("smart-wallet/spec.md")}>specification §5</a> owns the exact constraints.
+
+## Step by step
+
+A few conventions make the cards easier to read:
+
+- **Addresses are roles**, not real addresses: `wallet_addr`, `seed_addr`,
+  `governor_addr` (the Settings UTxO), `payout_addr`.
+- **Values name tokens by role**: `ADA`, `walletNFT`. `deposit` is an asset added
+  to the wallet.
+- **The datum carries two maps**: `spenders` and `depositors`. `spenders'` and
+  `depositors'` are the new maps written by an update.
+- **Values are symbolic**: `x` is the wallet's current value, `y` a payout, `d`
+  a deposit, `top-up` an admin ADA addition.
+- **Fee and collateral UTxOs are not drawn.** The validators assert nothing
+  about them.
+
+The **admin** mints, rewrites config and closes; the settings
+`members`/`threshold` sign a spend; the `spenders` and `depositors` maps run on
+every spend and deposit. The admin is a key or a script — see <a href={docUrl("smart-wallet/spec.md")}>spec §3</a>. A script admin is invoked as a withdraw-0, and the delegated scripts are arbitrary withdraw-0 staking scripts.
+
+## Mint
+
+Creates the wallet UTxO and mints its identifying NFT. Every script in the
+initial `spenders` and `depositors` maps is registered here.
+
+<TxDiagram data={mint} />
+
+## Deposit
+
+Adds funds. Every depositor script runs, `spenders` and the depositor key set are
+preserved, and the value may only grow.
+
+<TxDiagram data={deposit} />
+
+## Spend
+
+Pays out. The M-of-N floor signs and every spender script runs; the wallet
+survives with its NFT, `depositors` unchanged, the `spenders` key set fixed, and
+a value no greater than the input's.
+
+<TxDiagram data={spend} />
+
+## Update config
+
+The admin rewrites `spenders` and/or `depositors` in place. Non-ADA assets are
+preserved exactly; only the config changes. Added scripts are registered and
+removed scripts unregistered.
+
+<TxDiagram data={updateConfig} />
+
+## Close
+
+The admin burns the NFT, releases the remaining funds, and unregisters every
+delegated script. There is no continuation.
+
+<TxDiagram data={close} />
+
+## Delegated scripts
+
+The `spenders` and `depositors` maps are the extension point. Each key is a
+withdraw-0 staking script; its value is that script's own `Data`:
+
+- **spenders** run on every `Spend` — spending limits, time windows, recipient
+  allow/deny lists, oracle checks.
+- **depositors** run on every `Deposit` — asset allow/deny lists, source-address
+  checks, deposit counters.
+
+A delegated script participates through two handlers: `publish` validates its
+initial `Data` when registered (and checks it is leaving on unregister), and
+`withdraw` enforces its restriction on every spend or deposit. Stateless scripts
+store the marker `0`; stateful scripts carry their state in the map and enforce
+their own transition. See the <a href={docUrl("smart-wallet/usage.md")}>usage guide</a> for the reference scripts and their parameters.

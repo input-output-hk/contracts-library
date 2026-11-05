@@ -1,0 +1,97 @@
+---
+title: Specification & usage
+description: The smart wallet specification summarized, followed by the complete usage guide.
+tableOfContents: false
+---
+
+import CanonicalUsage from "../../../../components/CanonicalUsage.astro";
+import { docUrl } from "../../../../lib/manifest";
+
+This page summarizes the smart wallet specification and includes the complete
+usage guide. The canonical documents live in the repository; the full
+specification is linked below, and the usage guide is rendered here in full.
+
+## What it is
+
+A smart wallet holds funds on-chain behind a configurable set of restrictions.
+It is a single UTxO identified by a one-shot **wallet NFT**. Two kinds of
+restriction sit alongside a base M-of-N signature floor:
+
+- **spenders** run on every `Spend` — spending limits, time windows,
+  recipient lists, oracle checks;
+- **depositors** run on every `Deposit` — asset allow/deny lists, source
+  checks, deposit counters.
+
+The M-of-N members and threshold come from a Settings UTxO, so they can change
+without redeploying the wallet. The **admin** is a validator parameter and
+creates, reconfigures and closes the wallet.
+
+## Model
+
+| Part         | Meaning                                                  |
+| ------------ | -------------------------------------------------------- |
+| Wallet UTxO  | One UTxO at the wallet address, carrying the wallet NFT. |
+| `spenders`   | Map of script hash → that spender's own `Data`.          |
+| `depositors` | Map of script hash → that depositor's own `Data`.        |
+| Settings     | External `WalletConfig`: `members` and `threshold`.      |
+| Admin        | A compile-time `Credential`.                             |
+
+The wallet NFT is minted once by spending a parameterized seed. The wallet
+address has no staking credential. The config is per-UTxO; the same script
+address is one wallet for the life of the seed.
+
+## Who does what
+
+| Role                  | Credential                       | Powers                      |
+| --------------------- | -------------------------------- | --------------------------- |
+| **Admin**             | `admin` (parameter)              | Mint, update config, close. |
+| **Members**           | settings `members` / `threshold` | Sign a spend.               |
+| **Depositor scripts** | `depositors` map                 | Approve every deposit.      |
+| **Spender scripts**   | `spenders` map                   | Approve every spend.        |
+
+The admin is key or script; a script admin is invoked as a withdraw-0. The
+delegated scripts are arbitrary withdraw-0 staking scripts, parameterized per
+wallet.
+
+## What each action does
+
+| Action            | Redeemer                       | Effect                                                                                                       |
+| ----------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| **Mint**          | `Mint { out_ix }`              | Spends the seed, mints the NFT, creates the wallet UTxO with the initial maps.                               |
+| **Deposit**       | `Deposit { out_ix }`           | Runs every depositor script; the value may only grow and the maps stay fixed.                                |
+| **Spend**         | `Spend`                        | The M-of-N floor signs, every spender script runs, and the wallet survives with its NFT and no value gained. |
+| **Update config** | `UpdatePermissions { out_ix }` | The admin rewrites `spenders`/`depositors`; non-ADA assets are preserved exactly.                            |
+| **Close**         | `Close` + mint `Burn`          | Burns the NFT, releases the funds and unregisters every script.                                              |
+
+A spend or deposit that sends an NFT-less output to the wallet address is
+rejected: it could never be spent again. A spend continuation must keep
+`depositors` unchanged, the `spenders` key set fixed and a value no greater than
+the input's.
+
+## Invariants and assumptions
+
+- The admin is fixed at deployment; control cannot be handed off without a new
+  script address.
+- Members are verification-key hashes only in this version; script-credential
+  members are not supported.
+- Delegated scripts are parameterized per wallet; one instance works with one
+  wallet.
+- The M-of-N configuration is trusted from Settings. A malformed or missing
+  settings datum halts spending.
+- Close is admin-only and unrestricted: it does not enforce the M-of-N floor or
+  delegated restrictions, and it is irreversible.
+- `UpdatePermissions` can top up ADA without the deposit scripts; non-ADA assets
+  cannot move.
+- Locks and delegated data are per-UTxO; different wallet instances can carry
+  different restrictions.
+
+## Read the full specification
+
+The <a href={docUrl("smart-wallet/spec.md")}>canonical specification</a> has the
+datum, every action, invariants and the threat model. The
+[transactions in detail](/contracts/smart-wallet/transactions) page draws the
+five action shapes.
+
+## Usage
+
+<CanonicalUsage file="smart-wallet/usage.md" />

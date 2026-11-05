@@ -93,6 +93,20 @@ export default defineConfig({
                 },
               ],
             },
+            {
+              label: "Smart Wallet",
+              items: [
+                { label: "Overview", link: "/contracts/smart-wallet" },
+                {
+                  label: "Transactions",
+                  link: "/contracts/smart-wallet/transactions",
+                },
+                {
+                  label: "Specification & usage",
+                  link: "/contracts/smart-wallet/guide",
+                },
+              ],
+            },
           ],
         },
         {

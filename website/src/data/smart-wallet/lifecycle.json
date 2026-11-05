@@ -1,0 +1,171 @@
+{
+  "name": "smart-wallet-lifecycle",
+  "title": "Wallet lifecycle",
+  "transactions": [
+    {
+      "block": "Mint",
+      "name": "mint",
+      "title": "Mint",
+      "inputs": [
+        {
+          "name": "Seed UTxO",
+          "address": "seed_addr",
+          "value": {
+            "ADA": "s"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "id": "wallet-v1",
+          "name": "Wallet UTxO",
+          "address": "wallet_addr",
+          "value": {
+            "ADA": "x",
+            "walletNFT": "1"
+          },
+          "datum": {
+            "spenders": "Pairs<ScriptHash, Data>",
+            "depositors": "Pairs<ScriptHash, Data>"
+          }
+        }
+      ],
+      "mint": [{ "token": "walletNFT", "amount": "1" }],
+      "certificates": ["RegisterCredential — each seeded script"],
+      "signatures": ["admin"]
+    },
+    {
+      "block": "Deposit",
+      "name": "deposit",
+      "title": "Deposit",
+      "inputs": [
+        {
+          "id": "wallet-v1",
+          "name": "Wallet UTxO",
+          "redeemer": "Deposit"
+        }
+      ],
+      "withdrawals": ["each script in depositors"],
+      "outputs": [
+        {
+          "id": "wallet-v2",
+          "name": "Wallet UTxO",
+          "address": "wallet_addr",
+          "value": {
+            "ADA": "x + d",
+            "walletNFT": "1",
+            "deposit": "d'"
+          },
+          "datum": {
+            "spenders": "Pairs<ScriptHash, Data>",
+            "depositors": "depositors'"
+          }
+        }
+      ]
+    },
+    {
+      "block": "Spend",
+      "name": "spend",
+      "title": "Spend",
+      "inputs": [
+        {
+          "id": "wallet-v2",
+          "name": "Wallet UTxO",
+          "redeemer": "Spend"
+        },
+        {
+          "name": "Settings UTxO",
+          "address": "governor_addr",
+          "reference": true,
+          "value": {
+            "settingsNFT": "1"
+          },
+          "datum": {
+            "current": "WalletConfig"
+          }
+        }
+      ],
+      "withdrawals": ["each script in spenders"],
+      "outputs": [
+        {
+          "name": "Payout",
+          "address": "payout_addr",
+          "value": {
+            "ADA": "y"
+          }
+        },
+        {
+          "id": "wallet-v3",
+          "name": "Wallet continuation",
+          "address": "wallet_addr",
+          "value": {
+            "ADA": "x - y",
+            "walletNFT": "1"
+          },
+          "datum": {
+            "spenders": "Pairs<ScriptHash, Data>",
+            "depositors": "Pairs<ScriptHash, Data>"
+          }
+        }
+      ],
+      "signatures": ["m of n members"]
+    },
+    {
+      "block": "Update config",
+      "name": "update-config",
+      "title": "Update config",
+      "inputs": [
+        {
+          "id": "wallet-v3",
+          "name": "Wallet UTxO",
+          "redeemer": "UpdatePermissions"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "wallet-v4",
+          "name": "Wallet UTxO",
+          "address": "wallet_addr",
+          "value": {
+            "ADA": "x + top-up",
+            "walletNFT": "1"
+          },
+          "datum": {
+            "spenders": "spenders'",
+            "depositors": "depositors'"
+          }
+        }
+      ],
+      "certificates": [
+        "RegisterCredential — each added script",
+        "UnregisterCredential — each removed script"
+      ],
+      "signatures": ["admin"]
+    },
+    {
+      "block": "Close",
+      "name": "close",
+      "title": "Close",
+      "inputs": [
+        {
+          "id": "wallet-v4",
+          "name": "Wallet UTxO",
+          "redeemer": "Close"
+        }
+      ],
+      "mint": [{ "token": "walletNFT", "amount": "-1" }],
+      "certificates": ["UnregisterCredential — each script"],
+      "outputs": [
+        {
+          "name": "Payout",
+          "address": "payout_addr",
+          "value": {
+            "ADA": "x"
+          }
+        }
+      ],
+      "signatures": ["admin"]
+    }
+  ],
+  "notes": "Deposit, spend and update config spend and recreate the wallet, so they can repeat in any order. The chain shows one of each. Close is terminal: it burns the NFT and leaves no continuation. The reference Spend reads members and threshold from a Settings UTxO; design.typ abstracts the config source."
+}

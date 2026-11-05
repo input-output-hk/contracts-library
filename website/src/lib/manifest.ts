@@ -141,6 +141,31 @@ export const contracts: Contract[] = [
       },
     ],
   },
+  {
+    slug: "smart-wallet",
+    name: "Smart Wallet",
+    summary:
+      "A programmable wallet with a base M-of-N signature floor and pluggable spending and deposit restrictions.",
+    status: "In progress",
+    category: "Infrastructure",
+    specStatus: "draft",
+    docs: [
+      {
+        file: "smart-wallet/spec.md",
+        slug: "spec",
+        title: "Specification",
+        summary:
+          "Defines the wallet NFT, datum maps, M-of-N floor, and the mint, spend, deposit, update, and close actions.",
+      },
+      {
+        file: "smart-wallet/usage.md",
+        slug: "usage",
+        title: "Usage guide",
+        summary:
+          "How to deploy a wallet, run its lifecycle, and use the reference delegated withdrawal scripts.",
+      },
+    ],
+  },
 ];
 
 export function getContract(slug: string): Contract | undefined {

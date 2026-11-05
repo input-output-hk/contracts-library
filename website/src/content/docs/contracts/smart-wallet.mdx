@@ -1,0 +1,61 @@
+---
+title: Smart Wallet
+description: A programmable wallet with a base M-of-N signature floor and pluggable spending and deposit restrictions.
+tableOfContents: false
+---
+
+import TxChain from "../../../components/TxChain.astro";
+import lifecycle from "../../../data/smart-wallet/lifecycle.json";
+import { docUrl } from "../../../lib/manifest";
+
+**Smart Wallet** holds funds on-chain behind a configurable set of restrictions.
+It is a single UTxO, identified by a one-shot **wallet NFT**, carrying:
+
+- a base **M-of-N signature floor**, read from a Settings UTxO;
+- two maps of delegated withdraw-0 scripts: **`spenders`** (run on every spend)
+  and **`depositors`** (run on every deposit).
+
+The **admin** creates the wallet, rewrites its configuration, and closes it.
+Spending requires the M-of-N floor **and** every spender script. Depositing
+requires every depositor script. The wallet survives every action except Close,
+which burns the NFT.
+
+## Full lifecycle
+
+Every action spends and recreates the wallet, except Close. Deposit, spend and
+update config can repeat in any order; the chain shows one of each. Scroll
+horizontally to follow the cycle.
+
+<TxChain data={lifecycle} />
+
+Close is the only terminal action: it burns the NFT, releases the remaining
+funds, and unregisters every delegated script.
+
+## When to use it
+
+- A treasury or multisig whose spending rules must be programmable: limits,
+  time locks, recipient allow-lists, oracle attestations.
+- A wallet that should accept deposits only under specific conditions.
+- A setup where the restrictions must evolve without redeploying the wallet
+  script — the M-of-N floor comes from Settings, and the delegated maps are
+  rewritten in place.
+
+**When not to:** if a single key should control the funds, or if the admin must
+itself be updatable — in this version the admin is a compile-time parameter.
+Script-credential members are also not supported.
+
+## What this does not protect
+
+The full list is in <a href={docUrl("smart-wallet/spec.md")}>§8 of the specification</a>. The three that change how you deploy:
+
+- **The admin is fixed at deployment.** It is a validator parameter, so control
+  cannot be handed off without redeploying — and Close is admin-only and
+  unrestricted.
+- **The M-of-N configuration is trusted from Settings.** A malformed or missing
+  settings datum halts spending; whoever can change `current` can change the
+  floor.
+- **Members are verification-key hashes only.** Script-credential members are
+  not implemented in this version.
+
+Next: [specification & usage](/contracts/smart-wallet/guide) ·
+[transactions in detail](/contracts/smart-wallet/transactions).
