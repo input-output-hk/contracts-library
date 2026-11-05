@@ -1,0 +1,111 @@
+---
+title: Transactions in detail
+description: Every action the tokenized bond accepts, with the UTxOs, redeemers, mints and withdrawals each one needs.
+tableOfContents: false
+---
+
+import TxDiagram from "../../../../components/TxDiagram.astro";
+import authorize from "../../../../data/event-triggered-assets/authorize.json";
+import couponClaim from "../../../../data/event-triggered-assets/coupon-claim.json";
+import deposit from "../../../../data/event-triggered-assets/deposit.json";
+import graduation from "../../../../data/event-triggered-assets/graduation.json";
+import issuerClaim from "../../../../data/event-triggered-assets/issuer-claim.json";
+import issuerGraduation from "../../../../data/event-triggered-assets/issuer-graduation.json";
+import redemption from "../../../../data/event-triggered-assets/redemption.json";
+import register from "../../../../data/event-triggered-assets/register.json";
+import transfer from "../../../../data/event-triggered-assets/transfer.json";
+import { docUrl } from "../../../../lib/manifest";
+
+The [overview](/contracts/event-triggered-assets) shows the certificate
+lifecycles and the one-time registration. Here is every action, drawn. The <a href={docUrl("event-triggered-assets/spec.md")}>specification §4</a> owns the exact constraints.
+
+## Step by step
+
+A few conventions make the cards easier to read:
+
+- **Addresses are roles**: `issuer_addr`, `registry_addr`, `always_fail_addr`
+  (the issuance template), `vault_addr`, `plb_addr [stake: …]`,
+  `depositor_addr`, `holder_addr`, `holder_payment_addr`, `pay_addr`,
+  `protocol_params`.
+- **Token names carry meaning**: `registryNode`, `issuanceTemplate`,
+  `cipNFT (step k)` is the certificate at step `k`, `coupon (amount)` is a
+  coupon worth that many lovelace, and `vaultNFT` authenticates a vault.
+- **The certificate datum is** `start`, `commit`, `cnt_policy`; the vault datum
+  is its `cnt_policy`.
+- **Values are symbolic**: `principal`, `funds`, `amount_k`, `min_ada`, `f`.
+- **Fee and collateral UTxOs are not drawn.**
+
+`holder` signs claims and transfers; `issuer` registers the instrument and, for
+committed certificates, triggers claims and graduation against the committed
+credential. See <a href={docUrl("event-triggered-assets/spec.md")}>spec §2</a>.
+
+## Registry and issuance
+
+### Register
+
+The issuer inserts the RegistryNode once. No certificate is minted here; the
+node is a reference input for every later deposit.
+
+<TxDiagram data={register} />
+
+### Deposit (unit)
+
+Anyone deposits one unit: the principal moves into the vault and the certificate
+is minted to the depositor at step 0.
+
+<TxDiagram data={deposit} />
+
+## Certificate custody
+
+### Transfer
+
+The certificate moves freely; the step, `start` and `cnt_policy` are preserved.
+
+<TxDiagram data={transfer} />
+
+### Authorize (self-transfer)
+
+The owner commits a payment credential for issuer triggering, or clears it to
+revoke. The certificate stays with the same owner.
+
+<TxDiagram data={authorize} />
+
+## Coupons
+
+### Coupon claim (step k)
+
+The holder burns the certificate's name `k-1`, mints the name `k`, and receives
+the step's coupon.
+
+<TxDiagram data={couponClaim} />
+
+### Issuer claim (step k)
+
+The issuer triggers the same step on the owner's behalf, paying the committed
+credential. The paired output is the next certificate, so no ghost shell remains.
+
+<TxDiagram data={issuerClaim} />
+
+### Redemption (burn-to-pay)
+
+The coupon is burned at the vault; the vault pays exactly the value encoded in
+the burned coupon names and keeps the rest.
+
+<TxDiagram data={redemption} />
+
+## Maturity
+
+### Graduation
+
+At maturity the holder claims the principal-only coupon and retires the
+certificate.
+
+<TxDiagram data={graduation} />
+
+### Issuer graduation
+
+The issuer retires the certificate on the owner's behalf and pays the principal
+coupon to the commitment. The paired PLB output is a certificate-less ghost
+shell.
+
+<TxDiagram data={issuerGraduation} />

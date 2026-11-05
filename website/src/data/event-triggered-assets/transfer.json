@@ -1,0 +1,53 @@
+{
+  "name": "eta-transfer",
+  "title": "Transfer",
+  "inputs": [
+    {
+      "name": "Certificate",
+      "address": "plb_addr [stake: sender]",
+      "redeemer": "BaseSpendRedeemer",
+      "value": {
+        "cipNFT (step k)": "1"
+      },
+      "datum": {
+        "start": "…",
+        "commit": "…",
+        "cnt_policy": "…"
+      }
+    },
+    {
+      "name": "Protocol params",
+      "address": "protocol_params",
+      "reference": true
+    },
+    {
+      "name": "RegistryNode",
+      "address": "registry_addr",
+      "reference": true,
+      "value": {
+        "registryNode": "1"
+      }
+    }
+  ],
+  "withdrawals": [
+    "programmable_logic_global [TransferAct]",
+    "transfer [TransferRedeemer]",
+    "transfer_logic (ours)"
+  ],
+  "signatures": ["sender"],
+  "outputs": [
+    {
+      "name": "Certificate",
+      "address": "plb_addr [stake: recipient]",
+      "value": {
+        "cipNFT (step k)": "1"
+      },
+      "datum": {
+        "start": "…",
+        "commit": "…",
+        "cnt_policy": "…"
+      }
+    }
+  ],
+  "notes": "• Ownership rides the certificate's inline stake credential; moving the token moves the claim on the remaining coupons and principal.\n• The step name, start and cnt_policy are preserved. commit may change only when the stake does not (the owner's self-transfer); on an owner change it must be None.\n• At most one certificate per transaction: exactly one in and one out, no merge or split."
+}

@@ -1,0 +1,100 @@
+---
+title: Specification & usage
+description: The tokenized bond specification summarized, followed by the complete usage guide.
+tableOfContents: false
+---
+
+import CanonicalUsage from "../../../../components/CanonicalUsage.astro";
+import { docUrl } from "../../../../lib/manifest";
+
+This page summarizes the Event-Triggered Assets specification and includes the
+complete usage guide. The canonical documents live in the repository; the full
+specification is linked below, and the usage guide is rendered here in full.
+
+## What it is
+
+Event-Triggered Assets is a **tokenized bond** backed by ADA vaults. The issuer
+registers the instrument once; anyone can then deposit a fixed bond unit into a
+vault and receive a CIP-113 **certificate** for that unit. Each scheduled step
+mints a **coupon token** whose asset name is its ADA value. Coupons are redeemed
+by burning them at the vault. At maturity the certificate is retired and a
+principal coupon is minted.
+
+Issuer triggering is **opt-in**: the owner commits a payment credential with a
+self-transfer, after which the issuer can trigger claims and graduation on the
+owner's behalf, always paying that credential. The owner keeps the self-service
+path.
+
+## Model
+
+| Part             | Meaning                                                                             |
+| ---------------- | ----------------------------------------------------------------------------------- |
+| **RegistryNode** | The instrument's entry in the CIP-113 registry.                                     |
+| **Vault**        | An ADA UTxO with a vault NFT and a `cnt_policy` datum.                              |
+| **Certificate**  | A CIP-113 token at the PLB; its name is the current step.                           |
+| **Coupon**       | A native asset under the vault's coupon policy; its name is the amount in lovelace. |
+| **Schedule**     | `N` steps on a fixed interval, with baked amounts and principal.                    |
+
+The certificate datum is `{ start, commit, cnt_policy }`. `start` is pinned to
+the deposit transaction's validity upper bound, `commit` is `Option<Credential>`
+for issuer triggering, and `cnt_policy` selects the vault's coupon terms. The
+step lives in the asset name, so every claim burns the current name and mints
+the next one.
+
+## Who does what
+
+| Role                   | Who                                | Powers                                                                            |
+| ---------------------- | ---------------------------------- | --------------------------------------------------------------------------------- |
+| **Holder / depositor** | Anyone                             | Deposit a unit, own/transfer the certificate, claim and redeem coupons, graduate. |
+| **Vault owner**        | Company or country                 | Funds the vault off-chain; no on-chain withdrawal path.                           |
+| **Issuer**             | Registers the instrument           | Triggers claims and graduation only for committed certificates.                   |
+| **Vault**              | ADA UTxO with a validator          | Pays exactly the value of the burned coupons.                                     |
+| **Coupon policy**      | Per-vault minting policy           | Mints coupons and admits each scheduled step.                                     |
+| **Core protocol**      | CIP-113 PLB, transfer and issuance | Custody and movement of the certificate.                                          |
+
+## What each action does
+
+| Action                | What it does                                                                    |
+| --------------------- | ------------------------------------------------------------------------------- |
+| **Register**          | The issuer inserts the RegistryNode once. No certificate is minted.             |
+| **Deposit**           | Moves one unit's principal into the vault and mints the certificate at step 0.  |
+| **Transfer**          | Moves the certificate; the step, `start` and `cnt_policy` are preserved.        |
+| **Authorize**         | Owner self-transfer that sets or clears `commit`.                               |
+| **Coupon claim**      | Burns name `k-1`, mints name `k`, and mints the step's coupon.                  |
+| **Issuer claim**      | The third-party variant of the coupon claim, paying `commit`.                   |
+| **Redemption**        | Burns a coupon at the vault; the vault pays exactly the decoded amount.         |
+| **Graduation**        | Burns name `N` and mints the principal-only coupon; the certificate is retired. |
+| **Issuer graduation** | The third-party retirement, paying the principal to `commit`.                   |
+
+The owner-signed and issuer-triggered paths are the two certificate lifecycles.
+The redemption path is a side branch: a coupon leaves the certificate path and
+is burned at the vault for ADA.
+
+## Invariants and assumptions
+
+- Vault solvency is the central assumption. Vaults have no owner withdrawal
+  path, but the owner funds them off-chain; an underfunded vault fails
+  redemptions until it is topped up.
+- Vault creation and funding are outside this design. The deployment assumes the
+  authority mints exactly one vault NFT.
+- The CIP-113 core is trusted infrastructure.
+- Issuer triggering is opt-in and destination-bound: the issuer can only trigger
+  committed certificates and must pay the commitment.
+- Coupon values live in the asset name; equal amounts are fungible.
+- One certificate is handled per transaction; units cannot be merged or split.
+- Issuer graduation leaves a certificate-less ghost shell; the owner can sweep
+  it later.
+- Deposit is permissionless and uncapped; the owner manages total issuance
+  off-chain.
+
+## Read the full specification
+
+The <a href={docUrl("event-triggered-assets/spec.md")}>canonical specification</a>
+has the registry, vault and certificate layouts, every transaction table,
+invariants and the threat model. The
+[transactions in detail](/contracts/event-triggered-assets/transactions) page
+draws all nine action shapes.
+
+## Usage
+
+<CanonicalUsage file="event-triggered-assets/usage.md" />

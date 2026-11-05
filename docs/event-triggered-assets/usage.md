@@ -95,7 +95,7 @@ trigger but never redirect (I9).
 
 Unlike the settings/DAO protocols, this instrument runs **inside** the
 CIP-113 programmable-token framework (see
-[`documentation/09-DEVELOPING-MODULES.md`](../../../cip113-programmable-tokens/documentation/09-DEVELOPING-MODULES.md)).
+[`documentation/09-DEVELOPING-MODULES.md`](https://github.com/cardano-foundation/cip113-programmable-tokens/blob/main/documentation/09-DEVELOPING-MODULES.md)).
 Before any instrument transaction, the core must be deployed:
 
 1. **Parameterize the core scripts** in dependency order — the one-shot

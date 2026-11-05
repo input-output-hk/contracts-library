@@ -1,0 +1,69 @@
+{
+  "name": "eta-issuer-graduation",
+  "title": "Issuer graduation",
+  "inputs": [
+    {
+      "name": "Certificate",
+      "address": "plb_addr [stake: owner]",
+      "redeemer": "BaseSpendRedeemer",
+      "value": {
+        "cipNFT (step N)": "1"
+      },
+      "datum": {
+        "start": "…",
+        "commit": "Some(pay)",
+        "cnt_policy": "…"
+      }
+    },
+    {
+      "name": "Protocol params",
+      "address": "protocol_params",
+      "reference": true
+    },
+    {
+      "name": "RegistryNode",
+      "address": "registry_addr",
+      "reference": true,
+      "value": {
+        "registryNode": "1"
+      }
+    }
+  ],
+  "mint": [
+    { "token": "cipNFT (step N)", "amount": "-1" },
+    { "token": "coupon (principal)", "amount": "1" }
+  ],
+  "withdrawals": [
+    "programmable_logic_global [ThirdPartyAct]",
+    "third_party [ThirdPartyRedeemer]",
+    "third_party_logic (ours)",
+    "minting_logic (ours) [Retire]",
+    "issuance_logic (core) [names policy + RegistryNode]"
+  ],
+  "signatures": ["issuer"],
+  "outputs": [
+    {
+      "name": "Ghost continuation",
+      "address": "plb_addr [stake: owner]",
+      "value": {
+        "ADA": "min_ada"
+      },
+      "datum": {
+        "start": "…",
+        "commit": "Some(pay)",
+        "cnt_policy": "…"
+      }
+    },
+    {
+      "name": "Principal coupon",
+      "address": "pay_addr [payment: pay]",
+      "value": {
+        "coupon (principal)": "1"
+      }
+    }
+  ],
+  "validRange": {
+    "lower": "start + N * interval"
+  },
+  "notes": "• The issuer retires the certificate on the owner's behalf: third_party_logic requires the issuer signature and commit Some(pay), validates name N, and binds the principal coupon to pay.\n• The Retire mode requires the principal coupon, so the trigger cannot retire without paying it; no owner signature is needed.\n• Because the certificate disappears, the paired continuation is a certificate-less ghost shell. It is inert and the owner can sweep it later with an owner-signed transfer-path spend."
+}

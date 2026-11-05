@@ -1,0 +1,66 @@
+{
+  "name": "eta-register",
+  "title": "Register",
+  "inputs": [
+    {
+      "name": "Issuer funds",
+      "address": "issuer_addr",
+      "value": {
+        "ADA": "min_ada",
+        "FeeAsset": "f"
+      }
+    },
+    {
+      "name": "RegistryNode (covering)",
+      "address": "registry_addr",
+      "value": {
+        "registryNode": "1"
+      },
+      "datum": {
+        "key": "… < cip_policy",
+        "next": "cip_policy"
+      }
+    },
+    {
+      "name": "Issuance template",
+      "address": "always_fail_addr",
+      "reference": true,
+      "value": {
+        "issuanceTemplate": "1"
+      }
+    }
+  ],
+  "mint": [{ "token": "registryNode (cip_policy)", "amount": "1" }],
+  "withdrawals": ["minting_logic (ours) [Register]"],
+  "signatures": ["issuer"],
+  "outputs": [
+    {
+      "name": "RegistryNode (covering)",
+      "address": "registry_addr",
+      "value": {
+        "registryNode": "1"
+      },
+      "datum": {
+        "key": "… < cip_policy",
+        "next": "cip_policy"
+      }
+    },
+    {
+      "name": "RegistryNode (new)",
+      "address": "registry_addr",
+      "value": {
+        "registryNode": "1"
+      },
+      "datum": {
+        "key": "cip_policy",
+        "next": "… (old next)",
+        "minting_logic": "ours [Register / deny update]",
+        "transfer_logic": "ours [name-monotone]",
+        "third_party_logic": "ours (issuer-triggered)",
+        "unfracking_logic": "empty_vkey (forbidden)",
+        "global_state": "#\"\" (none)"
+      }
+    }
+  ],
+  "notes": "• The core registry mint handler inserts the node: it spends the covering node, mints exactly one node NFT named cip_policy, and requires the one-shot IssuanceCborHex template as a reference input.\n• Our minting logic runs once as [Register]: it authorises the issuer, asserts no cip_policy tokens are minted, and freezes the node stance.\n• No certificate is minted here; the same registration serves every later deposit. The vault is created and funded outside this design."
+}

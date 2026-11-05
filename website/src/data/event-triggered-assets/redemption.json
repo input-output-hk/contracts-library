@@ -1,0 +1,48 @@
+{
+  "name": "eta-redemption",
+  "title": "Redemption (burn-to-pay)",
+  "inputs": [
+    {
+      "name": "Coupon",
+      "address": "holder_addr",
+      "value": {
+        "coupon (amount)": "1"
+      }
+    },
+    {
+      "name": "Vault",
+      "address": "vault_addr",
+      "redeemer": "Redeem { payouts }",
+      "value": {
+        "ADA": "funds",
+        "vaultNFT": "1"
+      },
+      "datum": {
+        "cnt_policy": "coupon policy id"
+      }
+    }
+  ],
+  "mint": [{ "token": "coupon (amount)", "amount": "-1" }],
+  "signatures": ["redeemer"],
+  "outputs": [
+    {
+      "name": "Payout",
+      "address": "redeemer-named_addr",
+      "value": {
+        "ADA": "Σ decode(name) × burned"
+      }
+    },
+    {
+      "name": "Vault",
+      "address": "vault_addr",
+      "value": {
+        "ADA": "funds - Σ decode(name) × burned",
+        "vaultNFT": "1"
+      },
+      "datum": {
+        "cnt_policy": "coupon policy id"
+      }
+    }
+  ],
+  "notes": "• The vault validator pairs the spent vault with its continuation and requires the vault's net ADA loss to equal Σ decode(name) × burned exactly. A redeemer cannot ask for more than the coupons are worth, and the vault cannot short-pay.\n• Exactly one vault is spent per redemption; the payout goes to the address(es) the redeemer names.\n• The coupon is burned, so it can never be paid twice. No vault-owner signature is needed; the redeemer signs only to spend the coupon UTxO."
+}

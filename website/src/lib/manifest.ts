@@ -166,6 +166,31 @@ export const contracts: Contract[] = [
       },
     ],
   },
+  {
+    slug: "event-triggered-assets",
+    name: "Event-Triggered Assets",
+    summary:
+      "Tokenized bonds backed by ADA vaults: register once, deposit units, claim coupons, and redeem at maturity.",
+    status: "In progress",
+    category: "Tokenization",
+    specStatus: "draft",
+    docs: [
+      {
+        file: "event-triggered-assets/spec.md",
+        slug: "spec",
+        title: "Specification",
+        summary:
+          "Defines the tokenized bond: registry, certificates, vaults, coupons, redemption, and graduation.",
+      },
+      {
+        file: "event-triggered-assets/usage.md",
+        slug: "usage",
+        title: "Usage guide",
+        summary:
+          "How to register an instrument, deposit units, and operate the certificate and coupon lifecycles.",
+      },
+    ],
+  },
 ];
 
 export function getContract(slug: string): Contract | undefined {

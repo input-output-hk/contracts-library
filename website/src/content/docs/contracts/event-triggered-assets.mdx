@@ -1,0 +1,72 @@
+---
+title: Event-Triggered Assets
+description: Tokenized bonds backed by ADA vaults — register once, deposit units, claim coupons, and redeem at maturity.
+tableOfContents: false
+---
+
+import TxChain from "../../../components/TxChain.astro";
+import holderLifecycle from "../../../data/event-triggered-assets/holder-lifecycle.json";
+import issuerLifecycle from "../../../data/event-triggered-assets/issuer-lifecycle.json";
+import { docUrl } from "../../../lib/manifest";
+
+**Event-Triggered Assets** is a tokenized bond backed by ADA vaults. The issuer
+registers the instrument once; anyone can then deposit a fixed bond unit into a
+vault and receive a CIP-113 **certificate** for it. The certificate records the
+unit's timeline and its vault's coupon policy. Its asset name is the current
+**step**, and each claim advances it in place.
+
+Each scheduled step mints a **coupon token** whose asset name is its ADA value.
+A coupon is redeemed by burning it at the vault, which pays exactly what the
+burned coupons name. At maturity the certificate is retired and a principal
+coupon is minted. **Issuer triggering is opt-in**: the owner commits a payment
+credential with a self-transfer, after which the issuer can trigger claims and
+graduation on the owner's behalf, always paying that credential.
+
+## Issuer-triggered lifecycle
+
+The issuer registers the instrument once with `Register` (on the
+[transactions page](/contracts/event-triggered-assets/transactions)); every
+deposit references that RegistryNode. After a deposit, the owner can commit a
+payment credential with `Authorize`. The issuer then triggers every coupon claim
+and graduation, always paying the commitment. The owner can revoke at any time
+and always keeps the holder path.
+
+<TxChain data={issuerLifecycle} />
+
+## Holder lifecycle
+
+The holder signs each claim directly. After a coupon claim, the coupon can be
+redeemed at the vault (top branch) or the certificate can continue to the next
+step (bottom branch). The redemption branch is terminal; the certificate path
+ends at graduation.
+
+<TxChain data={holderLifecycle} />
+
+## When to use it
+
+- Tokenized bonds or fixed-income instruments with a coupon schedule backed by
+  ADA.
+- Claims that should be transferable and independently timed per deposit.
+- Instruments where the issuer should be able to service holders passively —
+  after an explicit, revocable commitment.
+- Setups with several vaults, each with its own coupon policy.
+
+**When not to:** if you need a fungible principal token in the float, if you
+cannot trust the vault owner to keep the vault funded, or if the coupon schedule
+must be more expressive than a fixed interval and amount per step.
+
+## What this does not protect
+
+The full list is in <a href={docUrl("event-triggered-assets/spec.md")}>§7 of the specification</a>. The three that change how you deploy:
+
+- **Vault solvency is the central assumption.** Vaults have no owner
+  withdrawal path, but the owner funds them off-chain: an underfunded vault
+  makes redemptions fail until it is topped up.
+- **Issuance is uncapped and redemption is first-come-first-served.** Deposits
+  are permissionless; the owner must manage total issuance off-chain and fund
+  every certificate's coupons.
+- **The CIP-113 core is trusted infrastructure.** The PLB, transfer and
+  issuance validators custody and move the certificate.
+
+Next: [specification & usage](/contracts/event-triggered-assets/guide) ·
+[transactions in detail](/contracts/event-triggered-assets/transactions).

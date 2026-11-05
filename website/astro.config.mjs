@@ -107,6 +107,23 @@ export default defineConfig({
                 },
               ],
             },
+            {
+              label: "Event-Triggered Assets",
+              items: [
+                {
+                  label: "Overview",
+                  link: "/contracts/event-triggered-assets",
+                },
+                {
+                  label: "Transactions",
+                  link: "/contracts/event-triggered-assets/transactions",
+                },
+                {
+                  label: "Specification & usage",
+                  link: "/contracts/event-triggered-assets/guide",
+                },
+              ],
+            },
           ],
         },
         {
