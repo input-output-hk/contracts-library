@@ -12,6 +12,7 @@
       "!**/dist",
       "!**/*.tsbuildinfo",
       "!**/package-lock.json",
+      "!website/tx-diagram-ui/**",
       "!offchain/tx3/devnet/genesis/**",
       "!onchain/**",
       "!formal/**",

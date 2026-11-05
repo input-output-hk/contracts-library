@@ -1,0 +1,27 @@
+{
+  "name": "tx-diagram-ui",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "type": "module",
+  "files": [
+    "src"
+  ],
+  "exports": {
+    ".": {
+      "types": "./src/lib/index.ts",
+      "svelte": "./src/lib/index.ts",
+      "default": "./src/lib/index.ts"
+    }
+  },
+  "svelte": "./src/lib/index.ts",
+  "sideEffects": [
+    "**/*.svelte"
+  ],
+  "peerDependencies": {
+    "svelte": "^5.0.0"
+  },
+  "dependencies": {
+    "html-to-image": "^1.11.13",
+    "zod": "^4.0.0"
+  }
+}
