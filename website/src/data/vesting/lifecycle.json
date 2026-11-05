@@ -1,0 +1,102 @@
+{
+  "name": "vesting-lifecycle",
+  "title": "Linear vesting lifecycle",
+  "transactions": [
+    {
+      "block": "Lock",
+      "name": "lock",
+      "title": "Lock",
+      "inputs": [
+        {
+          "name": "Locker UTxO",
+          "address": "locker_addr",
+          "value": {
+            "ADA": "1_000"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "id": "vesting-v1",
+          "name": "Vesting UTxO",
+          "address": "vesting_addr",
+          "value": {
+            "ADA": "1_000"
+          },
+          "datum": {
+            "beneficiary": "beneficiary",
+            "locker": "locker",
+            "vesting": {
+              "ADA": "1_000"
+            },
+            "start_time": "start",
+            "end_time": "end",
+            "recovery_time": "recovery"
+          }
+        }
+      ],
+      "signatures": ["locker"]
+    },
+    {
+      "block": "Claim",
+      "name": "claim-partial",
+      "title": "Claim (partial)",
+      "inputs": [
+        {
+          "id": "vesting-v1",
+          "name": "Vesting UTxO",
+          "redeemer": "Claim"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "vesting-v2",
+          "name": "Vesting UTxO",
+          "address": "vesting_addr",
+          "value": {
+            "ADA": "600"
+          },
+          "datum": {
+            "beneficiary": "",
+            "locker": "",
+            "vesting": "",
+            "start_time": "",
+            "end_time": "",
+            "recovery_time": ""
+          }
+        },
+        {
+          "name": "Beneficiary UTxO",
+          "address": "beneficiary_addr",
+          "value": {
+            "ADA": "400"
+          }
+        }
+      ],
+      "signatures": ["beneficiary"]
+    },
+    {
+      "block": "Full claim",
+      "name": "claim-full",
+      "title": "Claim (full)",
+      "inputs": [
+        {
+          "id": "vesting-v2",
+          "name": "Vesting UTxO",
+          "redeemer": "Claim"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "Beneficiary UTxO",
+          "address": "beneficiary_addr",
+          "value": {
+            "ADA": "600"
+          }
+        }
+      ],
+      "signatures": ["beneficiary"]
+    }
+  ],
+  "notes": "A partial claim keeps the same datum and leaves the unvested remainder in a continuation. At or after end_time a full claim takes everything. After recovery_time the locker can cancel instead; see the alternative lifecycle below."
+}

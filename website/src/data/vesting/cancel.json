@@ -1,0 +1,38 @@
+{
+  "name": "vesting-cancel",
+  "title": "Cancel",
+  "inputs": [
+    {
+      "name": "Vesting UTxO",
+      "address": "vesting_addr",
+      "redeemer": "Cancel",
+      "value": {
+        "ADA": "600"
+      },
+      "datum": {
+        "beneficiary": "beneficiary",
+        "locker": "locker",
+        "vesting": {
+          "ADA": "1_000"
+        },
+        "start_time": "start",
+        "end_time": "end",
+        "recovery_time": "recovery"
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "name": "Locker UTxO",
+      "address": "locker_addr",
+      "value": {
+        "ADA": "600"
+      }
+    }
+  ],
+  "signatures": ["locker"],
+  "validRange": {
+    "lower": "recovery + 1"
+  },
+  "notes": "• now > recovery_time is strict; set the lower bound to recovery_time + 1 ms or later.\n• start < end < recovery is re-checked, so Cancel can never reach unvested funds.\n• No continuing output: the locker takes the remaining bundle."
+}

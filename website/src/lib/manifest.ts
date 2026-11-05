@@ -91,6 +91,31 @@ export const contracts: Contract[] = [
       },
     ],
   },
+  {
+    slug: "vesting",
+    name: "Linear Vesting",
+    summary:
+      "Release a bundle of ada or native tokens to a beneficiary on a linear schedule, with locker recovery after a grace period.",
+    status: "In progress",
+    category: "Tokenization",
+    specStatus: "draft",
+    docs: [
+      {
+        file: "vesting/spec.md",
+        slug: "spec",
+        title: "Specification",
+        summary:
+          "Defines the vesting datum, the Claim and Cancel actions, the linear schedule, and the count-preserving continuation rule.",
+      },
+      {
+        file: "vesting/usage.md",
+        slug: "usage",
+        title: "Usage guide",
+        summary:
+          "How to deploy the vesting script and build Lock, Claim, and Cancel transactions with the MeshJS builders.",
+      },
+    ],
+  },
 ];
 
 export function getContract(slug: string): Contract | undefined {

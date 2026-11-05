@@ -68,6 +68,20 @@ export default defineConfig({
                 },
               ],
             },
+            {
+              label: "Linear Vesting",
+              items: [
+                { label: "Overview", link: "/contracts/vesting" },
+                {
+                  label: "Transactions",
+                  link: "/contracts/vesting/transactions",
+                },
+                {
+                  label: "Specification & usage",
+                  link: "/contracts/vesting/guide",
+                },
+              ],
+            },
           ],
         },
         {
