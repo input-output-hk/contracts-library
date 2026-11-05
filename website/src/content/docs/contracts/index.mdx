@@ -1,0 +1,24 @@
+---
+title: Contract catalog
+description: Every contract in ContractsLibrary, with its status and available off-chain implementations.
+---
+
+import ContractGrid from "../../../components/ContractGrid.astro";
+
+Every contract ships as an **on-chain validator**, **off-chain builders**, and a
+**specification**. A contract is only marked _Ready-to-audit_ once all three
+exist, with tests, a usage guide and a reproducible build.
+
+<ContractGrid />
+
+## How to read the status
+
+| Status                 | What it means                                                   |
+| ---------------------- | --------------------------------------------------------------- |
+| **In progress**        | Being implemented. Some parts may still change.                 |
+| **Ready-to-audit**     | Complete implementation, tests, spec and docs. Not yet audited. |
+| **Audited / Verified** | Audited or formally verified against its spec.                  |
+
+Nothing in the library is audited yet, so treat every contract as pre-release.
+Each contract page states its assumptions explicitly — read them before putting
+funds on mainnet.

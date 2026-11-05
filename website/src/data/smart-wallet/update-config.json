@@ -1,0 +1,39 @@
+{
+  "name": "smart-wallet-update-config",
+  "title": "Update config",
+  "inputs": [
+    {
+      "name": "Wallet UTxO",
+      "address": "wallet_addr",
+      "redeemer": "UpdatePermissions",
+      "value": {
+        "ADA": "x",
+        "walletNFT": "1"
+      },
+      "datum": {
+        "spenders": "Pairs<ScriptHash, Data>",
+        "depositors": "Pairs<ScriptHash, Data>"
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "name": "Wallet UTxO",
+      "address": "wallet_addr",
+      "value": {
+        "ADA": "x + top-up",
+        "walletNFT": "1"
+      },
+      "datum": {
+        "spenders": "spenders'",
+        "depositors": "depositors'"
+      }
+    }
+  ],
+  "certificates": [
+    "RegisterCredential — each added script",
+    "UnregisterCredential — each removed script"
+  ],
+  "signatures": ["admin"],
+  "notes": "• Non-ADA assets are preserved exactly; lovelace may only increase (explicit top-up).\n• Added scripts are registered with their Publish redeemer; removed scripts are unregistered; kept scripts keep byte-identical Data.\n• The config is per-UTxO; other wallet UTxOs are unaffected."
+}

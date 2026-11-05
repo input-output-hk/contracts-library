@@ -1,0 +1,172 @@
+{
+  "name": "dao-vote-lifecycle",
+  "title": "Vote lifecycle",
+  "transactions": [
+    {
+      "block": "Vote",
+      "name": "vote",
+      "title": "Vote",
+      "inputs": [
+        {
+          "name": "Stake UTxO",
+          "address": "stake_addr",
+          "redeemer": "VoteProposal",
+          "value": {
+            "stakeNFT": "1",
+            "stakedToken": "S"
+          },
+          "datum": {
+            "owner": "",
+            "delegatee": "",
+            "lockedBy": "L"
+          }
+        },
+        {
+          "name": "Proposal UTxO",
+          "address": "proposal_addr",
+          "reference": true,
+          "value": {
+            "proposalNFT": "1"
+          },
+          "datum": {
+            "thresholds": "",
+            "timingConfig": "",
+            "startTime": "T",
+            "status": "Voting",
+            "results": ""
+          }
+        },
+        {
+          "name": "Settings UTxO",
+          "address": "governor_addr",
+          "reference": true,
+          "value": {
+            "settingsNFT": "1"
+          },
+          "datum": {
+            "current": "DaoSettings"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "id": "vote-v1",
+          "name": "Vote UTxO",
+          "address": "vote_addr",
+          "value": {
+            "voteNFT": "1"
+          },
+          "datum": {
+            "stakeOwner": "owner",
+            "proposal": "pId",
+            "votedOption": "option",
+            "stake": "S"
+          }
+        },
+        {
+          "name": "Stake UTxO",
+          "address": "stake_addr",
+          "value": {
+            "stakeNFT": "1",
+            "stakedToken": "S"
+          },
+          "datum": {
+            "owner": "",
+            "delegatee": "",
+            "lockedBy": "L + vote lock"
+          }
+        }
+      ],
+      "mint": [{ "token": "voteNFT", "amount": "1" }],
+      "signatures": ["vote_auth"],
+      "validRange": {
+        "upper": "voting_end"
+      }
+    },
+    {
+      "block": "Tally",
+      "name": "tally",
+      "title": "Tally",
+      "inputs": [
+        {
+          "id": "vote-v1",
+          "name": "Vote UTxO",
+          "redeemer": "TallyVote"
+        },
+        {
+          "name": "Proposal UTxO",
+          "address": "proposal_addr",
+          "redeemer": "TallyVotes",
+          "value": {
+            "proposalNFT": "1"
+          },
+          "datum": {
+            "thresholds": "",
+            "timingConfig": "",
+            "startTime": "T",
+            "status": {
+              "Tally": {
+                "votes": "V"
+              }
+            },
+            "results": ""
+          }
+        },
+        {
+          "name": "More votes",
+          "dots": true
+        },
+        {
+          "name": "Settings UTxO",
+          "address": "governor_addr",
+          "reference": true,
+          "value": {
+            "settingsNFT": "1"
+          },
+          "datum": {
+            "current": "DaoSettings"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "Proposal UTxO",
+          "address": "proposal_addr",
+          "value": {
+            "proposalNFT": "1"
+          },
+          "datum": {
+            "thresholds": "",
+            "timingConfig": "",
+            "startTime": "",
+            "status": {
+              "Tally": {
+                "votes": "V'"
+              }
+            },
+            "results": ""
+          }
+        },
+        {
+          "name": "User UTxO",
+          "address": "addr",
+          "value": {
+            "ADA": "A"
+          }
+        },
+        {
+          "name": "More refunds",
+          "dots": true
+        }
+      ],
+      "mint": [
+        { "token": "voteNFT₁", "amount": "-1" },
+        { "token": "voteNFTₙ", "amount": "-1" }
+      ],
+      "validRange": {
+        "upper": "tally_end"
+      }
+    }
+  ],
+  "notes": "Vote creates the vote artifact; Tally consumes it and returns the proposal to the proposal lifecycle above. Cancel is the other terminal path: it burns the vote NFT and refunds the owner; see the transactions page."
+}

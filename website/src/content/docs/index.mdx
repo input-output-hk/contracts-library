@@ -1,0 +1,51 @@
+---
+title: Reusable smart contracts for Cardano
+description: An OpenZeppelin-style library of standardized smart contracts for Cardano — on-chain, off-chain, and formally specified.
+template: splash
+hero:
+  tagline: Configure one, ship it, or fork it — without rebuilding the same primitive twice. On-chain validators, TypeScript builders and a formal spec, shipped together.
+  actions:
+    - text: I'm new to Cardano
+      link: /get-started/cardano
+      icon: right-arrow
+      variant: primary
+    - text: I know Cardano — show me the contracts
+      link: /contracts
+      icon: right-arrow
+      variant: minimal
+---
+
+import { Card, CardGrid } from "@astrojs/starlight/components";
+import ContractGrid from "../../components/ContractGrid.astro";
+
+## What this is
+
+ContractsLibrary is an OpenZeppelin-style library for Cardano: complete
+contracts shipped as an **on-chain validator**, **off-chain transaction
+builders**, and a **formal specification**, so you can adopt a vetted
+implementation instead of writing your own.
+
+<CardGrid>
+  <Card title="Use" icon="rocket">
+    Supply parameters to a finished contract and ship. The off-chain builders
+    assemble every transaction for you — no need to learn Aiken first.
+  </Card>
+  <Card title="Compose" icon="puzzle">
+    Import the parameterized validation functions and helpers to build something
+    new on top of a proven core.
+  </Card>
+  <Card title="Fork" icon="github">
+    Copy the module and change it. The spec tells you exactly which behaviour
+    you are changing, and the tests tell you if you broke it.
+  </Card>
+</CardGrid>
+
+## Contracts
+
+<ContractGrid />
+
+[See every contract, with its status →](/contracts)
+
+## Install
+
+Ready to build? [Install & setup →](/get-started/install)

@@ -1,0 +1,32 @@
+{
+  "name": "smart-wallet-close",
+  "title": "Close",
+  "inputs": [
+    {
+      "name": "Wallet UTxO",
+      "address": "wallet_addr",
+      "redeemer": "Close",
+      "value": {
+        "ADA": "x",
+        "walletNFT": "1"
+      },
+      "datum": {
+        "spenders": "Pairs<ScriptHash, Data>",
+        "depositors": "Pairs<ScriptHash, Data>"
+      }
+    }
+  ],
+  "mint": [{ "token": "walletNFT", "amount": "-1" }],
+  "certificates": ["UnregisterCredential — each script"],
+  "outputs": [
+    {
+      "name": "Payout",
+      "address": "payout_addr",
+      "value": {
+        "ADA": "x"
+      }
+    }
+  ],
+  "signatures": ["admin"],
+  "notes": "• Burns the wallet NFT and releases the remaining funds; the admin may send them anywhere.\n• Every script in spenders and depositors is unregistered, refunding its stake deposit.\n• Close does not enforce the M-of-N floor or any delegated restriction. It is irreversible."
+}

@@ -1,0 +1,45 @@
+{
+  "name": "dao-end-voting",
+  "title": "End Voting Stage",
+  "inputs": [
+    {
+      "name": "Proposal UTxO",
+      "address": "proposal_addr",
+      "redeemer": "EndVotingStage",
+      "value": {
+        "proposalNFT": "1"
+      },
+      "datum": {
+        "thresholds": "",
+        "timingConfig": "",
+        "startTime": "",
+        "status": "Voting",
+        "results": ""
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "name": "Proposal UTxO",
+      "address": "proposal_addr",
+      "value": {
+        "proposalNFT": "1"
+      },
+      "datum": {
+        "thresholds": "",
+        "timingConfig": "",
+        "startTime": "",
+        "status": {
+          "Tally": {
+            "votes": "0, 0"
+          }
+        },
+        "results": ""
+      }
+    }
+  ],
+  "validRange": {
+    "lower": "voting_end"
+  },
+  "notes": "• Anyone can advance the poll after voting_end.\n• The tally counters start at zero for every option."
+}

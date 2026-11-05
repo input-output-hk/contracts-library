@@ -1,0 +1,88 @@
+{
+  "name": "dao-cosign",
+  "title": "Cosign Proposal",
+  "inputs": [
+    {
+      "name": "Proposal UTxO",
+      "address": "proposal_addr",
+      "redeemer": "Cosign",
+      "value": {
+        "proposalNFT": "1"
+      },
+      "datum": {
+        "thresholds": "",
+        "timingConfig": "",
+        "startTime": "",
+        "status": {
+          "Draft": {
+            "cosigningStake": "N"
+          }
+        },
+        "results": ""
+      }
+    },
+    {
+      "name": "Stake UTxO",
+      "address": "stake_addr",
+      "redeemer": "CosignProposal",
+      "value": {
+        "stakeNFT": "1",
+        "stakedToken": "C"
+      },
+      "datum": {
+        "owner": "",
+        "delegatee": "",
+        "lockedBy": "L"
+      }
+    },
+    {
+      "name": "Settings UTxO",
+      "address": "governor_addr",
+      "reference": true,
+      "value": {
+        "settingsNFT": "1"
+      },
+      "datum": {
+        "current": "DaoSettings"
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "name": "Proposal UTxO",
+      "address": "proposal_addr",
+      "value": {
+        "proposalNFT": "1"
+      },
+      "datum": {
+        "thresholds": "",
+        "timingConfig": "",
+        "startTime": "",
+        "status": {
+          "Draft": {
+            "cosigningStake": "N + C"
+          }
+        },
+        "results": ""
+      }
+    },
+    {
+      "name": "Stake UTxO",
+      "address": "stake_addr",
+      "value": {
+        "stakeNFT": "1",
+        "stakedToken": "C"
+      },
+      "datum": {
+        "owner": "",
+        "delegatee": "",
+        "lockedBy": "L + draft lock"
+      }
+    }
+  ],
+  "signatures": ["vote_auth"],
+  "validRange": {
+    "upper": "draft_end"
+  },
+  "notes": "• C ≥ thresholds.cosign.\n• The cosigner's position must not already have a lock for this proposal.\n• vote_auth is the delegatee if set, otherwise the owner.\n• The Settings UTxO reference input supplies the stake validator hash."
+}

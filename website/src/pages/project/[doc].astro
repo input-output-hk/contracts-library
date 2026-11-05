@@ -1,0 +1,29 @@
+---
+import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
+import { getEntry, render } from "astro:content";
+
+import { entryId, projectDocs } from "../../lib/manifest";
+
+export function getStaticPaths() {
+  return projectDocs.map((doc) => ({
+    params: { doc: doc.slug },
+    props: { doc },
+  }));
+}
+
+const { doc } = Astro.props;
+const entry = await getEntry("upstream", entryId(doc.file));
+
+if (!entry) {
+  throw new Error(
+    `Manifest points at docs/${doc.file}, which does not exist. ` +
+      `Fix the entry in src/lib/manifest.ts or restore the document.`,
+  );
+}
+
+const { Content, headings } = await render(entry);
+---
+
+<StarlightPage frontmatter={{ title: doc.title }} headings={headings}>
+  <Content />
+</StarlightPage>

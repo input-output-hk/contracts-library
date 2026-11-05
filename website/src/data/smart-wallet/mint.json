@@ -1,0 +1,31 @@
+{
+  "name": "smart-wallet-mint",
+  "title": "Mint",
+  "inputs": [
+    {
+      "name": "Seed UTxO",
+      "address": "seed_addr",
+      "value": {
+        "ADA": "s"
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "name": "Wallet UTxO",
+      "address": "wallet_addr",
+      "value": {
+        "ADA": "x",
+        "walletNFT": "1"
+      },
+      "datum": {
+        "spenders": "Pairs<ScriptHash, Data>",
+        "depositors": "Pairs<ScriptHash, Data>"
+      }
+    }
+  ],
+  "mint": [{ "token": "walletNFT", "amount": "1" }],
+  "certificates": ["RegisterCredential — each seeded script"],
+  "signatures": ["admin"],
+  "notes": "• The wallet NFT is minted once under the script's own policy; spending the seed_utxo makes it one-shot.\n• wallet_addr = hash(smart_wallet(seed, settings_ref, wallet_nft_name, admin)).\n• Every script in the initial spenders and depositors maps is registered here with its Publish redeemer.\n• The wallet UTxO carries the NFT, an inline datum and no reference script."
+}

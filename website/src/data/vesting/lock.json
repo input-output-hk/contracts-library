@@ -1,0 +1,34 @@
+{
+  "name": "vesting-lock",
+  "title": "Lock",
+  "inputs": [
+    {
+      "name": "Locker UTxO",
+      "address": "locker_addr",
+      "value": {
+        "ADA": "1_000"
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "name": "Vesting UTxO",
+      "address": "vesting_addr",
+      "value": {
+        "ADA": "1_000"
+      },
+      "datum": {
+        "beneficiary": "beneficiary",
+        "locker": "locker",
+        "vesting": {
+          "ADA": "1_000"
+        },
+        "start_time": "start",
+        "end_time": "end",
+        "recovery_time": "recovery"
+      }
+    }
+  ],
+  "signatures": ["locker"],
+  "notes": "• No script runs on lock: the builder creates the output and its inline datum.\n• Requires start < end < recovery and a value covering every total in vesting.\n• The datum is immutable: every later spend must reproduce it byte-for-byte."
+}

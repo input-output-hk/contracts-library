@@ -1,0 +1,35 @@
+{
+  "name": "dao-close-position",
+  "title": "Close Stake Position",
+  "inputs": [
+    {
+      "name": "Stake UTxO",
+      "address": "stake_addr",
+      "redeemer": "ClosePosition",
+      "value": {
+        "stakeNFT": "1",
+        "stakedToken": "N"
+      },
+      "datum": {
+        "owner": "",
+        "delegatee": "",
+        "lockedBy": "L"
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "name": "Owner UTxO",
+      "address": "owner_addr",
+      "value": {
+        "stakedToken": "N"
+      }
+    }
+  ],
+  "mint": [{ "token": "stakeNFT", "amount": "-1" }],
+  "signatures": ["owner"],
+  "validRange": {
+    "lower": "T"
+  },
+  "notes": "• Every lock must be expired: unlock_time ≤ T for all locks.\n• The NFT is burned and the remaining stake and ada go to the owner."
+}

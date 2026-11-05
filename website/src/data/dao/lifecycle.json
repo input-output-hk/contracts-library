@@ -1,0 +1,320 @@
+{
+  "name": "dao-proposal-lifecycle",
+  "title": "Proposal lifecycle",
+  "transactions": [
+    {
+      "block": "Create proposal",
+      "name": "create-proposal",
+      "title": "Create Proposal",
+      "inputs": [
+        {
+          "name": "Stake UTxO",
+          "address": "stake_addr",
+          "redeemer": "CreateProposal",
+          "value": {
+            "stakeNFT": "1",
+            "stakedToken": "S"
+          },
+          "datum": {
+            "owner": "",
+            "delegatee": "",
+            "lockedBy": "L"
+          }
+        },
+        {
+          "name": "Settings UTxO",
+          "address": "governor_addr",
+          "reference": true,
+          "value": {
+            "settingsNFT": "1"
+          },
+          "datum": {
+            "current": "DaoSettings"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "Stake UTxO",
+          "address": "stake_addr",
+          "value": {
+            "stakeNFT": "1",
+            "stakedToken": "S"
+          },
+          "datum": {
+            "owner": "",
+            "delegatee": "",
+            "lockedBy": "L'"
+          }
+        },
+        {
+          "id": "proposal-v1",
+          "name": "Proposal UTxO",
+          "address": "proposal_addr",
+          "value": {
+            "proposalNFT": "1"
+          },
+          "datum": {
+            "thresholds": "proposalThresholds",
+            "timingConfig": "proposalTimingConfig",
+            "startTime": "T",
+            "status": {
+              "Draft": {
+                "cosigningStake": "S"
+              }
+            },
+            "results": ""
+          }
+        }
+      ],
+      "mint": [{ "token": "proposalNFT", "amount": "1" }],
+      "signatures": ["owner"],
+      "validRange": {
+        "lower": "T",
+        "upper": "T + maxWidth"
+      }
+    },
+    {
+      "block": "Cosign",
+      "name": "cosign",
+      "title": "Cosign Proposal",
+      "inputs": [
+        {
+          "id": "proposal-v1",
+          "name": "Proposal UTxO",
+          "redeemer": "Cosign"
+        },
+        {
+          "name": "Stake UTxO",
+          "address": "stake_addr",
+          "redeemer": "CosignProposal",
+          "value": {
+            "stakeNFT": "1",
+            "stakedToken": "C"
+          },
+          "datum": {
+            "owner": "",
+            "delegatee": "",
+            "lockedBy": "L"
+          }
+        },
+        {
+          "name": "Settings UTxO",
+          "address": "governor_addr",
+          "reference": true,
+          "value": {
+            "settingsNFT": "1"
+          },
+          "datum": {
+            "current": "DaoSettings"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "id": "proposal-v2",
+          "name": "Proposal UTxO",
+          "address": "proposal_addr",
+          "value": {
+            "proposalNFT": "1"
+          },
+          "datum": {
+            "thresholds": "",
+            "timingConfig": "",
+            "startTime": "",
+            "status": {
+              "Draft": {
+                "cosigningStake": "S + C"
+              }
+            },
+            "results": ""
+          }
+        },
+        {
+          "name": "Stake UTxO",
+          "address": "stake_addr",
+          "value": {
+            "stakeNFT": "1",
+            "stakedToken": "C"
+          },
+          "datum": {
+            "owner": "",
+            "delegatee": "",
+            "lockedBy": "L'"
+          }
+        }
+      ],
+      "signatures": ["vote_auth"],
+      "validRange": {
+        "upper": "draft_end"
+      }
+    },
+    {
+      "block": "Accept draft",
+      "name": "accept-draft",
+      "title": "Accept Draft",
+      "inputs": [
+        {
+          "id": "proposal-v2",
+          "name": "Proposal UTxO",
+          "redeemer": "AcceptDraft"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "proposal-v3",
+          "name": "Proposal UTxO",
+          "address": "proposal_addr",
+          "value": {
+            "proposalNFT": "1"
+          },
+          "datum": {
+            "thresholds": "",
+            "timingConfig": "",
+            "startTime": "",
+            "status": "Voting",
+            "results": ""
+          }
+        }
+      ],
+      "validRange": {
+        "upper": "draft_end"
+      }
+    },
+    {
+      "block": "End voting",
+      "name": "end-voting",
+      "title": "End Voting Stage",
+      "inputs": [
+        {
+          "id": "proposal-v3",
+          "name": "Proposal UTxO",
+          "redeemer": "EndVotingStage"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "proposal-v4",
+          "name": "Proposal UTxO",
+          "address": "proposal_addr",
+          "value": {
+            "proposalNFT": "1"
+          },
+          "datum": {
+            "thresholds": "",
+            "timingConfig": "",
+            "startTime": "",
+            "status": {
+              "Tally": {
+                "votes": "0, 0"
+              }
+            },
+            "results": ""
+          }
+        }
+      ],
+      "validRange": {
+        "lower": "voting_end"
+      }
+    },
+    {
+      "block": "Tally",
+      "name": "tally",
+      "title": "Tally",
+      "inputs": [
+        {
+          "id": "proposal-v4",
+          "name": "Proposal UTxO",
+          "redeemer": "TallyVotes"
+        },
+        {
+          "name": "Vote UTxO",
+          "address": "vote_addr",
+          "redeemer": "TallyVote",
+          "value": {
+            "ADA": "A",
+            "voteNFT": "1"
+          },
+          "datum": {
+            "stakeOwner": "addr",
+            "proposal": "pId",
+            "votedOption": "option",
+            "stake": "S"
+          }
+        },
+        {
+          "name": "More votes",
+          "dots": true
+        },
+        {
+          "name": "Settings UTxO",
+          "address": "governor_addr",
+          "reference": true,
+          "value": {
+            "settingsNFT": "1"
+          },
+          "datum": {
+            "current": "DaoSettings"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "id": "proposal-v5",
+          "name": "Proposal UTxO",
+          "address": "proposal_addr",
+          "value": {
+            "proposalNFT": "1"
+          },
+          "datum": {
+            "thresholds": "",
+            "timingConfig": "",
+            "startTime": "",
+            "status": {
+              "Tally": {
+                "votes": "V'"
+              }
+            },
+            "results": ""
+          }
+        },
+        {
+          "name": "User UTxO",
+          "address": "addr",
+          "value": {
+            "ADA": "A"
+          }
+        },
+        {
+          "name": "More refunds",
+          "dots": true
+        }
+      ],
+      "mint": [
+        { "token": "voteNFT₁", "amount": "-1" },
+        { "token": "voteNFTₙ", "amount": "-1" }
+      ],
+      "validRange": {
+        "upper": "tally_end"
+      }
+    },
+    {
+      "block": "End proposal",
+      "name": "end-proposal",
+      "title": "End Proposal",
+      "inputs": [
+        {
+          "id": "proposal-v5",
+          "name": "Proposal UTxO",
+          "redeemer": "EndProposal"
+        }
+      ],
+      "mint": [{ "token": "proposalNFT", "amount": "-1" }],
+      "withdrawals": ["effect_w (winner)"],
+      "validRange": {
+        "lower": "tally_end"
+      }
+    }
+  ],
+  "notes": "• Dots mark batched inputs/outputs deliberately omitted; the cards show one representative.\n• Settings UTxO is a reference input on Create Proposal, Cosign, Vote and Tally. design.typ omits it from the Cosign/Vote/Tally diagrams for brevity.\n• L' is L plus a lock for this proposal until draft_end.\n• Voting happens off the proposal UTxO: a position mints a vote artifact, which Tally consumes. The transactions page shows Vote and Cancel Vote in detail."
+}

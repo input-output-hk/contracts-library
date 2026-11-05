@@ -1,0 +1,20 @@
+---
+import { TransactionChainDiagram, TransactionChainSchema } from "tx-diagram-ui";
+
+interface Props {
+  /** A chain of transactions; validated at build time. */
+  data: unknown;
+}
+
+const { data } = Astro.props;
+
+// Validates ids, links and the one-consumer-per-output rule at build time.
+const chain = TransactionChainSchema.parse(data);
+---
+
+<!-- `not-content` keeps Starlight's flow-spacing rule out of the diagram: it
+     would otherwise add a top margin to the internal SVG overlay and cards. -->
+<!-- Hydrated: the chain measures its ports on mount to draw the connectors. -->
+<div class="tx-frame-wide tx-theme not-content">
+  <TransactionChainDiagram client:load chain={chain} title={chain.title} />
+</div>

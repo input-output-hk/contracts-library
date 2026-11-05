@@ -1,0 +1,94 @@
+{
+  "name": "dao-tally",
+  "title": "Tally",
+  "inputs": [
+    {
+      "name": "Proposal UTxO",
+      "address": "proposal_addr",
+      "redeemer": "TallyVotes",
+      "value": {
+        "proposalNFT": "1"
+      },
+      "datum": {
+        "thresholds": "",
+        "timingConfig": "",
+        "startTime": "T",
+        "status": {
+          "Tally": {
+            "votes": "V"
+          }
+        },
+        "results": ""
+      }
+    },
+    {
+      "name": "Vote UTxO",
+      "address": "vote_addr",
+      "redeemer": "TallyVote",
+      "value": {
+        "ADA": "A",
+        "voteNFT": "1"
+      },
+      "datum": {
+        "stakeOwner": "addr",
+        "proposal": "pId",
+        "votedOption": "option",
+        "stake": "S"
+      }
+    },
+    {
+      "name": "More votes",
+      "dots": true
+    },
+    {
+      "name": "Settings UTxO",
+      "address": "governor_addr",
+      "reference": true,
+      "value": {
+        "settingsNFT": "1"
+      },
+      "datum": {
+        "current": "DaoSettings"
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "name": "Proposal UTxO",
+      "address": "proposal_addr",
+      "value": {
+        "proposalNFT": "1"
+      },
+      "datum": {
+        "thresholds": "",
+        "timingConfig": "",
+        "startTime": "",
+        "status": {
+          "Tally": {
+            "votes": "V'"
+          }
+        },
+        "results": ""
+      }
+    },
+    {
+      "name": "User UTxO",
+      "address": "addr",
+      "value": {
+        "ADA": "A"
+      }
+    },
+    {
+      "name": "More refunds",
+      "dots": true
+    }
+  ],
+  "mint": [
+    { "token": "voteNFT₁", "amount": "-1" },
+    { "token": "voteNFTₙ", "amount": "-1" }
+  ],
+  "validRange": {
+    "upper": "tally_end"
+  },
+  "notes": "• Anyone can tally; votes are consumed in batches.\n• Each vote's stake is added to its option total; its lovelace is refunded to the recorded stakeOwner.\n• The burned vote count must match the votes counted for this proposal.\n• The Settings UTxO reference input supplies the vote validator hash."
+}

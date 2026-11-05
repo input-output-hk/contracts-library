@@ -1,0 +1,53 @@
+{
+  "name": "eta-authorize",
+  "title": "Authorize (self-transfer)",
+  "inputs": [
+    {
+      "name": "Certificate",
+      "address": "plb_addr [stake: owner]",
+      "redeemer": "BaseSpendRedeemer",
+      "value": {
+        "cipNFT (step k)": "1"
+      },
+      "datum": {
+        "start": "…",
+        "commit": "None",
+        "cnt_policy": "…"
+      }
+    },
+    {
+      "name": "Protocol params",
+      "address": "protocol_params",
+      "reference": true
+    },
+    {
+      "name": "RegistryNode",
+      "address": "registry_addr",
+      "reference": true,
+      "value": {
+        "registryNode": "1"
+      }
+    }
+  ],
+  "withdrawals": [
+    "programmable_logic_global [TransferAct]",
+    "transfer [TransferRedeemer]",
+    "transfer_logic (ours)"
+  ],
+  "signatures": ["owner"],
+  "outputs": [
+    {
+      "name": "Certificate",
+      "address": "plb_addr [stake: owner]",
+      "value": {
+        "cipNFT (step k)": "1"
+      },
+      "datum": {
+        "start": "…",
+        "commit": "Some(pay)",
+        "cnt_policy": "…"
+      }
+    }
+  ],
+  "notes": "• The owner writes commit Some(pay) — or None to revoke — on a self-transfer: same stake in and out, step name, start and cnt_policy preserved.\n• Only the owner can authorise it, so the commitment is authentic.\n• commit is cleared automatically when the owner changes, so the issuer can never pay a previous owner. The owner keeps the self-service path."
+}

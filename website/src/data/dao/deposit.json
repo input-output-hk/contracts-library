@@ -1,0 +1,47 @@
+{
+  "name": "dao-deposit",
+  "title": "Deposit Stake",
+  "inputs": [
+    {
+      "name": "Stake UTxO",
+      "address": "stake_addr",
+      "redeemer": "Deposit",
+      "value": {
+        "stakeNFT": "1",
+        "stakedToken": "N"
+      },
+      "datum": {
+        "owner": "",
+        "delegatee": "",
+        "lockedBy": ""
+      }
+    },
+    {
+      "name": "Owner UTxO",
+      "address": "owner_addr",
+      "value": {
+        "stakedToken": "M"
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "name": "Stake UTxO",
+      "address": "stake_addr",
+      "value": {
+        "stakeNFT": "1",
+        "stakedToken": "N + M"
+      },
+      "datum": {
+        "owner": "",
+        "delegatee": "",
+        "lockedBy": ""
+      }
+    }
+  ],
+  "signatures": ["owner"],
+  "validRange": {
+    "lower": "T"
+  },
+  "notes": "• The continuation prunes expired locks; owner and delegatee are unchanged.\n• Deposit can be used only to prune locks by adding no tokens."
+}

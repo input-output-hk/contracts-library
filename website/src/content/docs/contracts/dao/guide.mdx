@@ -1,0 +1,96 @@
+---
+title: Specification & usage
+description: The DAO specification summarized, followed by the complete usage guide.
+tableOfContents: false
+---
+
+import CanonicalUsage from "../../../../components/CanonicalUsage.astro";
+import { docUrl } from "../../../../lib/manifest";
+
+This page summarizes the DAO specification and includes the complete usage
+guide. The canonical documents live in the repository; the full specification is
+linked below, and the usage guide is rendered here in full.
+
+## What it is
+
+The DAO is token-weighted governance for a protocol and its treasury. Three
+cooperating validators guard the state — **stake**, **proposal** and **vote** —
+and a proposal resolves to an **effect** script that executes the approved
+action. Governance parameters (thresholds, timings and sibling script hashes)
+are read from a Settings UTxO, so they can change without redeploying the DAO.
+
+## Model
+
+| UTxO               | Carries                                                      |
+| ------------------ | ------------------------------------------------------------ |
+| **Stake position** | One stake NFT, the staked governance tokens, and live locks. |
+| **Proposal**       | One proposal NFT and the lifecycle datum.                    |
+| **Vote artifact**  | One vote NFT and one holder's vote on one proposal.          |
+| **Settings**       | The `DaoSettings` in the Settings UTxO's `current` field.    |
+
+The stake position datum is `{ owner, delegatee, locks }`. A lock is
+`{ proposal_id, unlock_time, stake }`; the frozen stake is the **maximum** live
+lock, not the sum, so the same tokens can back several proposals at once. The
+proposal datum is `{ thresholds, timing_config, start_time, status, results }`;
+only `status` changes. The vote datum is `{ stake_owner, proposal, voted_option,
+stake }`.
+
+## Who does what
+
+| Role                            | Credential                             | Powers                                                |
+| ------------------------------- | -------------------------------------- | ----------------------------------------------------- |
+| **Owner**                       | position `owner`                       | Deposit, withdraw, delegate, close, create proposals. |
+| **Delegatee**                   | position `delegatee`                   | Cosign and vote on the position's behalf.             |
+| **Proposer / Cosigner / Voter** | any sufficiently staked position       | Perform the corresponding action.                     |
+| **Settings authority**          | settings `propose_auth` / `apply_auth` | Change the DAO's parameters.                          |
+| **Effect scripts**              | proposal `results`                     | Execute the winning option; must self-verify.         |
+
+All roles are pluggable credentials: a key signs, a script is invoked as a
+zero-ada withdrawal.
+
+## How a proposal moves
+
+`Draft` accumulates cosigning stake; `AcceptDraft` moves it to `Voting`;
+`EndVotingStage` freezes it into `Tally`; `TallyVotes` folds in votes; and
+`EndProposal` closes the poll and runs the winning effect when it meets the
+execute threshold.
+
+| Phase          | Action           | Meaning                                                                                 |
+| -------------- | ---------------- | --------------------------------------------------------------------------------------- |
+| Create         | `CreateProposal` | Locks the creator's stake until `draft_end`; snapshots thresholds, timings and results. |
+| Draft          | `Cosign`         | Adds a cosigner's stake and records their lock.                                         |
+| Draft → Voting | `AcceptDraft`    | Requires cosign stake ≥ `accept`. Anyone can do it.                                     |
+| Draft → closed | `RejectDraft`    | Burns an unaccepted draft after `draft_end`.                                            |
+| Voting         | `Vote`           | Mints a vote artifact weighted by the position's stake.                                 |
+| Voting → Tally | `EndVotingStage` | After `voting_end`, starts zeroed counters.                                             |
+| Tally          | `TallyVotes`     | Consumes votes in batches, counts stake and refunds ada.                                |
+| Tally → closed | `EndProposal`    | Declares the strict winner and optionally runs its effect.                              |
+
+## Invariants and assumptions
+
+- The settings authority is trusted: whoever can change the Settings UTxO's
+  `current` can change thresholds, timings and sibling hashes.
+- Effect scripts are untrusted. Being in `results` proves nothing; each must
+  verify its own victory with `am_i_the_winner`.
+- The proposal body is immutable except `status`. `create` is read live at
+  creation; the other thresholds and the timings are snapshotted.
+- One proposal is tallied per transaction, and a canceled vote never counts.
+- Vote cancellation has no deadline; the position's stake is freed when its lock
+  expires, not at cancel time.
+- Locks freeze the maximum, not the sum. Different positions may back different
+  proposals at the same time.
+- Delayed stage transitions shrink the tally window; someone must advance the
+  poll promptly.
+- The tally DoS budget assumes a known token supply; update settings before
+  minting more governance tokens.
+
+## Read the full specification
+
+The <a href={docUrl("dao/spec.md")}>canonical specification</a> has the UTxO
+layouts, every transaction table, invariants and the threat model. See also the
+[transactions in detail](/contracts/dao/transactions) and the
+[vote lifecycle](/contracts/dao#vote-lifecycle).
+
+## Usage
+
+<CanonicalUsage file="dao/usage.md" />

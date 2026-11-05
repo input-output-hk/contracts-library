@@ -1,0 +1,53 @@
+{
+  "name": "vesting-claim",
+  "title": "Claim (partial)",
+  "inputs": [
+    {
+      "name": "Vesting UTxO",
+      "address": "vesting_addr",
+      "redeemer": "Claim",
+      "value": {
+        "ADA": "1_000"
+      },
+      "datum": {
+        "beneficiary": "beneficiary",
+        "locker": "locker",
+        "vesting": {
+          "ADA": "1_000"
+        },
+        "start_time": "start",
+        "end_time": "end",
+        "recovery_time": "recovery"
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "name": "Vesting UTxO",
+      "address": "vesting_addr",
+      "value": {
+        "ADA": "600"
+      },
+      "datum": {
+        "beneficiary": "",
+        "locker": "",
+        "vesting": "",
+        "start_time": "",
+        "end_time": "",
+        "recovery_time": ""
+      }
+    },
+    {
+      "name": "Beneficiary UTxO",
+      "address": "beneficiary_addr",
+      "value": {
+        "ADA": "400"
+      }
+    }
+  ],
+  "signatures": ["beneficiary"],
+  "validRange": {
+    "lower": "now"
+  },
+  "notes": "• now is the validity-range lower bound. vested = floor(total × (now − start) / (end − start)).\n• The continuation reproduces the datum byte-for-byte and holds at least total − vested.\n• A full claim (now ≥ end) takes the whole bundle and needs no continuation."
+}

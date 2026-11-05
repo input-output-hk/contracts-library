@@ -1,0 +1,61 @@
+---
+import EditLink from "@astrojs/starlight/components/EditLink.astro";
+import LastUpdated from "@astrojs/starlight/components/LastUpdated.astro";
+import Pagination from "@astrojs/starlight/components/Pagination.astro";
+
+const isLanding = Astro.url.pathname === "/";
+---
+
+<footer class="sl-flex">
+  {isLanding ? (
+    <div class="landing-footer">
+      <span>
+        ContractsLibrary — Apache-2.0 · a public good for the Cardano ecosystem.
+      </span>
+      <a href="https://github.com/input-output-hk/contracts-library">GitHub</a>
+    </div>
+  ) : (
+    <>
+      <div class="meta sl-flex">
+        <EditLink />
+        <LastUpdated />
+      </div>
+      <Pagination />
+    </>
+  )}
+</footer>
+
+<style>
+  footer {
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .meta {
+    gap: 0.75rem 3rem;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    margin-top: 3rem;
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-3);
+  }
+
+  .meta > :global(p:only-child) {
+    margin-inline-start: auto;
+  }
+
+  .landing-footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1.5rem;
+    justify-content: center;
+    padding-block: 1.5rem;
+    border-top: 1px solid var(--sl-color-hairline);
+    font-size: var(--sl-text-xs);
+    color: var(--sl-color-gray-3);
+  }
+
+  .landing-footer a {
+    color: var(--sl-color-gray-2);
+  }
+</style>

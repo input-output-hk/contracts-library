@@ -1,0 +1,36 @@
+{
+  "name": "smart-wallet-deposit",
+  "title": "Deposit",
+  "inputs": [
+    {
+      "name": "Wallet UTxO",
+      "address": "wallet_addr",
+      "redeemer": "Deposit",
+      "value": {
+        "ADA": "x",
+        "walletNFT": "1"
+      },
+      "datum": {
+        "spenders": "Pairs<ScriptHash, Data>",
+        "depositors": "Pairs<ScriptHash, Data>"
+      }
+    }
+  ],
+  "withdrawals": ["each script in depositors"],
+  "outputs": [
+    {
+      "name": "Wallet UTxO",
+      "address": "wallet_addr",
+      "value": {
+        "ADA": "x + d",
+        "walletNFT": "1",
+        "deposit": "d'"
+      },
+      "datum": {
+        "spenders": "Pairs<ScriptHash, Data>",
+        "depositors": "depositors'"
+      }
+    }
+  ],
+  "notes": "• Every depositors script runs as a withdraw-0 and must approve; an empty map leaves deposits open.\n• spenders and the depositors key set are preserved; depositor Data may advance.\n• The value must be a superset of the input's; a deposit cannot spend or reconfigure.\n• The spenders scripts do not run."
+}
