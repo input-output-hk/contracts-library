@@ -8,7 +8,7 @@ on:
 
 jobs:
   format:
-    name: Format (biome + aiken)
+    name: Format (biome + prettier + aiken)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,7 +19,7 @@ jobs:
           cache-dependency-path: package-lock.json
       - name: Install
         run: npm ci
-      - name: Biome format check
+      - name: Format check (biome + prettier)
         run: npm run format:check
       - uses: aiken-lang/setup-aiken@v1
         with:
@@ -98,3 +98,31 @@ jobs:
       - name: Run e2e tests against an ephemeral devnet
         working-directory: offchain/meshjs/e2e
         run: npm run test:devnet
+
+  website:
+    name: Website (astro check + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # Astro 7 requires Node >= 22.12.
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - name: Install
+        working-directory: website
+        run: npm ci
+      - name: Typecheck
+        working-directory: website
+        run: npm run check
+      # The build renders the canonical Markdown from docs/, so it fails when a
+      # manifest entry or a rewritten link points at a file that is not there.
+      - name: Build
+        working-directory: website
+        run: npm run build
+      # Fails when llms.txt is malformed or links to a page/repository path that
+      # does not exist. See website/scripts/check-llms.mjs.
+      - name: Validate llms.txt
+        working-directory: website
+        run: npm run check:llms

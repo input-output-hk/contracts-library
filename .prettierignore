@@ -1,0 +1,7 @@
+# Prettier only owns the Astro components and MDX pages in website/.
+# Everything else is formatted by Biome (see biome.json).
+*
+!website/
+!website/**/
+!website/**/*.astro
+!website/**/*.mdx
