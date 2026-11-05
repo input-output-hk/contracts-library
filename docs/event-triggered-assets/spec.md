@@ -118,6 +118,9 @@ the spent vault with exactly one continuation carrying the same NFT and datum:
 | `VaultTopUp` | anyone continues the vault | The vault gains the topped-up ADA (any positive amount); its address, datum, NFT and other assets are preserved. |
 | `Redeem` | no owner signature needed | The vault's net ADA loss equals the sum decoded from the burned coupons; the payout(s) go to the address(es) the redeemer names. |
 
+Every continuation also pins `reference_script: None`, so no script can be
+attached to the vault UTxO.
+
 A vault is a single UTxO and a redemption spends **exactly one** vault; a
 deposit, top-up or redemption re-outputs the remainder. Solvency is an
 assumption, not an invariant (§7). ADA sent to the vault address without the
