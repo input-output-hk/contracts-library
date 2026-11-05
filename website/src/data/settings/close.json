@@ -1,0 +1,31 @@
+{
+  "name": "settings-close",
+  "title": "Close",
+  "inputs": [
+    {
+      "name": "Settings UTxO",
+      "address": "settings_addr",
+      "redeemer": "Close",
+      "value": {
+        "settingsNFT": "1"
+      },
+      "datum": {
+        "current": "",
+        "next": "",
+        "next_apply": ""
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "name": "Applier UTxO",
+      "address": "applier_addr",
+      "value": {
+        "ADA": "A"
+      }
+    }
+  ],
+  "mint": [{ "token": "settingsNFT", "amount": "-1" }],
+  "signatures": ["applier"],
+  "notes": "• Burns the NFT and releases the ada; where it goes is unconstrained.\n• Irreversible: the seed is already spent, so this script hash can never host another instance."
+}

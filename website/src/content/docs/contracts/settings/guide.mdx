@@ -1,0 +1,80 @@
+---
+title: Specification & usage
+description: The Settings specification summarized, followed by the complete usage guide.
+tableOfContents: false
+---
+
+import CanonicalUsage from "../../../../components/CanonicalUsage.astro";
+import { docUrl } from "../../../../lib/manifest";
+
+This page summarizes the Settings specification and includes the complete usage
+guide. The canonical documents live in the repository; the full specification is
+linked below, and the usage guide is rendered here in full.
+
+## What it is
+
+A Settings instance is one UTxO holding another protocol's configuration. It
+separates _proposing_ a new value from _applying_ it: a **proposer** stages a
+value, it waits out `apply_delay`, and an **applier** commits it. Consumers read
+the active value from the Settings UTxO as a reference input, so the main
+protocol never has to spend it.
+
+## Model
+
+| Part          | Meaning                                                                         |
+| ------------- | ------------------------------------------------------------------------------- |
+| Settings UTxO | The whole state, at the script address.                                         |
+| Settings NFT  | A one-shot token minted under the script's own policy; identifies the instance. |
+| `current`     | The active value, as opaque `Data`.                                             |
+| `next`        | An optional pending value.                                                      |
+| `next_apply`  | When the pending value may be applied, in POSIX milliseconds.                   |
+
+The one-shot seed is spent at launch, so the NFT can only be minted once and the
+script hash can host at most one instance. `current` is never interpreted by
+the reference validator; the `settings_typed` fork requires an integer value if
+you need a real predicate.
+
+## Who does what
+
+| Role         | Credential     | Can do                                  |
+| ------------ | -------------- | --------------------------------------- |
+| **Applier**  | `apply_auth`   | Launch, apply a matured proposal, close |
+| **Proposer** | `propose_auth` | Write or overwrite the pending value    |
+| **Consumer** | —              | Read `current` as a reference input     |
+
+Both credentials are pluggable: a key authorizes by signing, a script is invoked
+as a zero-ada withdrawal. A key, multisig, DAO or smart wallet can fill either
+role.
+
+## What each action does
+
+| Action      | Redeemer  | Effect                                                                      |
+| ----------- | --------- | --------------------------------------------------------------------------- |
+| **Launch**  | mint      | Spends the seed, mints the NFT, writes the initial `current`.               |
+| **Propose** | `Propose` | Writes `next` and `next_apply = now + apply_delay`; `current` is untouched. |
+| **Apply**   | `Apply`   | Once `now >= next_apply`, promotes `next` to `current` and clears the pair. |
+| **Close**   | `Close`   | Burns the NFT and releases the ada; irreversible.                           |
+
+Proposing again supersedes the pending pair and resets the deadline. The apply
+boundary is non-strict: `now == next_apply` is accepted.
+
+## Invariants and assumptions
+
+- One NFT-bearing UTxO per instance; the seed can only be spent once.
+- A continuation preserves the script address, the NFT and the datum shape.
+- `apply_delay` is trusted at deployment; the proposer chooses the delay anchor,
+  so the delay is a scheduling tool, not a hard real-time guarantee.
+- `validate_datum` is a stub in the reference validator: the value is not
+  checked for meaning.
+- Closing is irreversible.
+
+## Read the full specification
+
+The <a href={docUrl("settings/spec.md")}>canonical specification</a> has the exact
+datum, action constraints, invariants and threat model. The
+[transactions in detail](/contracts/settings/transactions) page draws the UTxOs,
+redeemers and datums each action needs.
+
+## Usage
+
+<CanonicalUsage file="settings/usage.md" />

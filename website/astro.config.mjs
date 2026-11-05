@@ -52,7 +52,23 @@ export default defineConfig({
         },
         {
           label: "Contracts",
-          items: [{ label: "Catalog", link: "/contracts" }],
+          items: [
+            { label: "Catalog", link: "/contracts" },
+            {
+              label: "Settings",
+              items: [
+                { label: "Overview", link: "/contracts/settings" },
+                {
+                  label: "Transactions",
+                  link: "/contracts/settings/transactions",
+                },
+                {
+                  label: "Specification & usage",
+                  link: "/contracts/settings/guide",
+                },
+              ],
+            },
+          ],
         },
         {
           label: "Project",

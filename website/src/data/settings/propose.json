@@ -1,0 +1,38 @@
+{
+  "name": "settings-propose",
+  "title": "Propose",
+  "inputs": [
+    {
+      "name": "Settings UTxO",
+      "address": "settings_addr",
+      "redeemer": "Propose",
+      "value": {
+        "settingsNFT": "1"
+      },
+      "datum": {
+        "current": "",
+        "next": "",
+        "next_apply": ""
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "name": "Settings UTxO",
+      "address": "settings_addr",
+      "value": {
+        "settingsNFT": "1"
+      },
+      "datum": {
+        "current": "",
+        "next": "d",
+        "next_apply": "now + apply_delay"
+      }
+    }
+  ],
+  "signatures": ["proposer"],
+  "validRange": {
+    "lower": "now"
+  },
+  "notes": "• d ≠ current and validate_datum(d).\n• Proposing again supersedes the pending pair and resets the deadline.\n• current is preserved byte-for-byte."
+}

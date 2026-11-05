@@ -65,7 +65,33 @@ export interface Contract {
   docs: DocRef[];
 }
 
-export const contracts: Contract[] = [];
+export const contracts: Contract[] = [
+  {
+    slug: "settings",
+    name: "Settings",
+    summary:
+      "Governed configuration for another protocol: changes are proposed, wait out a delay, then are applied.",
+    status: "In progress",
+    category: "Governance",
+    specStatus: "stable",
+    docs: [
+      {
+        file: "settings/spec.md",
+        slug: "spec",
+        title: "Specification",
+        summary:
+          "Defines the Settings UTxO, its datum, and the launch, propose, apply, and close transactions.",
+      },
+      {
+        file: "settings/usage.md",
+        slug: "usage",
+        title: "Usage guide",
+        summary:
+          "How to deploy, operate, and consume a Settings instance, including the off-chain builders.",
+      },
+    ],
+  },
+];
 
 export function getContract(slug: string): Contract | undefined {
   return contracts.find((contract) => contract.slug === slug);

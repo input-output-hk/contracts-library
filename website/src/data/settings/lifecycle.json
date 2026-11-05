@@ -1,0 +1,123 @@
+{
+  "name": "settings-lifecycle",
+  "title": "Settings lifecycle",
+  "transactions": [
+    {
+      "block": "Launch",
+      "name": "launch",
+      "title": "Launch",
+      "inputs": [
+        {
+          "name": "Seed UTxO"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "settings-v1",
+          "name": "Settings UTxO",
+          "address": "settings_addr",
+          "value": {
+            "settingsNFT": "1"
+          },
+          "datum": {
+            "current": "Data",
+            "next": "Maybe Data",
+            "next_apply": "Maybe Int"
+          }
+        }
+      ],
+      "mint": [
+        {
+          "token": "settingsNFT",
+          "amount": "1"
+        }
+      ],
+      "signatures": ["applier"]
+    },
+    {
+      "block": "Propose",
+      "name": "propose",
+      "title": "Propose",
+      "inputs": [
+        {
+          "id": "settings-v1",
+          "name": "Settings UTxO",
+          "redeemer": "Propose"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "settings-pending",
+          "name": "Settings UTxO",
+          "address": "settings_addr",
+          "value": {
+            "settingsNFT": "1"
+          },
+          "datum": {
+            "current": "",
+            "next": "d",
+            "next_apply": "now + apply_delay"
+          }
+        }
+      ],
+      "signatures": ["proposer"]
+    },
+    {
+      "block": "Apply",
+      "name": "apply",
+      "title": "Apply",
+      "inputs": [
+        {
+          "id": "settings-pending",
+          "name": "Settings UTxO",
+          "redeemer": "Apply"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "settings-v2",
+          "name": "Settings UTxO",
+          "address": "settings_addr",
+          "value": {
+            "settingsNFT": "1"
+          },
+          "datum": {
+            "current": "d",
+            "next": "None",
+            "next_apply": "None"
+          }
+        }
+      ],
+      "signatures": ["applier"]
+    },
+    {
+      "block": "Close",
+      "name": "close",
+      "title": "Close",
+      "inputs": [
+        {
+          "id": "settings-v2",
+          "name": "Settings UTxO",
+          "redeemer": "Close"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "Applier UTxO",
+          "address": "applier_addr",
+          "value": {
+            "ADA": "A"
+          }
+        }
+      ],
+      "mint": [
+        {
+          "token": "settingsNFT",
+          "amount": "-1"
+        }
+      ],
+      "signatures": ["applier"]
+    }
+  ],
+  "notes": "Close works from any state — it does not read the datum. Proposing again supersedes the pending proposal and resets the deadline."
+}

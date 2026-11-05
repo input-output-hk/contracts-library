@@ -1,0 +1,26 @@
+{
+  "name": "settings-launch",
+  "title": "Launch Settings",
+  "inputs": [
+    {
+      "name": "Seed UTxO"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "Settings UTxO",
+      "address": "settings_addr",
+      "value": {
+        "settingsNFT": "1"
+      },
+      "datum": {
+        "current": "Data",
+        "next": "Maybe Data",
+        "next_apply": "Maybe Int"
+      }
+    }
+  ],
+  "mint": [{ "token": "settingsNFT", "amount": "1" }],
+  "signatures": ["applier"],
+  "notes": "• Spends the parameterized seed_utxo, so the NFT can only be minted once.\n• The Settings UTxO carries exactly the NFT and ada.\n• validate_datum(current) must hold."
+}
