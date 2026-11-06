@@ -33,13 +33,12 @@ import { plutusVersion, stakeCompiledCode as stakeCode } from "./blueprint";
 import {
   closeStakePositionRedeemer,
   createPositionRedeemer,
+  DEFAULT_MIN_UTXO_LOVELACE,
   stakeParamsToData,
   stakePositionDatumToData,
   stakeRedeemerToData,
 } from "./datum";
 import type { StakeParams, StakePositionDatum, StakeRedeemer } from "./types";
-
-const DEFAULT_MIN_UTXO_LOVELACE = 2_000_000n;
 
 /** The Plutus V3 script in the form MeshJS expects (parameterized). */
 export function stakeScript(params: StakeParams): PlutusScript {

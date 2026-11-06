@@ -47,7 +47,7 @@ export function nftNameFromRef(ref: TxInput): string {
 }
 
 /** The enclosing slot and its start time (POSIX ms) for a wall-clock instant. */
-export interface SlotBound {
+interface SlotBound {
   slot: number;
   startMs: number;
 }
@@ -105,7 +105,7 @@ export function nftNameOf(utxo: UTxO, policyId: string): string {
 }
 
 /** Builder options shared by every transaction's closing calls. */
-export interface FinalizeOptions {
+interface FinalizeOptions {
   collateral: UTxO;
   changeAddress: string;
   utxos: UTxO[];

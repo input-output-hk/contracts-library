@@ -131,7 +131,7 @@ function camel(slug) {
     .join("");
 }
 
-/** {plutus, pins: [{file, title, mapKey?, code, hash?}], compilerPin} */
+/** {pins: [{file, title, mapKey?, code, hash?}], compilerPin} */
 function inputs() {
   const plutus = JSON.parse(
     readFileSync(join(REPO, "onchain/plutus.json"), "utf8"),
@@ -147,7 +147,6 @@ function inputs() {
     }
   }
   return {
-    plutus,
     pins,
     compilerPin: `aiken-${plutus.preamble?.compiler?.version ?? ""}`,
   };

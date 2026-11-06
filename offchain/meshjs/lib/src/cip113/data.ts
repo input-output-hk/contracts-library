@@ -35,7 +35,7 @@ export function thirdPartyAct(): Data {
 }
 
 /** `RegistryProof`: TokenExists { node_idx } = 0, TokenDoesNotExist = 1. */
-export interface RegistryProof {
+interface RegistryProof {
   nodeIdx: number;
 }
 
