@@ -10,7 +10,7 @@
 use aiken/crypto.{ScriptHash, VerificationKeyHash}
 use aiken/interval
 use cardano/address.{
-  Script, VerificationKey, from_script, from_verification_key,
+  Address, Inline, Script, VerificationKey, from_script, from_verification_key,
 }
 use cardano/assets.{Value}
 use cardano/certificate.{Certificate, RegisterCredential, UnregisterCredential}
@@ -584,6 +584,39 @@ test update_permissions_rejects_stray_wallet_output() fail {
     outputs: [
       wallet_out(nft_value(12 * ada), [], []),
       wallet_out(assets.from_lovelace(2 * ada), [], []),
+    ],
+  }
+  core_spend(datum, UpdatePermissions { out_ix: 0 }, tx)
+}
+
+test spend_rejects_stake_credential_change() fail {
+  let datum = WalletDatum { spenders: [], depositors: [] }
+  let tx = Transaction {
+    ..member_tx(),
+    inputs: [wallet_in(wallet_out(nft_value(100 * ada), [], []))],
+    outputs: [
+      Output {
+        ..wallet_out(nft_value(100 * ada), [], []),
+        address: Address {
+          payment_credential: Script(wallet_hash),
+          stake_credential: Some(Inline(VerificationKey(member))),
+        },
+      },
+    ],
+  }
+  core_spend(datum, Spend, tx)
+}
+
+test update_permissions_rejects_reference_script() fail {
+  let datum = WalletDatum { spenders: [], depositors: [] }
+  let tx = Transaction {
+    ..admin_tx(),
+    inputs: [wallet_in(wallet_out(nft_value(10 * ada), [], []))],
+    outputs: [
+      Output {
+        ..wallet_out(nft_value(10 * ada), [], []),
+        reference_script: Some(token_policy),
+      },
     ],
   }
   core_spend(datum, UpdatePermissions { out_ix: 0 }, tx)

@@ -1,5 +1,5 @@
 use aiken/crypto.{ScriptHash}
-use cardano/address.{Script, from_script}
+use cardano/address.{Address, Inline, Script, VerificationKey, from_script}
 use cardano/assets.{Value}
 use cardano/certificate.{RegisterCredential, UnregisterCredential}
 use cardano/transaction.{
@@ -260,6 +260,7 @@ fn spend_continuation(
   validate_spend_continuation(
     old_datum,
     old_value,
+    from_script(wallet_policy),
     wallet_policy,
     wallet_token,
     Transaction { ..placeholder, outputs },
@@ -335,6 +336,35 @@ test spend_rejects_non_nft_outputs_at_wallet_address() fail {
     wallet_datum([], [Pair(a, data)]),
     wallet_value(),
     [wallet_output([], [Pair(a, data)]), extra],
+  )
+}
+
+test spend_rejects_stake_credential_change() fail {
+  let data: Data = 0
+  let changed = Output {
+    ..wallet_output([], [Pair(a, data)]),
+    address: Address {
+      payment_credential: Script(wallet_policy),
+      stake_credential: Some(Inline(VerificationKey(a))),
+    },
+  }
+  spend_continuation(
+    wallet_datum([], [Pair(a, data)]),
+    wallet_value(),
+    [changed],
+  )
+}
+
+test spend_rejects_continuation_reference_script() fail {
+  let data: Data = 0
+  let with_script = Output {
+    ..wallet_output([], [Pair(a, data)]),
+    reference_script: Some(other_policy),
+  }
+  spend_continuation(
+    wallet_datum([], [Pair(a, data)]),
+    wallet_value(),
+    [with_script],
   )
 }
 
