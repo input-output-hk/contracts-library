@@ -13,7 +13,6 @@
 //// rely on its own entry only, and accept `UnregisterCredential` when leaving —
 //// a script that refuses to unregister blocks `Close` and removal.
 
-use aiken/cbor
 use aiken/collection/list
 use aiken/collection/pairs
 use aiken/crypto.{ScriptHash}
@@ -86,7 +85,7 @@ pub fn own_withdrawal_removed(
 /// The canonical `Data` marker stored by stateless delegated scripts (`0`).
 pub fn stateless_data_valid(data: Data) -> Bool {
   let canonical: Data = 0
-  cbor.serialise(data) == cbor.serialise(canonical)
+  data == canonical
 }
 
 /// Whether a stateless spender script's own `Data` is still the canonical
