@@ -1,7 +1,8 @@
 use aiken/cbor
 use aiken/crypto.{ScriptHash}
-use cardano/address.{Script, from_script}
+use cardano/address.{Credential, Script, VerificationKey, from_script}
 use cardano/assets
+use cardano/certificate.{Certificate, RegisterCredential, UnregisterCredential}
 use cardano/transaction.{
   InlineDatum, Input, Output, OutputReference, Transaction, placeholder,
 }
@@ -9,7 +10,7 @@ use smart_wallet/types.{WalletDatum}
 use smart_wallet/withdrawal.{
   own_depositor_data, own_depositor_data_in, own_depositor_removed,
   own_depositor_stateless_unchanged, own_withdrawal_data, own_withdrawal_removed,
-  own_withdrawal_stateless_unchanged, stateless_data_valid,
+  own_withdrawal_stateless_unchanged, reference_publish, stateless_data_valid,
 }
 
 const a = #"11111111111111111111111111111111111111111111111111111111"
@@ -309,4 +310,170 @@ test depositor_stateless_data_unchanged_rejects_rewrite() fail {
     outputs: [wallet_output_at_depositors([Pair(a, junk)])],
   }
   own_depositor_stateless_unchanged(tx, Script(a), wallet_token, a)
+}
+
+// ----------------------------------------------------- reference publish
+
+fn register_certificate(credential: Credential) -> Certificate {
+  RegisterCredential { credential, deposit: Never }
+}
+
+fn unregister_certificate(credential: Credential) -> Certificate {
+  UnregisterCredential { credential, refund: Never }
+}
+
+fn publish_with(
+  certificate: Certificate,
+  tx: Transaction,
+  role: withdrawal.ReferenceRole,
+  register_check: fn(Data) -> Bool,
+) -> Bool {
+  reference_publish(
+    certificate,
+    tx,
+    Script(a),
+    wallet_token,
+    role,
+    register_check,
+  )
+}
+
+test publish_register_spender_ok() {
+  let data: Data = 0
+  let tx = Transaction {
+    ..placeholder,
+    outputs: [wallet_output_at([Pair(a, data)])],
+  }
+  publish_with(
+    register_certificate(Script(a)),
+    tx,
+    withdrawal.Spender,
+    stateless_data_valid,
+  )
+}
+
+test publish_register_depositor_ok() {
+  let data: Data = 0
+  let tx = Transaction {
+    ..placeholder,
+    outputs: [wallet_output_at_depositors([Pair(a, data)])],
+  }
+  publish_with(
+    register_certificate(Script(a)),
+    tx,
+    withdrawal.Depositor,
+    stateless_data_valid,
+  )
+}
+
+test publish_register_rejects_failed_check() {
+  let data: Data = 0
+  let tx = Transaction {
+    ..placeholder,
+    outputs: [wallet_output_at([Pair(a, data)])],
+  }
+  !publish_with(
+    register_certificate(Script(a)),
+    tx,
+    withdrawal.Spender,
+    fn(_) { False },
+  )
+}
+
+test publish_register_rejects_noncanonical_data() {
+  let data: Data = 1
+  let tx = Transaction {
+    ..placeholder,
+    outputs: [wallet_output_at([Pair(a, data)])],
+  }
+  !publish_with(
+    register_certificate(Script(a)),
+    tx,
+    withdrawal.Spender,
+    stateless_data_valid,
+  )
+}
+
+test publish_register_rejects_missing_script() fail {
+  let data: Data = 0
+  let tx = Transaction {
+    ..placeholder,
+    outputs: [wallet_output_at([Pair(b, data)])],
+  }
+  publish_with(
+    register_certificate(Script(a)),
+    tx,
+    withdrawal.Spender,
+    stateless_data_valid,
+  )
+}
+
+test publish_register_rejects_key_credential() fail {
+  publish_with(
+    register_certificate(VerificationKey(a)),
+    placeholder,
+    withdrawal.Spender,
+    stateless_data_valid,
+  )
+}
+
+test publish_unregister_spender_ok() {
+  let data: Data = 0
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [wallet_input_at([Pair(a, data)])],
+  }
+  publish_with(
+    unregister_certificate(Script(a)),
+    tx,
+    withdrawal.Spender,
+    stateless_data_valid,
+  )
+}
+
+test publish_unregister_depositor_ok() {
+  let data: Data = 0
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [wallet_input_at_depositors([Pair(a, data)])],
+  }
+  publish_with(
+    unregister_certificate(Script(a)),
+    tx,
+    withdrawal.Depositor,
+    stateless_data_valid,
+  )
+}
+
+test publish_unregister_rejects_when_kept() fail {
+  let data: Data = 0
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [wallet_input_at([Pair(a, data)])],
+    outputs: [wallet_output_at([Pair(a, data)])],
+  }
+  publish_with(
+    unregister_certificate(Script(a)),
+    tx,
+    withdrawal.Spender,
+    stateless_data_valid,
+  )
+}
+
+test publish_unregister_rejects_without_wallet() fail {
+  publish_with(
+    unregister_certificate(Script(a)),
+    placeholder,
+    withdrawal.Spender,
+    stateless_data_valid,
+  )
+}
+
+test publish_unregister_rejects_key_credential() fail {
+  publish_with(
+    unregister_certificate(VerificationKey(a)),
+    placeholder,
+    withdrawal.Spender,
+    stateless_data_valid,
+  )
 }

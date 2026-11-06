@@ -1,7 +1,7 @@
 // Settings — configuration-parameter management (Tx3 off-chain).
 //
 // Reference Tx3 implementation of the settings protocol, mirroring the
-// on-chain validators in `onchain/validators/settings.ak` and the MeshJS
+// on-chain validators in `onchain/validators/settings/` and the MeshJS
 // builders in `offchain/meshjs/lib/src/settings/`.
 //
 // The settings contract is a single Plutus V3 script that acts both as a
@@ -11,7 +11,7 @@
 //
 //   - `launch`  mint the settings NFT and create the state UTxO.
 //   - `propose` record a proposed `next` value together with the earliest
-//               time it may be applied (`now + apply_delay`).
+//               time it may be applied (at least `now + apply_delay`).
 //   - `apply`   promote a matured `next` value to `current`.
 //   - `close`   burn the NFT and tear down the settings instance.
 //
@@ -209,23 +209,29 @@ tx launch(
     }
 }
 
-/// Propose a new value. Writes `next` and `next_apply = now + apply_delay` into
-/// the continuation datum, preserving `current` and the NFT.
+/// Propose a new value. Writes `next` and `next_apply = until_ms + apply_delay`
+/// into the continuation datum, preserving `current` and the NFT.
 ///
 /// `validate_propose` requires the `propose_auth` (Proposer) signature and that
 /// the continuation datum equals `SettingsDatum { current, next: Some(new),
-/// next_apply: Some(now + apply_delay) }` with `new != current`, where `now` is
-/// the lower bound of the validity range.
+/// next_apply: Some(t) }` with `t >= upper + apply_delay` and `new != current`,
+/// where `upper` is the validity range's upper bound. The ledger only includes
+/// a transaction whose range covers the actual slot, so the upper bound cannot
+/// be chosen before the proposal lands on-chain: the enforced delay is anchored
+/// to the proposal's inclusion. This builder uses the minimum,
+/// `t = until_ms + apply_delay`.
 tx propose(
     /// Proposed new value (opaque `Bytes` mirror of the on-chain `Data`). Must
     /// differ from the current value.
     new_value: Bytes,
-    /// POSIX time (milliseconds) of the validity lower bound. Used to compute
-    /// `next_apply`; must correspond to `since_slot`.
-    now_ms: Int,
-    /// Slot of the validity lower bound. Must denote the same instant as
-    /// `now_ms`.
+    /// POSIX time (milliseconds) of the validity range's upper bound, which
+    /// anchors `next_apply`; must correspond to `until_slot`.
+    until_ms: Int,
+    /// Slot of the validity lower bound.
     since_slot: Int,
+    /// Slot whose validity upper bound is exactly `until_ms`; the transaction
+    /// is includable only within `[since_slot, until_slot)`.
+    until_slot: Int,
     /// Index of the continuation output within the transaction outputs.
     out_ix: Int,
 ) {
@@ -254,7 +260,7 @@ tx propose(
                 value: new_value,
             },
             next_apply: OptionalInt::Some {
-                value: now_ms + apply_delay,
+                value: until_ms + apply_delay,
             },
         },
     }
@@ -266,6 +272,7 @@ tx propose(
 
     validity {
         since_slot: since_slot,
+        until_slot: until_slot,
     }
 
     collateral {
@@ -491,8 +498,9 @@ tx launch_script_authorized(
 /// Script-authorized counterpart of `propose`.
 tx propose_script_authorized(
     new_value: Bytes,
-    now_ms: Int,
+    until_ms: Int,
     since_slot: Int,
+    until_slot: Int,
     out_ix: Int,
 ) {
     input settings_in {
@@ -518,7 +526,7 @@ tx propose_script_authorized(
                 value: new_value,
             },
             next_apply: OptionalInt::Some {
-                value: now_ms + apply_delay,
+                value: until_ms + apply_delay,
             },
         },
     }
@@ -530,6 +538,7 @@ tx propose_script_authorized(
 
     validity {
         since_slot: since_slot,
+        until_slot: until_slot,
     }
 
     collateral {

@@ -1,3 +1,4 @@
+use aiken/fuzz
 use cardano/address.{Script, from_script}
 use cardano/assets
 use cardano/transaction.{
@@ -51,28 +52,10 @@ fn stray_output(value: assets.Value) -> Output {
 
 // ------------------------------------------------------- value_delta_below_bound
 
-test delta_negative_below_bound() {
-  // 130 in - 100 out = 30 outflow < 50.
-  value_delta_below_bound(
-    assets.from_lovelace(130),
-    assets.from_lovelace(100),
-    50,
-  )
-}
-
 test delta_at_bound_rejected() fail {
   // 150 in - 100 out = 50, not strictly < 50.
   value_delta_below_bound(
     assets.from_lovelace(150),
-    assets.from_lovelace(100),
-    50,
-  )
-}
-
-test delta_above_bound_rejected() fail {
-  // 200 in - 100 out = 100, not < 50.
-  value_delta_below_bound(
-    assets.from_lovelace(200),
     assets.from_lovelace(100),
     50,
   )
@@ -100,4 +83,36 @@ test within_limit_under_bound() {
     outputs: [wallet_output(assets.from_lovelace(99_000_000))],
   }
     |> within_spending_limit(Script(wallet_policy), wallet_token, 2_000_000)
+}
+
+// --------------------------------------------------------------- properties
+
+fn lovelace_scenario() -> Fuzzer<(Int, Int, Int)> {
+  fuzz.tuple3(
+    fuzz.int_between(0, 1_000_000),
+    fuzz.int_between(0, 1_000_000),
+    fuzz.int_between(0, 1_000_000),
+  )
+}
+
+test prop_delta_below_bound((input, output, bound) via lovelace_scenario()) {
+  let expected = input - output < bound
+  fuzz.label_if(@"below", expected)
+  fuzz.label_if(@"not-below", !expected)
+  value_delta_below_bound(
+    assets.from_lovelace(input),
+    assets.from_lovelace(output),
+    bound,
+  ) == expected
+}
+
+test prop_within_spending_limit((input, output, bound) via lovelace_scenario()) {
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [wallet_input(assets.from_lovelace(input))],
+    outputs: [wallet_output(assets.from_lovelace(output))],
+  }
+  within_spending_limit(tx, Script(wallet_policy), wallet_token, bound) == (
+    input - output < bound
+  )
 }

@@ -9,22 +9,27 @@
  */
 
 import {
-  applyParamsToScript,
-  Network,
-  resolveScriptHash,
-  serializePlutusScript,
-  SLOT_CONFIG_NETWORK,
-  unixTimeToEnclosingSlot,
   type Asset,
+  applyParamsToScript,
   type Data,
   type MeshTxBuilder,
+  type Network,
   type PlutusScript,
+  resolveScriptHash,
+  SLOT_CONFIG_NETWORK,
   type SlotConfig,
+  serializePlutusScript,
   type UTxO,
 } from "@meshsdk/core";
 
 import { applyAuthorization, type ScriptAuthorizer } from "../authorization";
-import type { Credential } from "../common";
+import {
+  type Credential,
+  enclosingSlotBound,
+  finalizeTx,
+  networkIdOf,
+  slotBound,
+} from "../common";
 import { compiledCode, plutusVersion, typedCompiledCode } from "./blueprint";
 import {
   applyRedeemer,
@@ -37,13 +42,16 @@ import {
 } from "./datum";
 import type { SettingsDatum, SettingsParams } from "./types";
 
-function networkIdOf(network: Network): 0 | 1 {
-  return network === "mainnet" ? 1 : 0;
-}
-
 const DEFAULT_MIN_UTXO_LOVELACE = 1_500_000n;
 
 export const SETTINGS_TOKEN_NAME = "73657474696e6773"; // hex-encoded "settings"
+
+/**
+ * The propose transaction's bounded validity window, in slots past the
+ * enclosing slot of `now` (spec §5.b): the validator anchors `next_apply` to
+ * the window's upper bound, which must cover the inclusion slot.
+ */
+export const PROPOSE_WINDOW_SLOTS = 30;
 
 export function settingsScript(params: SettingsParams): PlutusScript {
   const code = applyParamsToScript(compiledCode, paramsToData(params), "Mesh");
@@ -52,7 +60,7 @@ export function settingsScript(params: SettingsParams): PlutusScript {
 
 /**
  * Parameterized script for the `settings_typed` fork, whose `validate_datum`
- * requires the setting value to be `Constr(0, [_])` (spec §3.1, §7 R7).
+ * requires the setting value to be `Constr(0, [_])` (spec §3.d, §6.d R7).
  * Everything else behaves like the reference `settings` contract.
  */
 export function settingsTypedScript(params: SettingsParams): PlutusScript {
@@ -100,7 +108,7 @@ export async function buildLaunchTx(p: MintParams): Promise<string> {
 
   applyAuthorization(p.txBuilder, p.applyAuth, p.authorizer, networkId);
 
-  return await p.txBuilder
+  p.txBuilder
     .mintPlutusScriptV3()
     .mint("1", policyId, SETTINGS_TOKEN_NAME)
     .mintRedeemerValue(mintRedeemer(p.outputIndex))
@@ -115,16 +123,13 @@ export async function buildLaunchTx(p: MintParams): Promise<string> {
       { unit: "lovelace", quantity: DEFAULT_MIN_UTXO_LOVELACE.toString() },
       settingsAsset,
     ])
-    .txOutInlineDatumValue(settingsDatumToData(p.datum))
-    .txInCollateral(
-      p.collateralUtxo.input.txHash,
-      p.collateralUtxo.input.outputIndex,
-      p.collateralUtxo.output.amount,
-      p.collateralUtxo.output.address,
-    )
-    .changeAddress(p.changeAddress)
-    .selectUtxosFrom(p.utxos)
-    .complete();
+    .txOutInlineDatumValue(settingsDatumToData(p.datum));
+
+  return finalizeTx(p.txBuilder, {
+    collateral: p.collateralUtxo,
+    changeAddress: p.changeAddress,
+    utxos: p.utxos,
+  });
 }
 
 // ---------------------------------------------------- Propose
@@ -145,27 +150,34 @@ export interface ProposeParams {
   applyDelay: number;
   network?: Network;
   customSlotConfig?: SlotConfig;
+  /** Propose validity window in slots past `now` (default `PROPOSE_WINDOW_SLOTS`). */
+  validityWindowSlots?: number;
 }
 
 export async function buildProposeTx(p: ProposeParams): Promise<string> {
   const network = p.network ?? "preprod";
   const networkId = networkIdOf(network);
   const slotConfig = p.customSlotConfig ?? SLOT_CONFIG_NETWORK[network];
-  const lowerBoundSlot = unixTimeToEnclosingSlot(p.now, slotConfig);
-  const slotStartMs =
+  const { slot: lowerBoundSlot } = enclosingSlotBound(p.now, slotConfig);
+  const upperBoundSlot =
+    lowerBoundSlot + (p.validityWindowSlots ?? PROPOSE_WINDOW_SLOTS);
+
+  // The validator reads the exclusive validity upper bound: the start ms of
+  // the slot after the window's last slot.
+  const upperBoundMs =
     slotConfig.zeroTime +
-    (lowerBoundSlot - slotConfig.zeroSlot) * slotConfig.slotLength;
+    (upperBoundSlot + 1 - slotConfig.zeroSlot) * slotConfig.slotLength;
   const scriptAddr = settingsScriptAddress(p.script, networkId);
 
   const newDatum: SettingsDatum = {
     current: p.datum.current,
     next: p.newValue,
-    nextApply: slotStartMs + p.applyDelay,
+    nextApply: upperBoundMs + p.applyDelay,
   };
 
   applyAuthorization(p.txBuilder, p.proposeAuth, p.authorizer, networkId);
 
-  return await p.txBuilder
+  p.txBuilder
     .spendingPlutusScriptV3()
     .txIn(
       p.settingsUtxo.input.txHash,
@@ -179,15 +191,12 @@ export async function buildProposeTx(p: ProposeParams): Promise<string> {
     .txOut(scriptAddr, p.settingsUtxo.output.amount)
     .txOutInlineDatumValue(settingsDatumToData(newDatum))
     .invalidBefore(lowerBoundSlot)
-    .txInCollateral(
-      p.collateralUtxo.input.txHash,
-      p.collateralUtxo.input.outputIndex,
-      p.collateralUtxo.output.amount,
-      p.collateralUtxo.output.address,
-    )
-    .changeAddress(p.changeAddress)
-    .selectUtxosFrom(p.utxos)
-    .complete();
+    .invalidHereafter(upperBoundSlot);
+  return finalizeTx(p.txBuilder, {
+    collateral: p.collateralUtxo,
+    changeAddress: p.changeAddress,
+    utxos: p.utxos,
+  });
 }
 
 // ---------------------------------------------------- Apply
@@ -215,11 +224,11 @@ export async function buildApplyTx(p: ApplyParams): Promise<string> {
 
   const network = p.network ?? "preprod";
   const networkId = networkIdOf(network);
-  const slotConfig = p.customSlotConfig ?? SLOT_CONFIG_NETWORK[network];
-  const lowerBoundSlot = unixTimeToEnclosingSlot(p.now, slotConfig);
-  const slotStartMs =
-    slotConfig.zeroTime +
-    (lowerBoundSlot - slotConfig.zeroSlot) * slotConfig.slotLength;
+  const { slot: lowerBoundSlot, startMs: slotStartMs } = slotBound(
+    network,
+    p.now,
+    p.customSlotConfig,
+  );
 
   if (slotStartMs < p.datum.nextApply) {
     throw new Error(
@@ -237,7 +246,7 @@ export async function buildApplyTx(p: ApplyParams): Promise<string> {
 
   applyAuthorization(p.txBuilder, p.applyAuth, p.authorizer, networkId);
 
-  return await p.txBuilder
+  p.txBuilder
     .spendingPlutusScriptV3()
     .txIn(
       p.settingsUtxo.input.txHash,
@@ -250,16 +259,12 @@ export async function buildApplyTx(p: ApplyParams): Promise<string> {
     .txInScript(p.script.code)
     .txOut(scriptAddr, p.settingsUtxo.output.amount)
     .txOutInlineDatumValue(settingsDatumToData(newDatum))
-    .invalidBefore(lowerBoundSlot)
-    .txInCollateral(
-      p.collateralUtxo.input.txHash,
-      p.collateralUtxo.input.outputIndex,
-      p.collateralUtxo.output.amount,
-      p.collateralUtxo.output.address,
-    )
-    .changeAddress(p.changeAddress)
-    .selectUtxosFrom(p.utxos)
-    .complete();
+    .invalidBefore(lowerBoundSlot);
+  return finalizeTx(p.txBuilder, {
+    collateral: p.collateralUtxo,
+    changeAddress: p.changeAddress,
+    utxos: p.utxos,
+  });
 }
 
 // ---------------------------------------------------- Close
@@ -283,7 +288,7 @@ export async function buildCloseTx(p: CloseParams): Promise<string> {
 
   applyAuthorization(p.txBuilder, p.applyAuth, p.authorizer, networkId);
 
-  return await p.txBuilder
+  p.txBuilder
     .spendingPlutusScriptV3()
     .txIn(
       p.settingsUtxo.input.txHash,
@@ -297,14 +302,10 @@ export async function buildCloseTx(p: CloseParams): Promise<string> {
     .mintPlutusScriptV3()
     .mint("-1", policyId, SETTINGS_TOKEN_NAME)
     .mintRedeemerValue(burnRedeemer())
-    .mintingScript(p.script.code)
-    .txInCollateral(
-      p.collateralUtxo.input.txHash,
-      p.collateralUtxo.input.outputIndex,
-      p.collateralUtxo.output.amount,
-      p.collateralUtxo.output.address,
-    )
-    .changeAddress(p.changeAddress)
-    .selectUtxosFrom(p.utxos)
-    .complete();
+    .mintingScript(p.script.code);
+  return finalizeTx(p.txBuilder, {
+    collateral: p.collateralUtxo,
+    changeAddress: p.changeAddress,
+    utxos: p.utxos,
+  });
 }

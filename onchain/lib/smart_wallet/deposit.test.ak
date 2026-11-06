@@ -84,6 +84,23 @@ test deposit_ok_open_depositors() {
   )
 }
 
+test rejects_deposit_reference_script() {
+  let cont_value = assets.from_lovelace(1_500_000)
+    |> assets.add(wallet_policy, wallet_token, 1)
+  !deposit(
+    Transaction {
+      ..placeholder,
+      inputs: [wallet_input()],
+      outputs: [
+        Output {
+          ..wallet_output(cont_value),
+          reference_script: Some(other_policy),
+        },
+      ],
+    },
+  )
+}
+
 test deposit_ok_with_invoked_depositor() {
   let data: Data = 0
   let datum = wallet_datum_with([Pair(deposit_script, data)])

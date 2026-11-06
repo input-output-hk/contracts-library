@@ -10,9 +10,8 @@
  * policy id is the applied script's ledger hash.
  */
 
-import { applyParamsToScript, mConStr1 } from "@meshsdk/core";
-
 import { unwrapCborBytes } from "@contracts-library/meshjs";
+import { applyParamsToScript, mConStr1 } from "@meshsdk/core";
 
 export interface IssuanceTemplate {
   prefix: string;
@@ -38,7 +37,7 @@ export function issuanceTemplate(
 
   // The minting-logic credential is embedded as `Constr 1 [ bytes(28) ]`:
   // `d87a 9f 581c <hash> ff`. Split around the hash.
-  const anchor = "d87a9f581c" + mintingLogicHash;
+  const anchor = `d87a9f581c${mintingLogicHash}`;
   const at = content.indexOf(anchor);
   if (at === -1) {
     throw new Error(

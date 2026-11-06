@@ -33,7 +33,7 @@
 
 use aiken/collection/list
 use cardano/address.{Address}
-use cardano/assets.{quantity_of, without_lovelace}
+use cardano/assets.{lovelace_of, without_lovelace}
 use cardano/transaction.{Output, OutputReference, Transaction}
 use event_triggered/schedule
 use event_triggered/types.{
@@ -73,6 +73,8 @@ pub fn validate(
             // Address and datum are carried byte-for-byte.
             vin.output.address == vout.address,
             vin.output.datum == vout.datum,
+            // The continuation never carries a reference script.
+            vout.reference_script == None,
             // Non-ADA assets (including the vault NFT) never leave the vault.
             without_lovelace(vin.output.value) == without_lovelace(vout.value),
             when redeemer is {
@@ -107,7 +109,7 @@ pub fn validate(
 
 /// The net ADA change of the vault pair: continuation minus spent input.
 fn delta(input: Output, output: Output) -> Int {
-  quantity_of(output.value, #"", #"") - quantity_of(input.value, #"", #"")
+  lovelace_of(output.value) - lovelace_of(input.value)
 }
 
 fn payouts_positive(payouts: List<Payout>) -> Bool {
@@ -142,7 +144,7 @@ fn paid_to(outputs: List<Output>, address: Address) -> Int {
     0,
     fn(output: Output, total: Int) {
       if output.address == address {
-        total + quantity_of(output.value, #"", #"")
+        total + lovelace_of(output.value)
       } else {
         total
       }

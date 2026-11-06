@@ -1,12 +1,11 @@
 //// Smart wallet — reusable check functions.
 
-use aiken/cbor
 use aiken/collection/dict
 use aiken/collection/list
 use aiken/collection/pairs
 use aiken/crypto.{ScriptHash, VerificationKeyHash}
 use authorization
-use cardano/address.{Credential, Script}
+use cardano/address.{Address, Credential, Script}
 use cardano/assets.{AssetName, Lovelace, PolicyId, Value}
 use cardano/certificate.{RegisterCredential, UnregisterCredential}
 use cardano/transaction.{
@@ -149,7 +148,7 @@ pub fn withdrawals_kept_unchanged(
     new,
     fn(pair) {
       when pairs.get_first(old, pair.1st) is {
-        Some(old_data) -> cbor.serialise(old_data) == cbor.serialise(pair.2nd)
+        Some(old_data) -> old_data == pair.2nd
         None -> True
       }
     },
@@ -183,20 +182,22 @@ fn published_in_tx(hash: ScriptHash, self: Transaction) -> Bool {
   )
 }
 
-/// Spend check: the wallet survives the spend with its permission set intact
-/// and without gaining value. `depositors` is immutable across a spend (only
-/// `UpdatePermissions` may change the map), the `spenders` key set is fixed
-/// (only `UpdatePermissions` may add or remove delegated scripts), and the
+/// Spend check: the wallet survives the spend at the same address with its
+/// permission set intact, without gaining value and with no attached reference
+/// script. `depositors` is immutable across a spend (only `UpdatePermissions`
+/// may change the map), the `spenders` key set is fixed (only
+/// `UpdatePermissions` may add or remove delegated scripts), and the
 /// continuation's value is a subset of the input's — a spend only removes value;
 /// additions belong to `Deposit`. The transaction must recreate the wallet: an
-/// NFT-bearing output at the wallet's payment credential carrying an inline
-/// `WalletDatum` meeting those conditions. Any other output at the wallet's
-/// payment credential is rejected: without the NFT it could never be spent and
-/// would permanently lock funds. Spender `Data` may change: each spender script
-/// enforces its own transition.
+/// NFT-bearing output at the wallet's address carrying an inline `WalletDatum`
+/// meeting those conditions. Any other output at the wallet's payment credential
+/// is rejected: without the NFT it could never be spent and would permanently
+/// lock funds. Spender `Data` may change: each spender script enforces its own
+/// transition.
 pub fn validate_spend_continuation(
   old_datum: WalletDatum,
   old_value: Value,
+  old_address: Address,
   wallet_policy: PolicyId,
   wallet_token_name: AssetName,
   self: Transaction,
@@ -219,6 +220,8 @@ pub fn validate_spend_continuation(
       expect InlineDatum(raw) = output.datum
       expect new_datum: WalletDatum = raw
       and {
+        output.address == old_address,
+        output.reference_script == None,
         keys_unique(new_datum.spenders),
         keys_unique(new_datum.depositors),
         withdrawals_equal(old_datum.depositors, new_datum.depositors),
@@ -301,6 +304,7 @@ pub fn validate_deposit(
   and {
     withdrawals_invoked(datum.depositors, self.withdrawals),
     continuation.address == own_input.output.address,
+    continuation.reference_script == None,
     !list.is_empty(continuations) && list.length(wallet_outputs) == list.length(
       continuations,
     ),
@@ -325,8 +329,7 @@ fn withdrawals_equal(
       when pairs.get_first(old, hash) is {
         Some(old_data) ->
           when pairs.get_first(new, hash) is {
-            Some(new_data) ->
-              cbor.serialise(old_data) == cbor.serialise(new_data)
+            Some(new_data) -> old_data == new_data
             None -> False
           }
         None -> False

@@ -5,18 +5,19 @@
     "test:dao": "vitest run dao/tests/devnet.test.ts",
     "test:smart-wallet": "vitest run smart_wallet/tests/devnet.test.ts",
     "test:event-triggered": "vitest run event-triggered-assets/tests/devnet.test.ts",
-    "test:devnet": "vitest run settings/tests/devnet.test.ts dao/tests/devnet.test.ts smart_wallet/tests/devnet.test.ts event-triggered-assets/tests/devnet.test.ts",
+    "test:vesting": "vitest run vesting/tests/devnet.test.ts",
+    "test:devnet": "vitest run settings/tests/devnet.test.ts dao/tests/devnet.test.ts smart_wallet/tests/devnet.test.ts event-triggered-assets/tests/devnet.test.ts vesting/tests/devnet.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@contracts-library/meshjs": "file:../meshjs/lib",
     "@meshsdk/core": "^1.9.1",
     "@noble/hashes": "1.8.0",
-    "tx3-sdk": "^0.15.0",
-    "vitest": "^4.1.10"
+    "tx3-sdk": "^0.15.0"
   },
   "devDependencies": {
-    "@types/node": "^26.1.2",
-    "typescript": "^7.0.2"
+    "@types/node": "^20.0.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
   }
 }

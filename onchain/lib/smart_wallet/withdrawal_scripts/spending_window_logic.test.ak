@@ -1,4 +1,5 @@
 use aiken/crypto.{ScriptHash}
+use aiken/fuzz
 use aiken/interval
 use cardano/address.{Script, from_script}
 use cardano/assets
@@ -68,10 +69,6 @@ test initial_state_zero_valid() {
   initial_state_valid(state(0))
 }
 
-test initial_state_rejects_nonzero() fail {
-  initial_state_valid(state(500))
-}
-
 // ----------------------------------------------------------- validate_withdraw
 
 test first_spend_allowed() {
@@ -90,28 +87,6 @@ test cooldown_elapsed_allowed() {
     spend_tx(
       SpendingWindowState { last_upper: 500 },
       SpendingWindowState { last_upper: 3_700_000 },
-      3_600_500,
-      3_700_000,
-    ),
-  )
-}
-
-test cooldown_not_elapsed_rejected() fail {
-  validate(
-    spend_tx(
-      SpendingWindowState { last_upper: 500 },
-      SpendingWindowState { last_upper: 3_000_100 },
-      3_000_000,
-      3_000_100,
-    ),
-  )
-}
-
-test wrong_next_state_rejected() fail {
-  validate(
-    spend_tx(
-      SpendingWindowState { last_upper: 500 },
-      SpendingWindowState { last_upper: 3_600_500 },
       3_600_500,
       3_700_000,
     ),
@@ -167,4 +142,46 @@ test infinite_lower_rejected() fail {
 fn state(last_upper: Int) -> Data {
   let state: Data = SpendingWindowState { last_upper }
   state
+}
+
+// --------------------------------------------------------------- properties
+
+fn validate_with_window(tx: Transaction, window_value: Int) -> Bool {
+  validate_withdraw(
+    tx,
+    Script(wallet_policy),
+    wallet_token,
+    own_hash,
+    window_value,
+  )
+}
+
+test prop_window_initial_state(last_upper via fuzz.int()) {
+  initial_state_valid(state(last_upper)) == ( last_upper == 0 )
+}
+
+fn window_scenario() -> Fuzzer<(Int, Int, Int, Int, Int)> {
+  fuzz.tuple5(
+    fuzz.int_between(0, 10_000_000),
+    fuzz.int_between(0, 10_000_000),
+    fuzz.int_between(0, 1_000_000),
+    fuzz.int_between(0, 5_000_000),
+    fuzz.int_between(0, 10_000_000),
+  )
+}
+
+test prop_window_rule(
+  (last_upper, lower, upper_delta, window_value, next_upper) via window_scenario(),
+) {
+  let upper = lower + upper_delta
+  let tx = spend_tx(
+    SpendingWindowState { last_upper },
+    SpendingWindowState { last_upper: next_upper },
+    lower,
+    upper,
+  )
+  let expected = ( last_upper == 0 || lower - last_upper >= window_value ) && next_upper == upper
+  fuzz.label_if(@"accepted", expected)
+  fuzz.label_if(@"rejected", !expected)
+  validate_with_window(tx, window_value) == expected
 }

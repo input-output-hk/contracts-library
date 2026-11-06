@@ -1,25 +1,25 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import {
-  TrixDevnet,
-  DEVNET_POLL,
-  unwrapCborBytes,
-  type DevnetUtxo,
-  type DevnetWallet,
-} from "../../devnet/utils";
-import {
-  type SettingsParams,
   plutusVersion,
+  SETTINGS_TOKEN_NAME,
+  type SettingsParams,
   settingsScript,
   settingsScriptAddress,
-  SETTINGS_TOKEN_NAME,
 } from "@contracts-library/meshjs";
-import { Party } from "tx3-sdk";
-import { Client } from "../codegen/ts-client/config-parameter-management/protocol"; // trix codegen ts-client
 import {
   applyCborEncoding,
+  type PlutusScript,
   resolveScriptHash,
-  PlutusScript,
 } from "@meshsdk/core";
+import { Party } from "tx3-sdk";
+import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
+import {
+  DEVNET_POLL,
+  type DevnetUtxo,
+  type DevnetWallet,
+  TrixDevnet,
+  unwrapCborBytes,
+} from "../../devnet/utils";
+import { Client } from "../codegen/ts-client/config-parameter-management/protocol"; // trix codegen ts-client
 
 const ADA = 1_000_000n;
 // Must comfortably exceed ONE block interval (trix devnets mint every ~5s):
@@ -180,18 +180,28 @@ function launchTx(inst: Instance, value: Uint8Array) {
     .then((s) => s.submit());
 }
 
+// The propose tx's bounded validity window, in slots past the proposal tip:
+// the on-chain delay anchors to the window's upper bound (spec §5.b), whose
+// exclusive time is `devnet.slotTimeMs(untilSlot)`.
+const PROPOSE_WINDOW_SLOTS = 10;
+
+/** The validity upper-bound ms the propose tx anchors `next_apply` to. */
+function proposeUpperBoundMs(tipSlot: number): number {
+  return devnet.slotTimeMs(tipSlot + PROPOSE_WINDOW_SLOTS);
+}
+
 function proposeTx(
   inst: Instance,
   newValue: Uint8Array,
-  nowMs: number,
-  sinceSlot: number,
+  tipSlot: number,
   outIx = 0,
 ) {
   return inst.client
     .propose({
       new_value: newValue,
-      now_ms: nowMs,
-      since_slot: sinceSlot,
+      until_ms: proposeUpperBoundMs(tipSlot),
+      since_slot: tipSlot,
+      until_slot: tipSlot + PROPOSE_WINDOW_SLOTS,
       out_ix: outIx,
     } as unknown as ProposeArgs)
     .env(inst.env)
@@ -252,14 +262,14 @@ function launchScriptAuthorizedTx(inst: Instance, value: Uint8Array) {
 function proposeScriptAuthorizedTx(
   inst: Instance,
   newValue: Uint8Array,
-  nowMs: number,
-  sinceSlot: number,
+  tipSlot: number,
 ) {
   return inst.client
     .proposeScriptAuthorized({
       new_value: newValue,
-      now_ms: nowMs,
-      since_slot: sinceSlot,
+      until_ms: proposeUpperBoundMs(tipSlot),
+      since_slot: tipSlot,
+      until_slot: tipSlot + PROPOSE_WINDOW_SLOTS,
       out_ix: 0,
     } as unknown as ProposeScriptAuthorizedArgs)
     .env(inst.env)
@@ -353,10 +363,10 @@ test("launches, proposes, applies, and closes", async () => {
   await confirm(launchTx(inst, VALUE_A));
   expect(await settingsUtxoExists(inst)).toBe(true);
 
-  // 2. Propose — next = B, next_apply = now + apply_delay.
+  // 2. Propose — next = B, next_apply = validity upper bound + apply_delay.
   const proposeTip = await devnet.tip();
-  await confirm(proposeTx(inst, VALUE_B, proposeTip.timeMs, proposeTip.slot));
-  const nextApplyMs = proposeTip.timeMs + APPLY_DELAY;
+  await confirm(proposeTx(inst, VALUE_B, proposeTip.slot));
+  const nextApplyMs = proposeUpperBoundMs(proposeTip.slot) + APPLY_DELAY;
 
   // 3. Wait for the proposal to mature, then apply — current = B.
   await devnet.waitForChainTimeMs(nextApplyMs + 3_000);
@@ -378,16 +388,11 @@ test("runs the script-authorized lifecycle", async () => {
   expect(await settingsUtxoExists(inst)).toBe(true);
 
   const proposeTip = await devnet.tip();
-  await confirm(
-    proposeScriptAuthorizedTx(
-      inst,
-      VALUE_B,
-      proposeTip.timeMs,
-      proposeTip.slot,
-    ),
-  );
+  await confirm(proposeScriptAuthorizedTx(inst, VALUE_B, proposeTip.slot));
 
-  await devnet.waitForChainTimeMs(proposeTip.timeMs + APPLY_DELAY + 3_000);
+  await devnet.waitForChainTimeMs(
+    proposeUpperBoundMs(proposeTip.slot) + APPLY_DELAY + 3_000,
+  );
   const applyTip = await devnet.tip();
   await confirm(applyScriptAuthorizedTx(inst, VALUE_B, applyTip.slot));
   expect(await settingsUtxoExists(inst)).toBe(true);
@@ -403,7 +408,7 @@ test("rejects apply before next_apply", async () => {
   await confirm(launchTx(inst, VALUE_A));
 
   const proposeTip = await devnet.tip();
-  await confirm(proposeTx(inst, VALUE_B, proposeTip.timeMs, proposeTip.slot));
+  await confirm(proposeTx(inst, VALUE_B, proposeTip.slot));
 
   // Apply immediately, without waiting for the delay to elapse.
   const tip = await devnet.tip();
@@ -425,10 +430,7 @@ test("rejects propose with same value as current", async () => {
 
   // Proposing the current value is a no-op the validator forbids.
   const tip = await devnet.tip();
-  await expectAttackRejected(
-    proposeTx(inst, VALUE_A, tip.timeMs, tip.slot),
-    inst,
-  );
+  await expectAttackRejected(proposeTx(inst, VALUE_A, tip.slot), inst);
 }, 120_000);
 
 test("rejects propose signed by a non-proposer credential", async () => {
@@ -438,10 +440,7 @@ test("rejects propose signed by a non-proposer credential", async () => {
   // Script params bind propose auth to `proposer`; using `applier` to propose
   // must fail validator authorization.
   const tip = await devnet.tip();
-  await expectAttackRejected(
-    proposeTx(inst, VALUE_B, tip.timeMs, tip.slot),
-    inst,
-  );
+  await expectAttackRejected(proposeTx(inst, VALUE_B, tip.slot), inst);
 }, 120_000);
 
 test("rejects apply with an invalid continuation output index", async () => {
@@ -449,8 +448,8 @@ test("rejects apply with an invalid continuation output index", async () => {
   await confirm(launchTx(inst, VALUE_A));
 
   const proposeTip = await devnet.tip();
-  await confirm(proposeTx(inst, VALUE_B, proposeTip.timeMs, proposeTip.slot));
-  const nextApplyMs = proposeTip.timeMs + APPLY_DELAY;
+  await confirm(proposeTx(inst, VALUE_B, proposeTip.slot));
+  const nextApplyMs = proposeUpperBoundMs(proposeTip.slot) + APPLY_DELAY;
 
   await devnet.waitForChainTimeMs(nextApplyMs + 3_000);
   const applyTip = await devnet.tip();
