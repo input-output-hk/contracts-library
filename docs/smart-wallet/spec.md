@@ -108,7 +108,11 @@ once, so the policy mints a single token ever. The NFT is unforgeable and
 identifies the wallet; only an NFT-bearing UTxO at the wallet address is a valid
 wallet. The NFT never leaves the wallet UTxO except on `Close`, where it is
 burned: `Spend` requires the wallet to survive, carrying the NFT (and its
-`depositors`) forward (§5.2).
+`depositors`) forward (§5.2). The wallet's staking credential is chosen when the
+wallet is minted and preserved by every transition (`Spend`, `Deposit`,
+`UpdatePermissions`); it is outside the authorization model — no transition may
+rewrite it, so staking rewards and delegation stay with the credential the
+deployer chose.
 
 ### 4.3 Redeemers
 
@@ -152,7 +156,7 @@ via a **reward withdrawal** in the same transaction (withdraw-0 pattern).
 | | |
 |---|---|
 | **Inputs** | One wallet UTxO carrying the NFT. |
-| **Outputs** | Must include a **wallet continuation**: an NFT-bearing output at the wallet's payment credential carrying an inline `WalletDatum` with the same `depositors` map and `spenders` keys as the input, and a value that is a **subset** of the input's (every asset, including lovelace, in at most the same quantity). No other output may sit at the wallet's payment credential: an NFT-less output there would be unspendable forever. Payout outputs elsewhere are otherwise unconstrained. |
+| **Outputs** | Must include a **wallet continuation**: an NFT-bearing output at the wallet's address (same payment **and** staking credential) carrying an inline `WalletDatum` with the same `depositors` map and `spenders` keys as the input, no reference script, and a value that is a **subset** of the input's (every asset, including lovelace, in at most the same quantity). No other output may sit at the wallet's payment credential: an NFT-less output there would be unspendable forever. Payout outputs elsewhere are otherwise unconstrained. |
 | **Redeemer** | `Spend`. |
 | **Authorization** | At least `threshold` of `members` sign (read from the settings UTxO), **and** every script in `spenders` is invoked as a reward withdrawal and approves. |
 | **Constraints** | The wallet UTxO carries its NFT; the delegated spender scripts' `withdraw` handlers run and each enforces its own restriction; the wallet survives with `depositors` unchanged, the `spenders` key set fixed (adding or removing delegated scripts is reserved for `UpdatePermissions`, while spender `Data` may change — each script enforces its own transition), and a continuation value no greater than the input's (a spend only removes value: additions belong to `Deposit`). |
@@ -167,7 +171,7 @@ unchanged, its `spenders` key set fixed, and a value no greater than the input's
 | | |
 |---|---|
 | **Inputs** | The wallet UTxO. |
-| **Outputs** | One continuation at `out_ix`: same address, every **non-ADA asset exactly preserved** (including the NFT), inline datum with the new config. Lovelace may only increase — an explicit top-up exception (see below). No other output may sit at the wallet's payment credential: an NFT-less output there would be unspendable forever. |
+| **Outputs** | One continuation at `out_ix`: same address, every **non-ADA asset exactly preserved** (including the NFT), inline datum with the new config, no reference script. Lovelace may only increase — an explicit top-up exception (see below). No other output may sit at the wallet's payment credential: an NFT-less output there would be unspendable forever. |
 | **Redeemer** | `UpdatePermissions { out_ix }`. |
 | **Authorization** | `admin`. |
 | **Constraints** | The new `spenders` and `depositors` maps must have unique keys. The old and new maps are diffed: every script *added* must be **published** here (`RegisterCredential` **and its matching `Publish` redeemer**); every script *removed* must be **unregistered** (`UnregisterCredential`); every script *kept* must carry unchanged `Data`. |
@@ -187,7 +191,7 @@ transaction; its own `withdraw` transition is the only way its state advances.
 | | |
 |---|---|
 | **Inputs** | The wallet UTxO (plus the depositing party's own funding UTxOs). |
-| **Outputs** | One continuation at `out_ix`: same address, `spenders` unchanged, `depositors` keys unchanged with `Data` possibly advanced, value a **superset** of the input's (every asset, including lovelace and the NFT, present in `>=` quantity). No other output may sit at the wallet's payment credential: an NFT-less output there would be unspendable forever, and depositing funds into it locks them. |
+| **Outputs** | One continuation at `out_ix`: same address, `spenders` unchanged, `depositors` keys unchanged with `Data` possibly advanced, no reference script, value a **superset** of the input's (every asset, including lovelace and the NFT, present in `>=` quantity). No other output may sit at the wallet's payment credential: an NFT-less output there would be unspendable forever, and depositing funds into it locks them. |
 | **Redeemer** | `Deposit { out_ix }`. |
 | **Authorization** | Every script in `depositors` is invoked as a reward withdrawal and approves; with an empty map, no approval is needed. |
 | **Constraints** | The `spenders` map is preserved and the `depositors` key set is fixed; depositor `Data` may advance, with each deposit script enforcing its own transition. The `spenders` scripts do **not** run (there is no outflow to restrict). |
