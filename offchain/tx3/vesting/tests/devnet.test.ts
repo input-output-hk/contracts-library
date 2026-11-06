@@ -3,7 +3,6 @@ import {
   vestingScript,
   vestingScriptAddress,
 } from "@contracts-library/meshjs";
-import { resolveScriptHash } from "@meshsdk/core";
 import { Party, type SubmittedTx } from "tx3-sdk";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import {
@@ -18,10 +17,6 @@ import { Client } from "../codegen/ts-client/linear-vesting/protocol";
 
 const ADA = 1_000_000n;
 
-// Pinned linear_vesting blueprint (offchain/meshjs/lib/src/vesting/blueprint.ts).
-// Asserted in beforeAll so a MeshJS/pin drift fails loudly instead of on-chain.
-const PINNED_HASH = "95da21788eb1f59f51aad9669eb8c8b7081ab618c1f29b871925894a";
-
 // The locked bundle. Sized well above min-UTxO so the partial-claim
 // continuation keeps the required remainder without hitting the floor.
 const BUNDLE_ADA = 60n * ADA;
@@ -31,7 +26,7 @@ const GAS_ADA = 10n * ADA; // gas + collateral split per wallet
 const COLLATERAL = 5n * ADA;
 
 let devnet: TrixDevnet;
-/** The vesting script address, derived from the pinned blueprint. */
+/** The vesting script address, derived from the library blueprint. */
 let vestingAddr: string;
 /** The protocol env: the single-CBOR flat validator (tx3 witness form). */
 let env: Record<string, unknown>;
@@ -64,10 +59,9 @@ const vestingKit: DevnetKitFactory = (trpUrl, faucet) => {
 beforeAll(async () => {
   devnet = await TrixDevnet.start({ protocolRoot: "vesting", kit: vestingKit });
 
-  // The suite pins the vesting blueprint through the MeshJS library: fail
-  // loudly here if the library and the pin drift apart.
+  // Drift between the library blueprint and the on-chain validator is
+  // guarded by `blueprint:check` in CI (scripts/blueprint-sync.mjs).
   const scriptObj = vestingScript();
-  expect(resolveScriptHash(scriptObj.code, "V3")).toBe(PINNED_HASH);
 
   // tx3 witnesses the single-CBOR payload form; MeshJS emits double-CBOR.
   vestingAddr = vestingScriptAddress(0);
