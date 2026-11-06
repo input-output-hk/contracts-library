@@ -1,6 +1,5 @@
 //// Smart wallet — reusable check functions.
 
-use aiken/cbor
 use aiken/collection/dict
 use aiken/collection/list
 use aiken/collection/pairs
@@ -149,7 +148,7 @@ pub fn withdrawals_kept_unchanged(
     new,
     fn(pair) {
       when pairs.get_first(old, pair.1st) is {
-        Some(old_data) -> cbor.serialise(old_data) == cbor.serialise(pair.2nd)
+        Some(old_data) -> old_data == pair.2nd
         None -> True
       }
     },
@@ -330,8 +329,7 @@ fn withdrawals_equal(
       when pairs.get_first(old, hash) is {
         Some(old_data) ->
           when pairs.get_first(new, hash) is {
-            Some(new_data) ->
-              cbor.serialise(old_data) == cbor.serialise(new_data)
+            Some(new_data) -> old_data == new_data
             None -> False
           }
         None -> False
