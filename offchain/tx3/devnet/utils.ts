@@ -507,7 +507,9 @@ export class TrixDevnet {
     scriptHash: string,
   ): Promise<void> {
     const utxos = await this.utxosOf(payer.address);
-    const input = utxos[0];
+    // The largest UTxO: fragmented change from prior deploys must not starve
+    // registration when the wallet's total balance is fine.
+    const input = utxos.reduce((a, b) => (b.lovelace > a.lovelace ? b : a));
     if (!input)
       throw new Error(`wallet ${payer.name} has no UTxO to fund registration`);
     const change = input.lovelace - STAKE_REGISTRATION_FEE;
