@@ -173,6 +173,19 @@ Attacks the protocol defends against, each backed by the invariants of §6.b:
   it names, so one output cannot swallow another. A continuation must also
   carry no reference script and preserve the input's non-ADA assets exactly,
   so a permissionless tick cannot bloat the UTxO or smuggle/drop tokens.
+- **Permissionless tick churn.** `Tick` needs no authorization, so anyone can
+  consume and recreate a counter UTxO under the value-based rule (equal value or
+  a dust top-up). The impact is UTxO contention: transactions built against the
+  previous output must be rebuilt, and the churner pays the fees. The state
+  itself cannot be altered or stolen (`count + 1`, the same owner and the exact
+  non-ADA assets are enforced). A production protocol that cannot tolerate this
+  must gate ticks with owner authorization or a schedule.
+- **Continuations are existential.** `settled_by` accepts *any* matching
+  continuation, so a spender who provides duplicate value can settle one input
+  with more than one continuation (for example, forking the counter datum).
+  Value conservation and the exact non-ADA match keep this value-backed — no
+  value is created — but a protocol whose state must be unique should carry a
+  unique token or enforce uniqueness in its own logic.
 - **The protocol state's meaning is delegated.** The upgradeability predicates treat a forwarder's datum opaquely; the logic script defines it.
 - **Off-chain is out of scope in this pass.**
 
