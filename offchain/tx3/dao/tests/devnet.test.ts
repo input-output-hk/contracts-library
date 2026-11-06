@@ -130,8 +130,10 @@ beforeAll(async () => {
 
   // The publisher funds one poll-effect reference-script deployment per test
   // (the candidate is parameterized by each instance's proposal validator).
+  // Sizing: ~2.3 ADA per setup (2 ADA locked in the reference UTxO + fees),
+  // and every test boots a fresh instance — keep headroom for additions.
   registrar = devnet.wallet("bootstrap/registrar");
-  await devnet.payTo(registrar.address, 20n * ADA);
+  await devnet.payTo(registrar.address, 40n * ADA);
 
   // Split the faucet UTxO in two so `devnet_mint_staked` can pull its funding
   // and collateral from separate faucet UTxOs (a Plutus mint needs collateral).
@@ -606,6 +608,60 @@ async function vote(
       outputIndex: stakeUtxo.outputIndex,
     }),
   };
+}
+
+/** Build and submit the reject-draft transaction (no confirmation wait). */
+function rejectDraftTx(
+  inst: Instance,
+  proposal: ProposalState,
+  signer: DevnetWallet,
+  sinceSlot: number,
+): Promise<SubmittedTx> {
+  return submit(
+    inst
+      .client(signer)
+      .rejectDraft({
+        proposal_ref: proposal.utxo.ref,
+        proposal_token_name: toBytes(proposal.tokenName),
+        since_slot: sinceSlot,
+      } as unknown as Parameters<Client["rejectDraft"]>[0])
+      .env(inst.env),
+  );
+}
+
+/** Reject a draft proposal and wait until it is confirmed on-chain. */
+async function rejectDraft(
+  inst: Instance,
+  proposal: ProposalState,
+  signer: DevnetWallet,
+): Promise<void> {
+  // Rejecting is only legal once the draft window has ended.
+  await devnet.waitForChainTimeMs(proposal.startTime + DRAFT_LENGTH + 1_000);
+  const submitted = await rejectDraftTx(
+    inst,
+    proposal,
+    signer,
+    (await devnet.tip()).slot,
+  );
+  await submitted.waitForConfirmed(DEVNET_POLL);
+}
+
+/** Build and submit the vote-cancel transaction (no confirmation wait). */
+function cancelTx(
+  inst: Instance,
+  signer: DevnetWallet,
+  voteUtxo: DevnetUtxo,
+  voteNftName: string,
+): Promise<SubmittedTx> {
+  return submit(
+    inst
+      .client(signer)
+      .cancel({
+        vote_ref: voteUtxo.ref,
+        vote_nft_name: toBytes(voteNftName),
+      } as unknown as Parameters<Client["cancel"]>[0])
+      .env(inst.env),
+  );
 }
 
 // ---------------------------------------------------------------- happy path
@@ -1099,4 +1155,94 @@ test("rejects a close while locks are active", async () => {
     ),
     [{ address: inst.stakeAddr, ref: created.stakeUtxo.ref }],
   );
+}, 300_000);
+
+// ------------------------------------------------------------ draft rejection
+
+test("rejects a draft after the draft phase ends", async () => {
+  const inst = await setup();
+  const posA = await createPosition(inst, inst.a, inst.seedA, STAKE_A);
+  const created = await createProposal(inst, inst.a, posA.utxo, STAKE_A);
+
+  // After the draft window the proposer may reject: the proposal token burns
+  // and the proposal UTxO unwinds back to the signer.
+  const beforeWallet = await snapshot(inst.a.address);
+  await rejectDraft(inst, created, inst.a);
+  expect(await devnet.utxosOf(inst.proposalAddr)).toHaveLength(0);
+  const [refund] = await addedSince(inst.a.address, beforeWallet);
+  expect(refund).toBeDefined();
+}, 300_000);
+
+test("rejects a reject-draft while the draft is still open", async () => {
+  const inst = await setup();
+  const posA = await createPosition(inst, inst.a, inst.seedA, STAKE_A);
+  const created = await createProposal(inst, inst.a, posA.utxo, STAKE_A);
+
+  // The validator demands `lower >= draft_end`: rejecting inside the window
+  // must fail phase-2 and leave the draft untouched.
+  await expectAttackRejected(
+    rejectDraftTx(inst, created, inst.a, (await devnet.tip()).slot),
+    [{ address: inst.proposalAddr, ref: created.utxo.ref }],
+  );
+}, 300_000);
+
+// ---------------------------------------------------------------- vote cancel
+
+test("cancels a vote before the voting stage ends", async () => {
+  const inst = await setup();
+  const posA = await createPosition(inst, inst.a, inst.seedA, STAKE_A);
+  const created = await createProposal(inst, inst.a, posA.utxo, STAKE_A);
+  const voting = await acceptDraft(inst, created, inst.a);
+
+  // Voter positions need unlocked tokens (`!has_proposal` in the stake
+  // validator), so the voter opens a fresh one from newly minted tokens.
+  const beforeMint = await snapshot(inst.a.address);
+  await devnet.mintTokensTo(inst.a.address, BigInt(STAKE_A));
+  const [seedA2] = await addedSince(inst.a.address, beforeMint);
+  const voterPos = await createPosition(inst, inst.a, seedA2, STAKE_A);
+
+  const votingEnd = created.startTime + DRAFT_LENGTH + VOTING_LENGTH;
+  const cast = await vote(
+    inst,
+    inst.a,
+    voting.utxo.ref,
+    voterPos.utxo,
+    created.tokenName,
+    votingEnd,
+    STAKE_A,
+  );
+
+  // The vote's stake owner may withdraw at any time: the vote NFT burns and
+  // the artifact refunds to the voter.
+  const submitted = await cancelTx(inst, inst.a, cast.utxo, cast.nftName);
+  await submitted.waitForConfirmed(DEVNET_POLL);
+  expect(await devnet.utxosOf(inst.voteAddr)).toHaveLength(0);
+}, 300_000);
+
+test("rejects a vote cancel by a non-owner", async () => {
+  const inst = await setup();
+  const posA = await createPosition(inst, inst.a, inst.seedA, STAKE_A);
+  const created = await createProposal(inst, inst.a, posA.utxo, STAKE_A);
+  const voting = await acceptDraft(inst, created, inst.a);
+
+  const beforeMint = await snapshot(inst.a.address);
+  await devnet.mintTokensTo(inst.a.address, BigInt(STAKE_A));
+  const [seedA2] = await addedSince(inst.a.address, beforeMint);
+  const voterPos = await createPosition(inst, inst.a, seedA2, STAKE_A);
+
+  const votingEnd = created.startTime + DRAFT_LENGTH + VOTING_LENGTH;
+  const cast = await vote(
+    inst,
+    inst.a,
+    voting.utxo.ref,
+    voterPos.utxo,
+    created.tokenName,
+    votingEnd,
+    STAKE_A,
+  );
+
+  // B is not the vote's stake owner: the withdraw-0 authorization fails.
+  await expectAttackRejected(cancelTx(inst, inst.b, cast.utxo, cast.nftName), [
+    { address: inst.voteAddr, ref: cast.utxo.ref },
+  ]);
 }, 300_000);
