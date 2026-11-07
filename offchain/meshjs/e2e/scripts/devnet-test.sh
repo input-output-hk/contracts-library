@@ -25,14 +25,16 @@ ADMIN_URL="http://localhost:10000"
 LOG=".yaci-devnet.log"
 REPORT=".vitest-report.json"
 
-TEST_FILES=(
-  "test/vesting.e2e.test.ts"
-  "test/settings.e2e.test.ts"
-  "test/dao.e2e.test.ts"
-  "test/smart_wallet.e2e.test.ts"
-  "test/event_triggered.e2e.test.ts"
-  "test/upgradeability.e2e.test.ts"
-)
+# Every e2e file under test/ is picked up by glob, so a new test file runs
+# here without anyone remembering to extend a hand-maintained list. Pass a
+# file path to run a single file instead.
+shopt -s nullglob
+TEST_FILES=(test/*.e2e.test.ts)
+shopt -u nullglob
+if [ ${#TEST_FILES[@]} -eq 0 ]; then
+  echo "✗ no e2e test files found (test/*.e2e.test.ts)"
+  exit 1
+fi
 
 # Genesis overrides for the ephemeral devnet.
 #
