@@ -64,47 +64,52 @@ fn settled_by(
 }
 
 /// Validate a forced counter tick: the input referenced by `own_ref` must be
-/// settled by a continuation at its own address — one whose datum names
-/// `own_ref` as its `prev_input` — that increments `count` by one, preserves
-/// `owner` and the non-ADA assets, carries no reference script, and does not
-/// decrease the lovelace held.
+/// settled by a continuation at its own address that increments `count` by
+/// one (see `continue_counter`).
 pub fn validate_counter_tick(
   self: Transaction,
   own_ref: OutputReference,
 ) -> Bool {
-  expect Some(input) = find_input(self.inputs, own_ref)
-  expect InlineDatum(in_raw) = input.output.datum
-  expect CounterDatum { count, owner, .. } = in_raw
-
-  let continuation: Data = CounterDatum {
-    count: count + 1,
-    owner,
-    prev_input: Some(own_ref),
-  }
-
-  settled_by(self, input.output.address, continuation, input.output)
+  continue_counter(self, own_ref, None, 1)
 }
 
 /// Validate an opt-in migration of the input referenced by `own_ref`: the same
-/// state must reappear at `v2_address` — in a continuation whose datum names
-/// `own_ref` as its `prev_input` — with `count`, `owner` and the non-ADA assets
-/// preserved, no reference script, and no decrease in lovelace.
+/// state must reappear at `v2_address` with `count` unchanged (see
+/// `continue_counter`).
 pub fn validate_counter_migrate(
   self: Transaction,
   own_ref: OutputReference,
   v2_address: Address,
 ) -> Bool {
+  continue_counter(self, own_ref, Some(v2_address), 0)
+}
+
+/// Settle the counter input referenced by `own_ref` with a continuation at
+/// `target` (its own address when `None`) whose datum adds `increment` to
+/// `count`, preserves `owner`, and names `own_ref` as its `prev_input`. The
+/// continuation must also preserve the non-ADA assets, carry no reference
+/// script, and not decrease the lovelace held (see `settled_by`).
+fn continue_counter(
+  self: Transaction,
+  own_ref: OutputReference,
+  target: Option<Address>,
+  increment: Int,
+) -> Bool {
   expect Some(input) = find_input(self.inputs, own_ref)
   expect InlineDatum(in_raw) = input.output.datum
   expect CounterDatum { count, owner, .. } = in_raw
 
   let continuation: Data = CounterDatum {
-    count,
+    count: count + increment,
     owner,
     prev_input: Some(own_ref),
   }
+  let target_address = when target is {
+    Some(address) -> address
+    None -> input.output.address
+  }
 
-  settled_by(self, v2_address, continuation, input.output)
+  settled_by(self, target_address, continuation, input.output)
 }
 
 /// Whether the input referenced by `ref` was spent with the `Upgrade` action.
