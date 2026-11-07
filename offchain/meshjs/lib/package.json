@@ -51,9 +51,9 @@
     "event_triggered.coupon_policy": "f0da56d0617258734466ba0306cc2370822533bd96cd2753436b1a3c",
     "event_triggered.vault_nft_policy": "601198710ff29674e394a0953a0c9a7f6905623d2fefcdba9aab7b5f",
     "upgradeability.counter_forwarder": "00a47caa3da38598df513e660956a0e83ec868566a8b2a67a7e386ab",
-    "upgradeability.counter_logic": "d311e9d0a237992b6573750d81309ded41d33f8f2a1bba66a8ae7508",
+    "upgradeability.counter_logic": "73b732aa4e92c62eabf01972e16354af0631b0d0bb4dc11e48801d82",
     "upgradeability.counter_v1": "c1de05978e7aeefb9260d07e722e8fb3483c3364e1c84e1d60a3f397",
-    "upgradeability.counter_migration": "90ad3d7edda7b26655c9547a4e949865306ec346549bb145b944e58c",
+    "upgradeability.counter_migration": "b7ce0f3f018c8a3dbb951612070cff544e1f0d5a55dc6fc47ca8d792",
     "upgradeability.counter_v2": "fcd74c5dc5c510b1f93c46a53675e1d4e03cd7b0b8eb72c607130190",
     "compiler": "aiken-v1.1.24+bacbeb3"
   }

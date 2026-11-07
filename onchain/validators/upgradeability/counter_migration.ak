@@ -1,9 +1,11 @@
 use aiken/collection/list
 use cardano/address.{Address, Credential}
 use cardano/assets.{AssetName, PolicyId}
+use cardano/certificate.{Certificate}
 use cardano/transaction.{Transaction}
 use upgradeability/counter.{spent_with_upgrade, validate_counter_migrate}
 use upgradeability/delegate.{forwarded_by}
+use withdraw_zero.{accept_registration}
 
 /// Opt-in migration script for the counter demo.
 ///
@@ -26,6 +28,13 @@ validator counter_migration(
         }
       },
     )
+  }
+
+  /// Registering this script's stake credential is the only certificate it
+  /// accepts: withdraw-0 needs it registered, and refusing deregistration
+  /// keeps every forwarder that points here from getting stuck.
+  publish(_redeemer: Data, certificate: Certificate, _self: Transaction) {
+    accept_registration(certificate)
   }
 
   else(_) {

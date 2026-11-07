@@ -99,7 +99,7 @@ Returns `True` iff `own_hash = own_script_hash(inputs, own_ref)`, the registry m
 
 Returns `True` iff the registry maps `own_hash` to some `migration_hash`, `Script(migration_hash)` is present in `self.withdrawals`, **and** `user_auth` is satisfied (key in `extra_signatories`, or a script withdrawal — `authorization.is_authorized`).
 
-The **logic** and **migration** scripts run under the withdraw-0 convention (`withdraw(redeemer, account, self)`), and apply their checks to every input of `forwarded_by(self, settings_policy, settings_token_name, account)`, which rejects when nothing is delegated to them.
+The **logic** and **migration** scripts run under the withdraw-0 convention (`withdraw(redeemer, account, self)`), and apply their checks to every input of `forwarded_by(self, settings_policy, settings_token_name, account)`, which rejects when nothing is delegated to them. Both also carry a `publish` handler, `accept_registration` (shared `withdraw_zero` module), that accepts registering their own stake credential and refuses every other certificate.
 
 **`counter`** (helpers, non-normative demo):
 
@@ -162,6 +162,7 @@ Attacks the protocol defends against, each backed by the invariants of §6.b:
 - **Forwarding spoofing.** The forwarder requires the *exact* registered script hash; the hash comes from the NFT-authenticated settings UTxO and is compared by withdrawal credential, so it cannot be forged. (I4)
 - **Partial forwarding validation.** A logic/migration script validates **all** inputs mapped to it, so a benign input cannot shield a malicious one. (I5)
 - **Vacuous delegate.** A delegate registered under the wrong settings instance would read another instance's registry, find no inputs mapped to it, and accept over an empty set, letting every forwarder be spent unchecked. `forwarded_by` rejects an empty set, so a delegate never passes without validating something. (I5)
+- **Delegate deregistration.** Deregistering a delegate's stake credential would make its withdraw-0 impossible and leave every forwarder it serves (or every V1 upgrade) stuck. A delegate's `publish` handler accepts only registration, so once registered its credential cannot be deregistered or delegated. (I10)
 - **Migration re-creation / double spend.** The migration script binds each forwarded input to the `Upgrade` action and a `v2_address` continuation; a UTxO is spent once, and a migrated V1 UTxO cannot be re-created under a normal action. (I6)
 - **Malformed registry.** A malformed registry value makes every consumer reject (a liveness hazard), but it cannot be acted on. Governance is trusted to write well-formed maps. (I7)
 - **Fake registry.** The registry is read only from the settings UTxO carrying the settings NFT; a look-alike UTxO without the NFT is not accepted. (I8)
@@ -173,6 +174,7 @@ Attacks the protocol defends against, each backed by the invariants of §6.b:
 - **Registry values are built for the same settings instance.** A logic or migration script must be parameterized with the settings instance whose registry points at it. The non-empty check in `forwarded_by` stops a mismatched delegate from passing vacuously, but not a double misconfiguration in which the other instance's registry also maps an input to the same delegate.
 - **Forced repoints need a timelock and bounded governance.** `apply_delay` is the users' only window to react; a negative or tiny delay, or unbounded governance, weakens the guarantee (settings spec §6.a).
 - **The proposer anchors the timelock.** `next_apply = now + apply_delay` is computed from the propose transaction's lower bound, which the proposer chooses; a proposer can anchor it in the past and apply almost immediately. The delay is a scheduling tool, not a hard real-time guarantee against malicious governance (settings spec §6.a).
+- **Delegates must be registered, and the deposit is not refunded.** A logic or migration script only runs once its stake credential is registered. Anyone may register it (the script accepts the Conway registration certificate; the older certificate needs no script approval), and since deregistration is refused, the deposit stays locked for good.
 - **Closing the registry settings instance is a permanent brick.** `Close` burns the one-shot settings NFT and the instance can never be relaunched, so `get_registry` fails forever: forced forwarders become unspendable and opt-in V1 UTxOs can only tick in place (their only value exit is the migration path). A production registry must live in a settings fork without `Close`, or its governance must treat closing as forbidden (settings spec §6.a, "Closing is irreversible").
 - **The reference settings validator does not constrain the registry shape.** Any `Data` is admissible; consumers reject a malformed value at spend time, but governance can still write one (a liveness, not a safety, hazard). A deployer who wants to constrain it can fork settings with their own `validate_datum`.
 - **No global migration completeness.** On eUTxO each UTxO migrates independently; there is no all-or-nothing across the protocol, and no on-chain way to force a user off an opt-in V1.
@@ -209,6 +211,7 @@ Attacks the protocol defends against, each backed by the invariants of §6.b:
 - **I6 — Migration binding.** A migrated V1 input must have been spent with `Upgrade` and must reappear at `v2_address`.
 - **I7 — Registry decodability.** A registry that is not a map of byte arrays to 28-byte hashes with strictly ascending keys is rejected by `decode_registry`; consumers never act on a malformed or ambiguous (duplicate-key) registry.
 - **I8 — Registry authenticity.** The registry is read only from the settings UTxO identified by the settings NFT.
+- **I10 — Delegate registration is permanent.** A logic/migration script's `publish` handler returns `True` only for `RegisterCredential`; its stake credential can be registered but never deregistered or delegated.
 - **I9 — Composability.** The predicates assert only about their own input, the settings reference input, and the withdrawal key set (plus, for migration, the explicit `v2_address` continuation). They never assert total input/output counts, total value, or unrelated UTxOs (`ARCHITECTURE.md` §1.1).
 
 ### 6.c Completeness — when the predicates return `True` (must-accept)
@@ -250,6 +253,7 @@ And, on the migration side (enforced by the migration script, not by `validate_u
 - **R7 (collapsed continuation).** An input is settled by a continuation whose `prev_input` tag names another UTxO (or nothing); each validation binds the continuation by the `OutputReference` it claims, so a single output cannot satisfy two inputs.
 - **R8 (bloated or altered continuation).** A continuation attaches a reference script or changes the input's non-ADA token bundle, so a permissionless tick cannot bloat the UTxO or smuggle/drop tokens.
 - **R9 (vacuous delegate).** A logic or migration script runs while no input is delegated to it under the registry it reads (for example, another settings instance's registry). _(¬I5)_
+- **R10 (certificate other than registration).** A logic or migration script's `publish` handler runs on a deregistration, delegation, or any certificate other than `RegisterCredential`. _(¬I10)_
 
 #### Scope of the formalization
 

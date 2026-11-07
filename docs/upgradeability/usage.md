@@ -294,10 +294,12 @@ The Tx3 reference protocol has its own devnet suite
   settings parameters as the registry that points at it.
 - **Register the withdraw-0 stake credentials first.** The ledger only permits
   a withdrawal from a *registered* reward account: before any
-  `buildForwardTx` / `buildUpgradeTx`, register the stake credentials of
-  `logic_hash` and `migration_hash` — a stake-registration certificate over
-  `serializeRewardAddress(hash, true, networkId)`, exactly what the e2e
-  harness's `registerStakeCredential` does.
+  `buildForwardTx` / `buildUpgradeTx`, register the stake credentials of the
+  logic and migration scripts with `registerWithdrawalScript(txBuilder, script,
+  networkId)`. It emits the Conway registration certificate, which runs the
+  script's `publish` handler (the e2e harness's `registerScriptStakeCredential`
+  wraps it). The handler accepts only registration, so the credential can never
+  be deregistered and the deposit is not refunded.
 - **Migration is per-UTxO.** There is no global completeness guarantee, and no
   way to force a user off an opt-in V1.
 - **The registry is only as good as its governance.** `propose_auth` /

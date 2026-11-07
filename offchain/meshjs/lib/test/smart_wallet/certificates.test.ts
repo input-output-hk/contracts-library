@@ -1,6 +1,6 @@
 import { CredentialType, Serialization } from "@meshsdk/core-cst";
 import { describe, expect, it } from "vitest";
-import { rewriteWithdrawalCertificates } from "../../src/smart_wallet/withdrawal_scripts";
+import { rewriteWithdrawalCertificates } from "../../src/withdraw_zero";
 
 const TARGET_SCRIPT = "aa".repeat(28);
 const OTHER_SCRIPT = "cc".repeat(28);

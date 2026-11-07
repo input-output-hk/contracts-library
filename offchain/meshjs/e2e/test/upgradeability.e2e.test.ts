@@ -53,6 +53,7 @@ import {
   buildRegistryApplyTx,
   buildRegistryProposeTx,
   buildUpgradeTx,
+  deregisterWithdrawalScript,
   type CounterDatum,
   type Registry,
   type SettingsDatum,
@@ -76,7 +77,7 @@ import {
   makeProvider,
   NETWORK_ID,
   newTxBuilder,
-  registerStakeCredential,
+  registerScriptStakeCredential,
   scriptOutputOf,
   signAndSubmit,
   waitForTx,
@@ -195,9 +196,10 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
     };
 
     // The logic and migration scripts run as withdraw-0s: their reward
-    // accounts must exist on the ledger.
-    await registerStakeCredential(provider, governor, logicHash);
-    await registerStakeCredential(provider, governor, migrationHash);
+    // accounts must exist on the ledger. The Conway registration certificate
+    // runs each script's `publish` handler, which accepts it.
+    await registerScriptStakeCredential(provider, governor, logicScript);
+    await registerScriptStakeCredential(provider, governor, migrationScript);
 
     forwarderUtxo = await lockCounter(
       forwarderAddr,
@@ -471,6 +473,30 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
       owner: aliceOwner(),
       prevInput: null,
     });
+  });
+
+  it("refuses to deregister the logic's stake credential", async () => {
+    // Deregistering would make every withdraw-0 of the logic fail, leaving all
+    // forwarder UTxOs stuck; the logic's `publish` handler only accepts
+    // registration.
+    await expect(
+      (async () => {
+        const builder = newTxBuilder(provider);
+        deregisterWithdrawalScript(builder, logicScript, NETWORK_ID);
+        const collateral = await collateralOf(governor);
+        const tx = await builder
+          .txInCollateral(
+            collateral.input.txHash,
+            collateral.input.outputIndex,
+            collateral.output.amount,
+            collateral.output.address,
+          )
+          .changeAddress(governor.address)
+          .selectUtxosFrom(await governor.wallet.getUtxos())
+          .complete();
+        await signAndSubmit(governor, tx);
+      })(),
+    ).rejects.toThrow(/purpose[^a-z]*publish/);
   });
 
   it("ticks the forwarder through the registered logic (forced)", async () => {

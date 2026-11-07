@@ -15,11 +15,13 @@ import {
   MeshTxBuilder,
   MeshWallet,
   serializeRewardAddress,
+  type PlutusScript,
   YaciProvider,
   type SlotConfig,
   type UTxO,
 } from "@meshsdk/core";
 import { Serialization } from "@meshsdk/core-cst";
+import { registerWithdrawalScript } from "@contracts-library/meshjs";
 
 // `INDEXER_URL` is the convention used by the shared devnet lifecycle script.
 export const STORE_URL =
@@ -427,4 +429,30 @@ export async function registerStakeCredential(
     .complete();
   const hash = await payer.wallet.submitTx(await payer.wallet.signTx(tx, true));
   await waitForTx(provider, hash);
+}
+
+/**
+ * Register a script's stake credential with the Conway `reg_cert`, which runs
+ * the script's `publish` handler (unlike `registerStakeCredential`, whose
+ * legacy certificate needs no script approval).
+ */
+export async function registerScriptStakeCredential(
+  provider: YaciProvider,
+  payer: Account,
+  script: PlutusScript,
+): Promise<void> {
+  const builder = newTxBuilder(provider);
+  registerWithdrawalScript(builder, script, NETWORK_ID);
+  const collateral = await collateralOf(payer);
+  const tx = await builder
+    .txInCollateral(
+      collateral.input.txHash,
+      collateral.input.outputIndex,
+      collateral.output.amount,
+      collateral.output.address,
+    )
+    .changeAddress(payer.address)
+    .selectUtxosFrom(await payer.wallet.getUtxos())
+    .complete();
+  await waitForTx(provider, await signAndSubmit(payer, tx));
 }
