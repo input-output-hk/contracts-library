@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main]
 
+# New pushes cancel stale runs of the same branch (a full tx3 run takes ~41 min).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   format:
     name: Format & lint (biome) + aiken fmt
@@ -52,6 +57,12 @@ jobs:
       - name: aiken build
         working-directory: onchain
         run: aiken build
+      # The committed blueprint must match what aiken builds. Diff only
+      # plutus.json: `aiken build` rewrites an etag timestamp in aiken.lock on
+      # every run.
+      - name: Check plutus.json is up to date
+        working-directory: onchain
+        run: git diff --exit-code -- plutus.json
 
   offchain-unit:
     name: Off-chain unit (MeshJS lib)
