@@ -38,7 +38,7 @@ import {
   counterScriptHash,
   counterV1Script,
   counterV2Script,
-  enclosingSlotBound,
+  proposalTiming,
   opaqueRedeemer,
   readRegistry,
   registryToData,
@@ -76,6 +76,7 @@ import {
   fundedAccount,
   makeProvider,
   NETWORK_ID,
+  PROPOSE_TTL_MS,
   newTxBuilder,
   registerScriptStakeCredential,
   scriptOutputOf,
@@ -255,6 +256,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
       settingsUtxo: settingsUtxo!,
       datum: settingsDatum,
       now: proposeNow,
+      ttlMs: PROPOSE_TTL_MS,
       outputIndex: 0,
       utxos: await governor.wallet.getUtxos(),
       changeAddress: governor.address,
@@ -272,12 +274,17 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
       settingsAddr,
     );
 
-    // The builder bakes next_apply = slot_start(propose_now) + apply_delay.
-    const { startMs } = enclosingSlotBound(proposeNow, slotConfig);
+    // The builder bakes next_apply = upper validity bound + apply_delay.
+    const { nextApply } = proposalTiming({
+      now: proposeNow,
+      applyDelay: APPLY_DELAY,
+      ttlMs: PROPOSE_TTL_MS,
+      slotConfig,
+    });
     const proposedDatum: SettingsDatum = {
       current: settingsDatum.current,
       next: registryToData(next),
-      nextApply: startMs + APPLY_DELAY,
+      nextApply,
     };
     await waitUntilChainTimeMs(proposedDatum.nextApply! + TIME_SLACK);
 
@@ -945,6 +952,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
       datum: settingsDatum,
       newValue: 5,
       now: proposeNow,
+      ttlMs: PROPOSE_TTL_MS,
       outputIndex: 0,
       utxos: await governor.wallet.getUtxos(),
       changeAddress: governor.address,
@@ -960,11 +968,16 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
       proposeHash,
       settingsAddr,
     );
-    const { startMs } = enclosingSlotBound(proposeNow, slotConfig);
+    const { nextApply } = proposalTiming({
+      now: proposeNow,
+      applyDelay: APPLY_DELAY,
+      ttlMs: PROPOSE_TTL_MS,
+      slotConfig,
+    });
     const proposedDatum: SettingsDatum = {
       current: settingsDatum.current,
       next: 5,
-      nextApply: startMs + APPLY_DELAY,
+      nextApply,
     };
     await waitUntilChainTimeMs(proposedDatum.nextApply! + TIME_SLACK);
     const applyTx = await buildRegistryApplyTx({

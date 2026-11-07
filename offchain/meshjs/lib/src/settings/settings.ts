@@ -24,7 +24,7 @@ import {
 } from "@meshsdk/core";
 
 import { applyAuthorization, type ScriptAuthorizer } from "../authorization";
-import type { Credential } from "../common";
+import { enclosingSlotBound, type Credential } from "../common";
 import { compiledCode, plutusVersion, typedCompiledCode } from "./blueprint";
 import {
   applyRedeemer,
@@ -131,13 +131,50 @@ export async function buildLaunchTx(p: MintParams): Promise<string> {
 
 // ---------------------------------------------------- Propose
 
+/** Default validity window of a propose transaction: 10 minutes after `now`. */
+export const DEFAULT_PROPOSE_TTL_MS = 10 * 60 * 1000;
+
+/** The upper validity bound of a propose transaction and its `next_apply`. */
+export interface ProposalTiming {
+  /** Slot passed to `invalidHereafter`: the transaction is invalid from it on. */
+  untilSlot: number;
+  /** POSIX ms the validator sees as the validity range's upper bound. */
+  untilMs: number;
+  /** `untilMs + applyDelay`: the earliest time the proposal can be applied. */
+  nextApply: number;
+}
+
+/**
+ * Timing of a proposal submitted at `now`. The validator anchors the delay on
+ * the validity range's upper bound (it requires `next_apply >= upper +
+ * apply_delay`), because a transaction cannot land after it. The upper bound
+ * is the start of the slot enclosing `now + ttlMs`, which is what the
+ * validator sees after `invalidHereafter(untilSlot)`.
+ */
+export function proposalTiming(p: {
+  now: number;
+  applyDelay: number;
+  slotConfig: SlotConfig;
+  ttlMs?: number;
+}): ProposalTiming {
+  const { slot, startMs } = enclosingSlotBound(
+    p.now + (p.ttlMs ?? DEFAULT_PROPOSE_TTL_MS),
+    p.slotConfig,
+  );
+  return { untilSlot: slot, untilMs: startMs, nextApply: startMs + p.applyDelay };
+}
+
 export interface ProposeParams {
   txBuilder: MeshTxBuilder;
   script: PlutusScript;
   settingsUtxo: UTxO;
   datum: SettingsDatum;
   newValue: Data;
+  /** Current time (POSIX ms); the transaction stays valid until `now + ttlMs`. */
   now: number;
+  /** Validity window after `now` (default `DEFAULT_PROPOSE_TTL_MS`). The delay
+   * counts from the end of this window, so a longer window delays the apply. */
+  ttlMs?: number;
   outputIndex: number;
   utxos: UTxO[];
   changeAddress: string;
@@ -153,16 +190,18 @@ export async function buildProposeTx(p: ProposeParams): Promise<string> {
   const network = p.network ?? "preprod";
   const networkId = networkIdOf(network);
   const slotConfig = p.customSlotConfig ?? SLOT_CONFIG_NETWORK[network];
-  const lowerBoundSlot = unixTimeToEnclosingSlot(p.now, slotConfig);
-  const slotStartMs =
-    slotConfig.zeroTime +
-    (lowerBoundSlot - slotConfig.zeroSlot) * slotConfig.slotLength;
+  const timing = proposalTiming({
+    now: p.now,
+    applyDelay: p.applyDelay,
+    slotConfig,
+    ttlMs: p.ttlMs,
+  });
   const scriptAddr = settingsScriptAddress(p.script, networkId);
 
   const newDatum: SettingsDatum = {
     current: p.datum.current,
     next: p.newValue,
-    nextApply: slotStartMs + p.applyDelay,
+    nextApply: timing.nextApply,
   };
 
   applyAuthorization(p.txBuilder, p.proposeAuth, p.authorizer, networkId);
@@ -180,7 +219,7 @@ export async function buildProposeTx(p: ProposeParams): Promise<string> {
     .txInScript(p.script.code)
     .txOut(scriptAddr, p.settingsUtxo.output.amount)
     .txOutInlineDatumValue(settingsDatumToData(newDatum))
-    .invalidBefore(lowerBoundSlot)
+    .invalidHereafter(timing.untilSlot)
     .txInCollateral(
       p.collateralUtxo.input.txHash,
       p.collateralUtxo.input.outputIndex,

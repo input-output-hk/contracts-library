@@ -32,6 +32,13 @@ export const ADMIN_URL = process.env.YACI_ADMIN_URL ?? "http://localhost:10000";
 
 export const NETWORK_ID = 0;
 
+/**
+ * Validity window for settings propose transactions in the e2e suites. The
+ * settings delay counts from the end of this window, so it is kept short (the
+ * library default is 10 minutes); a fresh transaction lands well within it.
+ */
+export const PROPOSE_TTL_MS = 10_000;
+
 /** Pull the most informative message out of an error (axios bodies, etc.). */
 function describeError(err: unknown): string {
   const e = err as

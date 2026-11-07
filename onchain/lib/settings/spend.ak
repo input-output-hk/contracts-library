@@ -8,7 +8,6 @@ use settings/types.{SettingsDatum}
 use settings/utils.{expect_continuation}
 
 /// Validate a proposal to change settings.
-///
 pub fn validate_propose(
   auth: Credential,
   apply_delay: Int,
@@ -21,7 +20,7 @@ pub fn validate_propose(
 ) {
   let Transaction { inputs, outputs, validity_range, .. } = self
 
-  expect Finite(now) = validity_range.lower_bound.bound_type
+  expect Finite(latest) = validity_range.upper_bound.bound_type
 
   expect Some(input_datum) = datum
   let SettingsDatum { current, .. } = input_datum
@@ -38,7 +37,7 @@ pub fn validate_propose(
     expect cont_datum: SettingsDatum = cont_datum
     expect Some(next_data) = cont_datum.next
     expect Some(next_apply_time) = cont_datum.next_apply
-    cont_datum.current == current && next_apply_time >= now + apply_delay && validate_datum(
+    cont_datum.current == current && next_apply_time >= latest + apply_delay && validate_datum(
       next_data,
     ) && next_data != current
   }

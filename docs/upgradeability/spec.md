@@ -157,7 +157,7 @@ An **upgrade** is: deploy V2, then a §5.a registry change setting `R[V1]` to a 
 Attacks the protocol defends against, each backed by the invariants of §6.b:
 
 - **Unauthorized repoint.** Only `propose_auth` may stage and only `apply_auth` may commit a registry change, after `apply_delay` (inherited from #20). (I1)
-- **Premature repoint.** A forced change cannot take effect before the timelock elapses. (I2)
+- **Premature repoint.** A change cannot take effect until `apply_delay` after its proposal reaches the chain. The settings validator anchors the delay on the propose transaction's validity upper bound, which a proposer cannot backdate, so not even a malicious governor can shorten it. (I2)
 - **Forced drain via opt-in.** A governance repoint of a V1's migration script cannot move funds, because consent is enforced natively in V1. (I3)
 - **Forwarding spoofing.** The forwarder requires the *exact* registered script hash; the hash comes from the NFT-authenticated settings UTxO and is compared by withdrawal credential, so it cannot be forged. (I4)
 - **Partial forwarding validation.** A logic/migration script validates **all** inputs mapped to it, so a benign input cannot shield a malicious one. (I5)
@@ -172,8 +172,7 @@ Attacks the protocol defends against, each backed by the invariants of §6.b:
 
 - **The logic / migration script is trusted once registered.** `validate_forward` guarantees only that the registered script ran; the script itself carries the protocol's safety. For forced, a malicious repoint installs arbitrary logic — that is the inherent trust cost of beacon indirection.
 - **Registry values are built for the same settings instance.** A logic or migration script must be parameterized with the settings instance whose registry points at it. The non-empty check in `forwarded_by` stops a mismatched delegate from passing vacuously, but not a double misconfiguration in which the other instance's registry also maps an input to the same delegate.
-- **Forced repoints need a timelock and bounded governance.** `apply_delay` is the users' only window to react; a negative or tiny delay, or unbounded governance, weakens the guarantee (settings spec §6.a).
-- **The proposer anchors the timelock.** `next_apply = now + apply_delay` is computed from the propose transaction's lower bound, which the proposer chooses; a proposer can anchor it in the past and apply almost immediately. The delay is a scheduling tool, not a hard real-time guarantee against malicious governance (settings spec §6.a).
+- **Forced repoints need a sensible `apply_delay`.** The delay is the users' only window to react. The validator enforces it, but trusts the deployer to choose it: a negative or tiny delay weakens the guarantee (settings spec §6.a).
 - **Delegates must be registered, and the deposit is not refunded.** A logic or migration script only runs once its stake credential is registered. Anyone may register it (the script accepts the Conway registration certificate; the older certificate needs no script approval), and since deregistration is refused, the deposit stays locked for good.
 - **Closing the registry settings instance is a permanent brick.** `Close` burns the one-shot settings NFT and the instance can never be relaunched, so `get_registry` fails forever: forced forwarders become unspendable and opt-in V1 UTxOs can only tick in place (their only value exit is the migration path). A production registry must live in a settings fork without `Close`, or its governance must treat closing as forbidden (settings spec §6.a, "Closing is irreversible").
 - **The reference settings validator does not constrain the registry shape.** Any `Data` is admissible; consumers reject a malformed value at spend time, but governance can still write one (a liveness, not a safety, hazard). A deployer who wants to constrain it can fork settings with their own `validate_datum`.
@@ -204,7 +203,7 @@ Attacks the protocol defends against, each backed by the invariants of §6.b:
 ### 6.b Invariants
 
 - **I1 — Registry-change authorization.** `Propose` requires `propose_auth`; launch/`Apply`/`Close` require `apply_auth` (settings spec I1).
-- **I2 — Timelocked effect.** A registry change is committed only when `now >= next_apply` (settings spec I4).
+- **I2 — Timelocked effect.** A registry change is committed only when `now >= next_apply`, and its proposal wrote `next_apply >= upper + apply_delay`, so at least `apply_delay` of real time separates the proposal landing from the commit (settings spec I4).
 - **I3 — Native opt-in consent.** `validate_upgrade` returns `True` only if `user_auth` is satisfied; the registered migration script cannot bypass this.
 - **I4 — Forwarding integrity.** `validate_forward` returns `True` only if the exact registered delegate's withdrawal is present.
 - **I5 — Full forwarded validation.** A logic/migration script applies its checks to every input in `forwarded_by(...)`, and rejects when that set is empty.

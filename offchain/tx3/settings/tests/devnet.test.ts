@@ -2,13 +2,14 @@ import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import {
   TrixDevnet,
   DEVNET_POLL,
+  PROPOSE_TTL_MS,
   unwrapCborBytes,
   type DevnetUtxo,
   type DevnetWallet,
 } from "../../devnet/utils";
 import {
   type SettingsParams,
-  plutusVersion,
+  settingsPlutusVersion as plutusVersion,
   settingsScript,
   settingsScriptAddress,
   SETTINGS_TOKEN_NAME,
@@ -183,15 +184,15 @@ function launchTx(inst: Instance, value: Uint8Array) {
 function proposeTx(
   inst: Instance,
   newValue: Uint8Array,
-  nowMs: number,
-  sinceSlot: number,
+  untilMs: number,
+  untilSlot: number,
   outIx = 0,
 ) {
   return inst.client
     .propose({
       new_value: newValue,
-      now_ms: nowMs,
-      since_slot: sinceSlot,
+      until_ms: untilMs,
+      until_slot: untilSlot,
       out_ix: outIx,
     } as unknown as ProposeArgs)
     .env(inst.env)
@@ -252,14 +253,14 @@ function launchScriptAuthorizedTx(inst: Instance, value: Uint8Array) {
 function proposeScriptAuthorizedTx(
   inst: Instance,
   newValue: Uint8Array,
-  nowMs: number,
-  sinceSlot: number,
+  untilMs: number,
+  untilSlot: number,
 ) {
   return inst.client
     .proposeScriptAuthorized({
       new_value: newValue,
-      now_ms: nowMs,
-      since_slot: sinceSlot,
+      until_ms: untilMs,
+      until_slot: untilSlot,
       out_ix: 0,
     } as unknown as ProposeScriptAuthorizedArgs)
     .env(inst.env)
@@ -353,10 +354,10 @@ test("launches, proposes, applies, and closes", async () => {
   await confirm(launchTx(inst, VALUE_A));
   expect(await settingsUtxoExists(inst)).toBe(true);
 
-  // 2. Propose — next = B, next_apply = now + apply_delay.
-  const proposeTip = await devnet.tip();
-  await confirm(proposeTx(inst, VALUE_B, proposeTip.timeMs, proposeTip.slot));
-  const nextApplyMs = proposeTip.timeMs + APPLY_DELAY;
+  // 2. Propose — next = B, next_apply = upper bound + apply_delay.
+  const proposeBound = await devnet.validUntil(PROPOSE_TTL_MS);
+  await confirm(proposeTx(inst, VALUE_B, proposeBound.timeMs, proposeBound.slot));
+  const nextApplyMs = proposeBound.timeMs + APPLY_DELAY;
 
   // 3. Wait for the proposal to mature, then apply — current = B.
   await devnet.waitForChainTimeMs(nextApplyMs + 3_000);
@@ -377,17 +378,17 @@ test("runs the script-authorized lifecycle", async () => {
   await confirm(launchScriptAuthorizedTx(inst, VALUE_A));
   expect(await settingsUtxoExists(inst)).toBe(true);
 
-  const proposeTip = await devnet.tip();
+  const proposeBound = await devnet.validUntil(PROPOSE_TTL_MS);
   await confirm(
     proposeScriptAuthorizedTx(
       inst,
       VALUE_B,
-      proposeTip.timeMs,
-      proposeTip.slot,
+      proposeBound.timeMs,
+      proposeBound.slot,
     ),
   );
 
-  await devnet.waitForChainTimeMs(proposeTip.timeMs + APPLY_DELAY + 3_000);
+  await devnet.waitForChainTimeMs(proposeBound.timeMs + APPLY_DELAY + 3_000);
   const applyTip = await devnet.tip();
   await confirm(applyScriptAuthorizedTx(inst, VALUE_B, applyTip.slot));
   expect(await settingsUtxoExists(inst)).toBe(true);
@@ -402,8 +403,8 @@ test("rejects apply before next_apply", async () => {
   const inst = await configure();
   await confirm(launchTx(inst, VALUE_A));
 
-  const proposeTip = await devnet.tip();
-  await confirm(proposeTx(inst, VALUE_B, proposeTip.timeMs, proposeTip.slot));
+  const proposeBound = await devnet.validUntil(PROPOSE_TTL_MS);
+  await confirm(proposeTx(inst, VALUE_B, proposeBound.timeMs, proposeBound.slot));
 
   // Apply immediately, without waiting for the delay to elapse.
   const tip = await devnet.tip();
@@ -424,9 +425,9 @@ test("rejects propose with same value as current", async () => {
   await confirm(launchTx(inst, VALUE_A));
 
   // Proposing the current value is a no-op the validator forbids.
-  const tip = await devnet.tip();
+  const bound = await devnet.validUntil(PROPOSE_TTL_MS);
   await expectAttackRejected(
-    proposeTx(inst, VALUE_A, tip.timeMs, tip.slot),
+    proposeTx(inst, VALUE_A, bound.timeMs, bound.slot),
     inst,
   );
 }, 120_000);
@@ -437,9 +438,9 @@ test("rejects propose signed by a non-proposer credential", async () => {
 
   // Script params bind propose auth to `proposer`; using `applier` to propose
   // must fail validator authorization.
-  const tip = await devnet.tip();
+  const bound = await devnet.validUntil(PROPOSE_TTL_MS);
   await expectAttackRejected(
-    proposeTx(inst, VALUE_B, tip.timeMs, tip.slot),
+    proposeTx(inst, VALUE_B, bound.timeMs, bound.slot),
     inst,
   );
 }, 120_000);
@@ -448,9 +449,9 @@ test("rejects apply with an invalid continuation output index", async () => {
   const inst = await configure();
   await confirm(launchTx(inst, VALUE_A));
 
-  const proposeTip = await devnet.tip();
-  await confirm(proposeTx(inst, VALUE_B, proposeTip.timeMs, proposeTip.slot));
-  const nextApplyMs = proposeTip.timeMs + APPLY_DELAY;
+  const proposeBound = await devnet.validUntil(PROPOSE_TTL_MS);
+  await confirm(proposeTx(inst, VALUE_B, proposeBound.timeMs, proposeBound.slot));
+  const nextApplyMs = proposeBound.timeMs + APPLY_DELAY;
 
   await devnet.waitForChainTimeMs(nextApplyMs + 3_000);
   const applyTip = await devnet.tip();

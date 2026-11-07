@@ -2,6 +2,7 @@ import { afterAll, beforeAll, expect, test } from "vitest";
 import {
   TrixDevnet,
   DEVNET_POLL,
+  PROPOSE_TTL_MS,
   unwrapCborBytes,
   type DevnetKitFactory,
   type DevnetUtxo,
@@ -360,7 +361,8 @@ async function lockCounter(
 
 /** Propose a registry change for the forwarder's entry (V1 stays put). */
 async function proposeRegistry(forwarderValue: string): Promise<number> {
-  const tip = await devnet.tip();
+  // The delay is anchored on the validity upper bound.
+  const bound = await devnet.validUntil(PROPOSE_TTL_MS);
   await confirm(
     inst
       .client(governor)
@@ -369,13 +371,13 @@ async function proposeRegistry(forwarderValue: string): Promise<number> {
           [inst.forwarderHash, forwarderValue],
           [inst.v1Hash, inst.migrationHash],
         ]),
-        now_ms: tip.timeMs,
-        since_slot: tip.slot,
+        until_ms: bound.timeMs,
+        until_slot: bound.slot,
         out_ix: 0,
       } as unknown as ProposeRegistryArgs)
       .env(inst.env),
   );
-  return tip.timeMs + APPLY_DELAY;
+  return bound.timeMs + APPLY_DELAY;
 }
 
 /** Wait out the timelock and apply the pending registry proposal. */

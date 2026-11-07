@@ -127,9 +127,9 @@ coexist; other users are unaffected.
 Both are governed, timelocked changes to the settings UTxO. A forced repoint is
 **mandatory-timelocked**: the `apply_delay` is the users' window to inspect the
 new logic (and, for opt-in, to migrate or exit) before it takes effect. The
-anchor is chosen by the proposer, though: treat the delay as a scheduling tool,
-not a hard guarantee against malicious governance (see the gotchas and
-[settings spec §6.a](../settings/spec.md)).
+delay counts from the propose transaction's validity upper bound, which the
+proposer cannot backdate, so it holds even against malicious governance (see
+[settings spec §5](../settings/spec.md)).
 
 ## Reading the registry
 
@@ -314,10 +314,6 @@ The Tx3 reference protocol has its own devnet suite
   their only value exit (they can still tick natively, never migrate). For a
   production registry use a settings fork without `Close`, or forbid closing at
   the governance layer.
-- **The proposer anchors the delay.** `next_apply = now + apply_delay` is
-  computed from the propose transaction's lower bound, which the proposer
-  chooses; a malicious proposer can anchor it in the past and apply almost
-  immediately (settings spec §6.a).
 - **The settings UTxO needs enough lovelace for the registry.** A map of script
   hashes inflates the inline datum, which raises the min-UTxO of every
   continuation; the `buildLaunchTx` default (1.5 ADA) is rejected on-chain
