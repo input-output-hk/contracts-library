@@ -4,6 +4,9 @@
   "private": true,
   "description": "Standardized, reusable smart contracts for Cardano",
   "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "format": "biome format --write .",
     "format:check": "biome format .",

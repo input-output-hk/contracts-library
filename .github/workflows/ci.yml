@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: package-lock.json
       - name: Install
@@ -75,7 +75,7 @@ jobs:
         run: npm run blueprint:check
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: offchain/meshjs/lib/package-lock.json
       - name: Install
@@ -95,7 +95,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: offchain/meshjs/*/package-lock.json
       - uses: actions/setup-java@v4
@@ -130,7 +130,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: |
             offchain/meshjs/lib/package-lock.json
@@ -140,11 +140,17 @@ jobs:
       # The suites drive an ephemeral dolos devnet booted by `trix devnet`
       # (see offchain/tx3/README.md). tx3up installs the toolchain under
       # ~/.tx3/<toolchain>/bin.
+      #
+      # Both layers are pinned so a toolchain release cannot silently change
+      # what CI runs: the tx3up installer at its release tag, and the
+      # toolchain manifest via `tx3up install --release` (tx3-lang/toolchain
+      # tags; this one ships trix ^0.28.0, dolos ^1.6.1). Bump deliberately,
+      # then re-run the devnet suites.
       - name: Install the tx3 toolchain (trix, dolos)
         run: |
-          curl -LsSf https://github.com/tx3-lang/tx3up/releases/latest/download/tx3up-installer.sh | sh
+          curl -LsSf https://github.com/tx3-lang/tx3up/releases/download/v0.8.0/tx3up-installer.sh | sh
           export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$PATH"
-          tx3up
+          tx3up install --release sha-3f2296a
           for d in "$HOME"/.tx3/*/bin; do [ -d "$d" ] && echo "$d" >> "$GITHUB_PATH"; done
 
       # dolos < 1.4.0 injects Plutus POSIXTime in seconds during mempool
