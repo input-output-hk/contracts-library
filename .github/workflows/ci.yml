@@ -24,21 +24,24 @@ jobs:
           cache-dependency-path: package-lock.json
       - name: Install
         run: npm ci
-      - name: Biome format check
-        run: npm run format:check
-      - name: Biome lint check
-        run: npm run lint:check
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
       - uses: aiken-lang/setup-aiken@v1
         with:
           version: v1.1.24
-      - name: aiken fmt check (onchain)
-        working-directory: onchain
-        run: aiken fmt --check
+      - name: Format & lint
+        run: |
+          just fmt-check
+          just lint
   onchain:
     name: On-chain (aiken)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
       - uses: aiken-lang/setup-aiken@v1
         with:
           version: v1.1.24
@@ -51,42 +54,31 @@ jobs:
           key: ${{ runner.os }}-aiken-${{ hashFiles('onchain/aiken.lock') }}
           restore-keys: |
             ${{ runner.os }}-aiken-
-      - name: aiken check
-        working-directory: onchain
-        run: aiken check --max-success=100
-      - name: aiken build
-        working-directory: onchain
-        run: aiken build
-      # The committed blueprint must match what aiken builds. Diff only
-      # plutus.json: `aiken build` rewrites an etag timestamp in aiken.lock on
-      # every run.
-      - name: Check plutus.json is up to date
-        working-directory: onchain
-        run: git diff --exit-code -- plutus.json
+      - name: On-chain checks
+        run: just onchain
 
   offchain-unit:
     name: Off-chain unit (MeshJS lib)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # Fails the job when the pinned blueprints drift from onchain/plutus.json
-      # (no Node dependencies needed for this step).
-      - name: Blueprint sync check
-        run: npm run blueprint:check
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: offchain/meshjs/lib/package-lock.json
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
+      # Fails the job when the pinned blueprints drift from onchain/plutus.json
+      # (plain node — no dependencies needed for this step).
+      - name: Blueprint sync check
+        run: just blueprints-check
       - name: Install
         working-directory: offchain/meshjs/lib
         run: npm ci
-      - name: Typecheck
-        working-directory: offchain/meshjs/lib
-        run: npm run typecheck
-      - name: Unit tests
-        working-directory: offchain/meshjs/lib
-        run: npm test
+      - name: Typecheck & unit tests
+        run: just unit
 
   e2e:
     name: Off-chain e2e (Yaci devnet)
@@ -102,6 +94,9 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
 
       - name: Build library
         working-directory: offchain/meshjs/lib
@@ -111,16 +106,11 @@ jobs:
         working-directory: offchain/meshjs/e2e
         run: npm ci
 
-      - name: Typecheck e2e
-        working-directory: offchain/meshjs/e2e
-        run: npm run typecheck
-
-      # Starts an ephemeral devnet, runs the suite against it, always tears down.
-      - name: Run e2e tests against an ephemeral devnet
-        working-directory: offchain/meshjs/e2e
-        env:
-          REQUIRE_DEVNET: "1"
-        run: npm run test:devnet
+      # The recipe sets REQUIRE_DEVNET=1 (fail instead of silently skipping),
+      # typechecks, then starts an ephemeral devnet per suite and always tears
+      # it down.
+      - name: Typecheck & run e2e against an ephemeral devnet
+        run: just e2e
 
   tx3-devnet:
     name: Off-chain tx3 (trix devnet)
@@ -173,23 +163,18 @@ jobs:
         working-directory: offchain/meshjs/e2e
         run: npm ci
 
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
+
       - name: Generate TypeScript clients (gitignored — absent on a fresh checkout)
-        run: |
-          for dir in offchain/tx3/*/; do
-            if [ -f "${dir}trix.toml" ]; then
-              (cd "$dir" && trix codegen --plugin ts-client)
-            fi
-          done
+        run: just tx3-codegen
 
       - name: Install tx3 dependencies
         working-directory: offchain/tx3
         run: npm ci
 
-      - name: Typecheck
-        working-directory: offchain/tx3
-        run: npm run typecheck
-
-      # One ephemeral dolos devnet per suite, booted serially (fixed ports).
-      - name: Run devnet suites
-        working-directory: offchain/tx3
-        run: npm run test:devnet
+      # The recipe typechecks, then boots one ephemeral dolos devnet per
+      # suite, serially (fixed ports), always tearing down.
+      - name: Typecheck & run devnet suites
+        run: just tx3
