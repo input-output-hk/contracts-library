@@ -1,8 +1,9 @@
+use aiken/collection/dict
 use aiken/collection/list
-use cardano/address.{Address, Credential}
-use cardano/assets
+use cardano/address.{Address, Credential, Script}
+use cardano/assets.{AssetName, PolicyId}
 use cardano/transaction.{
-  InlineDatum, Output, OutputReference, Transaction, find_input,
+  InlineDatum, Input, Output, OutputReference, Transaction, find_input,
 }
 use upgradeability/delegate.{spend_redeemer}
 
@@ -30,6 +31,41 @@ pub type CounterDatum {
 pub type CounterRedeemer {
   Tick
   Upgrade
+}
+
+/// A forced counter is genuine iff it holds one `(forwarder, "counter")` token.
+pub const state_token_name: AssetName = "counter"
+
+pub fn carries_state_token(input: Input) -> Bool {
+  expect Script(forwarder) = input.output.address.payment_credential
+  assets.quantity_of(input.output.value, forwarder, state_token_name) == 1
+}
+
+/// A mint under `policy` is exactly one state token, paid to a fresh counter
+/// (`count: 0`, no `prev_input`) at the forwarder's address.
+pub fn validate_counter_genesis(self: Transaction, policy: PolicyId) -> Bool {
+  expect [Pair(name, 1)] = dict.to_pairs(assets.tokens(self.mint, policy))
+  and {
+    name == state_token_name,
+    list.any(self.outputs, fn(out) { is_fresh_counter(out, policy) }),
+  }
+}
+
+fn is_fresh_counter(out: Output, policy: PolicyId) -> Bool {
+  and {
+    out.address.payment_credential == Script(policy),
+    assets.quantity_of(out.value, policy, state_token_name) == 1,
+    out.reference_script == None,
+    when out.datum is {
+      InlineDatum(raw) ->
+        if raw is CounterDatum { count, prev_input, .. }: CounterDatum {
+          count == 0 && prev_input == None
+        } else {
+          False
+        }
+      _ -> False
+    },
+  }
 }
 
 /// Whether `input` is settled by a continuation output at `target_address`

@@ -87,24 +87,37 @@ The reusable predicates and helpers, all in `onchain/lib/upgradeability/`.
 
 | Function | Role |
 |---|---|
+| `Delegated { inputs, mints, withdrawals, certificates, votes }` | Every transaction item delegated to one script, by kind. |
+| `delegated_items(self, registry, logic_hash)` | The items whose script credential (input address, minting policy, withdrawal or certificate credential, voter) the registry maps to `logic_hash`. |
+| `delegated_to(self, settings_policy, settings_token_name, account)` | What the forced logic running as `account` must validate: `delegated_items` over the registry for its own hash. Fails if `account` is not a script or every kind is empty. |
 | `forwarded_inputs(inputs, registry, logic_hash)` | Every input whose address maps to `logic_hash`. |
-| `forwarded_by(self, settings_policy, settings_token_name, account)` | The inputs the delegate running as `account` must validate: `forwarded_inputs` over the registry for its own hash. Fails if `account` is not a script or the set is empty. |
+| `forwarded_by(self, settings_policy, settings_token_name, account)` | The inputs the opt-in migration running as `account` must validate: `forwarded_inputs` over the registry for its own hash. Fails if `account` is not a script or the set is empty. |
 | `spend_redeemer(self, ref)` | The redeemer the input at `ref` was spent with, if any. How a logic script reads each forwarded input's action. |
 
-**`forward.validate_forward(settings_policy, settings_token_name, own_ref, self)`** — forced forwarder:
+**`credentials`** (shared by the forwarder and its delegate):
 
-Returns `True` iff `own_hash = own_script_hash(inputs, own_ref)`, the registry maps `own_hash` to some `logic_hash`, and `Script(logic_hash)` is present in `self.withdrawals`.
+| Function | Role |
+|---|---|
+| `certificate_credential(certificate)` | The credential that witnesses a certificate (a stake pool's key for pool certificates). |
+| `voter_credential(voter)` | The credential of a voter (a stake pool's key for a pool). |
+
+**`forward.validate_forward(settings_policy, settings_token_name, info, self)`**, the forced forwarder, called from every purpose (one `else` handler):
+
+Returns `True` iff `own_hash = forward.own_hash(self, info)` (the spent input's script, the minting policy, or the withdrawal, certificate or voter script credential), the registry maps `own_hash` to some `logic_hash`, and `Script(logic_hash)` is present in `self.withdrawals`. It fails for a purpose that names no script credential of its own (a key or stake pool action, or a proposal guardrail).
 
 **`migrate.validate_upgrade(user_auth, settings_policy, settings_token_name, own_ref, self)`** — opt-in `Upgrade` path:
 
 Returns `True` iff the registry maps `own_hash` to some `migration_hash`, `Script(migration_hash)` is present in `self.withdrawals`, **and** `user_auth` is satisfied (key in `extra_signatories`, or a script withdrawal — `authorization.is_authorized`).
 
-The **logic** and **migration** scripts run under the withdraw-0 convention (`withdraw(redeemer, account, self)`), and apply their checks to every input of `forwarded_by(self, settings_policy, settings_token_name, account)`, which rejects when nothing is delegated to them. Both also carry a `publish` handler, `accept_registration` (shared `withdraw_zero` module), that accepts registering their own stake credential and refuses every other certificate.
+The **logic** and **migration** scripts run under the withdraw-0 convention (`withdraw(redeemer, account, self)`). The forced logic validates every item of `delegated_to(self, settings_policy, settings_token_name, account)` and must reject any item kind it does not handle; the migration script validates every input of `forwarded_by(...)`. Both reject when nothing is delegated to them. Both also carry a `publish` handler, `accept_registration` (shared `withdraw_zero` module), that accepts registering their own stake credential and refuses every other certificate.
 
 **`counter`** (helpers, non-normative demo):
 
 | Function | Role |
 |---|---|
+| `state_token_name` | `"counter"`: the asset name of a forwarded counter's state token, minted under the forwarder's policy. |
+| `carries_state_token(input)` | Whether the input holds exactly one state token of its own forwarder: what makes a forwarded counter genuine. |
+| `validate_counter_genesis(self, policy)` | Admit a mint under `policy` only as exactly one state token paid to a fresh counter (`count: 0`, `prev_input: None`, no reference script) at `policy`'s own address. |
 | `validate_counter_tick(self, own_ref)` | Settle the input at `own_ref` with a `count + 1` continuation at its own address, tagged `prev_input = own_ref`, preserving `owner` and the non-ADA assets, not decreasing lovelace, and carrying no reference script. |
 | `validate_counter_migrate(self, own_ref, v2_address)` | Settle it with a state-preserving continuation at `v2_address` under the same constraints. |
 | `spent_with_upgrade(self, ref)` | Whether the input at `ref` was spent with the `Upgrade` action. |
@@ -117,11 +130,11 @@ As specified in the settings spec §4.a. Its `current` value is a well-formed re
 
 ### 4.b Protocol UTxO
 
-The state a forwarder (forced) or V1 (opt-in) holds. Its shape is protocol-defined; the upgradeability predicates treat it as opaque. The `counter_*` demo uses `CounterDatum { count: Int, owner: Credential, prev_input: Option<OutputReference> }`: the `prev_input` tag binds a continuation output to the UTxO it continues (`None` only at the genesis lock), so each validation settles its input by its own continuation and several UTxOs can be ticked or migrated in one transaction without one continuation swallowing another.
+The state a forwarder (forced) or V1 (opt-in) holds. Its shape is protocol-defined; the upgradeability predicates treat it as opaque. A forwarder address accepts payments from anyone, so a forced protocol must tell its genuine state from look-alikes paid straight to the address: the demo's forwarded counters carry one state token minted under the forwarder's own policy (created by a genesis mint the logic validates), and the logic accepts only inputs that carry it. The `counter_*` demo uses `CounterDatum { count: Int, owner: Credential, prev_input: Option<OutputReference> }`: the `prev_input` tag binds a continuation output to the UTxO it continues (`None` only at the genesis lock), so each validation settles its input by its own continuation and several UTxOs can be ticked or migrated in one transaction without one continuation swallowing another.
 
 ## 5. Transactions
 
-Throughout, `R ≜ registry(settings_ref)` is the registry read from the settings reference input, and `own_hash` is the payment credential script hash of the input being validated.
+Throughout, `R ≜ registry(settings_ref)` is the registry read from the settings reference input, and `own_hash` is the validating script's own hash: for a spend, the payment credential of the input being validated; for the forwarder's other purposes, the script credential the purpose names (`forward.own_hash`).
 
 ### 5.a Registry change (governed, timelocked)
 
@@ -135,7 +148,9 @@ Identical to the settings `Propose` / `Apply` transactions (settings spec §5.b,
 | **Reference inputs** | The settings UTxO (registry). |
 | **Withdrawals** | A zero withdrawal keyed by the registered logic script's reward account. |
 | **Redeemer** | Forwarder spend: any `Data` (the forwarder does not inspect it). |
-| **Validation** | `validate_forward` returns `True`; the logic script independently validates the forwarded input(s). |
+| **Validation** | `validate_forward` returns `True`; the logic script independently validates every delegated item. |
+
+The same shape covers every other use of the forwarder's credential: minting under its policy (the demo's genesis mint of a state token), withdrawing from or certifying its stake credential, or voting as it. The forwarder runs for that purpose and checks only that the logic runs; the logic validates the item or rejects it.
 
 The forwarder's redeemer is opaque to the forwarder: all meaning lives in the logic script, selected by the registry. The logic reads each forwarded input's action with `spend_redeemer(self, input_ref)`, so a protocol with several actions is covered: one logic run validates every forwarded input, each under its own action. An **upgrade** is a §5.a registry change repointing `R[forwarder]`; no funds move.
 
@@ -160,8 +175,11 @@ Attacks the protocol defends against, each backed by the invariants of §6.b:
 - **Premature repoint.** A change cannot take effect until `apply_delay` after its proposal reaches the chain. The settings validator anchors the delay on the propose transaction's validity upper bound, which a proposer cannot backdate, so not even a malicious governor can shorten it. (I2)
 - **Forced drain via opt-in.** A governance repoint of a V1's migration script cannot move funds, because consent is enforced natively in V1. (I3)
 - **Forwarding spoofing.** The forwarder requires the *exact* registered script hash; the hash comes from the NFT-authenticated settings UTxO and is compared by withdrawal credential, so it cannot be forged. (I4)
-- **Partial forwarding validation.** A logic/migration script validates **all** inputs mapped to it, so a benign input cannot shield a malicious one. (I5)
-- **Vacuous delegate.** A delegate registered under the wrong settings instance would read another instance's registry, find no inputs mapped to it, and accept over an empty set, letting every forwarder be spent unchecked. `forwarded_by` rejects an empty set, so a delegate never passes without validating something. (I5)
+- **Partial forwarding validation.** A logic/migration script validates **all** items delegated to it, so a benign input cannot shield a malicious one. (I5)
+- **Counterfeit state.** Anyone can pay a UTxO with a made-up datum straight to a forwarder address. The demo logic accepts only inputs carrying the forwarder's state token, so a counterfeit counter cannot be ticked as genuine. (I11)
+- **Free mint through a forwarded policy.** The forwarder doubles as a minting policy, and it admits any mint once the logic runs. The logic sees every mint delegated to it (I5), and the demo admits only a single-token genesis into a fresh counter, so state tokens cannot be minted alongside a tick. (I11)
+- **Unchecked purpose.** A forwarder that forwarded only its spends would let anyone mint under its policy, or withdraw, certify or vote with its credential, unchecked. It forwards every purpose, and the logic rejects item kinds it does not handle. (I4, I5)
+- **Vacuous delegate.** A delegate registered under the wrong settings instance would read another instance's registry, find no inputs mapped to it, and accept over an empty set, letting every forwarder be spent unchecked. `delegated_to` and `forwarded_by` reject an empty set, so a delegate never passes without validating something. (I5)
 - **Delegate deregistration.** Deregistering a delegate's stake credential would make its withdraw-0 impossible and leave every forwarder it serves (or every V1 upgrade) stuck. A delegate's `publish` handler accepts only registration, so once registered its credential cannot be deregistered or delegated. (I10)
 - **Migration re-creation / double spend.** The migration script binds each forwarded input to the `Upgrade` action and a `v2_address` continuation; a UTxO is spent once, and a migrated V1 UTxO cannot be re-created under a normal action. (I6)
 - **Malformed registry.** A malformed registry value makes every consumer reject (a liveness hazard), but it cannot be acted on. Governance is trusted to write well-formed maps. (I7)
@@ -171,7 +189,7 @@ Attacks the protocol defends against, each backed by the invariants of §6.b:
 ### 6.a Assumptions / out of scope
 
 - **The logic / migration script is trusted once registered.** `validate_forward` guarantees only that the registered script ran; the script itself carries the protocol's safety. For forced, a malicious repoint installs arbitrary logic — that is the inherent trust cost of beacon indirection.
-- **Registry values are built for the same settings instance.** A logic or migration script must be parameterized with the settings instance whose registry points at it. The non-empty check in `forwarded_by` stops a mismatched delegate from passing vacuously, but not a double misconfiguration in which the other instance's registry also maps an input to the same delegate.
+- **Registry values are built for the same settings instance.** A logic or migration script must be parameterized with the settings instance whose registry points at it. The non-empty checks in `delegated_to` and `forwarded_by` stop a mismatched delegate from passing vacuously, but not a double misconfiguration in which the other instance's registry also maps an input to the same delegate.
 - **Forced repoints need a sensible `apply_delay`.** The delay is the users' only window to react. The validator enforces it, but trusts the deployer to choose it: a negative or tiny delay weakens the guarantee (settings spec §6.a).
 - **Delegates must be registered, and the deposit is not refunded.** A logic or migration script only runs once its stake credential is registered. Anyone may register it (the script accepts the Conway registration certificate; the older certificate needs no script approval), and since deregistration is refused, the deposit stays locked for good.
 - **Closing the registry settings instance is a permanent brick.** `Close` burns the one-shot settings NFT and the instance can never be relaunched, so `get_registry` fails forever: forced forwarders become unspendable and opt-in V1 UTxOs can only tick in place (their only value exit is the migration path). A production registry must live in a settings fork without `Close`, or its governance must treat closing as forbidden (settings spec §6.a, "Closing is irreversible").
@@ -195,8 +213,13 @@ Attacks the protocol defends against, each backed by the invariants of §6.b:
   continuation, so a spender who provides duplicate value can settle one input
   with more than one continuation (for example, forking the counter datum).
   Value conservation and the exact non-ADA match keep this value-backed — no
-  value is created — but a protocol whose state must be unique should carry a
-  unique token or enforce uniqueness in its own logic.
+  value is created — but a protocol whose state must be unique should enforce
+  uniqueness in its own logic. A forwarded demo counter is unique: its single
+  state token can sit in only one output, so a forked datum without it is not
+  genuine and cannot be ticked.
+- **Tokenless UTxOs at a forwarder are stuck.** The demo logic rejects any forwarded input without the state token, and nothing else can spend it, so value paid straight to a forwarder address is locked for good. It was never extractable (a tick preserves value), but a production protocol may want a reclaim path in its logic.
+- **A forwarder's stake credential is unusable in the demo.** The logic rejects every certificate, withdrawal and vote naming the forwarder, including the legacy registration that needs no witness, so a tick fails in a transaction that also registers the forwarder that way. A protocol that stakes through its forwarder handles these items in its logic instead.
+- **Demo counters are open and permanent.** Anyone can mint a fresh counter (genesis needs no authorization), and burns are rejected, so a counter can never be closed.
 - **The protocol state's meaning is delegated.** The upgradeability predicates treat a forwarder's datum opaquely; the logic script defines it.
 - **Off-chain is out of scope in this pass.**
 
@@ -206,12 +229,13 @@ Attacks the protocol defends against, each backed by the invariants of §6.b:
 - **I2 — Timelocked effect.** A registry change is committed only when `now >= next_apply`, and its proposal wrote `next_apply >= upper + apply_delay`, so at least `apply_delay` of real time separates the proposal landing from the commit (settings spec I4).
 - **I3 — Native opt-in consent.** `validate_upgrade` returns `True` only if `user_auth` is satisfied; the registered migration script cannot bypass this.
 - **I4 — Forwarding integrity.** `validate_forward` returns `True` only if the exact registered delegate's withdrawal is present.
-- **I5 — Full forwarded validation.** A logic/migration script applies its checks to every input in `forwarded_by(...)`, and rejects when that set is empty.
+- **I5 — Full forwarded validation.** The forced logic applies its checks to every item in `delegated_to(...)` (inputs, mints, withdrawals, certificates, votes) and rejects kinds it does not handle; the migration script applies its checks to every input in `forwarded_by(...)`. Both reject when nothing is delegated.
 - **I6 — Migration binding.** A migrated V1 input must have been spent with `Upgrade` and must reappear at `v2_address`.
 - **I7 — Registry decodability.** A registry that is not a map of byte arrays to 28-byte hashes with strictly ascending keys is rejected by `decode_registry`; consumers never act on a malformed or ambiguous (duplicate-key) registry.
 - **I8 — Registry authenticity.** The registry is read only from the settings UTxO identified by the settings NFT.
 - **I10 — Delegate registration is permanent.** A logic/migration script's `publish` handler returns `True` only for `RegisterCredential`; its stake credential can be registered but never deregistered or delegated.
-- **I9 — Composability.** The predicates assert only about their own input, the settings reference input, and the withdrawal key set (plus, for migration, the explicit `v2_address` continuation). They never assert total input/output counts, total value, or unrelated UTxOs (`ARCHITECTURE.md` §1.1).
+- **I11 — Genuine forwarded state (demo).** The counter logic ticks only inputs carrying exactly one state token of their forwarder, and admits a mint under the forwarder's policy only as one token paid to a fresh `count: 0` counter at the forwarder address.
+- **I9 — Composability.** The predicates assert only about their own credential (the input, policy, stake credential or voter they run for), the settings reference input, and the withdrawal key set (plus, for migration, the explicit `v2_address` continuation). They never assert total input/output counts, total value, or unrelated UTxOs (`ARCHITECTURE.md` §1.1).
 
 ### 6.c Completeness — when the predicates return `True` (must-accept)
 
@@ -221,7 +245,7 @@ Attacks the protocol defends against, each backed by the invariants of §6.b:
 
 Returns `True` if **all** of:
 
-- **F1 (own input).** The input at `own_ref` exists and its payment credential is `Script(own_hash)`.
+- **F1 (own credential).** `info` names a script credential `own_hash`: for spending, the input at the spent reference exists and its payment credential is `Script(own_hash)`; for minting, the policy id; for withdrawing, publishing or voting, a `Script` credential (a certificate's own credential, a committee member or DRep voter).
 - **F2 (registry).** The settings reference input exists, carries the settings NFT, and its `current` decodes to a registry `R`.
 - **F3 (entry).** `R[own_hash] == Some(logic_hash)`.
 - **F4 (delegate).** `Script(logic_hash)` is present in `self.withdrawals`.
@@ -230,7 +254,7 @@ Returns `True` if **all** of:
 
 Returns `True` if **all** of:
 
-- **U1 (own input).** As F1.
+- **U1 (own input).** The input at `own_ref` exists and its payment credential is `Script(own_hash)`.
 - **U2 (registry).** As F2.
 - **U3 (entry).** `R[own_hash] == Some(migration_hash)`.
 - **U4 (delegate).** `Script(migration_hash)` is present in `self.withdrawals`.
@@ -251,7 +275,9 @@ And, on the migration side (enforced by the migration script, not by `validate_u
 - **R6 (no continuation / wrong target).** The migrated state does not reappear at `v2_address` with `count`, `owner` and the non-ADA assets preserved and no reference script. _(¬I6)_
 - **R7 (collapsed continuation).** An input is settled by a continuation whose `prev_input` tag names another UTxO (or nothing); each validation binds the continuation by the `OutputReference` it claims, so a single output cannot satisfy two inputs.
 - **R8 (bloated or altered continuation).** A continuation attaches a reference script or changes the input's non-ADA token bundle, so a permissionless tick cannot bloat the UTxO or smuggle/drop tokens.
-- **R9 (vacuous delegate).** A logic or migration script runs while no input is delegated to it under the registry it reads (for example, another settings instance's registry). _(¬I5)_
+- **R9 (vacuous delegate).** A logic or migration script runs while nothing is delegated to it under the registry it reads (for example, another settings instance's registry). _(¬I5)_
+- **R11 (counterfeit or unchecked item, demo).** The counter logic rejects a delegated input without the state token, a delegated mint other than a single-token genesis into a fresh counter (including a burn), and any delegated withdrawal, certificate or vote. _(¬I5, ¬I11)_
+- **R12 (no own script credential).** The forwarder runs for a purpose that names no script credential of its own (a key withdrawal, a stake pool voter or certificate, a proposal). _(¬F1)_
 - **R10 (certificate other than registration).** A logic or migration script's `publish` handler runs on a deregistration, delegation, or any certificate other than `RegisterCredential`. _(¬I10)_
 
 #### Scope of the formalization

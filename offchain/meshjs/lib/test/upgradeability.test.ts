@@ -32,7 +32,9 @@ import {
 } from "../src/upgradeability/datum";
 import {
   addressToData,
+  buildForwardMintTx,
   buildForwardTx,
+  STATE_TOKEN_NAME as COUNTER_STATE_TOKEN_NAME,
   buildUpgradeTx,
   counterForwarderScript,
   counterLogicScript,
@@ -419,6 +421,58 @@ describe("buildForwardTx guards", () => {
     expect(json.fields[2].constructor).toBe(0n); // Some
     expect(json.fields[2].fields[0].fields[0].bytes).toBe("bb".repeat(32));
     expect(Number(json.fields[2].fields[0].fields[1].int)).toBe(0);
+  });
+});
+
+describe("buildForwardMintTx", () => {
+  const forwarderHash = () => counterScriptHash(counterForwarderScript(PARAMS));
+  const registered = (): Registry =>
+    new Map([[forwarderHash(), counterScriptHash(counterLogicScript(PARAMS))]]);
+  const mintParams = (
+    registry: Registry,
+    overrides: Partial<Parameters<typeof buildForwardMintTx>[0]> = {},
+  ): Parameters<typeof buildForwardMintTx>[0] => ({
+    txBuilder: recorder().txBuilder,
+    forwarderScript: counterForwarderScript(PARAMS),
+    logicAuthorizer: { scriptCbor: counterLogicScript(PARAMS).code },
+    settingsUtxo: settingsUtxo(registry),
+    owner: OWNER,
+    lovelace: 3_000_000n,
+    utxos: [],
+    changeAddress: "addr_test_change",
+    collateralUtxo: collat,
+    ...overrides,
+  });
+
+  it("names the state token \"counter\"", () => {
+    expect(Buffer.from(COUNTER_STATE_TOKEN_NAME, "hex").toString()).toBe(
+      "counter",
+    );
+  });
+
+  it("throws when the forwarder is not registered in the registry", async () => {
+    await expect(buildForwardMintTx(mintParams(new Map()))).rejects.toThrow(
+      /not registered/i,
+    );
+  });
+
+  it("mints one state token under the forwarder policy into a fresh counter", async () => {
+    const { txBuilder, calls } = recorder();
+    await buildForwardMintTx(mintParams(registered(), { txBuilder }));
+
+    const mint = calls.find((c) => c.method === "mint");
+    expect(mint?.args).toEqual(["1", forwarderHash(), COUNTER_STATE_TOKEN_NAME]);
+    expect(calls.map((c) => c.method)).toContain("withdrawalScript");
+
+    const out = calls.find((c) => c.method === "txOut");
+    expect(out?.args[1]).toContainEqual({
+      unit: forwarderHash() + COUNTER_STATE_TOKEN_NAME,
+      quantity: "1",
+    });
+    const datum = calls.find((c) => c.method === "txOutInlineDatumValue");
+    const json = deserializeDatum(serializeData(datum?.args[0]));
+    expect(Number(json.fields[0].int)).toBe(0); // count 0
+    expect(json.fields[2].constructor).toBe(1n); // prevInput: None
   });
 });
 

@@ -6,6 +6,8 @@
  * new here are the two mechanism builders:
  *
  *   - `buildCounterTickTx`  the opt-in V1/V2 native action (no registry read)
+ *   - `buildForwardMintTx`  the forced genesis: mint a state token under the
+ *                           forwarder's policy into a fresh counter
  *   - `buildForwardTx`      the forced forwarder spend + logic withdraw-0
  *   - `buildUpgradeTx`      the opt-in migration: V1 `Upgrade` + migration
  *                           withdraw-0 + owner consent + V2 output
@@ -55,11 +57,19 @@ import {
   v2CompiledCode,
 } from "./blueprint";
 import type {
+  Credential,
   CounterDatum,
   MigrationParams,
   Registry,
   SettingsRefParams,
 } from "./types";
+
+/**
+ * Asset name (hex) of the counter's state token, `"counter"`. It is minted
+ * under the forwarder's own policy, so the forced logic treats a counter as
+ * genuine only if it carries exactly one unit of `(forwarder hash, name)`.
+ */
+export const STATE_TOKEN_NAME = Buffer.from("counter").toString("hex");
 
 function networkIdOf(network: Network): 0 | 1 {
   return network === "mainnet" ? 1 : 0;
@@ -277,22 +287,11 @@ export async function buildForwardTx(p: ForwardTxParams): Promise<string> {
   const network = p.network ?? "preprod";
   const networkId = networkIdOf(network);
 
-  if (p.logicAuthorizer.manual) {
-    throw new Error(
-      "`logicAuthorizer.manual` is not supported: the builder must check the " +
-        "logic script against the registry entry.",
-    );
-  }
-
-  const registry = readRegistry(p.settingsUtxo);
-  const forwarderHash = counterScriptHash(p.forwarderScript);
-  const delegate = registry.get(forwarderHash);
-  if (delegate === undefined) {
-    throw new Error(
-      `The forwarder (${forwarderHash}) is not registered in the settings ` +
-        "registry; register it (Propose + Apply) before spending its UTxOs.",
-    );
-  }
+  const delegate = registeredLogic(
+    p.settingsUtxo,
+    counterScriptHash(p.forwarderScript),
+    p.logicAuthorizer,
+  );
 
   const datum = counterDatumFromUtxo(p.forwarderUtxo);
   const continuation = counterDatumToData({
@@ -337,6 +336,104 @@ export async function buildForwardTx(p: ForwardTxParams): Promise<string> {
     .changeAddress(p.changeAddress)
     .selectUtxosFrom(p.utxos)
     .complete();
+}
+
+export interface ForwardMintTxParams {
+  txBuilder: MeshTxBuilder;
+  forwarderScript: PlutusScript;
+  /** How to invoke the registered logic script (see `ForwardTxParams`). */
+  logicAuthorizer: ScriptAuthorizer;
+  /** The settings UTxO holding the registry (added as a reference input). */
+  settingsUtxo: UTxO;
+  /** Owner of the new counter (gates nothing in forced mode; kept in state). */
+  owner: Credential;
+  /** Lovelace locked with the new counter. */
+  lovelace: bigint;
+  utxos: UTxO[];
+  changeAddress: string;
+  collateralUtxo: UTxO;
+  network?: Network;
+}
+
+/**
+ * The forced genesis: mint one state token under the forwarder's policy into a
+ * fresh counter (`count: 0`, no `prevInput`) at the forwarder address. The
+ * forwarder admits the mint once the registered logic runs, and the logic
+ * accepts exactly this shape. Only counters created this way carry the token,
+ * so a counter paid straight to the forwarder address is not genuine.
+ *
+ * Throws early if the forwarder is unregistered or the provided logic script
+ * does not match the registry entry.
+ */
+export async function buildForwardMintTx(
+  p: ForwardMintTxParams,
+): Promise<string> {
+  const networkId = networkIdOf(p.network ?? "preprod");
+  const forwarderHash = counterScriptHash(p.forwarderScript);
+  const delegate = registeredLogic(
+    p.settingsUtxo,
+    forwarderHash,
+    p.logicAuthorizer,
+  );
+
+  applyAuthorization(
+    p.txBuilder,
+    { kind: "script", hash: delegate },
+    p.logicAuthorizer,
+    networkId,
+  );
+
+  return await p.txBuilder
+    .mintPlutusScriptV3()
+    .mint("1", forwarderHash, STATE_TOKEN_NAME)
+    .mintingScript(p.forwarderScript.code)
+    .mintRedeemerValue(opaqueRedeemer())
+    .readOnlyTxInReference(
+      p.settingsUtxo.input.txHash,
+      p.settingsUtxo.input.outputIndex,
+    )
+    .txOut(counterScriptAddress(p.forwarderScript, networkId), [
+      { unit: "lovelace", quantity: p.lovelace.toString() },
+      { unit: forwarderHash + STATE_TOKEN_NAME, quantity: "1" },
+    ])
+    .txOutInlineDatumValue(
+      counterDatumToData({ count: 0, owner: p.owner, prevInput: null }),
+    )
+    .txInCollateral(
+      p.collateralUtxo.input.txHash,
+      p.collateralUtxo.input.outputIndex,
+      p.collateralUtxo.output.amount,
+      p.collateralUtxo.output.address,
+    )
+    .changeAddress(p.changeAddress)
+    .selectUtxosFrom(p.utxos)
+    .complete();
+}
+
+/**
+ * The logic registered for `forwarderHash`. Throws if the forwarder is not
+ * registered, or if `logicAuthorizer` is manual (the builder must be able to
+ * check the logic against the registry entry).
+ */
+function registeredLogic(
+  settingsUtxo: UTxO,
+  forwarderHash: string,
+  logicAuthorizer: ScriptAuthorizer,
+): string {
+  if (logicAuthorizer.manual) {
+    throw new Error(
+      "`logicAuthorizer.manual` is not supported: the builder must check the " +
+        "logic script against the registry entry.",
+    );
+  }
+  const delegate = readRegistry(settingsUtxo).get(forwarderHash);
+  if (delegate === undefined) {
+    throw new Error(
+      `The forwarder (${forwarderHash}) is not registered in the settings ` +
+        "registry; register it (Propose + Apply) before using it.",
+    );
+  }
+  return delegate;
 }
 
 export interface UpgradeTxParams {

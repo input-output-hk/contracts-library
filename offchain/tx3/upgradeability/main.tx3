@@ -403,21 +403,36 @@ tx apply_registry(
 
 // ---------------------------------------------------------------- counters
 
-/// Lock a counter UTxO at the forwarder address.
-tx lock_forwarder(
-    count: Int,
+/// Genesis of a forwarded counter: mint one `counter` state token under the
+/// forwarder's policy into a fresh `count: 0` counter at the forwarder address.
+/// The forwarder forwards the mint to the registered logic (withdraw-0), which
+/// admits exactly one token paid to a fresh counter. Only counters carrying
+/// this token are genuine: a UTxO paid straight to the forwarder is not.
+tx mint_forwarder(
     owner: Credential,
+    /// The settings UTxO holding the registry (reference input).
+    settings_ref: UtxoRef,
 ) {
+    reference settings_registry {
+        ref: settings_ref,
+    }
+
     input gas {
         from: Signer,
         min_amount: Ada(3000000) + fees,
     }
 
+    mint {
+        amount: AnyAsset(forwarder_hash, "counter", 1),
+        // The forwarder does not inspect its redeemer; any Data is accepted.
+        redeemer: (),
+    }
+
     output counter_out {
         to: Forwarder,
-        amount: Ada(3000000),
+        amount: AnyAsset(forwarder_hash, "counter", 1) + Ada(3000000),
         datum: CounterDatum {
-            count: count,
+            count: 0,
             owner: owner,
             prev_input: OptionalUtxoRef::None {},
         },
@@ -426,6 +441,22 @@ tx lock_forwarder(
     output {
         to: Signer,
         amount: gas - Ada(3000000) - fees,
+    }
+
+    collateral {
+        from: Signer,
+        min_amount: fees,
+    }
+
+    cardano::withdrawal {
+        from: LogicScript,
+        amount: 0,
+        redeemer: (),
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: forwarder_script,
     }
 }
 

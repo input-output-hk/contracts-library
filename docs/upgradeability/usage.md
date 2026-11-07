@@ -82,9 +82,12 @@ forward every entry you are not changing.
 3. **Register** the pair: set `registry[forwarder_hash] = logic_hash` via the
    settings `Propose` / `Apply` flow.
 
-4. **Lock state** at the forwarder's address. From then on, every spend must be
-   accompanied by a zero withdrawal from `logic_hash`, which validates the
-   forwarded input(s).
+4. **Mint state** at the forwarder's address. Anyone can pay a UTxO to that
+   address, so a paid-in UTxO proves nothing: the demo's genuine counters carry
+   a state token minted under the forwarder's own policy, created by a genesis
+   mint the logic validates (`buildForwardMintTx`). From then on, every use of
+   the forwarder (a spend, a mint, any other purpose) must be accompanied by a
+   zero withdrawal from `logic_hash`, which validates what was delegated.
 
 To **upgrade**, deploy a new logic script with the same parameterization and
 repoint `registry[forwarder_hash]` to it. Funds stay put.
@@ -157,25 +160,41 @@ transaction.
 
 ## Writing a logic or migration script
 
-A delegate runs once per transaction and validates every input forwarded to
-it. `upgradeability/delegate` gives it the inputs to check (`forwarded_by`,
-which rejects when there are none) and each input's action (`spend_redeemer`,
-since the forwarder itself ignores its redeemer):
+A delegate runs once per transaction and validates everything forwarded to
+it. The forwarder forwards every purpose, so a forced logic gets one item list
+per kind from `delegated_to` (which rejects when all are empty), and must
+validate each kind it handles and **reject the rest**: an unchecked kind is a
+hole (for example, a mint under the forwarder's policy left unchecked lets
+anyone mint state tokens). Each input's action comes from `spend_redeemer`,
+since the forwarder itself ignores its redeemer:
 
 ```aiken
 use aiken/collection/list
-use upgradeability/delegate.{forwarded_by, spend_redeemer}
+use upgradeability/delegate.{Delegated, delegated_to, spend_redeemer}
 
 withdraw(_redeemer: Data, account: Credential, self: Transaction) {
-  list.all(
-    forwarded_by(self, settings_policy, settings_token_name, account),
-    fn(input) {
-      expect Some(action) = spend_redeemer(self, input.output_reference)
-      validate_step(self, input, action) // your protocol's transition
-    },
-  )
+  let Delegated { inputs, mints, withdrawals, certificates, votes } =
+    delegated_to(self, settings_policy, settings_token_name, account)
+  and {
+    list.all(
+      inputs,
+      fn(input) {
+        expect Some(action) = spend_redeemer(self, input.output_reference)
+        is_genuine(input) && validate_step(self, input, action)
+      },
+    ),
+    list.all(mints, fn(policy) { validate_genesis(self, policy) }),
+    withdrawals == [],
+    certificates == [],
+    votes == [],
+  }
 }
 ```
+
+`is_genuine` is how your protocol tells its state from a look-alike paid
+straight to the forwarder address; the demo checks for the forwarder's state
+token (`carries_state_token`). An opt-in migration script only ever sees
+inputs, so it uses `forwarded_by`, the inputs-only variant.
 
 The action is whatever the transaction builder put in the redeemer: treat it
 as a claim and validate the transition it names, as any validator does with
@@ -222,9 +241,22 @@ await buildRegistryProposeTx({
 await buildRegistryApplyTx(settingsApplyArgs);
 ```
 
-### 3. Forced: spend the forwarder through the registered logic
+### 3. Forced: mint a counter, then spend it through the registered logic
 
 ```ts
+// Genesis: one state token under the forwarder's policy, into a fresh
+// count-0 counter at the forwarder address.
+await buildForwardMintTx({
+  txBuilder,
+  forwarderScript: forwarder,
+  logicAuthorizer: { scriptCbor: counterLogicScript(params).code },
+  settingsUtxo,
+  owner, // Credential
+  lovelace: 3_000_000n,
+  utxos, changeAddress, collateralUtxo,
+});
+
+
 await buildForwardTx({
   txBuilder,
   forwarderScript: forwarder,
@@ -288,10 +320,14 @@ The Tx3 reference protocol has its own devnet suite
   you genuinely must change behaviour for everyone.
 - **Consent is native in opt-in.** Never move consent into the registered
   migration script: a governance repoint would then be able to drain funds.
-- **Validate every forwarded input.** A logic / migration script must apply its
-  checks to all of `forwarded_by(...)`, not just one. `forwarded_by` also
-  rejects when nothing is delegated, so build each delegate with the same
+- **Validate every delegated item.** A forced logic must apply its checks to
+  everything in `delegated_to(...)` and reject the item kinds it does not
+  handle; a migration script to every input of `forwarded_by(...)`. Both
+  reject when nothing is delegated, so build each delegate with the same
   settings parameters as the registry that points at it.
+- **A forwarder address is not proof of state.** Anyone can pay to it. Give
+  genuine state a token minted under the forwarder's policy (the demo's
+  `carries_state_token`), or an equivalent check, and accept nothing else.
 - **Register the withdraw-0 stake credentials first.** The ledger only permits
   a withdrawal from a *registered* reward account: before any
   `buildForwardTx` / `buildUpgradeTx`, register the stake credentials of the

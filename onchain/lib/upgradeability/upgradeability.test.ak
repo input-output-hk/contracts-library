@@ -3,6 +3,7 @@ use aiken/collection/list
 use aiken/crypto.{ScriptHash}
 use cardano/address.{Credential, Script, VerificationKey, from_script}
 use cardano/assets
+use cardano/script_context.{ScriptInfo, Spending}
 use cardano/transaction.{
   InlineDatum, Input, Output, OutputReference, Spend, Transaction, placeholder,
 }
@@ -11,9 +12,9 @@ use upgradeability/counter.{
   CounterDatum, Tick, Upgrade, spent_with_upgrade, validate_counter_migrate,
   validate_counter_tick,
 }
+use upgradeability/delegate.{forwarded_by, forwarded_inputs, spend_redeemer}
 use upgradeability/forward.{validate_forward}
 use upgradeability/migrate.{validate_upgrade}
-use upgradeability/delegate.{forwarded_by, forwarded_inputs, spend_redeemer}
 use upgradeability/registry.{decode_registry, lookup}
 
 // ------------------------------------------------------------------- fixtures
@@ -95,6 +96,11 @@ fn ref(index: Int) -> OutputReference {
   OutputReference { transaction_id: tx_id, output_index: index }
 }
 
+/// The purpose of spending the input at `output`.
+fn spending(output: OutputReference) -> ScriptInfo {
+  Spending { output, datum: None }
+}
+
 /// An input at `hash`'s address carrying a counter datum.
 fn counter_input(hash: ScriptHash, index: Int, count: Int) -> Input {
   counter_input_with(hash, index, count, assets.from_lovelace(2_000_000))
@@ -173,12 +179,11 @@ fn raw_registry(entries: Pairs<ByteArray, ByteArray>) -> Data {
 
 test decode_registry_accepts_sorted_entries() {
   // 0x99.. < 0xbb..: keys in strictly ascending byte order.
-  let r =
-    decode_registry(
-      raw_registry(
-        [Pair(unrelated_hash, migration_hash), Pair(forwarder_hash, logic_hash)],
-      ),
-    )
+  let r = decode_registry(
+    raw_registry(
+      [Pair(unrelated_hash, migration_hash), Pair(forwarder_hash, logic_hash)],
+    ),
+  )
   and {
     lookup(r, forwarder_hash) == Some(logic_hash),
     lookup(r, unrelated_hash) == Some(migration_hash),
@@ -186,22 +191,20 @@ test decode_registry_accepts_sorted_entries() {
 }
 
 test decode_registry_rejects_unsorted_keys() fail {
-  let r =
-    decode_registry(
-      raw_registry(
-        [Pair(forwarder_hash, logic_hash), Pair(unrelated_hash, migration_hash)],
-      ),
-    )
+  let r = decode_registry(
+    raw_registry(
+      [Pair(forwarder_hash, logic_hash), Pair(unrelated_hash, migration_hash)],
+    ),
+  )
   lookup(r, forwarder_hash) == Some(logic_hash)
 }
 
 test decode_registry_rejects_duplicate_keys() fail {
-  let r =
-    decode_registry(
-      raw_registry(
-        [Pair(forwarder_hash, logic_hash), Pair(forwarder_hash, migration_hash)],
-      ),
-    )
+  let r = decode_registry(
+    raw_registry(
+      [Pair(forwarder_hash, logic_hash), Pair(forwarder_hash, migration_hash)],
+    ),
+  )
   lookup(r, forwarder_hash) != None
 }
 
@@ -271,7 +274,7 @@ test forward_admits_when_logic_runs() {
     reference_inputs: [settings_ref(r)],
     withdrawals: [Pair(Script(logic_hash), 0)],
   }
-  validate_forward(settings_policy, settings_name, ref(0), tx)
+  validate_forward(settings_policy, settings_name, spending(ref(0)), tx)
 }
 
 test forward_rejects_without_logic_withdrawal() fail {
@@ -282,7 +285,7 @@ test forward_rejects_without_logic_withdrawal() fail {
     reference_inputs: [settings_ref(r)],
     withdrawals: [],
   }
-  validate_forward(settings_policy, settings_name, ref(0), tx)
+  validate_forward(settings_policy, settings_name, spending(ref(0)), tx)
 }
 
 test forward_rejects_wrong_delegate() fail {
@@ -293,7 +296,7 @@ test forward_rejects_wrong_delegate() fail {
     reference_inputs: [settings_ref(r)],
     withdrawals: [Pair(Script(unrelated_hash), 0)],
   }
-  validate_forward(settings_policy, settings_name, ref(0), tx)
+  validate_forward(settings_policy, settings_name, spending(ref(0)), tx)
 }
 
 test forward_rejects_unregistered_own_hash() fail {
@@ -305,7 +308,7 @@ test forward_rejects_unregistered_own_hash() fail {
     reference_inputs: [settings_ref(r)],
     withdrawals: [Pair(Script(logic_hash), 0)],
   }
-  validate_forward(settings_policy, settings_name, ref(0), tx)
+  validate_forward(settings_policy, settings_name, spending(ref(0)), tx)
 }
 
 // ------------------------------------------------------------- opt-in upgrade

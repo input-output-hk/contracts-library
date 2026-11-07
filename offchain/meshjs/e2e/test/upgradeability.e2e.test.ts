@@ -49,7 +49,9 @@ import {
   upgradeRedeemer,
   buildCloseTx,
   buildCounterTickTx,
+  buildForwardMintTx,
   buildForwardTx,
+  COUNTER_STATE_TOKEN_NAME,
   buildRegistryApplyTx,
   buildRegistryProposeTx,
   buildUpgradeTx,
@@ -202,11 +204,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
     await registerScriptStakeCredential(provider, governor, logicScript);
     await registerScriptStakeCredential(provider, governor, migrationScript);
 
-    forwarderUtxo = await lockCounter(
-      forwarderAddr,
-      { count: 1, owner: aliceOwner(), prevInput: null },
-      alice,
-    );
+    forwarderUtxo = await mintCounter();
     v1Utxo = await lockCounter(
       v1Addr,
       { count: 5, owner: aliceOwner(), prevInput: null },
@@ -338,6 +336,36 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
     return await lockDatum(addr, counterDatumToData(datum), owner);
   }
 
+  /** The counter's state token under the forwarder's policy. */
+  const stateUnit = (): string => forwarderHash + COUNTER_STATE_TOKEN_NAME;
+
+  /** A forced counter's value: lovelace plus its one state token. */
+  const counterValue = (lovelace = "3000000"): Asset[] => [
+    { unit: "lovelace", quantity: lovelace },
+    { unit: stateUnit(), quantity: "1" },
+  ];
+
+  /**
+   * Create a genuine forced counter: mint its state token under the
+   * forwarder's policy into a fresh `count: 0` counter (the forced genesis).
+   */
+  async function mintCounter(): Promise<UTxO> {
+    const tx = await buildForwardMintTx({
+      txBuilder: newTxBuilder(provider),
+      forwarderScript,
+      logicAuthorizer: { scriptCbor: logicScript.code },
+      settingsUtxo: settingsUtxo!,
+      owner: aliceOwner(),
+      lovelace: 3_000_000n,
+      utxos: await alice.wallet.getUtxos(),
+      changeAddress: alice.address,
+      collateralUtxo: await collateralOf(alice),
+    });
+    const hash = await signAndSubmit(alice, tx);
+    await waitForTx(provider, hash);
+    return await scriptOutputOf(provider, hash, forwarderAddr);
+  }
+
   /**
    * A raw, possibly-malicious V1 upgrade: spends `inputs` with `redeemer`,
    * optionally runs the migration script as a withdraw-0, and emits arbitrary
@@ -404,8 +432,16 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
   async function rawForwardTick(p: {
     inputs: UTxO[];
     outputs: { address: string; amount: Asset[]; datum: CounterDatum }[];
+    /** State tokens minted under the forwarder's policy alongside the tick. */
+    mint?: string;
   }): Promise<string> {
     const tb = newTxBuilder(provider);
+    if (p.mint !== undefined) {
+      tb.mintPlutusScriptV3()
+        .mint(p.mint, forwarderHash, COUNTER_STATE_TOKEN_NAME)
+        .mintingScript(forwarderScript.code)
+        .mintRedeemerValue(opaqueRedeemer());
+    }
     for (const utxo of p.inputs) {
       tb.spendingPlutusScriptV3()
         .txIn(
@@ -446,6 +482,23 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
     return await signAndSubmit(alice, unsigned);
   }
 
+  /** Tick one forced counter with a raw tick; return its continuation. */
+  async function rawForwardTickAndWait(utxo: UTxO): Promise<UTxO> {
+    const datum = counterDatumFromUtxo(utxo);
+    const hash = await rawForwardTick({
+      inputs: [utxo],
+      outputs: [
+        {
+          address: forwarderAddr,
+          amount: counterValue(),
+          datum: { ...datum, count: datum.count + 1, prevInput: prevOf(utxo) },
+        },
+      ],
+    });
+    await waitForTx(provider, hash);
+    return await scriptOutputOf(provider, hash, forwarderAddr);
+  }
+
   /** Tick the forwarder: build + submit, and return the continuation UTxO. */
   async function forwardTick(logicAuthorizerCbor: string): Promise<UTxO> {
     const tx = await buildForwardTx({
@@ -471,7 +524,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
 
   it("locks the forwarder and V1 state UTxOs", () => {
     expect(counterDatumFromUtxo(forwarderUtxo!)).toEqual({
-      count: 1,
+      count: 0,
       owner: aliceOwner(),
       prevInput: null,
     });
@@ -510,7 +563,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
     const spent = forwarderUtxo!;
     const continuation = await forwardTick(logicScript.code);
     expect(counterDatumFromUtxo(continuation)).toEqual({
-      count: 2,
+      count: 1,
       owner: aliceOwner(),
       prevInput: prevOf(spent),
     });
@@ -816,30 +869,22 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
       ]),
     );
     const continuation = await forwardTick(logicScript.code);
-    expect(counterDatumFromUtxo(continuation).count).toBe(3);
+    expect(counterDatumFromUtxo(continuation).count).toBe(2);
     forwarderUtxo = continuation;
   });
 
   it("rejects a batch tick when one forwarded input is not preserved", async () => {
-    const matching = await lockCounter(
-      forwarderAddr,
-      { count: 1, owner: aliceOwner(), prevInput: null },
-      alice,
-    );
-    const stale = await lockCounter(
-      forwarderAddr,
-      { count: 5, owner: aliceOwner(), prevInput: null },
-      alice,
-    );
+    const matching = await mintCounter();
+    const stale = await mintCounter();
     await expect(
       rawForwardTick({
         inputs: [matching, stale],
         outputs: [
           {
             address: forwarderAddr,
-            amount: [{ unit: "lovelace", quantity: "6000000" }],
+            amount: counterValue("6000000"),
             datum: {
-              count: 2,
+              count: 1,
               owner: aliceOwner(),
               prevInput: prevOf(matching),
             },
@@ -853,24 +898,16 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
     // Two same-count UTxOs and a single continuation tagged for only the
     // first one. Before the `prevInput` binding both inputs validated against
     // the one output and the second UTxO's value vanished with it.
-    const first = await lockCounter(
-      forwarderAddr,
-      { count: 1, owner: aliceOwner(), prevInput: null },
-      alice,
-    );
-    const second = await lockCounter(
-      forwarderAddr,
-      { count: 1, owner: aliceOwner(), prevInput: null },
-      alice,
-    );
+    const first = await mintCounter();
+    const second = await mintCounter();
     await expect(
       rawForwardTick({
         inputs: [first, second],
         outputs: [
           {
             address: forwarderAddr,
-            amount: COUNTER_LOVELACE,
-            datum: { count: 2, owner: aliceOwner(), prevInput: prevOf(first) },
+            amount: counterValue(),
+            datum: { count: 1, owner: aliceOwner(), prevInput: prevOf(first) },
           },
         ],
       }),
@@ -878,28 +915,20 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
   });
 
   it("ticks two forwarder UTxOs in one transaction with per-input continuations", async () => {
-    const first = await lockCounter(
-      forwarderAddr,
-      { count: 1, owner: aliceOwner(), prevInput: null },
-      alice,
-    );
-    const second = await lockCounter(
-      forwarderAddr,
-      { count: 4, owner: aliceOwner(), prevInput: null },
-      alice,
-    );
+    const first = await mintCounter();
+    const second = await rawForwardTickAndWait(await mintCounter());
     const hash = await rawForwardTick({
       inputs: [first, second],
       outputs: [
         {
           address: forwarderAddr,
-          amount: COUNTER_LOVELACE,
-          datum: { count: 2, owner: aliceOwner(), prevInput: prevOf(first) },
+          amount: counterValue(),
+          datum: { count: 1, owner: aliceOwner(), prevInput: prevOf(first) },
         },
         {
           address: forwarderAddr,
-          amount: COUNTER_LOVELACE,
-          datum: { count: 5, owner: aliceOwner(), prevInput: prevOf(second) },
+          amount: counterValue(),
+          datum: { count: 2, owner: aliceOwner(), prevInput: prevOf(second) },
         },
       ],
     });
@@ -911,7 +940,52 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
     const counts = continuations
       .map((u) => counterDatumFromUtxo(u).count)
       .sort();
-    expect(counts).toEqual([2, 5]);
+    expect(counts).toEqual([1, 2]);
+  });
+
+  it("rejects a counterfeit counter paid straight to the forwarder", async () => {
+    // Anyone can pay to the forwarder address with any datum. Without the
+    // state token, the logic refuses to treat the UTxO as a counter.
+    const counterfeit = await lockCounter(
+      forwarderAddr,
+      { count: 999, owner: aliceOwner(), prevInput: null },
+      alice,
+    );
+    await expect(
+      rawForwardTick({
+        inputs: [counterfeit],
+        outputs: [
+          {
+            address: forwarderAddr,
+            amount: COUNTER_LOVELACE,
+            datum: {
+              count: 1000,
+              owner: aliceOwner(),
+              prevInput: prevOf(counterfeit),
+            },
+          },
+        ],
+      }),
+    ).rejects.toThrow(/purpose[^a-z]*withdraw/);
+  });
+
+  it("rejects a free mint of state tokens alongside a genuine tick", async () => {
+    // The forwarder admits its mint once the logic runs, so the logic must
+    // validate the mint too: a genuine tick must not cover 1000 extra tokens.
+    const genuine = await mintCounter();
+    await expect(
+      rawForwardTick({
+        inputs: [genuine],
+        mint: "1000",
+        outputs: [
+          {
+            address: forwarderAddr,
+            amount: counterValue(),
+            datum: { count: 1, owner: aliceOwner(), prevInput: prevOf(genuine) },
+          },
+        ],
+      }),
+    ).rejects.toThrow(/purpose[^a-z]*withdraw/);
   });
 
   it("ignores a forged registry without the settings NFT", async () => {
@@ -1020,14 +1094,14 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
       ]),
     );
     const continuation = await forwardTick(logicScript.code);
-    expect(counterDatumFromUtxo(continuation).count).toBe(4);
+    expect(counterDatumFromUtxo(continuation).count).toBe(3);
     forwarderUtxo = continuation;
   });
 
   it("closing the settings instance permanently bricks consumers", async () => {
     // Sanity: the forwarder still ticks while the registry exists.
     const ticked = await forwardTick(logicScript.code);
-    expect(counterDatumFromUtxo(ticked).count).toBe(5);
+    expect(counterDatumFromUtxo(ticked).count).toBe(4);
     forwarderUtxo = ticked;
 
     // The applier closes the instance: the settings NFT is burned.

@@ -25,10 +25,13 @@ export {
   buildRegistryProposeTx,
   buildRegistryApplyTx,
   buildCounterTickTx,
+  buildForwardMintTx,
   buildForwardTx,
   buildUpgradeTx,
+  STATE_TOKEN_NAME as COUNTER_STATE_TOKEN_NAME,
   type RegistryProposeParams,
   type TickTxParams,
+  type ForwardMintTxParams,
   type ForwardTxParams,
   type UpgradeTxParams,
 } from "./upgradeability";

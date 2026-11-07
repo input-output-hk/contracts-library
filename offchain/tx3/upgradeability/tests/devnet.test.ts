@@ -194,7 +194,7 @@ async function addedSince(
 type LaunchRegistryArgs = Parameters<Client["launchRegistry"]>[0];
 type ProposeRegistryArgs = Parameters<Client["proposeRegistry"]>[0];
 type ApplyRegistryArgs = Parameters<Client["applyRegistry"]>[0];
-type LockForwarderArgs = Parameters<Client["lockForwarder"]>[0];
+type MintForwarderArgs = Parameters<Client["mintForwarder"]>[0];
 type LockV1Args = Parameters<Client["lockV1"]>[0];
 type TickForwarderArgs = Parameters<Client["tickForwarder"]>[0];
 type TickV1Args = Parameters<Client["tickV1"]>[0];
@@ -328,34 +328,40 @@ async function setup(): Promise<Instance> {
   };
 }
 
-async function lockCounter(
-  target: "forwarder" | "v1",
+/** Genesis of a forwarded counter: mint its state token (count 0). */
+async function mintForwarder(ownerKeyHash: string): Promise<DevnetUtxo> {
+  const before = await snapshot(inst.forwarderAddr);
+  await confirm(
+    inst
+      .client(owner)
+      .mintForwarder({
+        owner: { Key: { hash: toBytes(ownerKeyHash) } },
+        settings_ref: inst.settingsRef,
+      } as unknown as MintForwarderArgs)
+      .env(inst.env),
+  );
+  const [utxo] = await addedSince(inst.forwarderAddr, before);
+  if (!utxo) throw new Error("mint forwarder confirmed but no UTxO appeared");
+  return utxo;
+}
+
+/** Lock a V1 counter (opt-in: no state token). */
+async function lockV1(
   count: number,
   ownerKeyHash: string,
 ): Promise<DevnetUtxo> {
-  const addr = target === "forwarder" ? inst.forwarderAddr : inst.v1Addr;
-  const before = await snapshot(addr);
-  const ownerArg = { Key: { hash: toBytes(ownerKeyHash) } };
-  if (target === "forwarder") {
-    await confirm(
-      inst
-        .client(owner)
-        .lockForwarder({
-          count,
-          owner: ownerArg,
-        } as unknown as LockForwarderArgs)
-        .env(inst.env),
-    );
-  } else {
-    await confirm(
-      inst
-        .client(owner)
-        .lockV1({ count, owner: ownerArg } as unknown as LockV1Args)
-        .env(inst.env),
-    );
-  }
-  const [utxo] = await addedSince(addr, before);
-  if (!utxo) throw new Error(`lock ${target} confirmed but no UTxO appeared`);
+  const before = await snapshot(inst.v1Addr);
+  await confirm(
+    inst
+      .client(owner)
+      .lockV1({
+        count,
+        owner: { Key: { hash: toBytes(ownerKeyHash) } },
+      } as unknown as LockV1Args)
+      .env(inst.env),
+  );
+  const [utxo] = await addedSince(inst.v1Addr, before);
+  if (!utxo) throw new Error("lock v1 confirmed but no UTxO appeared");
   return utxo;
 }
 
@@ -424,8 +430,8 @@ beforeAll(async () => {
   await devnet.payTo(registrar.address, REGISTRAR_FUNDS);
 
   inst = await setup();
-  forwarderUtxo = await lockCounter("forwarder", 1, owner.keyHash);
-  v1Utxo = await lockCounter("v1", 5, owner.keyHash);
+  forwarderUtxo = await mintForwarder(owner.keyHash);
+  v1Utxo = await lockV1(5, owner.keyHash);
 }, 300_000);
 
 afterAll(() => devnet.stop());
@@ -476,7 +482,7 @@ test("ticks V1 natively without consulting the registry", async () => {
 }, 120_000);
 
 test("migrates a V1 UTxO to V2 with the owner's consent, and ticks V2 natively", async () => {
-  const v1 = await lockCounter("v1", 7, owner.keyHash);
+  const v1 = await lockV1(7, owner.keyHash);
 
   const beforeV2 = await snapshot(inst.v2Addr);
   await confirm(
@@ -516,7 +522,7 @@ test("migrates a V1 UTxO to V2 with the owner's consent, and ticks V2 natively",
 test("rejects a migration without the owner's consent", async () => {
   // The UTxO is owned by the governor; the owner party signs, so the consent
   // witness the V1 validator checks for is missing.
-  const v1 = await lockCounter("v1", 1, governor.keyHash);
+  const v1 = await lockV1(1, governor.keyHash);
   await expectAttackRejected(
     submit(
       inst
@@ -534,7 +540,7 @@ test("rejects a migration without the owner's consent", async () => {
 }, 120_000);
 
 test("rejects a migration that tampers with the migrated count", async () => {
-  const v1 = await lockCounter("v1", 3, owner.keyHash);
+  const v1 = await lockV1(3, owner.keyHash);
   await expectAttackRejected(
     submit(
       inst
@@ -553,7 +559,7 @@ test("rejects a migration that tampers with the migrated count", async () => {
 }, 120_000);
 
 test("rejects a migration whose continuation stays at the V1 address", async () => {
-  const v1 = await lockCounter("v1", 2, owner.keyHash);
+  const v1 = await lockV1(2, owner.keyHash);
   await expectAttackRejected(
     submit(
       inst
@@ -571,7 +577,7 @@ test("rejects a migration whose continuation stays at the V1 address", async () 
 }, 120_000);
 
 test("rejects a V1 spent with Tick while the migration script runs", async () => {
-  const v1 = await lockCounter("v1", 4, owner.keyHash);
+  const v1 = await lockV1(4, owner.keyHash);
   await expectAttackRejected(
     submit(
       inst

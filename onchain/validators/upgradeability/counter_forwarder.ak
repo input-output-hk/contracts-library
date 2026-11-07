@@ -1,28 +1,19 @@
 use cardano/assets.{AssetName, PolicyId}
-use cardano/transaction.{OutputReference, Transaction}
+use cardano/script_context.{ScriptContext}
 use upgradeability/forward.{validate_forward}
 
-/// Forced forwarder for the counter demo.
-///
-/// It holds the counter state but carries no business logic: every spend is
-/// admitted only if the logic script currently registered for this script's own
-/// hash runs as a reward withdrawal in the same transaction. Repointing the
-/// registry entry upgrades the protocol **without moving any funds**, and the
-/// change applies to every user at once (hence *forced*).
+/// Forced forwarder for the counter demo: holds the state and is the state
+/// token's policy, and delegates every purpose to the registered logic.
 validator counter_forwarder(
   settings_policy: PolicyId,
   settings_token_name: AssetName,
 ) {
-  spend(
-    _datum: Option<Data>,
-    _redeemer: Data,
-    own_ref: OutputReference,
-    self: Transaction,
-  ) {
-    validate_forward(settings_policy, settings_token_name, own_ref, self)
-  }
-
-  else(_) {
-    fail
+  else(ctx: ScriptContext) {
+    validate_forward(
+      settings_policy,
+      settings_token_name,
+      ctx.info,
+      ctx.transaction,
+    )
   }
 }
