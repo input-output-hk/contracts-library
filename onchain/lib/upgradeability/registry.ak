@@ -1,8 +1,7 @@
-use aiken/builtin
 use aiken/collection/dict.{Dict}
-use aiken/collection/list
 use aiken/collection/pairs
 use aiken/crypto.{ScriptHash}
+use aiken/primitive/bytearray
 use cardano/address.{Script}
 use cardano/assets.{AssetName, PolicyId}
 use cardano/transaction.{Input, OutputReference, Transaction, find_input}
@@ -27,16 +26,20 @@ use settings/utils.{get_settings_datum}
 pub type Registry =
   Dict<ByteArray, ScriptHash>
 
-/// Decode a registry from its on-chain `Data` representation (a Plutus `Map`
-/// from byte arrays to byte arrays). Fails on any other shape.
+/// Decode a registry from its on-chain `Data` representation: a Plutus `Map`
+/// from byte arrays to 28-byte script hashes, with keys in strictly ascending
+/// byte order. Fails on any other shape, on unsorted or duplicate keys, and on
+/// a value that is not 28 bytes long.
+///
+/// Requiring sorted keys makes decoding a single linear pass (no re-sorting on
+/// every spend), rules out ambiguous duplicate entries, and lets lookups stop
+/// early. Writers (governance, off-chain builders) must sort the map by key.
 pub fn decode_registry(data: Data) -> Registry {
-  let entries = list.map(
-    builtin.un_map_data(data),
-    fn(entry) {
-      Pair(builtin.un_b_data(entry.1st), builtin.un_b_data(entry.2nd))
-    },
+  expect entries: Pairs<ScriptHash, ScriptHash> = data
+  dict.from_ascending_pairs_with(
+    entries,
+    fn(delegate) { bytearray.length(delegate) == 28 },
   )
-  dict.from_pairs(entries)
 }
 
 /// Read the upgrade registry from the settings UTxO identified by

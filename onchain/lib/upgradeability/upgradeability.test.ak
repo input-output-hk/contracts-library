@@ -165,6 +165,56 @@ test lookup_absent_is_none() {
   lookup(decode_registry(r), unrelated_hash) == None
 }
 
+/// Raw registry `Data`, in the given entry order (no sorting).
+fn raw_registry(entries: Pairs<ByteArray, ByteArray>) -> Data {
+  let raw: Data = entries
+  raw
+}
+
+test decode_registry_accepts_sorted_entries() {
+  // 0x99.. < 0xbb..: keys in strictly ascending byte order.
+  let r =
+    decode_registry(
+      raw_registry(
+        [Pair(unrelated_hash, migration_hash), Pair(forwarder_hash, logic_hash)],
+      ),
+    )
+  and {
+    lookup(r, forwarder_hash) == Some(logic_hash),
+    lookup(r, unrelated_hash) == Some(migration_hash),
+  }
+}
+
+test decode_registry_rejects_unsorted_keys() fail {
+  let r =
+    decode_registry(
+      raw_registry(
+        [Pair(forwarder_hash, logic_hash), Pair(unrelated_hash, migration_hash)],
+      ),
+    )
+  lookup(r, forwarder_hash) == Some(logic_hash)
+}
+
+test decode_registry_rejects_duplicate_keys() fail {
+  let r =
+    decode_registry(
+      raw_registry(
+        [Pair(forwarder_hash, logic_hash), Pair(forwarder_hash, migration_hash)],
+      ),
+    )
+  lookup(r, forwarder_hash) != None
+}
+
+test decode_registry_rejects_short_delegate_hash() fail {
+  let r = decode_registry(raw_registry([Pair(forwarder_hash, #"cccc")]))
+  lookup(r, forwarder_hash) != None
+}
+
+test decode_registry_rejects_non_map() fail {
+  let not_a_map: Data = 5
+  lookup(decode_registry(not_a_map), forwarder_hash) == None
+}
+
 test forwarded_inputs_filters_by_registered_hash() {
   let r = registry([Pair(forwarder_hash, logic_hash)])
   let inputs = [

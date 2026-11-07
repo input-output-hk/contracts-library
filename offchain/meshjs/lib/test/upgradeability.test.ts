@@ -110,6 +110,30 @@ function counterUtxo(d: CounterDatum, index = 0): UTxO {
   };
 }
 
+/**
+ * A settings UTxO whose `current` value is a raw map in the given entry order,
+ * duplicates included. `registryToData` sorts and a JS `Map` drops duplicate
+ * keys, so malformed registries are written in Mesh's JSON datum form instead.
+ */
+function rawRegistryUtxo(entries: [string, string][]): UTxO {
+  const datum = {
+    constructor: 0,
+    fields: [
+      { map: entries.map(([k, v]) => ({ k: { bytes: k }, v: { bytes: v } })) },
+      { constructor: 1, fields: [] },
+      { constructor: 1, fields: [] },
+    ],
+  };
+  return {
+    input: { txHash: "ee".repeat(32), outputIndex: 0 },
+    output: {
+      address: "addr_test_settings",
+      amount: [],
+      plutusData: serializeData(datum, "JSON"),
+    },
+  };
+}
+
 /** A settings UTxO whose `current` value is the given registry. */
 function settingsUtxo(registry: Registry): UTxO {
   return {
@@ -273,6 +297,36 @@ describe("datum/redeemer encoding", () => {
     expect(json.map).toHaveLength(2);
     expect(json.map[0].k.bytes).toMatch(/^[0-9a-f]{56}$/);
     expect(readRegistry(settingsUtxo(registry))).toEqual(registry);
+  });
+
+  it("the registry encodes with its keys sorted", () => {
+    const registry: Registry = new Map([
+      ["cc".repeat(28), "dd".repeat(28)],
+      ["aa".repeat(28), "bb".repeat(28)],
+    ]);
+    const json = deserializeDatum(serializeData(registryToData(registry)));
+    expect(json.map.map((e: { k: { bytes: string } }) => e.k.bytes)).toEqual([
+      "aa".repeat(28),
+      "cc".repeat(28),
+    ]);
+  });
+
+  it("rejects a registry whose keys are not strictly ascending", () => {
+    const unsorted = rawRegistryUtxo([
+      ["cc".repeat(28), "dd".repeat(28)],
+      ["aa".repeat(28), "bb".repeat(28)],
+    ]);
+    expect(() => registryFromUtxo(unsorted)).toThrow(/ascending/i);
+    const duplicated = rawRegistryUtxo([
+      ["aa".repeat(28), "bb".repeat(28)],
+      ["aa".repeat(28), "dd".repeat(28)],
+    ]);
+    expect(() => registryFromUtxo(duplicated)).toThrow(/ascending/i);
+  });
+
+  it("rejects a registry value that is not a 28-byte hash", () => {
+    const short = rawRegistryUtxo([["aa".repeat(28), "bb"]]);
+    expect(() => registryFromUtxo(short)).toThrow(/28-byte/i);
   });
 
   it("rejects a settings UTxO whose current value is not a map", () => {

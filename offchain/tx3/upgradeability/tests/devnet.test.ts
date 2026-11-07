@@ -36,6 +36,26 @@ const REGISTRAR_FUNDS = 30n * ADA;
 
 const toBytes = (hex: string): Uint8Array => Buffer.from(hex, "hex");
 
+/**
+ * Two registry entries as the `entry_*` args, sorted by key: the on-chain
+ * `decode_registry` rejects keys that are not strictly ascending, and the
+ * transactions write the entries in argument order. Lowercase hex sorts in
+ * byte order.
+ */
+function registryEntries(
+  entries: [key: string, value: string][],
+): Record<string, Uint8Array> {
+  const [[k1, v1], [k2, v2]] = [...entries].sort(([a], [b]) =>
+    a.toLowerCase() < b.toLowerCase() ? -1 : 1,
+  );
+  return {
+    entry_1_key: toBytes(k1),
+    entry_1_value: toBytes(v1),
+    entry_2_key: toBytes(k2),
+    entry_2_value: toBytes(v2),
+  };
+}
+
 /** The spent UTxO as the on-chain `OutputReference` (datum tag). */
 const prevOf = (utxo: DevnetUtxo) => ({
   transaction_id: toBytes(utxo.txHash),
@@ -280,10 +300,10 @@ async function setup(): Promise<Instance> {
     client(governor)
       .launchRegistry({
         seed: seed.ref,
-        entry_1_key: toBytes(forwarderHash),
-        entry_1_value: toBytes(logicHash),
-        entry_2_key: toBytes(v1Hash),
-        entry_2_value: toBytes(migrationHash),
+        ...registryEntries([
+          [forwarderHash, logicHash],
+          [v1Hash, migrationHash],
+        ]),
         out_ix: 0,
       } as unknown as LaunchRegistryArgs)
       .env(env),
@@ -345,10 +365,10 @@ async function proposeRegistry(forwarderValue: string): Promise<number> {
     inst
       .client(governor)
       .proposeRegistry({
-        entry_1_key: toBytes(inst.forwarderHash),
-        entry_1_value: toBytes(forwarderValue),
-        entry_2_key: toBytes(inst.v1Hash),
-        entry_2_value: toBytes(inst.migrationHash),
+        ...registryEntries([
+          [inst.forwarderHash, forwarderValue],
+          [inst.v1Hash, inst.migrationHash],
+        ]),
         now_ms: tip.timeMs,
         since_slot: tip.slot,
         out_ix: 0,
@@ -369,10 +389,10 @@ async function applyRegistry(
     inst
       .client(governor)
       .applyRegistry({
-        entry_1_key: toBytes(inst.forwarderHash),
-        entry_1_value: toBytes(forwarderValue),
-        entry_2_key: toBytes(inst.v1Hash),
-        entry_2_value: toBytes(inst.migrationHash),
+        ...registryEntries([
+          [inst.forwarderHash, forwarderValue],
+          [inst.v1Hash, inst.migrationHash],
+        ]),
         since_slot: tip.slot,
         out_ix: 0,
       } as unknown as ApplyRegistryArgs)

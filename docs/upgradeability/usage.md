@@ -51,6 +51,11 @@ validator accepts any value, so a map needs no change. Consumers reject a
 malformed registry at spend time (`decode_registry`); the reference validator
 does not constrain the shape on-chain.
 
+**Keys must be sorted.** `decode_registry` requires the map's keys in strictly
+ascending byte order and every value to be a 28-byte script hash.
+`registryToData` sorts for you; with Tx3, pass the `entry_*` arguments in key
+order.
+
 Because the registry is a settings value, **changing it is a normal
 `Propose` → wait `apply_delay` → `Apply`** flow, authorized by
 `propose_auth` / `apply_auth`. Use the existing settings builders

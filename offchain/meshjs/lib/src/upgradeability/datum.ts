@@ -5,7 +5,9 @@
  *   CounterDatum    = Constr 0 [count: Int, owner: Credential,
  *                              prev_input: Option<OutputReference>]
  *   CounterRedeemer = Tick=0 | Upgrade=1
- *   Registry        = Map<bytes, bytes>   (the settings datum's `current`)
+ *   Registry        = Map<bytes, bytes>   (the settings datum's `current`;
+ *                                          keys strictly ascending, values
+ *                                          28-byte script hashes)
  *
  * The forwarder's spend redeemer and the logic/migration withdrawal redeemers
  * are opaque `Data` on-chain, so any well-formed value works — the unit.
@@ -67,14 +69,26 @@ export function opaqueRedeemer(): Data {
 
 /**
  * Encode a registry as the settings datum's `current` value: a Plutus map of
- * byte arrays to byte arrays (hex script hashes).
+ * byte arrays to byte arrays (hex script hashes), sorted by key. The on-chain
+ * `decode_registry` rejects a map whose keys are not strictly ascending.
  */
 export function registryToData(entries: Registry): Data {
   const map = new Map<Data, Data>();
-  for (const [key, value] of entries) {
+  const sorted = [...entries].sort(([a], [b]) => compareHex(a, b));
+  for (const [key, value] of sorted) {
     map.set(key, value);
   }
   return map;
+}
+
+/**
+ * Byte-wise order of two hex strings. For lowercase hex, string order is byte
+ * order (a shorter prefix sorts first, as on-chain).
+ */
+function compareHex(a: string, b: string): number {
+  const x = a.toLowerCase();
+  const y = b.toLowerCase();
+  return x < y ? -1 : x > y ? 1 : 0;
 }
 
 // ------------------------------------------------------------------ decoding
@@ -177,8 +191,9 @@ export function counterDatumFromUtxo(utxo: UTxO): CounterDatum {
 
 /**
  * Read the registry from the settings UTxO's inline datum (`current` value).
- * Throws if the UTxO carries no inline datum or the value is not a map of
- * byte arrays — mirroring the on-chain `decode_registry` rejection.
+ * Throws if the UTxO carries no inline datum, the value is not a map of byte
+ * arrays, its keys are not strictly ascending, or a value is not a 28-byte
+ * hash — mirroring the on-chain `decode_registry` rejection.
  */
 export function registryFromUtxo(settingsUtxo: UTxO): Registry {
   if (!settingsUtxo.output.plutusData) {
@@ -203,11 +218,22 @@ export function registryFromUtxo(settingsUtxo: UTxO): Registry {
     );
   }
   const registry: Registry = new Map();
+  let previous: string | undefined;
   for (const entry of current.map) {
-    registry.set(
-      asBytes(entry.k, "registry key"),
-      asBytes(entry.v, "registry value"),
-    );
+    const key = asBytes(entry.k, "registry key");
+    const value = asBytes(entry.v, "registry value");
+    if (previous !== undefined && compareHex(previous, key) >= 0) {
+      throw new Error(
+        "Malformed registry: keys are not in strictly ascending order.",
+      );
+    }
+    if (value.length !== 56) {
+      throw new Error(
+        `Malformed registry: the value for ${key} is not a 28-byte script hash.`,
+      );
+    }
+    registry.set(key, value);
+    previous = key;
   }
   return registry;
 }

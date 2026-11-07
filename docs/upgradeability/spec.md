@@ -66,7 +66,7 @@ The **forwarder hash** is `hash(forwarder_validator(settings_policy, settings_to
 
 A `Registry` is a `Map` from 28-byte script hashes to 28-byte script hashes, stored as the settings UTxO's `current` value.
 
-- **Well-formedness.** `decode_registry` fails on any value that is not a map of byte arrays to byte arrays; a consumer therefore rejects a malformed registry. The reference settings validator does not constrain the shape on-chain.
+- **Well-formedness.** A well-formed registry is a map from byte arrays to 28-byte script hashes whose keys are in strictly ascending byte order (so no key repeats). `decode_registry` fails on anything else; a consumer therefore rejects a malformed registry. Sorted keys let decoding run in one linear pass and lookups stop early. The reference settings validator does not constrain the shape on-chain, so writers must sort the map.
 - **Authenticity.** The registry is read from the settings UTxO identified by the settings NFT (`has_nft_strict`), so it is unique and one-shot (settings spec §3.c).
 
 ### 3.d Validators
@@ -81,7 +81,7 @@ The reusable predicates and helpers, all in `onchain/lib/upgradeability/`.
 | `lookup(registry, own_hash)` | The delegate registered for `own_hash`, if any. |
 | `delegate_invoked(self, settings_policy, settings_token_name, own_hash)` | Whether the delegate registered for `own_hash` runs as a withdrawal; fails if `own_hash` is unregistered. Shared by both predicates. |
 | `own_script_hash(inputs, own_ref)` | The script hash owning the input at `own_ref`. |
-| `decode_registry(data)` | Decode the registry from the settings value; fails on a malformed shape. |
+| `decode_registry(data)` | Decode the registry from the settings value; fails unless it is a map of byte arrays to 28-byte hashes with strictly ascending keys. |
 
 **`delegate`** (helpers for logic and migration scripts):
 
@@ -207,7 +207,7 @@ Attacks the protocol defends against, each backed by the invariants of §6.b:
 - **I4 — Forwarding integrity.** `validate_forward` returns `True` only if the exact registered delegate's withdrawal is present.
 - **I5 — Full forwarded validation.** A logic/migration script applies its checks to every input in `forwarded_by(...)`, and rejects when that set is empty.
 - **I6 — Migration binding.** A migrated V1 input must have been spent with `Upgrade` and must reappear at `v2_address`.
-- **I7 — Registry decodability.** A registry that is not a map of byte arrays to byte arrays is rejected by `decode_registry`; consumers never act on a malformed registry.
+- **I7 — Registry decodability.** A registry that is not a map of byte arrays to 28-byte hashes with strictly ascending keys is rejected by `decode_registry`; consumers never act on a malformed or ambiguous (duplicate-key) registry.
 - **I8 — Registry authenticity.** The registry is read only from the settings UTxO identified by the settings NFT.
 - **I9 — Composability.** The predicates assert only about their own input, the settings reference input, and the withdrawal key set (plus, for migration, the explicit `v2_address` continuation). They never assert total input/output counts, total value, or unrelated UTxOs (`ARCHITECTURE.md` §1.1).
 

@@ -50,11 +50,11 @@
     "event_triggered.vault": "55f3e552aad55bb8c98c7764e6b45fb36b2c913dd46b903d96ba87c3",
     "event_triggered.coupon_policy": "f0da56d0617258734466ba0306cc2370822533bd96cd2753436b1a3c",
     "event_triggered.vault_nft_policy": "601198710ff29674e394a0953a0c9a7f6905623d2fefcdba9aab7b5f",
-    "upgradeability.counter_forwarder": "aab1f9e8bbf9b11b5658792d53a6d574b6fa1d4f8e22d7456eba19e9",
-    "upgradeability.counter_logic": "afeae1c93b98aefd5a1dfa7cf4f99db7593365943c56182cabcf63a6",
-    "upgradeability.counter_v1": "fb859d2817a1dded27326c5407086b270a5050f8f007bfcd0730eead",
-    "upgradeability.counter_migration": "32c2c4c81c12dbcb265da714fa1eb950a6292e7dab6f2af14c8f0a58",
-    "upgradeability.counter_v2": "3e021596f538533b8939c8bc57460b87a3541707bde2281bbb375517",
+    "upgradeability.counter_forwarder": "00a47caa3da38598df513e660956a0e83ec868566a8b2a67a7e386ab",
+    "upgradeability.counter_logic": "d311e9d0a237992b6573750d81309ded41d33f8f2a1bba66a8ae7508",
+    "upgradeability.counter_v1": "c1de05978e7aeefb9260d07e722e8fb3483c3364e1c84e1d60a3f397",
+    "upgradeability.counter_migration": "90ad3d7edda7b26655c9547a4e949865306ec346549bb145b944e58c",
+    "upgradeability.counter_v2": "fcd74c5dc5c510b1f93c46a53675e1d4e03cd7b0b8eb72c607130190",
     "compiler": "aiken-v1.1.24+bacbeb3"
   }
 }

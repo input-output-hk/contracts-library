@@ -192,6 +192,10 @@ type CounterRedeemer {
 /// travel as `Bytes` args and the map literal is built here: a `Map` argument
 /// from the generated client would encode its keys as UTF-8 strings, not the
 /// binary hashes the on-chain `decode_registry` looks up.
+///
+/// The entries are written in argument order, and `decode_registry` rejects a
+/// map whose keys are not strictly ascending: pass `entry_1_key < entry_2_key`
+/// (byte-wise). The same holds for `propose_registry` and `apply_registry`.
 tx launch_registry(
     /// The UTxO consumed as the mint seed (settings validator parameter).
     seed: UtxoRef,
@@ -254,6 +258,7 @@ tx launch_registry(
 
 /// Propose a registry change: write `next` to the given map and
 /// `next_apply = now_ms + apply_delay`, preserving `current` and the NFT.
+/// Pass `entry_1_key < entry_2_key` (see `launch_registry`).
 tx propose_registry(
     /// First proposed entry: a validator's own script hash.
     entry_1_key: Bytes,
@@ -327,7 +332,7 @@ tx propose_registry(
 }
 
 /// Apply a matured registry proposal: promote the given map and clear the
-/// pending fields.
+/// pending fields. Pass `entry_1_key < entry_2_key` (see `launch_registry`).
 tx apply_registry(
     /// First entry of the registry being promoted to `current`.
     entry_1_key: Bytes,
