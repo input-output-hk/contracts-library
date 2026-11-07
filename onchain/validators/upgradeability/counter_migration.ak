@@ -1,9 +1,9 @@
 use aiken/collection/list
-use cardano/address.{Address, Credential, Script}
+use cardano/address.{Address, Credential}
 use cardano/assets.{AssetName, PolicyId}
 use cardano/transaction.{Transaction}
 use upgradeability/counter.{spent_with_upgrade, validate_counter_migrate}
-use upgradeability/registry.{forwarded_inputs, get_registry}
+use upgradeability/registry.{forwarded_by}
 
 /// Opt-in migration script for the counter demo.
 ///
@@ -17,11 +17,8 @@ validator counter_migration(
   v2_address: Address,
 ) {
   withdraw(_redeemer: Data, account: Credential, self: Transaction) {
-    expect Script(own_hash) = account
-    let registry = get_registry(self, settings_policy, settings_token_name)
-    let targets = forwarded_inputs(self.inputs, registry, own_hash)
     list.all(
-      targets,
+      forwarded_by(self, settings_policy, settings_token_name, account),
       fn(input) {
         and {
           spent_with_upgrade(self, input.output_reference),

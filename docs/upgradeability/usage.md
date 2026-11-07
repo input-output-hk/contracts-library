@@ -258,7 +258,9 @@ The Tx3 reference protocol has its own devnet suite
 - **Consent is native in opt-in.** Never move consent into the registered
   migration script: a governance repoint would then be able to drain funds.
 - **Validate every forwarded input.** A logic / migration script must apply its
-  checks to all of `forwarded_inputs(...)`, not just one.
+  checks to all of `forwarded_by(...)`, not just one. `forwarded_by` also
+  rejects when nothing is delegated, so build each delegate with the same
+  settings parameters as the registry that points at it.
 - **Register the withdraw-0 stake credentials first.** The ledger only permits
   a withdrawal from a *registered* reward account: before any
   `buildForwardTx` / `buildUpgradeTx`, register the stake credentials of

@@ -3,7 +3,7 @@ use aiken/collection/dict.{Dict}
 use aiken/collection/list
 use aiken/collection/pairs
 use aiken/crypto.{ScriptHash}
-use cardano/address.{Script}
+use cardano/address.{Credential, Script}
 use cardano/assets.{AssetName, PolicyId}
 use cardano/transaction.{Input, OutputReference, Transaction, find_input}
 use settings/utils.{get_settings_datum}
@@ -77,6 +77,28 @@ pub fn delegate_invoked(
   let registry = get_registry(self, settings_policy, settings_token_name)
   expect Some(delegate) = lookup(registry, own_hash)
   pairs.has_key(self.withdrawals, Script(delegate))
+}
+
+/// The inputs a delegate (logic or migration script) must validate: every input
+/// registered to delegate to the script running as `account`.
+///
+/// Fails (rejects the transaction) if `account` is not a script, the registry
+/// can't be read, or no input is delegated to this script. A delegate that
+/// validates nothing has no legitimate use, and accepting an empty set would
+/// let a delegate built for another settings instance pass vacuously: an
+/// attacker could reference that instance's settings UTxO, find no targets, and
+/// spend every forwarder unchecked.
+pub fn forwarded_by(
+  self: Transaction,
+  settings_policy: PolicyId,
+  settings_token_name: AssetName,
+  account: Credential,
+) -> List<Input> {
+  expect Script(own_hash) = account
+  let registry = get_registry(self, settings_policy, settings_token_name)
+  let targets = forwarded_inputs(self.inputs, registry, own_hash)
+  expect targets != []
+  targets
 }
 
 /// The script hash that owns the input referenced by `own_ref` — the immutable

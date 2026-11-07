@@ -13,7 +13,9 @@ use upgradeability/counter.{
 }
 use upgradeability/forward.{validate_forward}
 use upgradeability/migrate.{validate_upgrade}
-use upgradeability/registry.{decode_registry, forwarded_inputs, lookup}
+use upgradeability/registry.{
+  decode_registry, forwarded_by, forwarded_inputs, lookup,
+}
 
 // ------------------------------------------------------------------- fixtures
 
@@ -171,6 +173,43 @@ test forwarded_inputs_filters_by_registered_hash() {
     counter_input(unrelated_hash, 1, 0),
   ]
   list.length(forwarded_inputs(inputs, r, logic_hash)) == 1
+}
+
+test forwarded_by_returns_delegated_inputs() {
+  let r = registry([Pair(forwarder_hash, logic_hash)])
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [
+      counter_input(forwarder_hash, 0, 0),
+      counter_input(unrelated_hash, 1, 0),
+    ],
+    reference_inputs: [settings_ref(r)],
+  }
+  list.length(
+    forwarded_by(tx, settings_policy, settings_name, Script(logic_hash)),
+  ) == 1
+}
+
+/// A delegate built for another settings instance finds no targets there; it
+/// must reject instead of passing vacuously over an empty set.
+test forwarded_by_rejects_when_nothing_is_delegated() fail {
+  let r = registry([Pair(forwarder_hash, logic_hash)])
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [counter_input(unrelated_hash, 0, 0)],
+    reference_inputs: [settings_ref(r)],
+  }
+  forwarded_by(tx, settings_policy, settings_name, Script(logic_hash)) != []
+}
+
+test forwarded_by_rejects_key_account() fail {
+  let r = registry([Pair(forwarder_hash, logic_hash)])
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [counter_input(forwarder_hash, 0, 0)],
+    reference_inputs: [settings_ref(r)],
+  }
+  forwarded_by(tx, settings_policy, settings_name, VerificationKey(vkh)) != []
 }
 
 // ------------------------------------------------------------ forced forward

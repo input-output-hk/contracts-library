@@ -1,9 +1,9 @@
 use aiken/collection/list
-use cardano/address.{Credential, Script}
+use cardano/address.{Credential}
 use cardano/assets.{AssetName, PolicyId}
 use cardano/transaction.{Transaction}
 use upgradeability/counter.{validate_counter_tick}
-use upgradeability/registry.{forwarded_inputs, get_registry}
+use upgradeability/registry.{forwarded_by}
 
 /// Forced logic for the counter demo.
 ///
@@ -20,11 +20,8 @@ validator counter_logic(
   settings_token_name: AssetName,
 ) {
   withdraw(_redeemer: Data, account: Credential, self: Transaction) {
-    expect Script(own_hash) = account
-    let registry = get_registry(self, settings_policy, settings_token_name)
-    let targets = forwarded_inputs(self.inputs, registry, own_hash)
     list.all(
-      targets,
+      forwarded_by(self, settings_policy, settings_token_name, account),
       fn(input) { validate_counter_tick(self, input.output_reference) },
     )
   }
