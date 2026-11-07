@@ -161,7 +161,11 @@ export function proposalTiming(p: {
     p.now + (p.ttlMs ?? DEFAULT_PROPOSE_TTL_MS),
     p.slotConfig,
   );
-  return { untilSlot: slot, untilMs: startMs, nextApply: startMs + p.applyDelay };
+  return {
+    untilSlot: slot,
+    untilMs: startMs,
+    nextApply: startMs + p.applyDelay,
+  };
 }
 
 export interface ProposeParams {

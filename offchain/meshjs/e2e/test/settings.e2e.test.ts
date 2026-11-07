@@ -306,7 +306,10 @@ describe.skipIf(!reachable)("settings e2e (Yaci devnet)", () => {
       .txInInlineDatumPresent()
       .txInRedeemerValue(proposeRedeemer(0))
       .txInScript(p.ctx.script.code);
-    tb.txOut(p.ctx.scriptAddr, p.settingsUtxo.output.amount).txOutInlineDatumValue(
+    tb.txOut(
+      p.ctx.scriptAddr,
+      p.settingsUtxo.output.amount,
+    ).txOutInlineDatumValue(
       settingsDatumToData({
         current: p.datum.current,
         next: VALUE_B,
