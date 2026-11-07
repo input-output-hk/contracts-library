@@ -1,10 +1,10 @@
 use aiken/collection/list
-use aiken/collection/pairs
 use cardano/address.{Address, Credential}
 use cardano/assets
 use cardano/transaction.{
-  InlineDatum, Output, OutputReference, Spend, Transaction, find_input,
+  InlineDatum, Output, OutputReference, Transaction, find_input,
 }
+use upgradeability/delegate.{spend_redeemer}
 
 /// State of the demo counter used to exercise the upgradeability pattern end to
 /// end.
@@ -114,8 +114,5 @@ pub fn validate_counter_migrate(
 /// action.
 pub fn spent_with_upgrade(self: Transaction, ref: OutputReference) -> Bool {
   let upgrade: Data = Upgrade
-  when pairs.get_first(self.redeemers, Spend(ref)) is {
-    Some(redeemer) -> redeemer == upgrade
-    None -> False
-  }
+  spend_redeemer(self, ref) == Some(upgrade)
 }

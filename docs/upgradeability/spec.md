@@ -73,7 +73,7 @@ A `Registry` is a `Map` from 28-byte script hashes to 28-byte script hashes, sto
 
 The reusable predicates and helpers, all in `onchain/lib/upgradeability/`.
 
-**`registry`** (helpers):
+**`registry`** (reading the registry, and the forwarder / V1 side):
 
 | Function | Role |
 |---|---|
@@ -81,9 +81,15 @@ The reusable predicates and helpers, all in `onchain/lib/upgradeability/`.
 | `lookup(registry, own_hash)` | The delegate registered for `own_hash`, if any. |
 | `delegate_invoked(self, settings_policy, settings_token_name, own_hash)` | Whether the delegate registered for `own_hash` runs as a withdrawal; fails if `own_hash` is unregistered. Shared by both predicates. |
 | `own_script_hash(inputs, own_ref)` | The script hash owning the input at `own_ref`. |
+| `decode_registry(data)` | Decode the registry from the settings value; fails on a malformed shape. |
+
+**`delegate`** (helpers for logic and migration scripts):
+
+| Function | Role |
+|---|---|
 | `forwarded_inputs(inputs, registry, logic_hash)` | Every input whose address maps to `logic_hash`. |
 | `forwarded_by(self, settings_policy, settings_token_name, account)` | The inputs the delegate running as `account` must validate: `forwarded_inputs` over the registry for its own hash. Fails if `account` is not a script or the set is empty. |
-| `decode_registry(data)` | Decode the registry from the settings value; fails on a malformed shape. |
+| `spend_redeemer(self, ref)` | The redeemer the input at `ref` was spent with, if any. How a logic script reads each forwarded input's action. |
 
 **`forward.validate_forward(settings_policy, settings_token_name, own_ref, self)`** — forced forwarder:
 
@@ -131,7 +137,7 @@ Identical to the settings `Propose` / `Apply` transactions (settings spec §5.b,
 | **Redeemer** | Forwarder spend: any `Data` (the forwarder does not inspect it). |
 | **Validation** | `validate_forward` returns `True`; the logic script independently validates the forwarded input(s). |
 
-The forwarder's redeemer is opaque: all meaning lives in the logic script, selected by the registry. An **upgrade** is a §5.a registry change repointing `R[forwarder]`; no funds move.
+The forwarder's redeemer is opaque to the forwarder: all meaning lives in the logic script, selected by the registry. The logic reads each forwarded input's action with `spend_redeemer(self, input_ref)`, so a protocol with several actions is covered: one logic run validates every forwarded input, each under its own action. An **upgrade** is a §5.a registry change repointing `R[forwarder]`; no funds move.
 
 ### 5.c Opt-in upgrade (migration)
 

@@ -3,7 +3,7 @@ use cardano/address.{Credential}
 use cardano/assets.{AssetName, PolicyId}
 use cardano/transaction.{Transaction}
 use upgradeability/counter.{validate_counter_tick}
-use upgradeability/registry.{forwarded_by}
+use upgradeability/delegate.{forwarded_by}
 
 /// Forced logic for the counter demo.
 ///

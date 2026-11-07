@@ -3,7 +3,7 @@ use cardano/address.{Address, Credential}
 use cardano/assets.{AssetName, PolicyId}
 use cardano/transaction.{Transaction}
 use upgradeability/counter.{spent_with_upgrade, validate_counter_migrate}
-use upgradeability/registry.{forwarded_by}
+use upgradeability/delegate.{forwarded_by}
 
 /// Opt-in migration script for the counter demo.
 ///

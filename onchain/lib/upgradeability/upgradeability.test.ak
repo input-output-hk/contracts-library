@@ -13,9 +13,8 @@ use upgradeability/counter.{
 }
 use upgradeability/forward.{validate_forward}
 use upgradeability/migrate.{validate_upgrade}
-use upgradeability/registry.{
-  decode_registry, forwarded_by, forwarded_inputs, lookup,
-}
+use upgradeability/delegate.{forwarded_by, forwarded_inputs, spend_redeemer}
+use upgradeability/registry.{decode_registry, lookup}
 
 // ------------------------------------------------------------------- fixtures
 
@@ -611,4 +610,23 @@ test spent_with_upgrade_rejects_other_action() fail {
   let tick: Data = Tick
   let tx = Transaction { ..placeholder, redeemers: [Pair(Spend(ref(0)), tick)] }
   spent_with_upgrade(tx, ref(0))
+}
+
+test spend_redeemer_returns_the_input_action() {
+  let tick: Data = Tick
+  let upgrade: Data = Upgrade
+  let tx = Transaction {
+    ..placeholder,
+    redeemers: [Pair(Spend(ref(0)), tick), Pair(Spend(ref(1)), upgrade)],
+  }
+  and {
+    spend_redeemer(tx, ref(0)) == Some(tick),
+    spend_redeemer(tx, ref(1)) == Some(upgrade),
+  }
+}
+
+test spend_redeemer_is_none_for_unspent_ref() {
+  let tick: Data = Tick
+  let tx = Transaction { ..placeholder, redeemers: [Pair(Spend(ref(0)), tick)] }
+  spend_redeemer(tx, ref(1)) == None
 }

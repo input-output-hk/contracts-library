@@ -150,6 +150,32 @@ The builders do this themselves before wiring anything (see below), so a stale
 or missing registry entry surfaces as a clear error instead of a rejected
 transaction.
 
+## Writing a logic or migration script
+
+A delegate runs once per transaction and validates every input forwarded to
+it. `upgradeability/delegate` gives it the inputs to check (`forwarded_by`,
+which rejects when there are none) and each input's action (`spend_redeemer`,
+since the forwarder itself ignores its redeemer):
+
+```aiken
+use aiken/collection/list
+use upgradeability/delegate.{forwarded_by, spend_redeemer}
+
+withdraw(_redeemer: Data, account: Credential, self: Transaction) {
+  list.all(
+    forwarded_by(self, settings_policy, settings_token_name, account),
+    fn(input) {
+      expect Some(action) = spend_redeemer(self, input.output_reference)
+      validate_step(self, input, action) // your protocol's transition
+    },
+  )
+}
+```
+
+The action is whatever the transaction builder put in the redeemer: treat it
+as a claim and validate the transition it names, as any validator does with
+its own redeemer.
+
 ## Off-chain usage (MeshJS)
 
 The builders live in `offchain/meshjs/lib/src/upgradeability/` and follow the
