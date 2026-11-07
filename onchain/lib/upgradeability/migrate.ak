@@ -1,9 +1,8 @@
-use aiken/collection/pairs
 use authorization.{is_authorized}
-use cardano/address.{Credential, Script}
+use cardano/address.{Credential}
 use cardano/assets.{AssetName, PolicyId}
 use cardano/transaction.{OutputReference, Transaction}
-use upgradeability/registry.{get_registry, lookup, own_script_hash}
+use upgradeability/registry.{delegate_invoked, own_script_hash}
 
 /// Opt-in migration (Approach A).
 ///
@@ -21,7 +20,7 @@ use upgradeability/registry.{get_registry, lookup, own_script_hash}
 /// Because consent is native, a governance repoint of the registered migration
 /// script can change *how* a migration is performed but can never move a
 /// user's funds without that user's authorization. That is what makes this
-/// opt-in rather than forced.
+/// opt-in instead of forced.
 ///
 /// Like `forward.validate_forward`, this asserts only about the own input, the
 /// settings UTxO, and the withdrawal key set (`ARCHITECTURE.md` §1.1).
@@ -32,15 +31,13 @@ pub fn validate_upgrade(
   own_ref: OutputReference,
   self: Transaction,
 ) -> Bool {
-  let Transaction { inputs, withdrawals, extra_signatories, .. } = self
-  let registry = get_registry(self, settings_policy, settings_token_name)
-  let own = own_script_hash(inputs, own_ref)
-  let delegated = when lookup(registry, own) is {
-    Some(migration_hash) -> pairs.has_key(withdrawals, Script(migration_hash))
-    None -> False
-  }
   and {
-    is_authorized(user_auth, extra_signatories, withdrawals),
-    delegated,
+    is_authorized(user_auth, self.extra_signatories, self.withdrawals),
+    delegate_invoked(
+      self,
+      settings_policy,
+      settings_token_name,
+      own_script_hash(self.inputs, own_ref),
+    ),
   }
 }

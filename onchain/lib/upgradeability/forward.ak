@@ -1,8 +1,6 @@
-use aiken/collection/pairs
-use cardano/address.{Script}
 use cardano/assets.{AssetName, PolicyId}
 use cardano/transaction.{OutputReference, Transaction}
-use upgradeability/registry.{get_registry, lookup, own_script_hash}
+use upgradeability/registry.{delegate_invoked, own_script_hash}
 
 /// Forced forwarding (beacon indirection).
 ///
@@ -29,11 +27,10 @@ pub fn validate_forward(
   own_ref: OutputReference,
   self: Transaction,
 ) -> Bool {
-  let Transaction { inputs, withdrawals, .. } = self
-  let registry = get_registry(self, settings_policy, settings_token_name)
-  let own = own_script_hash(inputs, own_ref)
-  when lookup(registry, own) is {
-    Some(logic_hash) -> pairs.has_key(withdrawals, Script(logic_hash))
-    None -> False
-  }
+  delegate_invoked(
+    self,
+    settings_policy,
+    settings_token_name,
+    own_script_hash(self.inputs, own_ref),
+  )
 }

@@ -1,6 +1,7 @@
 use aiken/builtin
 use aiken/collection/dict.{Dict}
 use aiken/collection/list
+use aiken/collection/pairs
 use aiken/crypto.{ScriptHash}
 use cardano/address.{Script}
 use cardano/assets.{AssetName, PolicyId}
@@ -60,6 +61,22 @@ pub fn get_registry(
 /// The delegate script hash registered for `own_hash`, if any.
 pub fn lookup(registry: Registry, own_hash: ScriptHash) -> Option<ScriptHash> {
   dict.get(registry, own_hash)
+}
+
+/// Whether the delegate registered for `own_hash` runs in this transaction as a
+/// reward withdrawal (the withdraw-0 convention).
+///
+/// Fails (rejects the transaction) if the registry can't be read or has no
+/// entry for `own_hash`; an unregistered validator has no delegate to admit it.
+pub fn delegate_invoked(
+  self: Transaction,
+  settings_policy: PolicyId,
+  settings_token_name: AssetName,
+  own_hash: ScriptHash,
+) -> Bool {
+  let registry = get_registry(self, settings_policy, settings_token_name)
+  expect Some(delegate) = lookup(registry, own_hash)
+  pairs.has_key(self.withdrawals, Script(delegate))
 }
 
 /// The script hash that owns the input referenced by `own_ref` — the immutable

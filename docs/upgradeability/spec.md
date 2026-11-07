@@ -79,6 +79,7 @@ The reusable predicates and helpers, all in `onchain/lib/upgradeability/`.
 |---|---|
 | `get_registry(self, settings_policy, settings_token_name)` | Read + decode the registry from the settings reference input. |
 | `lookup(registry, own_hash)` | The delegate registered for `own_hash`, if any. |
+| `delegate_invoked(self, settings_policy, settings_token_name, own_hash)` | Whether the delegate registered for `own_hash` runs as a withdrawal; fails if `own_hash` is unregistered. Shared by both predicates. |
 | `own_script_hash(inputs, own_ref)` | The script hash owning the input at `own_ref`. |
 | `forwarded_inputs(inputs, registry, logic_hash)` | Every input whose address maps to `logic_hash`. |
 | `decode_registry(data)` | Decode the registry from the settings value; fails on a malformed shape. |
