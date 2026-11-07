@@ -33,6 +33,7 @@ import {
   counterDatumToData,
   counterForwarderScript,
   counterLogicScript,
+  counterLogicSteppedScript,
   counterMigrationScript,
   counterScriptAddress,
   counterScriptHash,
@@ -45,6 +46,8 @@ import {
   settingsDatumToData,
   settingsScript as makeSettingsScript,
   settingsScriptAddress,
+  steppedCounterDatumToData,
+  steppedCounterFromUtxo,
   tickRedeemer,
   upgradeRedeemer,
   buildCloseTx,
@@ -60,6 +63,7 @@ import {
   type Registry,
   type SettingsDatum,
   type SettingsRefParams,
+  type SteppedCounterDatum,
 } from "@contracts-library/meshjs";
 import {
   resolveScriptHash,
@@ -115,6 +119,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
 
   let forwarderScript: ReturnType<typeof counterForwarderScript>;
   let logicScript: ReturnType<typeof counterLogicScript>;
+  let steppedScript: PlutusScript;
   let v1Script: ReturnType<typeof counterV1Script>;
   let v2Script: ReturnType<typeof counterV2Script>;
   let migrationScript: ReturnType<typeof counterMigrationScript>;
@@ -125,6 +130,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
 
   let forwarderHash: string;
   let logicHash: string;
+  let steppedHash: string;
   let v1Hash: string;
   let migrationHash: string;
 
@@ -174,6 +180,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
 
     forwarderScript = counterForwarderScript(counterParams);
     logicScript = counterLogicScript(counterParams);
+    steppedScript = counterLogicSteppedScript(counterParams);
     v1Script = counterV1Script(counterParams);
     v2Script = counterV2Script();
     migrationScript = counterMigrationScript({
@@ -187,6 +194,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
 
     forwarderHash = counterScriptHash(forwarderScript);
     logicHash = counterScriptHash(logicScript);
+    steppedHash = counterScriptHash(steppedScript);
     v1Hash = counterScriptHash(v1Script);
     migrationHash = counterScriptHash(migrationScript);
 
@@ -203,6 +211,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
     // runs each script's `publish` handler, which accepts it.
     await registerScriptStakeCredential(provider, governor, logicScript);
     await registerScriptStakeCredential(provider, governor, migrationScript);
+    await registerScriptStakeCredential(provider, governor, steppedScript);
 
     forwarderUtxo = await mintCounter();
     v1Utxo = await lockCounter(
@@ -349,11 +358,11 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
    * Create a genuine forced counter: mint its state token under the
    * forwarder's policy into a fresh `count: 0` counter (the forced genesis).
    */
-  async function mintCounter(): Promise<UTxO> {
+  async function mintCounter(logic = logicScript): Promise<UTxO> {
     const tx = await buildForwardMintTx({
       txBuilder: newTxBuilder(provider),
       forwarderScript,
-      logicAuthorizer: { scriptCbor: logicScript.code },
+      logicAuthorizer: { scriptCbor: logic.code },
       settingsUtxo: settingsUtxo!,
       owner: aliceOwner(),
       lovelace: 3_000_000n,
@@ -431,10 +440,17 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
    */
   async function rawForwardTick(p: {
     inputs: UTxO[];
-    outputs: { address: string; amount: Asset[]; datum: CounterDatum }[];
+    outputs: {
+      address: string;
+      amount: Asset[];
+      datum: CounterDatum | SteppedCounterDatum;
+    }[];
     /** State tokens minted under the forwarder's policy alongside the tick. */
     mint?: string;
+    /** The logic run as the withdraw-0 (the first logic by default). */
+    logic?: PlutusScript;
   }): Promise<string> {
+    const logic = p.logic ?? logicScript;
     const tb = newTxBuilder(provider);
     if (p.mint !== undefined) {
       tb.mintPlutusScriptV3()
@@ -454,10 +470,14 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
         .txInRedeemerValue(opaqueRedeemer())
         .txInScript(forwarderScript.code);
     }
-    const rewardAddress = serializeRewardAddress(logicHash, true, NETWORK_ID);
+    const rewardAddress = serializeRewardAddress(
+      counterScriptHash(logic),
+      true,
+      NETWORK_ID,
+    );
     tb.withdrawalPlutusScriptV3()
       .withdrawal(rewardAddress, "0")
-      .withdrawalScript(logicScript.code)
+      .withdrawalScript(logic.code)
       .withdrawalRedeemerValue(opaqueRedeemer());
     tb.readOnlyTxInReference(
       settingsUtxo!.input.txHash,
@@ -465,7 +485,9 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
     );
     for (const out of p.outputs) {
       tb.txOut(out.address, out.amount).txOutInlineDatumValue(
-        counterDatumToData(out.datum),
+        "step" in out.datum
+          ? steppedCounterDatumToData(out.datum)
+          : counterDatumToData(out.datum),
       );
     }
     const col = await collateralOf(alice);
@@ -981,7 +1003,86 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
           {
             address: forwarderAddr,
             amount: counterValue(),
-            datum: { count: 1, owner: aliceOwner(), prevInput: prevOf(genuine) },
+            datum: {
+              count: 1,
+              owner: aliceOwner(),
+              prevInput: prevOf(genuine),
+            },
+          },
+        ],
+      }),
+    ).rejects.toThrow(/purpose[^a-z]*withdraw/);
+  });
+
+  it("a schema upgrade converts counters on touch, and a rollback strands converted ones", async () => {
+    const counter = await mintCounter();
+    await changeRegistry(
+      new Map([
+        [forwarderHash, steppedHash],
+        [v1Hash, migrationHash],
+      ]),
+    );
+
+    // The stepped logic writes only the new shape.
+    await expect(
+      rawForwardTick({
+        logic: steppedScript,
+        inputs: [counter],
+        outputs: [
+          {
+            address: forwarderAddr,
+            amount: counterValue(),
+            datum: {
+              count: 1,
+              owner: aliceOwner(),
+              prevInput: prevOf(counter),
+            },
+          },
+        ],
+      }),
+    ).rejects.toThrow(/purpose[^a-z]*withdraw/);
+    await expect(mintCounter(steppedScript)).rejects.toThrow(
+      /purpose[^a-z]*withdraw/,
+    );
+
+    // Convert on touch: the original counter continues as Stepped, step 1.
+    const converted: SteppedCounterDatum = {
+      count: 1,
+      owner: aliceOwner(),
+      prevInput: prevOf(counter),
+      step: 1,
+    };
+    const hash = await rawForwardTick({
+      logic: steppedScript,
+      inputs: [counter],
+      outputs: [
+        { address: forwarderAddr, amount: counterValue(), datum: converted },
+      ],
+    });
+    await waitForTx(provider, hash);
+    const continuation = await scriptOutputOf(provider, hash, forwarderAddr);
+    expect(steppedCounterFromUtxo(continuation)).toEqual(converted);
+    expect(() => counterDatumFromUtxo(continuation)).toThrow(/Malformed/);
+
+    // Roll back: the first logic cannot read the converted counter.
+    await changeRegistry(
+      new Map([
+        [forwarderHash, logicHash],
+        [v1Hash, migrationHash],
+      ]),
+    );
+    await expect(
+      rawForwardTick({
+        inputs: [continuation],
+        outputs: [
+          {
+            address: forwarderAddr,
+            amount: counterValue(),
+            datum: {
+              count: 2,
+              owner: aliceOwner(),
+              prevInput: prevOf(continuation),
+            },
           },
         ],
       }),

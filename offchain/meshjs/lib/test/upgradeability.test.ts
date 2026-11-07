@@ -6,6 +6,7 @@ import {
   mConStr1,
   resolveScriptHash,
   serializeData,
+  type Data,
   type MeshTxBuilder,
   type UTxO,
 } from "@meshsdk/core";
@@ -14,6 +15,8 @@ import {
   forwarderCompiledCode,
   forwarderValidatorHash,
   logicCompiledCode,
+  logicSteppedCompiledCode,
+  logicSteppedValidatorHash,
   logicValidatorHash,
   migrationCompiledCode,
   migrationValidatorHash,
@@ -27,6 +30,8 @@ import {
   counterDatumToData,
   registryFromUtxo,
   registryToData,
+  steppedCounterDatumToData,
+  steppedCounterFromUtxo,
   tickRedeemer,
   upgradeRedeemer,
 } from "../src/upgradeability/datum";
@@ -102,12 +107,16 @@ const collat: UTxO = {
 const PREV_REF = { txHash: "aa".repeat(32), outputIndex: 3 };
 
 function counterUtxo(d: CounterDatum, index = 0): UTxO {
+  return datumUtxo(counterDatumToData(d), index);
+}
+
+function datumUtxo(datum: Data, index = 0): UTxO {
   return {
     input: { txHash: "bb".repeat(32), outputIndex: index },
     output: {
       address: "addr_test_counter",
       amount: [{ unit: "lovelace", quantity: "2000000" }],
-      plutusData: serializeData(counterDatumToData(d)),
+      plutusData: serializeData(datum),
     },
   };
 }
@@ -199,6 +208,7 @@ describe("blueprint pins", () => {
     const pins: [string, string, string][] = [
       ["forwarder", forwarderCompiledCode, forwarderValidatorHash],
       ["logic", logicCompiledCode, logicValidatorHash],
+      ["logic stepped", logicSteppedCompiledCode, logicSteppedValidatorHash],
       ["v1", v1CompiledCode, v1ValidatorHash],
       ["migration", migrationCompiledCode, migrationValidatorHash],
       ["v2", v2CompiledCode, v2ValidatorHash],
@@ -278,6 +288,28 @@ describe("datum/redeemer encoding", () => {
     expect(ref.constructor).toBe(0n); // OutputReference record
     expect(ref.fields[0].bytes).toBe(PREV_REF.txHash);
     expect(Number(ref.fields[1].int)).toBe(PREV_REF.outputIndex);
+  });
+
+  it("the stepped shape is constructor 1 with step last, and round-trips", () => {
+    const d = { count: 4, owner: OWNER, prevInput: PREV_REF, step: 3 };
+    const json = deserializeDatum(serializeData(steppedCounterDatumToData(d)));
+    expect(json.constructor).toBe(1n);
+    expect(json.fields).toHaveLength(4);
+    expect(Number(json.fields[3].int)).toBe(3);
+    expect(
+      steppedCounterFromUtxo(datumUtxo(steppedCounterDatumToData(d))),
+    ).toEqual(d);
+  });
+
+  it("an original counter reads as stepped with step 1", () => {
+    const d: CounterDatum = { count: 7, owner: OWNER, prevInput: null };
+    expect(steppedCounterFromUtxo(counterUtxo(d))).toEqual({ ...d, step: 1 });
+  });
+
+  it("rejects a datum that is neither counter shape", () => {
+    expect(() =>
+      steppedCounterFromUtxo(datumUtxo(mConStr1([1, 2, 3]))),
+    ).toThrow(/Malformed counter datum/);
   });
 
   it("tick is constructor 0 and upgrade is constructor 1", () => {
@@ -444,7 +476,7 @@ describe("buildForwardMintTx", () => {
     ...overrides,
   });
 
-  it("names the state token \"counter\"", () => {
+  it('names the state token "counter"', () => {
     expect(Buffer.from(COUNTER_STATE_TOKEN_NAME, "hex").toString()).toBe(
       "counter",
     );
@@ -461,7 +493,11 @@ describe("buildForwardMintTx", () => {
     await buildForwardMintTx(mintParams(registered(), { txBuilder }));
 
     const mint = calls.find((c) => c.method === "mint");
-    expect(mint?.args).toEqual(["1", forwarderHash(), COUNTER_STATE_TOKEN_NAME]);
+    expect(mint?.args).toEqual([
+      "1",
+      forwarderHash(),
+      COUNTER_STATE_TOKEN_NAME,
+    ]);
     expect(calls.map((c) => c.method)).toContain("withdrawalScript");
 
     const out = calls.find((c) => c.method === "txOut");

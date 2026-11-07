@@ -35,6 +35,15 @@ export interface CounterDatum {
 }
 
 /**
+ * State written by `counter_logic_stepped`: the original fields plus the
+ * amount each tick adds. Counters the first logic wrote still read as the
+ * original shape until their next tick converts them (step 1).
+ */
+export interface SteppedCounterDatum extends CounterDatum {
+  step: number;
+}
+
+/**
  * Parameters of the forwarder / logic / V1 validators: the settings instance
  * that holds the registry. Hashes are hex (Blake2b-224, 56 hex chars).
  */

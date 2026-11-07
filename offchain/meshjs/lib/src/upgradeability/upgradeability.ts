@@ -51,6 +51,7 @@ import {
 import {
   forwarderCompiledCode,
   logicCompiledCode,
+  logicSteppedCompiledCode,
   migrationCompiledCode,
   plutusVersion,
   v1CompiledCode,
@@ -135,6 +136,18 @@ export function counterForwarderScript(
 export function counterLogicScript(params: SettingsRefParams): PlutusScript {
   const code = applyParamsToScript(
     logicCompiledCode,
+    [params.settingsPolicy, params.settingsTokenName],
+    "Mesh",
+  );
+  return { code, version: plutusVersion };
+}
+
+/** The forced logic after a schema upgrade: reads both counter shapes, writes `Stepped`. */
+export function counterLogicSteppedScript(
+  params: SettingsRefParams,
+): PlutusScript {
+  const code = applyParamsToScript(
+    logicSteppedCompiledCode,
     [params.settingsPolicy, params.settingsTokenName],
     "Mesh",
   );

@@ -44,27 +44,43 @@ pub fn carries_state_token(input: Input) -> Bool {
 /// A mint under `policy` is exactly one state token, paid to a fresh counter
 /// (`count: 0`, no `prev_input`) at the forwarder's address.
 pub fn validate_counter_genesis(self: Transaction, policy: PolicyId) -> Bool {
+  validate_genesis(
+    self,
+    policy,
+    fn(raw) {
+      if raw is CounterDatum { count, prev_input, .. }: CounterDatum {
+        count == 0 && prev_input == None
+      } else {
+        False
+      }
+    },
+  )
+}
+
+/// A mint under `policy` is exactly one state token, paid with no reference
+/// script to the forwarder's address under an inline datum `is_fresh` accepts.
+pub fn validate_genesis(
+  self: Transaction,
+  policy: PolicyId,
+  is_fresh: fn(Data) -> Bool,
+) -> Bool {
   expect [Pair(name, 1)] = dict.to_pairs(assets.tokens(self.mint, policy))
   and {
     name == state_token_name,
-    list.any(self.outputs, fn(out) { is_fresh_counter(out, policy) }),
-  }
-}
-
-fn is_fresh_counter(out: Output, policy: PolicyId) -> Bool {
-  and {
-    out.address.payment_credential == Script(policy),
-    assets.quantity_of(out.value, policy, state_token_name) == 1,
-    out.reference_script == None,
-    when out.datum is {
-      InlineDatum(raw) ->
-        if raw is CounterDatum { count, prev_input, .. }: CounterDatum {
-          count == 0 && prev_input == None
-        } else {
-          False
+    list.any(
+      self.outputs,
+      fn(out) {
+        and {
+          out.address.payment_credential == Script(policy),
+          assets.quantity_of(out.value, policy, state_token_name) == 1,
+          out.reference_script == None,
+          when out.datum is {
+            InlineDatum(raw) -> is_fresh(raw)
+            _ -> False
+          },
         }
-      _ -> False
-    },
+      },
+    ),
   }
 }
 
@@ -81,7 +97,7 @@ fn is_fresh_counter(out: Output, policy: PolicyId) -> Bool {
 /// exhaustively and delegates ADA to `>=`), so a permissionless tick cannot
 /// bloat the UTxO with attached scripts or smuggle tokens in (or drop state
 /// assets).
-fn settled_by(
+pub fn settled_by(
   self: Transaction,
   target_address: Address,
   expected: Data,

@@ -121,6 +121,16 @@ The **logic** and **migration** scripts run under the withdraw-0 convention (`wi
 | `validate_counter_tick(self, own_ref)` | Settle the input at `own_ref` with a `count + 1` continuation at its own address, tagged `prev_input = own_ref`, preserving `owner` and the non-ADA assets, not decreasing lovelace, and carrying no reference script. |
 | `validate_counter_migrate(self, own_ref, v2_address)` | Settle it with a state-preserving continuation at `v2_address` under the same constraints. |
 | `spent_with_upgrade(self, ref)` | Whether the input at `ref` was spent with the `Upgrade` action. |
+| `validate_genesis(self, policy, is_fresh)` | The genesis check for any datum shape: one state token at `policy`'s address, no reference script, an inline datum `is_fresh` accepts. |
+| `settled_by(self, target_address, expected, input)` | Whether some output at `target_address` carries exactly the `expected` inline datum, no reference script, and the input's non-ADA assets. |
+
+**`stepped_counter`** (the demo's second schema, read by `counter_logic_stepped`):
+
+| Item | Role |
+|---|---|
+| `SteppedCounter` | `Unstepped { count, owner, prev_input }` (constructor 0: encodes exactly like `CounterDatum`) or `Stepped { count, owner, prev_input, step }` (constructor 1). |
+| `validate_stepped_tick(self, own_ref)` | Settle the input with a `Stepped` continuation adding its step to `count`; an `Unstepped` input converts with step 1. |
+| `validate_stepped_genesis(self, policy)` | Genesis of a fresh `Stepped` counter with `step > 0`; the original shape is no longer admitted. |
 
 ## 4. UTxOs
 
@@ -131,6 +141,8 @@ As specified in the settings spec §4.a. Its `current` value is a well-formed re
 ### 4.b Protocol UTxO
 
 The state a forwarder (forced) or V1 (opt-in) holds. Its shape is protocol-defined; the upgradeability predicates treat it as opaque. A forwarder address accepts payments from anyone, so a forced protocol must tell its genuine state from look-alikes paid straight to the address: the demo's forwarded counters carry one state token minted under the forwarder's own policy (created by a genesis mint the logic validates), and the logic accepts only inputs that carry it. The `counter_*` demo uses `CounterDatum { count: Int, owner: Credential, prev_input: Option<OutputReference> }`: the `prev_input` tag binds a continuation output to the UTxO it continues (`None` only at the genesis lock), so each validation settles its input by its own continuation and several UTxOs can be ticked or migrated in one transaction without one continuation swallowing another.
+
+**Datum evolution (forced).** A forced repoint changes the logic but not the UTxOs, so their datums keep the schema they were written with. Aiken's typed decode is exact (a datum with an extra or missing field does not decode), so a new logic must decode every shape ever written on purpose. The pattern is **convert on touch**: the new logic reads the old shapes and writes only the new one on each continuation and genesis. Shapes are told apart by constructor tag: the demo's `SteppedCounter` keeps the original layout as constructor 0 (`Unstepped`), so existing counters decode unchanged, and adds `Stepped` as constructor 1.
 
 ## 5. Transactions
 
@@ -184,6 +196,7 @@ Attacks the protocol defends against, each backed by the invariants of §6.b:
 - **Migration re-creation / double spend.** The migration script binds each forwarded input to the `Upgrade` action and a `v2_address` continuation; a UTxO is spent once, and a migrated V1 UTxO cannot be re-created under a normal action. (I6)
 - **Malformed registry.** A malformed registry value makes every consumer reject (a liveness hazard), but it cannot be acted on. Governance is trusted to write well-formed maps. (I7)
 - **Fake registry.** The registry is read only from the settings UTxO carrying the settings NFT; a look-alike UTxO without the NFT is not accepted. (I8)
+- **Stranded state after a schema change.** Counters convert only when touched, so a logic that stops decoding a shape still held by some UTxO bricks it, and so does rolling back to a logic that cannot read the new shape. A forced logic must keep decoding every shape ever written (see §6.a). (I12)
 - **Closed registry.** Closing the settings instance burns its one-shot NFT, and the instance can never be relaunched. Unlike a malformed registry, this liveness failure is **permanent**: forced forwarders reject forever and opt-in V1 UTxOs lose their only value exit. See §6.a.
 
 ### 6.a Assumptions / out of scope
@@ -220,6 +233,7 @@ Attacks the protocol defends against, each backed by the invariants of §6.b:
 - **Tokenless UTxOs at a forwarder are stuck.** The demo logic rejects any forwarded input without the state token, and nothing else can spend it, so value paid straight to a forwarder address is locked for good. It was never extractable (a tick preserves value), but a production protocol may want a reclaim path in its logic.
 - **A forwarder's stake credential is unusable in the demo.** The logic rejects every certificate, withdrawal and vote naming the forwarder, including the legacy registration that needs no witness, so a tick fails in a transaction that also registers the forwarder that way. A protocol that stakes through its forwarder handles these items in its logic instead.
 - **Demo counters are open and permanent.** Anyone can mint a fresh counter (genesis needs no authorization), and burns are rejected, so a counter can never be closed.
+- **Old datum shapes are kept, not dropped.** No on-chain check can prove that every UTxO has converted, so a forced logic should decode every shape ever written. Governance may drop an old shape only after verifying off-chain (with an indexer, at the forwarder addresses) that no UTxO still holds it, accepting that a missed one is bricked. A rollback is a schema change too: repointing to an older logic strands the counters the newer one converted, unless the older logic also reads the newer shape.
 - **The protocol state's meaning is delegated.** The upgradeability predicates treat a forwarder's datum opaquely; the logic script defines it.
 - **Off-chain is out of scope in this pass.**
 
@@ -235,6 +249,7 @@ Attacks the protocol defends against, each backed by the invariants of §6.b:
 - **I8 — Registry authenticity.** The registry is read only from the settings UTxO identified by the settings NFT.
 - **I10 — Delegate registration is permanent.** A logic/migration script's `publish` handler returns `True` only for `RegisterCredential`; its stake credential can be registered but never deregistered or delegated.
 - **I11 — Genuine forwarded state (demo).** The counter logic ticks only inputs carrying exactly one state token of their forwarder, and admits a mint under the forwarder's policy only as one token paid to a fresh `count: 0` counter at the forwarder address.
+- **I12 — Datum continuity (demo).** `counter_logic_stepped` decodes both counter shapes, writes only `Stepped`, keeps the step on every tick, and converts an `Unstepped` counter with step 1.
 - **I9 — Composability.** The predicates assert only about their own credential (the input, policy, stake credential or voter they run for), the settings reference input, and the withdrawal key set (plus, for migration, the explicit `v2_address` continuation). They never assert total input/output counts, total value, or unrelated UTxOs (`ARCHITECTURE.md` §1.1).
 
 ### 6.c Completeness — when the predicates return `True` (must-accept)

@@ -4,6 +4,8 @@
  * CBOR constructor layout matching the Aiken blueprint:
  *   CounterDatum    = Constr 0 [count: Int, owner: Credential,
  *                              prev_input: Option<OutputReference>]
+ *   SteppedCounter  = Constr 0 [...CounterDatum]          (Unstepped)
+ *                   | Constr 1 [count, owner, prev_input, step: Int]
  *   CounterRedeemer = Tick=0 | Upgrade=1
  *   Registry        = Map<bytes, bytes>   (the settings datum's `current`;
  *                                          keys strictly ascending, values
@@ -22,7 +24,12 @@ import {
 } from "@meshsdk/core";
 
 import { credentialToData, type Credential } from "../common";
-import type { CounterDatum, OutputRef, Registry } from "./types";
+import type {
+  CounterDatum,
+  OutputRef,
+  Registry,
+  SteppedCounterDatum,
+} from "./types";
 
 export { credentialToData };
 
@@ -49,6 +56,16 @@ export function counterDatumToData(d: CounterDatum): Data {
 }
 
 /** The ordinary counter step, accepted by the forced logic and both versions. */
+/** Encode the `Stepped` shape that `counter_logic_stepped` writes. */
+export function steppedCounterDatumToData(d: SteppedCounterDatum): Data {
+  return mConStr1([
+    d.count,
+    credentialToData(d.owner),
+    prevInputToData(d.prevInput),
+    d.step,
+  ]);
+}
+
 export function tickRedeemer(): Data {
   return mConStr0([]);
 }
@@ -186,6 +203,36 @@ export function counterDatumFromUtxo(utxo: UTxO): CounterDatum {
     count: asInt(d.fields[0], "count"),
     owner: credentialFromJson(d.fields[1], "owner"),
     prevInput: optionalOutputRefFromJson(d.fields[2], "prevInput"),
+  };
+}
+
+/**
+ * Decode either counter shape: the original datum (step 1, as the stepped
+ * logic reads it) or `Stepped`. Throws on absence/malformation.
+ */
+export function steppedCounterFromUtxo(utxo: UTxO): SteppedCounterDatum {
+  if (!utxo.output.plutusData) {
+    throw new Error(
+      `The counter UTxO (${utxo.input.txHash}#${utxo.input.outputIndex}) has no inline datum.`,
+    );
+  }
+  const d = asConstr(
+    deserializeDatum(utxo.output.plutusData),
+    "the counter datum",
+  );
+  const original = d.constructor === 0 && d.fields.length === 3;
+  const stepped = d.constructor === 1 && d.fields.length === 4;
+  if (!original && !stepped) {
+    throw new Error(
+      "Malformed counter datum: expected Constr 0 [count, owner, prevInput] " +
+        "or Constr 1 [count, owner, prevInput, step].",
+    );
+  }
+  return {
+    count: asInt(d.fields[0], "count"),
+    owner: credentialFromJson(d.fields[1], "owner"),
+    prevInput: optionalOutputRefFromJson(d.fields[2], "prevInput"),
+    step: stepped ? asInt(d.fields[3], "step") : 1,
   };
 }
 

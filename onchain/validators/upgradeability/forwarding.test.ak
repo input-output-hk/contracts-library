@@ -20,6 +20,8 @@ use settings/types.{SettingsDatum}
 use upgradeability/counter.{CounterDatum, state_token_name}
 use upgradeability/counter_forwarder
 use upgradeability/counter_logic
+use upgradeability/counter_logic_stepped
+use upgradeability/stepped_counter.{Stepped, Unstepped}
 
 // ------------------------------------------------------------------- fixtures
 
@@ -429,5 +431,159 @@ test forwarder_rejects_a_proposal() fail {
       },
     },
     with_logic(placeholder),
+  )
+}
+
+// ------------------------------------------- datum evolution: stepped logic
+
+fn stepped_output(
+  count: Int,
+  prev_input: Option<OutputReference>,
+  step: Int,
+) -> Output {
+  Output {
+    ..counter_output(state_token(), 0, None),
+    datum: InlineDatum(
+      Stepped { count, owner: VerificationKey(vkh), prev_input, step },
+    ),
+  }
+}
+
+fn stepped_counter(index: Int, count: Int, step: Int) -> Input {
+  Input {
+    output_reference: ref(index),
+    output: stepped_output(count, None, step),
+  }
+}
+
+fn run_stepped(tx: Transaction) -> Bool {
+  let redeemer: Data = 0
+  counter_logic_stepped.counter_logic_stepped.withdraw(
+    settings_policy,
+    settings_name,
+    redeemer,
+    Script(logic_hash),
+    with_logic(tx),
+  )
+}
+
+/// Counters written under the first logic must decode as `Unstepped`.
+test unstepped_encodes_like_the_original_datum() {
+  let original: Data = CounterDatum {
+    count: 5,
+    owner: VerificationKey(vkh),
+    prev_input: Some(ref(1)),
+  }
+  let unstepped: Data = Unstepped {
+    count: 5,
+    owner: VerificationKey(vkh),
+    prev_input: Some(ref(1)),
+  }
+  original == unstepped
+}
+
+test stepped_logic_converts_an_original_counter_on_touch() {
+  run_stepped(
+    Transaction {
+      ..placeholder,
+      inputs: [genuine_counter(0, 5)],
+      outputs: [stepped_output(6, Some(ref(0)), 1)],
+    },
+  )
+}
+
+test stepped_logic_rejects_writing_the_original_shape() fail {
+  run_stepped(
+    Transaction {
+      ..placeholder,
+      inputs: [genuine_counter(0, 5)],
+      outputs: [counter_output(state_token(), 6, Some(ref(0)))],
+    },
+  )
+}
+
+test stepped_logic_ticks_by_the_step() {
+  run_stepped(
+    Transaction {
+      ..placeholder,
+      inputs: [stepped_counter(0, 5, 3)],
+      outputs: [stepped_output(8, Some(ref(0)), 3)],
+    },
+  )
+}
+
+test stepped_logic_rejects_changing_the_step() fail {
+  run_stepped(
+    Transaction {
+      ..placeholder,
+      inputs: [stepped_counter(0, 5, 3)],
+      outputs: [stepped_output(105, Some(ref(0)), 100)],
+    },
+  )
+}
+
+test stepped_logic_rejects_a_counterfeit_counter() fail {
+  run_stepped(
+    Transaction {
+      ..placeholder,
+      inputs: [
+        Input {
+          output_reference: ref(0),
+          output: Output {
+            ..stepped_output(5, None, 1),
+            value: assets.from_lovelace(2_000_000),
+          },
+        },
+      ],
+      outputs: [
+        Output {
+          ..stepped_output(6, Some(ref(0)), 1),
+          value: assets.from_lovelace(2_000_000),
+        },
+      ],
+    },
+  )
+}
+
+test stepped_logic_accepts_a_stepped_genesis() {
+  run_stepped(
+    Transaction {
+      ..placeholder,
+      outputs: [stepped_output(0, None, 2)],
+      mint: assets.from_asset(forwarder_hash, state_name, 1),
+    },
+  )
+}
+
+test stepped_logic_rejects_an_original_genesis() fail {
+  run_stepped(
+    Transaction {
+      ..placeholder,
+      outputs: [counter_output(state_token(), 0, None)],
+      mint: assets.from_asset(forwarder_hash, state_name, 1),
+    },
+  )
+}
+
+test stepped_logic_rejects_a_genesis_with_a_zero_step() fail {
+  run_stepped(
+    Transaction {
+      ..placeholder,
+      outputs: [stepped_output(0, None, 0)],
+      mint: assets.from_asset(forwarder_hash, state_name, 1),
+    },
+  )
+}
+
+/// Rolling back is not free: the first logic cannot read a converted counter.
+test original_logic_rejects_a_stepped_counter() fail {
+  run_logic(
+    with_logic(
+      Transaction {
+        ..placeholder,
+        inputs: [stepped_counter(0, 5, 1)],
+        outputs: [stepped_output(6, Some(ref(0)), 1)],
+      },
+    ),
   )
 }

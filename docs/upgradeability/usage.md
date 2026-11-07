@@ -19,7 +19,7 @@ Two mechanisms share this registry:
 | Part | Where |
 |---|---|
 | Registry + predicates | [`onchain/lib/upgradeability/`](../../onchain/lib/upgradeability/) |
-| Forced reference validators | [`onchain/validators/upgradeability/counter_forwarder.ak`](../../onchain/validators/upgradeability/counter_forwarder.ak), [`counter_logic.ak`](../../onchain/validators/upgradeability/counter_logic.ak) |
+| Forced reference validators | [`onchain/validators/upgradeability/counter_forwarder.ak`](../../onchain/validators/upgradeability/counter_forwarder.ak), [`counter_logic.ak`](../../onchain/validators/upgradeability/counter_logic.ak), [`counter_logic_stepped.ak`](../../onchain/validators/upgradeability/counter_logic_stepped.ak) |
 | Opt-in reference validators | [`onchain/validators/upgradeability/counter_v1.ak`](../../onchain/validators/upgradeability/counter_v1.ak), [`counter_migration.ak`](../../onchain/validators/upgradeability/counter_migration.ak), [`counter_v2.ak`](../../onchain/validators/upgradeability/counter_v2.ak) |
 | MeshJS builders | [`offchain/meshjs/lib/src/upgradeability/`](../../offchain/meshjs/lib/src/upgradeability/) |
 | On-chain unit tests | [`onchain/lib/upgradeability/upgradeability.test.ak`](../../onchain/lib/upgradeability/upgradeability.test.ak) |
@@ -38,6 +38,7 @@ The `counter_*` validators under `onchain/validators/upgradeability/` are a
 - [Forced: deploy a forwarder + logic](#forced-deploy-a-forwarder--logic)
 - [Opt-in: deploy V1 + migration + V2](#opt-in-deploy-v1--migration--v2)
 - [Upgrading](#upgrading)
+- [Evolving the datum (forced)](#evolving-the-datum-forced)
 - [Reading the registry](#reading-the-registry)
 - [Off-chain usage (MeshJS)](#off-chain-usage-meshjs)
 - [Gotchas and safety notes](#gotchas-and-safety-notes)
@@ -133,6 +134,41 @@ new logic (and, for opt-in, to migrate or exit) before it takes effect. The
 delay counts from the propose transaction's validity upper bound, which the
 proposer cannot backdate, so it holds even against malicious governance (see
 [settings spec §5](../settings/spec.md)).
+
+## Evolving the datum (forced)
+
+A forced repoint swaps the logic but leaves every UTxO where it is, with the
+datum it was written with. Aiken's typed decode is exact (a datum with an extra
+or a missing field does not decode), so a new logic that changes the schema
+must read the old shapes on purpose. Convert on touch:
+
+1. Give each shape its own constructor in one sum type, keeping the existing
+   layout as constructor 0 so current UTxOs decode unchanged.
+2. The new logic decodes any shape and writes only the newest one, on every
+   continuation and every genesis.
+3. Keep decoding the old shapes. Counters convert only when touched, and
+   nothing on-chain can show that all of them have, so dropping a shape bricks
+   any UTxO still holding it. Drop one only after verifying off-chain (an
+   indexer over the forwarder addresses) that none is left.
+
+The demo's `counter_logic_stepped` adds a `step` to the counter:
+
+```aiken
+pub type SteppedCounter {
+  Unstepped { count: Int, owner: Credential, prev_input: Option<OutputReference> }
+  Stepped { count: Int, owner: Credential, prev_input: Option<OutputReference>, step: Int }
+}
+```
+
+`Unstepped` encodes exactly like the original `CounterDatum`, so a repoint from
+`counter_logic` needs no migration: each counter becomes `Stepped` (step 1) at
+its next tick. Off-chain, `steppedCounterFromUtxo` reads either shape and
+`steppedCounterDatumToData` writes the new one.
+
+**Rollbacks are schema changes too.** Repointing back to `counter_logic`
+strands every counter the stepped logic already converted, because the first
+logic cannot read `Stepped`. Before rolling back, make sure the target logic
+reads every shape on chain.
 
 ## Reading the registry
 
