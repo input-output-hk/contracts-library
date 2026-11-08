@@ -10,6 +10,10 @@
  *   - dao/                DAO governance (proposal, stake, vote)
  *   - smart_wallet/       Smart wallet with pluggable authorization
  *   - event_triggered/    Tokenized bond (event-triggered assets)
+ *   - upgradeability/     Upgradeability (registry, delegate wiring)
+ *
+ * Examples (separate entry points, not re-exported here):
+ *   - examples/upgradeability/   The counter demo (`.../examples/upgradeability`)
  */
 
 export * from "./common";
@@ -23,3 +27,4 @@ export * from "./smart_wallet";
 export * from "./event_triggered";
 // Both submodules expose this encoder; retain the package's existing export.
 export { addressToData } from "./event_triggered";
+export * from "./upgradeability";

@@ -15,11 +15,13 @@ import {
   MeshTxBuilder,
   MeshWallet,
   serializeRewardAddress,
+  type PlutusScript,
   YaciProvider,
   type SlotConfig,
   type UTxO,
 } from "@meshsdk/core";
 import { Serialization } from "@meshsdk/core-cst";
+import { registerWithdrawalScript } from "@contracts-library/meshjs";
 
 // `INDEXER_URL` is the convention used by the shared devnet lifecycle script.
 export const STORE_URL =
@@ -29,6 +31,13 @@ export const STORE_URL =
 export const ADMIN_URL = process.env.YACI_ADMIN_URL ?? "http://localhost:10000";
 
 export const NETWORK_ID = 0;
+
+/**
+ * Validity window for settings propose transactions in the e2e suites. The
+ * settings delay counts from the end of this window, so it is kept short (the
+ * library default is 10 minutes); a fresh transaction lands well within it.
+ */
+export const PROPOSE_TTL_MS = 10_000;
 
 /** Pull the most informative message out of an error (axios bodies, etc.). */
 function describeError(err: unknown): string {
@@ -427,4 +436,30 @@ export async function registerStakeCredential(
     .complete();
   const hash = await payer.wallet.submitTx(await payer.wallet.signTx(tx, true));
   await waitForTx(provider, hash);
+}
+
+/**
+ * Register a script's stake credential with the Conway `reg_cert`, which runs
+ * the script's `publish` handler (unlike `registerStakeCredential`, whose
+ * legacy certificate needs no script approval).
+ */
+export async function registerScriptStakeCredential(
+  provider: YaciProvider,
+  payer: Account,
+  script: PlutusScript,
+): Promise<void> {
+  const builder = newTxBuilder(provider);
+  registerWithdrawalScript(builder, script, NETWORK_ID);
+  const collateral = await collateralOf(payer);
+  const tx = await builder
+    .txInCollateral(
+      collateral.input.txHash,
+      collateral.input.outputIndex,
+      collateral.output.amount,
+      collateral.output.address,
+    )
+    .changeAddress(payer.address)
+    .selectUtxosFrom(await payer.wallet.getUtxos())
+    .complete();
+  await waitForTx(provider, await signAndSubmit(payer, tx));
 }

@@ -6,6 +6,17 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./examples/upgradeability": {
+      "types": "./dist/examples/upgradeability/index.d.ts",
+      "import": "./dist/examples/upgradeability/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "dist",
     "src"
@@ -30,8 +41,8 @@
     "dao.proposal": "0222c427016359c662a5ec9da8548cd502ede975dfaee74127c4f44a",
     "dao.stake": "2590ef411a0d1524b803dd00fdc4cb47b0424d3f4054501cef00e975",
     "dao.vote": "159c194c38c731f22357da05d3f7ddd1078e80067222340a55789bf1",
-    "settings": "2404b296676c4ab96a657c873a5bf58d01c77c6021f380a481a9a0bd",
-    "settings_typed": "df77ce7f7d573025b2176af1efaa36ac27bfd324fd68be775c11c04a",
+    "settings": "5cade3aebd9b0f692b69a18c6eccd9b8eefcd58d1012f92e11f442cb",
+    "settings_typed": "6a919d56bcdc61db2aaf485bc2db76b75bc22a8508d68b085e732133",
     "smart_wallet": "fe17146bcf1942416c3ec2aa13e78b6343ae1af7552c22ceb72817f6",
     "smart_wallet.spending_limit": "628f18f26192e6e912fb131a9996fa3a2e35568bd6a0149470c32dbe",
     "smart_wallet.spending_window": "44b22663bbd76e3a6e32f3236c508e288c124a9100625c59920e17cc",
@@ -44,12 +55,18 @@
     "smart_wallet.asset_deny_list": "81cd174bf9738d6126471bcfe5616a282ff09a1522b6066b1e0c3665",
     "smart_wallet.asset_deposit_allow_list": "00a01f5e34d8a3b7a9ab3d5246e965e2062e65a28728ef8e9ff14d93",
     "smart_wallet.asset_deposit_deny_list": "d2e284d55c54f7c1076dcfee1218ac49e1e56b1e72d933024cf615eb",
-    "compiler": "aiken-v1.1.24+bacbeb3",
     "event_triggered.issuance": "0e1477ee0356f5c69376811ffff350ed7d5832992ee84dc1a4793396",
     "event_triggered.transfer": "0ad39115b868e3db8439c2da4a706c6b241d16ab49c5024083fa8b40",
     "event_triggered.third_party": "9f2108e60db114bc1a598dec9765500a8c3d55df5513b2fae56a20e3",
     "event_triggered.vault": "55f3e552aad55bb8c98c7764e6b45fb36b2c913dd46b903d96ba87c3",
     "event_triggered.coupon_policy": "f0da56d0617258734466ba0306cc2370822533bd96cd2753436b1a3c",
-    "event_triggered.vault_nft_policy": "601198710ff29674e394a0953a0c9a7f6905623d2fefcdba9aab7b5f"
+    "event_triggered.vault_nft_policy": "601198710ff29674e394a0953a0c9a7f6905623d2fefcdba9aab7b5f",
+    "upgradeability.counter_forwarder": "6dd87eedd60371f4aa531e232ae0b6bcbee90f6b6a2b7a569c1dd1da",
+    "upgradeability.counter_logic": "9052e1251b043447b94ef8cb7282b0a8840fa8c72cd986eb07136869",
+    "upgradeability.counter_logic_stepped": "01680b30076c004dd42ad544c89687a00e62134cd354cfa15dfd9bb2",
+    "upgradeability.counter_v1": "c1de05978e7aeefb9260d07e722e8fb3483c3364e1c84e1d60a3f397",
+    "upgradeability.counter_migration": "b7ce0f3f018c8a3dbb951612070cff544e1f0d5a55dc6fc47ca8d792",
+    "upgradeability.counter_v2": "fcd74c5dc5c510b1f93c46a53675e1d4e03cd7b0b8eb72c607130190",
+    "compiler": "aiken-v1.1.24+bacbeb3"
   }
 }

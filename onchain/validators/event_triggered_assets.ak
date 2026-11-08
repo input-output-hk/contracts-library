@@ -3,7 +3,7 @@
 
 use cardano/address.{Credential}
 use cardano/assets.{PolicyId}
-use cardano/certificate.{Certificate, RegisterCredential}
+use cardano/certificate.{Certificate}
 use cardano/transaction.{OutputReference, Transaction}
 use event_triggered/coupon
 use event_triggered/issuance as issuance_logic
@@ -16,18 +16,7 @@ use event_triggered/types.{
 }
 use event_triggered/vault as vault_logic
 use event_triggered/vault_nft as vault_nft_logic
-
-/// Every withdraw-0 stake credential must be registered before it can appear
-/// in a transaction's withdrawals, and after Conway registering a script
-/// credential requires that script's consent (09-DEVELOPING-MODULES, "Your
-/// credential must also carry a publish handler"). Each withdraw-0 validator
-/// below accepts the registration certificate and refuses every other one.
-fn accept_registration(redeemer: Certificate) -> Bool {
-  when redeemer is {
-    RegisterCredential { .. } -> True
-    _ -> False
-  }
-}
+use withdraw_zero.{accept_registration}
 
 /// Issuance logic (withdraw-0): the registration authority, the permissionless
 /// unit deposit, the coupon claim advance and the maturity retirement (see
