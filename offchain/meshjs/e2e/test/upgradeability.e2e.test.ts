@@ -26,25 +26,31 @@
  */
 
 import {
-  SETTINGS_TOKEN_NAME,
+  buildCloseTx,
   buildLaunchTx,
   buildProposeTx,
-  proposalTiming,
-  opaqueRedeemer,
-  readRegistry,
-  registryToData,
-  settingsDatumToData,
-  settingsScript as makeSettingsScript,
-  settingsScriptAddress,
-  buildCloseTx,
   buildRegistryApplyTx,
   buildRegistryProposeTx,
   deregisterWithdrawalScript,
+  settingsScript as makeSettingsScript,
+  opaqueRedeemer,
+  proposalTiming,
   type Registry,
+  readRegistry,
+  registryToData,
+  SETTINGS_TOKEN_NAME,
   type SettingsDatum,
   type SettingsRefParams,
+  settingsDatumToData,
+  settingsScriptAddress,
 } from "@contracts-library/meshjs";
 import {
+  buildCounterTickTx,
+  buildForwardMintTx,
+  buildForwardTx,
+  buildUpgradeTx,
+  COUNTER_STATE_TOKEN_NAME,
+  type CounterDatum,
   counterDatumFromUtxo,
   counterDatumToData,
   counterForwarderScript,
@@ -55,28 +61,23 @@ import {
   counterScriptHash,
   counterV1Script,
   counterV2Script,
+  type SteppedCounterDatum,
   steppedCounterDatumToData,
   steppedCounterFromUtxo,
   tickRedeemer,
   upgradeRedeemer,
-  buildCounterTickTx,
-  buildForwardMintTx,
-  buildForwardTx,
-  COUNTER_STATE_TOKEN_NAME,
-  buildUpgradeTx,
-  type CounterDatum,
-  type SteppedCounterDatum,
 } from "@contracts-library/meshjs/examples/upgradeability";
 import {
-  resolveScriptHash,
-  serializeRewardAddress,
   type Asset,
   type Data,
   type PlutusScript,
+  resolveScriptHash,
+  serializeRewardAddress,
   type UTxO,
 } from "@meshsdk/core";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
+  type Account,
   chainNowMs,
   collateralOf,
   devnetReachable,
@@ -84,15 +85,23 @@ import {
   fundedAccount,
   makeProvider,
   NETWORK_ID,
-  PROPOSE_TTL_MS,
   newTxBuilder,
+  PROPOSE_TTL_MS,
   registerScriptStakeCredential,
   scriptOutputOf,
   signAndSubmit,
   waitForTx,
   waitUntilChainTimeMs,
-  type Account,
 } from "../src/devnet";
+
+/** Unwrap a value the suite setup guarantees, failing with a named error
+ * instead of a non-null assertion (biome `noNonNullAssertion`). */
+function must<T>(value: T | undefined | null, what: string): T {
+  if (value === undefined || value === null) {
+    throw new Error(`expected ${what} to be set`);
+  }
+  return value;
+}
 
 const reachable = await devnetReachable();
 if (!reachable) {
@@ -227,11 +236,14 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
 
   /** Mint the settings NFT and lock the registry at the settings address. */
   async function launchSettings(registry: Registry): Promise<UTxO> {
-    const seedUtxo = (await governor.wallet.getUtxos()).find(
-      (u) =>
-        u.input.txHash === seedRef.txHash &&
-        u.input.outputIndex === seedRef.outputIndex,
-    )!;
+    const seedUtxo = must(
+      (await governor.wallet.getUtxos()).find(
+        (u) =>
+          u.input.txHash === seedRef.txHash &&
+          u.input.outputIndex === seedRef.outputIndex,
+      ),
+      "seed UTxO",
+    );
     const mintTx = await buildLaunchTx({
       txBuilder: newTxBuilder(provider),
       script: settingsScript,
@@ -262,7 +274,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
     const proposeTx = await buildRegistryProposeTx({
       txBuilder: newTxBuilder(provider),
       script: settingsScript,
-      settingsUtxo: settingsUtxo!,
+      settingsUtxo: must(settingsUtxo, "settings UTxO"),
       datum: settingsDatum,
       now: proposeNow,
       ttlMs: PROPOSE_TTL_MS,
@@ -295,7 +307,9 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
       next: registryToData(next),
       nextApply,
     };
-    await waitUntilChainTimeMs(proposedDatum.nextApply! + TIME_SLACK);
+    await waitUntilChainTimeMs(
+      must(proposedDatum.nextApply, "nextApply") + TIME_SLACK,
+    );
 
     const applyTx = await buildRegistryApplyTx({
       txBuilder: newTxBuilder(provider),
@@ -365,7 +379,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
       txBuilder: newTxBuilder(provider),
       forwarderScript,
       logicAuthorizer: { scriptCbor: logic.code },
-      settingsUtxo: settingsUtxo!,
+      settingsUtxo: must(settingsUtxo, "settings UTxO"),
       owner: aliceOwner(),
       lovelace: 3_000_000n,
       utxos: await alice.wallet.getUtxos(),
@@ -414,7 +428,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
         .withdrawalScript(migrationScript.code)
         .withdrawalRedeemerValue(opaqueRedeemer());
     }
-    const settings = p.settings ?? settingsUtxo!;
+    const settings = p.settings ?? must(settingsUtxo, "settings UTxO");
     tb.readOnlyTxInReference(settings.input.txHash, settings.input.outputIndex);
     for (const out of p.outputs) {
       tb.txOut(out.address, out.amount).txOutInlineDatumValue(
@@ -482,8 +496,8 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
       .withdrawalScript(logic.code)
       .withdrawalRedeemerValue(opaqueRedeemer());
     tb.readOnlyTxInReference(
-      settingsUtxo!.input.txHash,
-      settingsUtxo!.input.outputIndex,
+      must(settingsUtxo, "settings UTxO").input.txHash,
+      must(settingsUtxo, "settings UTxO").input.outputIndex,
     );
     for (const out of p.outputs) {
       tb.txOut(out.address, out.amount).txOutInlineDatumValue(
@@ -529,8 +543,8 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
       txBuilder: newTxBuilder(provider),
       forwarderScript,
       logicAuthorizer: { scriptCbor: logicAuthorizerCbor },
-      forwarderUtxo: forwarderUtxo!,
-      settingsUtxo: settingsUtxo!,
+      forwarderUtxo: must(forwarderUtxo, "forwarder UTxO"),
+      settingsUtxo: must(settingsUtxo, "settings UTxO"),
       utxos: await alice.wallet.getUtxos(),
       changeAddress: alice.address,
       collateralUtxo: await collateralOf(alice),
@@ -543,16 +557,20 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
   // ------------------------------------------------------------ tests
 
   it("launches the settings instance with the forwarder registered", () => {
-    expect(readRegistry(settingsUtxo!).get(forwarderHash)).toBe(logicHash);
+    expect(
+      readRegistry(must(settingsUtxo, "settings UTxO")).get(forwarderHash),
+    ).toBe(logicHash);
   });
 
   it("locks the forwarder and V1 state UTxOs", () => {
-    expect(counterDatumFromUtxo(forwarderUtxo!)).toEqual({
-      count: 0,
-      owner: aliceOwner(),
-      prevInput: null,
-    });
-    expect(counterDatumFromUtxo(v1Utxo!)).toEqual({
+    expect(counterDatumFromUtxo(must(forwarderUtxo, "forwarder UTxO"))).toEqual(
+      {
+        count: 0,
+        owner: aliceOwner(),
+        prevInput: null,
+      },
+    );
+    expect(counterDatumFromUtxo(must(v1Utxo, "V1 UTxO"))).toEqual({
       count: 5,
       owner: aliceOwner(),
       prevInput: null,
@@ -584,7 +602,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
   });
 
   it("ticks the forwarder through the registered logic (forced)", async () => {
-    const spent = forwarderUtxo!;
+    const spent = must(forwarderUtxo, "forwarder UTxO");
     const continuation = await forwardTick(logicScript.code);
     expect(counterDatumFromUtxo(continuation)).toEqual({
       count: 1,
@@ -595,11 +613,11 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
   });
 
   it("ticks V1 natively without consulting the registry", async () => {
-    const spent = v1Utxo!;
+    const spent = must(v1Utxo, "V1 UTxO");
     const tx = await buildCounterTickTx({
       txBuilder: newTxBuilder(provider),
       script: v1Script,
-      counterUtxo: v1Utxo!,
+      counterUtxo: must(v1Utxo, "V1 UTxO"),
       utxos: await alice.wallet.getUtxos(),
       changeAddress: alice.address,
       collateralUtxo: await collateralOf(alice),
@@ -622,7 +640,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
         [v1Hash, migrationHash],
       ]),
     );
-    const registry = readRegistry(settingsUtxo!);
+    const registry = readRegistry(must(settingsUtxo, "settings UTxO"));
     expect(registry.get(forwarderHash)).toBe(logicHash);
     expect(registry.get(v1Hash)).toBe(migrationHash);
   });
@@ -800,8 +818,8 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
       txBuilder: newTxBuilder(provider),
       v1Script,
       migrationAuthorizer: { scriptCbor: migrationScript.code },
-      v1Utxo: v1Utxo!,
-      settingsUtxo: settingsUtxo!,
+      v1Utxo: must(v1Utxo, "V1 UTxO"),
+      settingsUtxo: must(settingsUtxo, "settings UTxO"),
       v2Address: v2Addr,
       utxos: await alice.wallet.getUtxos(),
       changeAddress: alice.address,
@@ -813,7 +831,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
     expect(counterDatumFromUtxo(v2Utxo)).toEqual({
       count: 6,
       owner: aliceOwner(),
-      prevInput: prevOf(v1Utxo!),
+      prevInput: prevOf(must(v1Utxo, "V1 UTxO")),
     });
   });
 
@@ -821,7 +839,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
     const tx = await buildCounterTickTx({
       txBuilder: newTxBuilder(provider),
       script: v2Script,
-      counterUtxo: v2Utxo!,
+      counterUtxo: must(v2Utxo, "V2 UTxO"),
       utxos: await alice.wallet.getUtxos(),
       changeAddress: alice.address,
       collateralUtxo: await collateralOf(alice),
@@ -848,7 +866,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
           v1Script,
           migrationAuthorizer: { scriptCbor: migrationScript.code },
           v1Utxo: bobUtxo,
-          settingsUtxo: settingsUtxo!,
+          settingsUtxo: must(settingsUtxo, "settings UTxO"),
           v2Address: v2Addr,
           utxos: await alice.wallet.getUtxos(),
           changeAddress: alice.address,
@@ -875,8 +893,8 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
           txBuilder: newTxBuilder(provider),
           forwarderScript,
           logicAuthorizer: { scriptCbor: migrationScript.code },
-          forwarderUtxo: forwarderUtxo!,
-          settingsUtxo: settingsUtxo!,
+          forwarderUtxo: must(forwarderUtxo, "forwarder UTxO"),
+          settingsUtxo: must(settingsUtxo, "settings UTxO"),
           utxos: await alice.wallet.getUtxos(),
           changeAddress: alice.address,
           collateralUtxo: await collateralOf(alice),
@@ -1107,7 +1125,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
           txBuilder: newTxBuilder(provider),
           forwarderScript,
           logicAuthorizer: { scriptCbor: logicScript.code },
-          forwarderUtxo: forwarderUtxo!,
+          forwarderUtxo: must(forwarderUtxo, "forwarder UTxO"),
           settingsUtxo: forged,
           utxos: await alice.wallet.getUtxos(),
           changeAddress: alice.address,
@@ -1125,7 +1143,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
     const proposeTx = await buildProposeTx({
       txBuilder: newTxBuilder(provider),
       script: settingsScript,
-      settingsUtxo: settingsUtxo!,
+      settingsUtxo: must(settingsUtxo, "settings UTxO"),
       datum: settingsDatum,
       newValue: 5,
       now: proposeNow,
@@ -1156,7 +1174,9 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
       next: 5,
       nextApply,
     };
-    await waitUntilChainTimeMs(proposedDatum.nextApply! + TIME_SLACK);
+    await waitUntilChainTimeMs(
+      must(proposedDatum.nextApply, "nextApply") + TIME_SLACK,
+    );
     const applyTx = await buildRegistryApplyTx({
       txBuilder: newTxBuilder(provider),
       script: settingsScript,
@@ -1181,8 +1201,8 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
         txBuilder: newTxBuilder(provider),
         forwarderScript,
         logicAuthorizer: { scriptCbor: logicScript.code },
-        forwarderUtxo: forwarderUtxo!,
-        settingsUtxo: settingsUtxo!,
+        forwarderUtxo: must(forwarderUtxo, "forwarder UTxO"),
+        settingsUtxo: must(settingsUtxo, "settings UTxO"),
         utxos: await alice.wallet.getUtxos(),
         changeAddress: alice.address,
         collateralUtxo: await collateralOf(alice),
@@ -1211,7 +1231,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
     const closeTx = await buildCloseTx({
       txBuilder: newTxBuilder(provider),
       script: settingsScript,
-      settingsUtxo: settingsUtxo!,
+      settingsUtxo: must(settingsUtxo, "settings UTxO"),
       utxos: await governor.wallet.getUtxos(),
       changeAddress: governor.address,
       collateralUtxo: await collateralOf(governor),
@@ -1224,7 +1244,9 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
     // (the earlier forged look-alike has no NFT), and the instance can never
     // be relaunched (the seed UTxO is spent).
     const nftUnit = counterParams.settingsPolicy + SETTINGS_TOKEN_NAME;
-    const remaining = await provider.fetchAddressUTxOs(settingsAddr!);
+    const remaining = await provider.fetchAddressUTxOs(
+      must(settingsAddr, "settings address"),
+    );
     expect(
       remaining.some((u) =>
         u.output.amount.some((asset) => asset.unit === nftUnit),
@@ -1239,7 +1261,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
           forwarderScript,
           logicAuthorizer: { scriptCbor: logicScript.code },
           forwarderUtxo: ticked,
-          settingsUtxo: settingsUtxo!,
+          settingsUtxo: must(settingsUtxo, "settings UTxO"),
           utxos: await alice.wallet.getUtxos(),
           changeAddress: alice.address,
           collateralUtxo: await collateralOf(alice),

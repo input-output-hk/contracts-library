@@ -199,6 +199,8 @@ export interface ChainTip {
   readonly slot: number;
   /** POSIX time of the tip block, in milliseconds. */
   readonly timeMs: number;
+  /** Block height of the tip. */
+  readonly height: number;
 }
 
 /** Extract the listen port of one `[serve.<section>]` from a dolos.toml. */
@@ -625,11 +627,11 @@ export class TrixDevnet {
   async tip(): Promise<ChainTip> {
     const res = await fetch(`${this.minibfUrl}/blocks/latest`);
     if (!res.ok) throw new Error(`tip query failed: HTTP ${res.status}`);
-    const b = (await res.json()) as { slot?: number };
+    const b = (await res.json()) as { slot?: number; height?: number };
     const slot = b.slot ?? 0;
     const timeMs =
       this.slotConfig.zeroTimeMs + slot * this.slotConfig.slotLengthMs;
-    return { slot, timeMs };
+    return { slot, timeMs, height: b.height ?? 0 };
   }
 
   /**
