@@ -356,7 +356,9 @@ test("launches, proposes, applies, and closes", async () => {
 
   // 2. Propose — next = B, next_apply = upper bound + apply_delay.
   const proposeBound = await devnet.validUntil(PROPOSE_TTL_MS);
-  await confirm(proposeTx(inst, VALUE_B, proposeBound.timeMs, proposeBound.slot));
+  await confirm(
+    proposeTx(inst, VALUE_B, proposeBound.timeMs, proposeBound.slot),
+  );
   const nextApplyMs = proposeBound.timeMs + APPLY_DELAY;
 
   // 3. Wait for the proposal to mature, then apply — current = B.
@@ -404,7 +406,9 @@ test("rejects apply before next_apply", async () => {
   await confirm(launchTx(inst, VALUE_A));
 
   const proposeBound = await devnet.validUntil(PROPOSE_TTL_MS);
-  await confirm(proposeTx(inst, VALUE_B, proposeBound.timeMs, proposeBound.slot));
+  await confirm(
+    proposeTx(inst, VALUE_B, proposeBound.timeMs, proposeBound.slot),
+  );
 
   // Apply immediately, without waiting for the delay to elapse.
   const tip = await devnet.tip();
@@ -450,7 +454,9 @@ test("rejects apply with an invalid continuation output index", async () => {
   await confirm(launchTx(inst, VALUE_A));
 
   const proposeBound = await devnet.validUntil(PROPOSE_TTL_MS);
-  await confirm(proposeTx(inst, VALUE_B, proposeBound.timeMs, proposeBound.slot));
+  await confirm(
+    proposeTx(inst, VALUE_B, proposeBound.timeMs, proposeBound.slot),
+  );
   const nextApplyMs = proposeBound.timeMs + APPLY_DELAY;
 
   await devnet.waitForChainTimeMs(nextApplyMs + 3_000);
