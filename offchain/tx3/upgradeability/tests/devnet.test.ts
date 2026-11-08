@@ -10,6 +10,11 @@ import {
 } from "../../devnet/utils";
 import {
   SETTINGS_TOKEN_NAME,
+  settingsScript,
+  settingsScriptAddress,
+  type SettingsParams,
+} from "@contracts-library/meshjs";
+import {
   counterForwarderScript,
   counterLogicScript,
   counterMigrationScript,
@@ -17,10 +22,7 @@ import {
   counterScriptHash,
   counterV1Script,
   counterV2Script,
-  settingsScript,
-  settingsScriptAddress,
-  type SettingsParams,
-} from "@contracts-library/meshjs";
+} from "@contracts-library/meshjs/examples/upgradeability";
 import { resolveScriptHash } from "@meshsdk/core";
 import { Party, type SubmittedTx, type TxBuilder } from "tx3-sdk";
 import { Client } from "../codegen/ts-client/upgradeability/protocol";

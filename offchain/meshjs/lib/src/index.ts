@@ -10,7 +10,10 @@
  *   - dao/                DAO governance (proposal, stake, vote)
  *   - smart_wallet/       Smart wallet with pluggable authorization
  *   - event_triggered/    Tokenized bond (event-triggered assets)
- *   - upgradeability/     Upgradeability (forced forwarder, opt-in migration)
+ *   - upgradeability/     Upgradeability (registry, delegate wiring)
+ *
+ * Examples (separate entry points, not re-exported here):
+ *   - examples/upgradeability/   The counter demo (`.../examples/upgradeability`)
  */
 
 export * from "./common";

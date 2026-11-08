@@ -22,7 +22,8 @@ Two mechanisms share this registry:
 | Forced reference validators | [`onchain/validators/upgradeability/counter_forwarder.ak`](../../onchain/validators/upgradeability/counter_forwarder.ak), [`counter_logic.ak`](../../onchain/validators/upgradeability/counter_logic.ak), [`counter_logic_stepped.ak`](../../onchain/validators/upgradeability/counter_logic_stepped.ak) |
 | Demo helpers | [`onchain/validators/upgradeability/counter.ak`](../../onchain/validators/upgradeability/counter.ak), [`stepped_counter.ak`](../../onchain/validators/upgradeability/stepped_counter.ak) |
 | Opt-in reference validators | [`onchain/validators/upgradeability/counter_v1.ak`](../../onchain/validators/upgradeability/counter_v1.ak), [`counter_migration.ak`](../../onchain/validators/upgradeability/counter_migration.ak), [`counter_v2.ak`](../../onchain/validators/upgradeability/counter_v2.ak) |
-| MeshJS builders | [`offchain/meshjs/lib/src/upgradeability/`](../../offchain/meshjs/lib/src/upgradeability/) |
+| MeshJS library | [`offchain/meshjs/lib/src/upgradeability/`](../../offchain/meshjs/lib/src/upgradeability/) (registry, `addDelegateInvocation`) |
+| MeshJS demo builders | [`offchain/meshjs/lib/src/examples/upgradeability/`](../../offchain/meshjs/lib/src/examples/upgradeability/) (`@contracts-library/meshjs/examples/upgradeability`) |
 | On-chain unit tests | Library: [`onchain/lib/upgradeability/upgradeability.test.ak`](../../onchain/lib/upgradeability/upgradeability.test.ak). Demo: [`counter.test.ak`](../../onchain/validators/upgradeability/counter.test.ak), [`forwarding.test.ak`](../../onchain/validators/upgradeability/forwarding.test.ak), [`delegates.test.ak`](../../onchain/validators/upgradeability/delegates.test.ak) |
 | Unit tests (MeshJS) | [`offchain/meshjs/lib/test/upgradeability.test.ts`](../../offchain/meshjs/lib/test/upgradeability.test.ts) |
 | e2e (Yaci devnet) | [`offchain/meshjs/e2e/test/upgradeability.e2e.test.ts`](../../offchain/meshjs/e2e/test/upgradeability.e2e.test.ts) |
@@ -239,8 +240,28 @@ its own redeemer.
 
 ## Off-chain usage (MeshJS)
 
-The builders live in `offchain/meshjs/lib/src/upgradeability/` and follow the
-settings conventions (a `MeshTxBuilder` + UTxOs in, cbor string out).
+The package root exports the reusable part: the registry codec and builders,
+and `addDelegateInvocation`, which wires what every forwarded or migrated
+transaction needs (the registered delegate's withdraw-0, checked against the
+registry, and the settings reference input). Your protocol's builders add their
+own inputs, outputs and mints around it:
+
+```ts
+import { addDelegateInvocation } from "@contracts-library/meshjs";
+
+addDelegateInvocation({
+  txBuilder,
+  ownHash: forwarderHash, // or the V1 hash, for an opt-in migration
+  delegateAuthorizer: { scriptCbor: logicScript.code }, // or { reference }
+  settingsUtxo,
+});
+// ...then spend / mint / pay as your protocol requires.
+```
+
+The `counter_*` demo builders below are built that way. They are a separate
+entry point, `@contracts-library/meshjs/examples/upgradeability`, not part of
+the library API, and follow the settings conventions (a `MeshTxBuilder` +
+UTxOs in, cbor string out).
 
 ### 1. Parameterize and hash the scripts
 
@@ -253,7 +274,7 @@ import {
   counterScriptHash,
   counterV1Script,
   counterV2Script,
-} from "@contracts-library/meshjs";
+} from "@contracts-library/meshjs/examples/upgradeability";
 
 const forwarder = counterForwarderScript(params);
 const forwarderHash = counterScriptHash(forwarder); // the registry key
@@ -406,10 +427,12 @@ The Tx3 reference protocol has its own devnet suite
   script or changes the input's token bundle: because the forced path is
   permissionless, anyone could otherwise bloat the UTxO or smuggle/drop
   tokens. Keep both checks when reusing the pattern.
-- **Off-chain: MeshJS and Tx3 ship.** The MeshJS builders
-  (`buildCounterTickTx`, `buildForwardTx`, `buildUpgradeTx`) live in
-  `offchain/meshjs/lib/src/upgradeability/`; registry changes reuse the settings
-  builders (`buildRegistryProposeTx` / `buildRegistryApplyTx`). The Tx3
+- **Off-chain: MeshJS and Tx3 ship.** The MeshJS library
+  (`offchain/meshjs/lib/src/upgradeability/`) has the registry builders
+  (`buildRegistryProposeTx` / `buildRegistryApplyTx`, reusing settings) and
+  `addDelegateInvocation`; the demo builders (`buildCounterTickTx`,
+  `buildForwardTx`, `buildUpgradeTx`) live in
+  `offchain/meshjs/lib/src/examples/upgradeability/`. The Tx3
   reference protocol and its devnet tests live in
   [`offchain/tx3/upgradeability/`](../../offchain/tx3/upgradeability/).
 

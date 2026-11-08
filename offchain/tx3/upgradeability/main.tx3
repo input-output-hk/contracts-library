@@ -2,7 +2,7 @@
 //
 // Reference Tx3 implementation of the upgradeability protocol, mirroring the
 // on-chain validators in `onchain/validators/upgradeability/` and the MeshJS
-// builders in `offchain/meshjs/lib/src/upgradeability/`.
+// demo builders in `offchain/meshjs/lib/src/examples/upgradeability/`.
 //
 // The registry lives as the `current` value of a settings UTxO (the settings
 // script from `settings/main.tx3`), typed here as `Map<Bytes, Bytes>` so it

@@ -6,6 +6,17 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./examples/upgradeability": {
+      "types": "./dist/examples/upgradeability/index.d.ts",
+      "import": "./dist/examples/upgradeability/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "dist",
     "src"
