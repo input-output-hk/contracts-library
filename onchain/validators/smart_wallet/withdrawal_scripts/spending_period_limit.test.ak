@@ -1,7 +1,7 @@
 use aiken/crypto.{ScriptHash}
 use aiken/interval
 use cardano/address.{Credential, Script, from_script}
-use cardano/assets.{Value}
+use cardano/assets.{Assets}
 use cardano/certificate.{Certificate, RegisterCredential, UnregisterCredential}
 use cardano/transaction.{
   InlineDatum, Input, Output, OutputReference, Transaction, placeholder,
@@ -22,11 +22,11 @@ const tx_id =
 
 const wallet_token = "wallet"
 
-fn nft() -> assets.Value {
+fn nft() -> assets.Assets {
   assets.from_asset(wallet_policy, wallet_token, 1)
 }
 
-fn wallet_value(value: assets.Value) -> assets.Value {
+fn wallet_value(value: assets.Assets) -> assets.Assets {
   assets.merge(value, nft())
 }
 
@@ -43,7 +43,10 @@ fn state_data(s: SpendingPeriodState) -> Data {
   d
 }
 
-fn wallet_output_with(value: Value, spenders: Pairs<ScriptHash, Data>) -> Output {
+fn wallet_output_with(
+  value: Assets,
+  spenders: Pairs<ScriptHash, Data>,
+) -> Output {
   Output {
     address: from_script(wallet_policy),
     value: wallet_value(value),
@@ -52,18 +55,18 @@ fn wallet_output_with(value: Value, spenders: Pairs<ScriptHash, Data>) -> Output
   }
 }
 
-fn wallet_output(value: Value, period_state: SpendingPeriodState) -> Output {
+fn wallet_output(value: Assets, period_state: SpendingPeriodState) -> Output {
   wallet_output_with(value, [Pair(a, state_data(period_state))])
 }
 
-fn wallet_input_with(value: Value, spenders: Pairs<ScriptHash, Data>) -> Input {
+fn wallet_input_with(value: Assets, spenders: Pairs<ScriptHash, Data>) -> Input {
   Input {
     output_reference: OutputReference { transaction_id: tx_id, output_index: 0 },
     output: wallet_output_with(value, spenders),
   }
 }
 
-fn wallet_input(value: Value, period_state: SpendingPeriodState) -> Input {
+fn wallet_input(value: Assets, period_state: SpendingPeriodState) -> Input {
   wallet_input_with(value, [Pair(a, state_data(period_state))])
 }
 

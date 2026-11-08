@@ -1,7 +1,7 @@
 use aiken/fuzz
 use aiken/interval
 use cardano/address.{Script, from_script}
-use cardano/assets.{Value}
+use cardano/assets.{Assets}
 use cardano/transaction.{
   InlineDatum, Input, NoDatum, Output, OutputReference, Transaction, placeholder,
 }
@@ -24,15 +24,15 @@ const max_spend = 100
 
 const wallet_token = "wallet"
 
-fn nft() -> Value {
+fn nft() -> Assets {
   assets.from_asset(wallet_policy, wallet_token, 1)
 }
 
-fn wallet_value(value: Value) -> Value {
+fn wallet_value(value: Assets) -> Assets {
   assets.merge(value, nft())
 }
 
-fn wallet_output(value: Value, period_state: SpendingPeriodState) -> Output {
+fn wallet_output(value: Assets, period_state: SpendingPeriodState) -> Output {
   Output {
     address: from_script(wallet_policy),
     value: wallet_value(value),
@@ -46,7 +46,7 @@ fn wallet_output(value: Value, period_state: SpendingPeriodState) -> Output {
   }
 }
 
-fn wallet_input(value: Value, period_state: SpendingPeriodState) -> Input {
+fn wallet_input(value: Assets, period_state: SpendingPeriodState) -> Input {
   Input {
     output_reference: OutputReference { transaction_id: tx_id, output_index: 0 },
     output: wallet_output(value, period_state),

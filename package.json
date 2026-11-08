@@ -16,7 +16,7 @@
     "prepare": "husky"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.2.6",
+    "@biomejs/biome": "^2.6.6",
     "husky": "^9.1.7",
     "lint-staged": "^16.1.5"
   },

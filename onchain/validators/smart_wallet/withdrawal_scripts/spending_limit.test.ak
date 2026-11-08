@@ -12,7 +12,7 @@ const b = #"22222222222222222222222222222222222222222222222222222222"
 
 const wallet_token = "wallet"
 
-fn nft() -> assets.Value {
+fn nft() -> assets.Assets {
   assets.from_asset(b, wallet_token, 1)
 }
 

@@ -96,7 +96,7 @@ fn cert_datum(
   CertificateDatum { start, commit, cnt_policy: cnt }
 }
 
-fn cert_value(k: Int) -> assets.Value {
+fn cert_value(k: Int) -> assets.Assets {
   assets.from_asset(cip_policy, schedule.step_name(k), 1)
     |> assets.merge(assets.from_lovelace(2_000_000))
 }

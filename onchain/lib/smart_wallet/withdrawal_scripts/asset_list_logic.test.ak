@@ -1,6 +1,6 @@
 use aiken/fuzz
 use cardano/address.{Script, from_script}
-use cardano/assets.{AssetName, PolicyId, Value}
+use cardano/assets.{AssetName, Assets, PolicyId}
 use cardano/fuzz as cardano_fuzz
 use cardano/transaction.{
   Input, NoDatum, Output, OutputReference, Transaction, placeholder,
@@ -25,11 +25,11 @@ const tx_id =
 
 const wallet_token = "wallet"
 
-fn nft() -> Value {
+fn nft() -> Assets {
   assets.from_asset(wallet_policy, wallet_token, 1)
 }
 
-fn wallet_input(value: Value) -> Input {
+fn wallet_input(value: Assets) -> Input {
   Input {
     output_reference: OutputReference { transaction_id: tx_id, output_index: 0 },
     output: Output {
@@ -41,7 +41,7 @@ fn wallet_input(value: Value) -> Input {
   }
 }
 
-fn wallet_output(value: Value) -> Output {
+fn wallet_output(value: Assets) -> Output {
   Output {
     address: from_script(wallet_policy),
     value: assets.merge(value, nft()),
@@ -51,7 +51,7 @@ fn wallet_output(value: Value) -> Output {
 }
 
 /// An NFT-less output at the wallet address: not authenticated wallet value.
-fn stray_output(value: Value) -> Output {
+fn stray_output(value: Assets) -> Output {
   Output {
     address: from_script(wallet_policy),
     value,
@@ -60,7 +60,7 @@ fn stray_output(value: Value) -> Output {
   }
 }
 
-fn tx(input: Value, output: Value) -> Transaction {
+fn tx(input: Assets, output: Assets) -> Transaction {
   Transaction {
     ..placeholder,
     inputs: [wallet_input(input)],
@@ -68,11 +68,11 @@ fn tx(input: Value, output: Value) -> Transaction {
   }
 }
 
-fn lovelace(quantity: Int) -> Value {
+fn lovelace(quantity: Int) -> Assets {
   assets.from_lovelace(quantity)
 }
 
-fn holding(policy: PolicyId, name: AssetName, quantity: Int) -> Value {
+fn holding(policy: PolicyId, name: AssetName, quantity: Int) -> Assets {
   assets.from_lovelace(2_000_000) |> assets.add(policy, name, quantity)
 }
 

@@ -1,7 +1,7 @@
 use aiken/fuzz
 use aiken/interval
 use cardano/address.{Address, VerificationKey, from_script, with_delegation_key}
-use cardano/assets.{Value}
+use cardano/assets.{Assets}
 use cardano/transaction.{
   DatumHash, InlineDatum, Input, Output, OutputReference, Transaction,
   placeholder,
@@ -39,7 +39,7 @@ fn datum() -> VestingDatum {
   }
 }
 
-fn input_with(d: VestingDatum, value: Value, index: Int) -> Input {
+fn input_with(d: VestingDatum, value: Assets, index: Int) -> Input {
   Input {
     output_reference: OutputReference {
       transaction_id: tx_id,
@@ -54,7 +54,7 @@ fn input_with(d: VestingDatum, value: Value, index: Int) -> Input {
   }
 }
 
-fn output_with(d: VestingDatum, value: Value) -> Output {
+fn output_with(d: VestingDatum, value: Assets) -> Output {
   Output {
     address: from_script(own_script),
     value,
@@ -462,14 +462,14 @@ fn staked(stake: ByteArray) -> Address {
 fn input_at(
   address: Address,
   d: VestingDatum,
-  value: Value,
+  value: Assets,
   index: Int,
 ) -> Input {
   let input = input_with(d, value, index)
   Input { ..input, output: Output { ..input.output, address } }
 }
 
-fn output_at(address: Address, d: VestingDatum, value: Value) -> Output {
+fn output_at(address: Address, d: VestingDatum, value: Assets) -> Output {
   Output { ..output_with(d, value), address }
 }
 

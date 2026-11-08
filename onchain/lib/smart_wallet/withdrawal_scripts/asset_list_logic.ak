@@ -15,7 +15,7 @@
 use aiken/collection/list
 use aiken/collection/pairs
 use cardano/address.{Credential, Script}
-use cardano/assets.{AssetName, PolicyId, Value, has_nft}
+use cardano/assets.{AssetName, Assets, PolicyId, has_nft}
 use cardano/transaction.{Output, Transaction}
 
 /// Allow check: every asset class that moves must be authorised by `allowed`.
@@ -52,8 +52,8 @@ pub fn no_denied_assets_moved(
 
 /// Every class of `side` whose quantity changed relative to `other` is allowed.
 fn classes_ok(
-  side: Value,
-  other: Value,
+  side: Assets,
+  other: Assets,
   allowed: Pairs<PolicyId, List<AssetName>>,
 ) -> Bool {
   assets.reduce(
@@ -74,8 +74,8 @@ fn classes_ok(
 /// Every class of `side` whose quantity changed relative to `other` is not
 /// denied.
 fn classes_not_denied(
-  side: Value,
-  other: Value,
+  side: Assets,
+  other: Assets,
   denied: Pairs<PolicyId, List<AssetName>>,
 ) -> Bool {
   assets.reduce(
@@ -121,7 +121,7 @@ fn wallet_value(
   outputs: List<Output>,
   wallet: Credential,
   wallet_token_name: AssetName,
-) -> Value {
+) -> Assets {
   expect Script(wallet_hash) = wallet
   list.foldl(
     outputs,
