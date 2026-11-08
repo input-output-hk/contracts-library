@@ -122,6 +122,48 @@ const PINS = [
       codeExport: `${camel(slug)}CompiledCode`,
     })),
   },
+  {
+    file: "offchain/meshjs/lib/src/examples/upgradeability/blueprint.ts",
+    entries: [
+      {
+        mapKey: "upgradeability.counter_forwarder",
+        title: "upgradeability/counter_forwarder.counter_forwarder.else",
+        codeExport: "forwarderCompiledCode",
+        hashExport: "forwarderValidatorHash",
+      },
+      {
+        mapKey: "upgradeability.counter_logic",
+        title: "upgradeability/counter_logic.counter_logic.publish",
+        codeExport: "logicCompiledCode",
+        hashExport: "logicValidatorHash",
+      },
+      {
+        mapKey: "upgradeability.counter_logic_stepped",
+        title:
+          "upgradeability/counter_logic_stepped.counter_logic_stepped.publish",
+        codeExport: "logicSteppedCompiledCode",
+        hashExport: "logicSteppedValidatorHash",
+      },
+      {
+        mapKey: "upgradeability.counter_migration",
+        title: "upgradeability/counter_migration.counter_migration.publish",
+        codeExport: "migrationCompiledCode",
+        hashExport: "migrationValidatorHash",
+      },
+      {
+        mapKey: "upgradeability.counter_v1",
+        title: "upgradeability/counter_v1.counter_v1.spend",
+        codeExport: "v1CompiledCode",
+        hashExport: "v1ValidatorHash",
+      },
+      {
+        mapKey: "upgradeability.counter_v2",
+        title: "upgradeability/counter_v2.counter_v2.spend",
+        codeExport: "v2CompiledCode",
+        hashExport: "v2ValidatorHash",
+      },
+    ],
+  },
 ];
 
 function camel(slug) {

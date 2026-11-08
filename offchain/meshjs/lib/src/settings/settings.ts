@@ -156,8 +156,9 @@ export interface ProposalTiming {
  * Timing of a proposal submitted at `now`. The validator anchors the delay on
  * the validity range's upper bound (it requires `next_apply >= upper +
  * apply_delay`), because a transaction cannot land after it. The window is
- * `ttlMs` of slots past the slot enclosing `now`; the upper bound the
- * validator sees is the start of the slot after the window's last slot.
+ * `ttlMs` of slots past the slot enclosing `now`; `invalidHereafter(untilSlot)`
+ * makes the transaction invalid from `untilSlot` on, so the exclusive upper
+ * bound the validator sees is `untilSlot`'s start time.
  */
 export function proposalTiming(p: {
   now: number;
@@ -173,7 +174,7 @@ export function proposalTiming(p: {
   const untilSlot = sinceSlot + windowSlots;
   const untilMs =
     p.slotConfig.zeroTime +
-    (untilSlot + 1 - p.slotConfig.zeroSlot) * p.slotConfig.slotLength;
+    (untilSlot - p.slotConfig.zeroSlot) * p.slotConfig.slotLength;
   return { sinceSlot, untilSlot, untilMs, nextApply: untilMs + p.applyDelay };
 }
 

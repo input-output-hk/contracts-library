@@ -12,6 +12,7 @@
       "!**/dist",
       "!**/*.tsbuildinfo",
       "!**/package-lock.json",
+      "!**/*.md",
       "!offchain/tx3/devnet/genesis",
       "!onchain",
       "!formal",
