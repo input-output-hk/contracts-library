@@ -17,7 +17,7 @@ Registry : Map<ScriptHash, ScriptHash>
 - The **value** is the script that must run.
 - Registry changes reuse the settings protocol's `Propose` / `Apply` split, its `apply_delay` timelock, and its pluggable `propose_auth` / `apply_auth` authorization.
 
-The two mechanisms differ only in **which redeemer paths forward**: a **forced** validator forwards every path (the value is the protocol's logic); an **opt-in** validator forwards only its `Upgrade` path (the value is the migration script).
+The two mechanisms differ only in **which paths forward**: a **forced** validator forwards every path of every script purpose (the value is the protocol's logic); an **opt-in** validator forwards only its `Upgrade` path (the value is the migration script).
 
 This document specifies the reusable predicates (`onchain/lib/upgradeability/`) and their trust model. The `counter_*` reference validators are a non-normative demo used to exercise the mechanics.
 
@@ -31,10 +31,10 @@ This document specifies the reusable predicates (`onchain/lib/upgradeability/`) 
 |---|---|---|
 | Substrate | **A settings UTxO holds the registry** | Reuses propose/apply + timelock + pluggable auth unchanged (#20). |
 | Registry shape | **`Map<own_hash, delegate_hash>`** | One instance governs many protocols; the immutable key is the stable identity. |
-| Forced forwarding | **Every path forwards via withdraw-zero** | The only way to keep the address stable and funds in place. |
+| Forced forwarding | **Every path of every purpose forwards via withdraw-zero** | The only way to keep the address stable and funds in place; one hash serves as address, minting policy, stake credential and voter. |
 | Opt-in consent | **Enforced natively in V1** | A malicious registry repoint can change migration rules but never move funds without the user's signature. |
-| Forwarding check | **Exact script hash invoked as a withdrawal** | O(1), NFT-authenticated, not spoofable. |
-| Logic/migration scope | **Validate every forwarded input** | Prevents validating a benign input while another is drained. |
+| Forwarding check | **Exact script hash invoked as a withdrawal** | NFT-authenticated, not spoofable. Each run decodes the registry (linear in its size), so a transaction pays that once per forwarded use plus once for the delegate. |
+| Logic/migration scope | **Validate every delegated item** | Prevents validating a benign input while another is drained, or a mint slips through unchecked. |
 | Registry datum | **Any `Data`; consumers decode** | The reference settings validator accepts any value; `decode_registry` rejects a malformed registry at spend time. |
 
 ### Limitations
@@ -204,9 +204,12 @@ Attacks the protocol defends against, each backed by the invariants of §6.b:
 - **The logic / migration script is trusted once registered.** `validate_forward` guarantees only that the registered script ran; the script itself carries the protocol's safety. For forced, a malicious repoint installs arbitrary logic — that is the inherent trust cost of beacon indirection.
 - **Registry values are built for the same settings instance.** A logic or migration script must be parameterized with the settings instance whose registry points at it. The non-empty checks in `delegated_to` and `forwarded_by` stop a mismatched delegate from passing vacuously, but not a double misconfiguration in which the other instance's registry also maps an input to the same delegate.
 - **Forced repoints need a sensible `apply_delay`.** The delay is the users' only window to react. The validator enforces it, but trusts the deployer to choose it: a negative or tiny delay weakens the guarantee (settings spec §6.a).
-- **Delegates must be registered, and the deposit is not refunded.** A logic or migration script only runs once its stake credential is registered. Anyone may register it (the script accepts the Conway registration certificate; the older certificate needs no script approval), and since deregistration is refused, the deposit stays locked for good.
+- **The delay is an exit window only if the current logic has an exit.** During `apply_delay` the *current* logic still governs every forwarded UTxO, so users who reject a proposed repoint can leave only if that logic lets them (for example, an owner-authorized withdrawal of their state). The delay is anchored on the propose transaction's validity upper bound, so this holds against a malicious governor too. A forced deployment should ship an exit path; the counter demo has none. Guaranteeing an exit across repoints is out of scope: a new logic may drop the exit, but only after the delay, under which the old one still applies.
+- **Delegates must be registered first, and the deposit is not refunded.** A logic or migration script only runs once its stake credential is registered: a withdraw-0 from an unregistered credential is rejected by the ledger, so every forwarder pointing at an unregistered logic is stuck (and every V1 pointing at an unregistered migration cannot upgrade) until someone registers it. Register a delegate before repointing the registry to it. Anyone may register it (the script accepts the Conway registration certificate; the older certificate needs no script approval), and since deregistration is refused, the deposit stays locked for good.
 - **Closing the registry settings instance is a permanent brick.** `Close` burns the one-shot settings NFT and the instance can never be relaunched, so `get_registry` fails forever: forced forwarders become unspendable and opt-in V1 UTxOs can only tick in place (their only value exit is the migration path). A production registry must live in a settings fork without `Close`, or its governance must treat closing as forbidden (settings spec §6.a, "Closing is irreversible").
 - **The reference settings validator does not constrain the registry shape.** Any `Data` is admissible; consumers reject a malformed value at spend time, but governance can still write one (a liveness, not a safety, hazard). A deployer who wants to constrain it can fork settings with their own `validate_datum`.
+- **One settings instance per protocol.** A forwarder's identity is its code plus its parameters, which are only the settings instance. Two byte-identical forwarders on the same instance are the same script: one hash, one registry key, one delegate. Roles that must be repointed independently need either separate settings instances or one logic that dispatches per input. Sharing one instance across unrelated protocols also couples their governance and timelock.
+- **Shared state should use forced forwarding.** Opt-in consent assumes each UTxO has one owner who can authorize its migration. State that many users share (a pool, an order book, a treasury) has no such owner, so it cannot move under opt-in without trusting whoever signs for it; forward it instead.
 - **No global migration completeness.** On eUTxO each UTxO migrates independently; there is no all-or-nothing across the protocol, and no on-chain way to force a user off an opt-in V1.
 - **Batched continuations are tagged.** The `counter_*` datums carry a
   `prev_input: Option<OutputReference>` tag naming the UTxO each continuation
@@ -235,7 +238,6 @@ Attacks the protocol defends against, each backed by the invariants of §6.b:
 - **Demo counters are open and permanent.** Anyone can mint a fresh counter (genesis needs no authorization), and burns are rejected, so a counter can never be closed.
 - **Old datum shapes are kept, not dropped.** No on-chain check can prove that every UTxO has converted, so a forced logic should decode every shape ever written. Governance may drop an old shape only after verifying off-chain (with an indexer, at the forwarder addresses) that no UTxO still holds it, accepting that a missed one is bricked. A rollback is a schema change too: repointing to an older logic strands the counters the newer one converted, unless the older logic also reads the newer shape.
 - **The protocol state's meaning is delegated.** The upgradeability predicates treat a forwarder's datum opaquely; the logic script defines it.
-- **Off-chain is out of scope in this pass.**
 
 ### 6.b Invariants
 

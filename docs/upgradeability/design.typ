@@ -116,13 +116,18 @@ pending one._
       datum: (
         current: [R],
         next: [*R'*],
-        next_apply: [*now + apply_delay*],
+        next_apply: [*U + apply_delay*],
       ),
     ),
+  ),
+  validRange: (
+    upper: [*U*],
   ),
   notes: [
     - `R' != R` and `validate_datum(R')`.
     - The proposal can only change the registry; it cannot be applied yet.
+    - The delay is anchored on the validity upper bound `U`, which a proposer
+      cannot backdate: the transaction cannot land after `U`.
   ],
 )
 
@@ -177,11 +182,11 @@ changes a protocol's behaviour._
       is the new logic script — funds never move and the change applies to
       everyone at once. For *opt-in*, `h_new` is the new migration script —
       each user then chooses to migrate.
-    - Timelocked: valid only when `now >= T = propose_time + apply_delay`, giving
-      users a window to inspect the new delegate (and, for opt-in, to migrate).
-      The proposer chooses the anchor (`now` is the propose transaction's
-      validity lower bound), so the delay is a scheduling tool, not a hard
-      guarantee against malicious governance (spec §6.a).
+    - Timelocked: valid only when `now >= T`, and `T` is at least `apply_delay`
+      after the proposal landed, even against malicious governance. The delay
+      gives users a window to inspect the new delegate and, if the current
+      logic has an exit path, to leave (spec §6.a). For opt-in, it is the
+      window to migrate.
   ],
 )
 
@@ -189,10 +194,72 @@ changes a protocol's behaviour._
 
 #pagebreak()
 
+= Forced genesis (state token mint)
+
+_The forwarder is also the state token's minting policy. A mint forwards like
+a spend, and the logic admits exactly one token paid to a fresh counter._
+
+#let genesis_tx = vanilla_transaction(
+  "Forced Genesis",
+  inputs: (
+    (
+      name: "Funding UTxO",
+      wallet: true,
+    ),
+    (
+      reference: true,
+      name: "Settings UTxO",
+      address: "settings_addr",
+      value: (
+        "settingsNFT": "1",
+      ),
+      datum: (
+        current: [R],
+        next: [None],
+        next_apply: [None],
+      ),
+    ),
+  ),
+  mint: (
+    "counterToken": 1,
+  ),
+  withdrawals: (
+    "logic_script",
+  ),
+  outputs: (
+    (
+      name: "Forwarder UTxO",
+      address: "forwarder_addr",
+      value: (
+        "counterToken": "1",
+        "ADA": "min_ada",
+      ),
+      datum: (
+        count: [*0*],
+        owner: "Credential",
+        prev_input: [*None*],
+      ),
+    ),
+  ),
+  notes: [
+    - The forwarder runs for the mint (`own_hash` is the policy id) and only
+      checks that the registered logic runs.
+    - The logic admits a mint under the forwarder's policy only as one
+      `counterToken` paid, with no reference script, to a fresh counter at the
+      forwarder's own address. Burns and other names are rejected.
+    - After a schema upgrade, genesis writes the new datum shape (spec §4.b).
+  ],
+)
+
+#figure(genesis_tx, caption: [Forced genesis transaction]) <fig:genesis>
+
+#pagebreak()
+
 = Forced spend (beacon indirection)
 
-_A thin forwarder holds state but carries no logic. Every spend must be
-accompanied by the logic script registered for the forwarder's own hash._
+_A thin forwarder holds state but carries no logic. Every use of it, for any
+purpose, must be accompanied by the logic script registered for the
+forwarder's own hash. The logic validates every item delegated to it._
 
 #let forward_tx = vanilla_transaction(
   "Forced Spend",
@@ -201,6 +268,7 @@ accompanied by the logic script registered for the forwarder's own hash._
       name: "Forwarder UTxO",
       address: "forwarder_addr",
       value: (
+        "counterToken": "1",
         "ADA": "min_ada",
       ),
       datum: (
@@ -232,6 +300,7 @@ accompanied by the logic script registered for the forwarder's own hash._
       name: "Forwarder UTxO",
       address: "forwarder_addr",
       value: (
+        "counterToken": "1",
         "ADA": "min_ada",
       ),
       datum: (
@@ -242,18 +311,25 @@ accompanied by the logic script registered for the forwarder's own hash._
     ),
   ),
   notes: [
-    - `validate_forward`: `own_hash = forwarder_addr`, `R[own_hash] = logic_script`,
-      and `logic_script` must be present as a withdrawal (withdraw-0
-      convention).
+    - `validate_forward`: `own_hash` is the forwarder's own hash (here the
+      spent input's payment credential), `R[own_hash] = logic_script`, and
+      `logic_script` must be present as a withdrawal (withdraw-0 convention).
     - The forwarder's redeemer is opaque: the *logic script* is responsible for
-      validating *every* input forwarded to it, not just one.
+      validating *every* item delegated to it (inputs, mints, withdrawals,
+      certificates, votes), not just one, and rejects kinds it does not handle.
+    - `counterToken` is the state token (`forwarder_hash.counter`): the logic
+      ticks only inputs that carry it, so a UTxO paid straight to the forwarder
+      address is not a counter.
     - Each continuation names the spent UTxO in its `prev_input` tag, so one
       output can only settle the single input it names — several UTxOs can be
       forwarded in one transaction without an N→1 collapse.
     - The continuation preserves the input's non-ADA assets exactly, holds at
       least its lovelace, and carries no reference script.
-    - A registry repoint changes behaviour for all users at once — this is a
+    - A registry repoint changes behaviour for all users at once: this is a
       *forced* upgrade, so timelock and bounded governance are mandatory.
+    - A repoint does not touch the datum. A logic that changes the schema reads
+      every shape ever written and writes the new one on each continuation
+      (convert on touch, spec §4.b).
   ],
 )
 

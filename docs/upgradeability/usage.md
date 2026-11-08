@@ -137,6 +137,13 @@ delay counts from the propose transaction's validity upper bound, which the
 proposer cannot backdate, so it holds even against malicious governance (see
 [settings spec §5](../settings/spec.md)).
 
+**Choosing a mechanism.** Opt-in consent needs one owner per UTxO who can sign
+for its migration. Shared state (a pool, an order book, a treasury) has no such
+owner, so forward it (forced). For forced, the delay only lets users leave if
+the *current* logic has an exit path: ship one (for example, an
+owner-authorized withdrawal), since a repoint can only remove it after the
+delay. The counter demo has none.
+
 ## Evolving the datum (forced)
 
 A forced repoint swaps the logic but leaves every UTxO where it is, with the
@@ -393,7 +400,14 @@ The Tx3 reference protocol has its own devnet suite
   networkId)`. It emits the Conway registration certificate, which runs the
   script's `publish` handler (the e2e harness's `registerScriptStakeCredential`
   wraps it). The handler accepts only registration, so the credential can never
-  be deregistered and the deposit is not refunded.
+  be deregistered and the deposit is not refunded. Register a delegate before
+  repointing the registry to it: until then, every forwarder pointing at it is
+  stuck.
+- **Use one settings instance per protocol.** A forwarder's identity is its
+  code plus its settings instance, so byte-identical forwarders on one
+  instance share a hash, a registry key and a delegate. Roles you need to
+  repoint independently need separate settings instances, or one logic that
+  dispatches per input.
 - **Migration is per-UTxO.** There is no global completeness guarantee, and no
   way to force a user off an opt-in V1.
 - **The registry is only as good as its governance.** `propose_auth` /
