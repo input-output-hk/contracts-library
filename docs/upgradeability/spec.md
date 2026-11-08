@@ -71,7 +71,7 @@ A `Registry` is a `Map` from 28-byte script hashes to 28-byte script hashes, sto
 
 ### 3.d Validators
 
-The reusable predicates and helpers, all in `onchain/lib/upgradeability/`.
+The reusable predicates and helpers live in `onchain/lib/upgradeability/`. The demo's own helpers (`counter`, `stepped_counter`) live beside its validators in `onchain/validators/upgradeability/`.
 
 **`registry`** (reading the registry, and the forwarder / V1 side):
 
@@ -111,7 +111,7 @@ Returns `True` iff the registry maps `own_hash` to some `migration_hash`, `Scrip
 
 The **logic** and **migration** scripts run under the withdraw-0 convention (`withdraw(redeemer, account, self)`). The forced logic validates every item of `delegated_to(self, settings_policy, settings_token_name, account)` and must reject any item kind it does not handle; the migration script validates every input of `forwarded_by(...)`. Both reject when nothing is delegated to them. Both also carry a `publish` handler, `accept_registration` (shared `withdraw_zero` module), that accepts registering their own stake credential and refuses every other certificate.
 
-**`counter`** (helpers, non-normative demo):
+**`counter`** (demo helpers, in `validators/upgradeability/`):
 
 | Function | Role |
 |---|---|
@@ -124,7 +124,7 @@ The **logic** and **migration** scripts run under the withdraw-0 convention (`wi
 | `validate_genesis(self, policy, is_fresh)` | The genesis check for any datum shape: one state token at `policy`'s address, no reference script, an inline datum `is_fresh` accepts. |
 | `settled_by(self, target_address, expected, input)` | Whether some output at `target_address` carries exactly the `expected` inline datum, no reference script, and the input's non-ADA assets. |
 
-**`stepped_counter`** (the demo's second schema, read by `counter_logic_stepped`):
+**`stepped_counter`** (the demo's second schema, read by `counter_logic_stepped`; in `validators/upgradeability/`):
 
 | Item | Role |
 |---|---|

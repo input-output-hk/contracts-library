@@ -1,5 +1,7 @@
 /**
- * Off-chain mirror of the on-chain types in `onchain/lib/upgradeability/`.
+ * Off-chain mirror of the on-chain types: the registry from
+ * `onchain/lib/upgradeability/`, and the counter demo's datums from
+ * `onchain/validators/upgradeability/`.
  */
 
 import type { Credential } from "../common";

@@ -8,10 +8,6 @@ use cardano/transaction.{
   InlineDatum, Input, Output, OutputReference, Spend, Transaction, placeholder,
 }
 use settings/types.{SettingsDatum}
-use upgradeability/counter.{
-  CounterDatum, Tick, Upgrade, spent_with_upgrade, validate_counter_migrate,
-  validate_counter_tick,
-}
 use upgradeability/delegate.{forwarded_by, forwarded_inputs, spend_redeemer}
 use upgradeability/forward.{validate_forward}
 use upgradeability/migrate.{validate_upgrade}
@@ -35,61 +31,13 @@ const logic_hash = #"cccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 const migration_hash =
   #"dddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
 
-const v2_hash = #"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-
 const unrelated_hash =
   #"99999999999999999999999999999999999999999999999999999999"
 
-const token_policy = #"ffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-
-const token_name = "tok"
-
 const vkh = #"11111111111111111111111111111111111111111111111111111111"
-
-/// The input value plus one unit of a stand-in state token.
-fn with_token(value: assets.Value) -> assets.Value {
-  assets.add(value, token_policy, token_name, 1)
-}
 
 fn owner() -> Credential {
   VerificationKey(vkh)
-}
-
-fn counter_datum(count: Int) -> CounterDatum {
-  CounterDatum { count, owner: owner(), prev_input: None }
-}
-
-/// A continuation output at `hash` continuing the UTxO referenced by `prev`.
-fn continuation_output(
-  hash: ScriptHash,
-  prev: OutputReference,
-  count: Int,
-) -> Output {
-  continuation_output_with(
-    hash,
-    prev,
-    count,
-    assets.from_lovelace(2_000_000),
-    None,
-  )
-}
-
-/// A continuation output with a custom value and reference script.
-fn continuation_output_with(
-  hash: ScriptHash,
-  prev: OutputReference,
-  count: Int,
-  value: assets.Value,
-  reference_script: Option<ScriptHash>,
-) -> Output {
-  Output {
-    address: from_script(hash),
-    value,
-    datum: InlineDatum(
-      CounterDatum { count, owner: owner(), prev_input: Some(prev) },
-    ),
-    reference_script,
-  }
 }
 
 fn ref(index: Int) -> OutputReference {
@@ -101,36 +49,17 @@ fn spending(output: OutputReference) -> ScriptInfo {
   Spending { output, datum: None }
 }
 
-/// An input at `hash`'s address carrying a counter datum.
-fn counter_input(hash: ScriptHash, index: Int, count: Int) -> Input {
-  counter_input_with(hash, index, count, assets.from_lovelace(2_000_000))
-}
-
-/// An input at `hash`'s address carrying a counter datum and a custom value.
-fn counter_input_with(
-  hash: ScriptHash,
-  index: Int,
-  count: Int,
-  value: assets.Value,
-) -> Input {
+/// An input at `hash`'s address; the predicates never read its datum.
+fn script_input(hash: ScriptHash, index: Int) -> Input {
+  let datum: Data = 0
   Input {
     output_reference: ref(index),
     output: Output {
       address: from_script(hash),
-      value,
-      datum: InlineDatum(counter_datum(count)),
+      value: assets.from_lovelace(2_000_000),
+      datum: InlineDatum(datum),
       reference_script: None,
     },
-  }
-}
-
-/// An output at `hash`'s address carrying a counter datum.
-fn counter_output(hash: ScriptHash, count: Int) -> Output {
-  Output {
-    address: from_script(hash),
-    value: assets.from_lovelace(2_000_000),
-    datum: InlineDatum(counter_datum(count)),
-    reference_script: None,
   }
 }
 
@@ -221,8 +150,8 @@ test decode_registry_rejects_non_map() fail {
 test forwarded_inputs_filters_by_registered_hash() {
   let r = registry([Pair(forwarder_hash, logic_hash)])
   let inputs = [
-    counter_input(forwarder_hash, 0, 0),
-    counter_input(unrelated_hash, 1, 0),
+    script_input(forwarder_hash, 0),
+    script_input(unrelated_hash, 1),
   ]
   list.length(forwarded_inputs(inputs, r, logic_hash)) == 1
 }
@@ -231,10 +160,7 @@ test forwarded_by_returns_delegated_inputs() {
   let r = registry([Pair(forwarder_hash, logic_hash)])
   let tx = Transaction {
     ..placeholder,
-    inputs: [
-      counter_input(forwarder_hash, 0, 0),
-      counter_input(unrelated_hash, 1, 0),
-    ],
+    inputs: [script_input(forwarder_hash, 0), script_input(unrelated_hash, 1)],
     reference_inputs: [settings_ref(r)],
   }
   list.length(
@@ -248,7 +174,7 @@ test forwarded_by_rejects_when_nothing_is_delegated() fail {
   let r = registry([Pair(forwarder_hash, logic_hash)])
   let tx = Transaction {
     ..placeholder,
-    inputs: [counter_input(unrelated_hash, 0, 0)],
+    inputs: [script_input(unrelated_hash, 0)],
     reference_inputs: [settings_ref(r)],
   }
   forwarded_by(tx, settings_policy, settings_name, Script(logic_hash)) != []
@@ -258,7 +184,7 @@ test forwarded_by_rejects_key_account() fail {
   let r = registry([Pair(forwarder_hash, logic_hash)])
   let tx = Transaction {
     ..placeholder,
-    inputs: [counter_input(forwarder_hash, 0, 0)],
+    inputs: [script_input(forwarder_hash, 0)],
     reference_inputs: [settings_ref(r)],
   }
   forwarded_by(tx, settings_policy, settings_name, VerificationKey(vkh)) != []
@@ -270,7 +196,7 @@ test forward_admits_when_logic_runs() {
   let r = registry([Pair(forwarder_hash, logic_hash)])
   let tx = Transaction {
     ..placeholder,
-    inputs: [counter_input(forwarder_hash, 0, 0)],
+    inputs: [script_input(forwarder_hash, 0)],
     reference_inputs: [settings_ref(r)],
     withdrawals: [Pair(Script(logic_hash), 0)],
   }
@@ -281,7 +207,7 @@ test forward_rejects_without_logic_withdrawal() fail {
   let r = registry([Pair(forwarder_hash, logic_hash)])
   let tx = Transaction {
     ..placeholder,
-    inputs: [counter_input(forwarder_hash, 0, 0)],
+    inputs: [script_input(forwarder_hash, 0)],
     reference_inputs: [settings_ref(r)],
     withdrawals: [],
   }
@@ -292,7 +218,7 @@ test forward_rejects_wrong_delegate() fail {
   let r = registry([Pair(forwarder_hash, logic_hash)])
   let tx = Transaction {
     ..placeholder,
-    inputs: [counter_input(forwarder_hash, 0, 0)],
+    inputs: [script_input(forwarder_hash, 0)],
     reference_inputs: [settings_ref(r)],
     withdrawals: [Pair(Script(unrelated_hash), 0)],
   }
@@ -304,7 +230,7 @@ test forward_rejects_unregistered_own_hash() fail {
   let r = registry([Pair(unrelated_hash, logic_hash)])
   let tx = Transaction {
     ..placeholder,
-    inputs: [counter_input(forwarder_hash, 0, 0)],
+    inputs: [script_input(forwarder_hash, 0)],
     reference_inputs: [settings_ref(r)],
     withdrawals: [Pair(Script(logic_hash), 0)],
   }
@@ -317,7 +243,7 @@ test upgrade_admits_with_consent_and_delegate() {
   let r = registry([Pair(forwarder_hash, migration_hash)])
   let tx = Transaction {
     ..placeholder,
-    inputs: [counter_input(forwarder_hash, 0, 0)],
+    inputs: [script_input(forwarder_hash, 0)],
     reference_inputs: [settings_ref(r)],
     withdrawals: [Pair(Script(migration_hash), 0)],
     extra_signatories: [vkh],
@@ -329,7 +255,7 @@ test upgrade_rejects_without_consent() fail {
   let r = registry([Pair(forwarder_hash, migration_hash)])
   let tx = Transaction {
     ..placeholder,
-    inputs: [counter_input(forwarder_hash, 0, 0)],
+    inputs: [script_input(forwarder_hash, 0)],
     reference_inputs: [settings_ref(r)],
     withdrawals: [Pair(Script(migration_hash), 0)],
     extra_signatories: [],
@@ -341,7 +267,7 @@ test upgrade_rejects_without_migration_script() fail {
   let r = registry([Pair(forwarder_hash, migration_hash)])
   let tx = Transaction {
     ..placeholder,
-    inputs: [counter_input(forwarder_hash, 0, 0)],
+    inputs: [script_input(forwarder_hash, 0)],
     reference_inputs: [settings_ref(r)],
     withdrawals: [],
     extra_signatories: [vkh],
@@ -349,325 +275,11 @@ test upgrade_rejects_without_migration_script() fail {
   validate_upgrade(owner(), settings_policy, settings_name, ref(0), tx)
 }
 
-// ------------------------------------------------------------- counter steps
-
-test tick_admits_increment() {
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [counter_input(forwarder_hash, 0, 5)],
-    outputs: [continuation_output(forwarder_hash, ref(0), 6)],
-  }
-  validate_counter_tick(tx, ref(0))
-}
-
-test tick_rejects_wrong_count() fail {
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [counter_input(forwarder_hash, 0, 5)],
-    outputs: [continuation_output(forwarder_hash, ref(0), 5)],
-  }
-  validate_counter_tick(tx, ref(0))
-}
-
-test tick_rejects_missing_continuation() fail {
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [counter_input(forwarder_hash, 0, 5)],
-    outputs: [counter_output(unrelated_hash, 6)],
-  }
-  validate_counter_tick(tx, ref(0))
-}
-
-test tick_rejects_mistagged_continuation() fail {
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [counter_input(forwarder_hash, 0, 5)],
-    outputs: [continuation_output(forwarder_hash, ref(1), 6)],
-  }
-  validate_counter_tick(tx, ref(0))
-}
-
-test tick_admits_continuation_with_extra_lovelace() {
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [counter_input(forwarder_hash, 0, 5)],
-    outputs: [
-      continuation_output_with(
-        forwarder_hash,
-        ref(0),
-        6,
-        assets.from_lovelace(3_000_000),
-        None,
-      ),
-    ],
-  }
-  validate_counter_tick(tx, ref(0))
-}
-
-test tick_admits_preserving_input_token() {
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [
-      counter_input_with(
-        forwarder_hash,
-        0,
-        5,
-        with_token(assets.from_lovelace(2_000_000)),
-      ),
-    ],
-    outputs: [
-      continuation_output_with(
-        forwarder_hash,
-        ref(0),
-        6,
-        with_token(assets.from_lovelace(2_000_000)),
-        None,
-      ),
-    ],
-  }
-  validate_counter_tick(tx, ref(0))
-}
-
-test tick_admits_token_preserved_and_extra_lovelace() {
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [
-      counter_input_with(
-        forwarder_hash,
-        0,
-        5,
-        with_token(assets.from_lovelace(2_000_000)),
-      ),
-    ],
-    outputs: [
-      continuation_output_with(
-        forwarder_hash,
-        ref(0),
-        6,
-        with_token(assets.from_lovelace(3_000_000)),
-        None,
-      ),
-    ],
-  }
-  validate_counter_tick(tx, ref(0))
-}
-
-test tick_rejects_continuation_with_reference_script() fail {
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [counter_input(forwarder_hash, 0, 5)],
-    outputs: [
-      continuation_output_with(
-        forwarder_hash,
-        ref(0),
-        6,
-        assets.from_lovelace(2_000_000),
-        Some(unrelated_hash),
-      ),
-    ],
-  }
-  validate_counter_tick(tx, ref(0))
-}
-
-test tick_rejects_continuation_with_extra_token() fail {
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [counter_input(forwarder_hash, 0, 5)],
-    outputs: [
-      continuation_output_with(
-        forwarder_hash,
-        ref(0),
-        6,
-        with_token(assets.from_lovelace(2_000_000)),
-        None,
-      ),
-    ],
-  }
-  validate_counter_tick(tx, ref(0))
-}
-
-test tick_rejects_continuation_dropping_input_token() fail {
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [
-      counter_input_with(
-        forwarder_hash,
-        0,
-        5,
-        with_token(assets.from_lovelace(2_000_000)),
-      ),
-    ],
-    outputs: [continuation_output(forwarder_hash, ref(0), 6)],
-  }
-  validate_counter_tick(tx, ref(0))
-}
-
-test tick_binds_each_input_to_its_own_continuation() {
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [
-      counter_input(forwarder_hash, 0, 5),
-      counter_input(forwarder_hash, 1, 5),
-    ],
-    outputs: [
-      continuation_output(forwarder_hash, ref(0), 6),
-      continuation_output(forwarder_hash, ref(1), 6),
-    ],
-  }
-  and {
-    validate_counter_tick(tx, ref(0)),
-    validate_counter_tick(tx, ref(1)),
-  }
-}
-
-test tick_rejects_collapsed_shared_continuation() fail {
-  // M1: two same-count UTxOs settled by one continuation tagged for only one
-  // of them. The second input has no continuation of its own, so the collapse
-  // cannot drain its value.
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [
-      counter_input(forwarder_hash, 0, 5),
-      counter_input(forwarder_hash, 1, 5),
-    ],
-    outputs: [continuation_output(forwarder_hash, ref(0), 6)],
-  }
-  and {
-    validate_counter_tick(tx, ref(0)),
-    validate_counter_tick(tx, ref(1)),
-  }
-}
-
-test migrate_admits_state_preserved_at_v2() {
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [counter_input(forwarder_hash, 0, 5)],
-    outputs: [continuation_output(v2_hash, ref(0), 5)],
-  }
-  validate_counter_migrate(tx, ref(0), from_script(v2_hash))
-}
-
-test migrate_rejects_output_still_at_v1() fail {
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [counter_input(forwarder_hash, 0, 5)],
-    outputs: [continuation_output(forwarder_hash, ref(0), 5)],
-  }
-  validate_counter_migrate(tx, ref(0), from_script(v2_hash))
-}
-
-test migrate_rejects_mistagged_continuation() fail {
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [counter_input(forwarder_hash, 0, 5)],
-    outputs: [continuation_output(v2_hash, ref(1), 5)],
-  }
-  validate_counter_migrate(tx, ref(0), from_script(v2_hash))
-}
-
-test migrate_rejects_continuation_with_reference_script() fail {
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [counter_input(forwarder_hash, 0, 5)],
-    outputs: [
-      continuation_output_with(
-        v2_hash,
-        ref(0),
-        5,
-        assets.from_lovelace(2_000_000),
-        Some(unrelated_hash),
-      ),
-    ],
-  }
-  validate_counter_migrate(tx, ref(0), from_script(v2_hash))
-}
-
-test migrate_rejects_continuation_with_extra_token() fail {
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [counter_input(forwarder_hash, 0, 5)],
-    outputs: [
-      continuation_output_with(
-        v2_hash,
-        ref(0),
-        5,
-        with_token(assets.from_lovelace(2_000_000)),
-        None,
-      ),
-    ],
-  }
-  validate_counter_migrate(tx, ref(0), from_script(v2_hash))
-}
-
-test migrate_rejects_continuation_dropping_input_token() fail {
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [
-      counter_input_with(
-        forwarder_hash,
-        0,
-        5,
-        with_token(assets.from_lovelace(2_000_000)),
-      ),
-    ],
-    outputs: [continuation_output(v2_hash, ref(0), 5)],
-  }
-  validate_counter_migrate(tx, ref(0), from_script(v2_hash))
-}
-
-test migrate_binds_each_input_to_its_own_continuation() {
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [
-      counter_input(forwarder_hash, 0, 5),
-      counter_input(forwarder_hash, 1, 5),
-    ],
-    outputs: [
-      continuation_output(v2_hash, ref(0), 5),
-      continuation_output(v2_hash, ref(1), 5),
-    ],
-  }
-  and {
-    validate_counter_migrate(tx, ref(0), from_script(v2_hash)),
-    validate_counter_migrate(tx, ref(1), from_script(v2_hash)),
-  }
-}
-
-test migrate_rejects_collapsed_shared_continuation() fail {
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [
-      counter_input(forwarder_hash, 0, 5),
-      counter_input(forwarder_hash, 1, 5),
-    ],
-    outputs: [continuation_output(v2_hash, ref(0), 5)],
-  }
-  and {
-    validate_counter_migrate(tx, ref(0), from_script(v2_hash)),
-    validate_counter_migrate(tx, ref(1), from_script(v2_hash)),
-  }
-}
-
-// --------------------------------------------------------- redeemer binding
-
-test spent_with_upgrade_detects_action() {
-  let upgrade: Data = Upgrade
-  let tx = Transaction {
-    ..placeholder,
-    redeemers: [Pair(Spend(ref(0)), upgrade)],
-  }
-  spent_with_upgrade(tx, ref(0))
-}
-
-test spent_with_upgrade_rejects_other_action() fail {
-  let tick: Data = Tick
-  let tx = Transaction { ..placeholder, redeemers: [Pair(Spend(ref(0)), tick)] }
-  spent_with_upgrade(tx, ref(0))
-}
+// ---------------------------------------------------------- spend redeemer
 
 test spend_redeemer_returns_the_input_action() {
-  let tick: Data = Tick
-  let upgrade: Data = Upgrade
+  let tick: Data = 0
+  let upgrade: Data = 1
   let tx = Transaction {
     ..placeholder,
     redeemers: [Pair(Spend(ref(0)), tick), Pair(Spend(ref(1)), upgrade)],
@@ -679,7 +291,7 @@ test spend_redeemer_returns_the_input_action() {
 }
 
 test spend_redeemer_is_none_for_unspent_ref() {
-  let tick: Data = Tick
+  let tick: Data = 0
   let tx = Transaction { ..placeholder, redeemers: [Pair(Spend(ref(0)), tick)] }
   spend_redeemer(tx, ref(1)) == None
 }

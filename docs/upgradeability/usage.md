@@ -20,9 +20,10 @@ Two mechanisms share this registry:
 |---|---|
 | Registry + predicates | [`onchain/lib/upgradeability/`](../../onchain/lib/upgradeability/) |
 | Forced reference validators | [`onchain/validators/upgradeability/counter_forwarder.ak`](../../onchain/validators/upgradeability/counter_forwarder.ak), [`counter_logic.ak`](../../onchain/validators/upgradeability/counter_logic.ak), [`counter_logic_stepped.ak`](../../onchain/validators/upgradeability/counter_logic_stepped.ak) |
+| Demo helpers | [`onchain/validators/upgradeability/counter.ak`](../../onchain/validators/upgradeability/counter.ak), [`stepped_counter.ak`](../../onchain/validators/upgradeability/stepped_counter.ak) |
 | Opt-in reference validators | [`onchain/validators/upgradeability/counter_v1.ak`](../../onchain/validators/upgradeability/counter_v1.ak), [`counter_migration.ak`](../../onchain/validators/upgradeability/counter_migration.ak), [`counter_v2.ak`](../../onchain/validators/upgradeability/counter_v2.ak) |
 | MeshJS builders | [`offchain/meshjs/lib/src/upgradeability/`](../../offchain/meshjs/lib/src/upgradeability/) |
-| On-chain unit tests | [`onchain/lib/upgradeability/upgradeability.test.ak`](../../onchain/lib/upgradeability/upgradeability.test.ak) |
+| On-chain unit tests | Library: [`onchain/lib/upgradeability/upgradeability.test.ak`](../../onchain/lib/upgradeability/upgradeability.test.ak). Demo: [`counter.test.ak`](../../onchain/validators/upgradeability/counter.test.ak), [`forwarding.test.ak`](../../onchain/validators/upgradeability/forwarding.test.ak), [`delegates.test.ak`](../../onchain/validators/upgradeability/delegates.test.ak) |
 | Unit tests (MeshJS) | [`offchain/meshjs/lib/test/upgradeability.test.ts`](../../offchain/meshjs/lib/test/upgradeability.test.ts) |
 | e2e (Yaci devnet) | [`offchain/meshjs/e2e/test/upgradeability.e2e.test.ts`](../../offchain/meshjs/e2e/test/upgradeability.e2e.test.ts) |
 | Tx3 reference + tests | [`offchain/tx3/upgradeability/`](../../offchain/tx3/upgradeability/) |
