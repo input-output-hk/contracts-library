@@ -13,9 +13,9 @@ import type { MeshTxBuilder, Network, UTxO } from "@meshsdk/core";
 
 import { applyAuthorization, type ScriptAuthorizer } from "../authorization";
 import {
+  type ApplyParams,
   buildApplyTx,
   buildProposeTx,
-  type ApplyParams,
   type ProposeParams,
 } from "../settings/settings";
 import { registryFromUtxo, registryToData } from "./datum";

@@ -10,9 +10,9 @@
  */
 
 import {
+  type Data,
   deserializeDatum,
   mConStr0,
-  type Data,
   type UTxO,
 } from "@meshsdk/core";
 

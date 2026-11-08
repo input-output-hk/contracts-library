@@ -10,14 +10,14 @@
  */
 
 import {
+  type Data,
   deserializeDatum,
   mConStr0,
   mConStr1,
-  type Data,
   type UTxO,
 } from "@meshsdk/core";
 
-import { credentialToData, type Credential } from "../../common";
+import { type Credential, credentialToData } from "../../common";
 import { asBytes, asConstr, asInt } from "../../upgradeability/datum";
 import type { CounterDatum, OutputRef, SteppedCounterDatum } from "./types";
 

@@ -4,13 +4,13 @@
  * The `counter_*` demo lives in `@contracts-library/meshjs/examples/upgradeability`.
  */
 
+export { opaqueRedeemer, registryFromUtxo, registryToData } from "./datum";
 export * from "./types";
-export { opaqueRedeemer, registryToData, registryFromUtxo } from "./datum";
 export {
   addDelegateInvocation,
   buildRegistryApplyTx,
   buildRegistryProposeTx,
-  readRegistry,
   type DelegateInvocationParams,
   type RegistryProposeParams,
+  readRegistry,
 } from "./upgradeability";

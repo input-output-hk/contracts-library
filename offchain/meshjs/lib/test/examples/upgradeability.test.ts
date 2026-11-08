@@ -1,13 +1,13 @@
 import {
   applyCborEncoding,
+  type Data,
   deserializeAddress,
   deserializeDatum,
+  type MeshTxBuilder,
   mConStr0,
   mConStr1,
   resolveScriptHash,
   serializeData,
-  type Data,
-  type MeshTxBuilder,
   type UTxO,
 } from "@meshsdk/core";
 import { describe, expect, it } from "vitest";
@@ -26,20 +26,11 @@ import {
   v2ValidatorHash,
 } from "../../src/examples/upgradeability/blueprint";
 import {
-  counterDatumFromUtxo,
-  counterDatumToData,
-  steppedCounterDatumToData,
-  steppedCounterFromUtxo,
-  tickRedeemer,
-  upgradeRedeemer,
-} from "../../src/examples/upgradeability/datum";
-import { registryToData } from "../../src/upgradeability/datum";
-import {
   addressToData,
   buildForwardMintTx,
   buildForwardTx,
-  STATE_TOKEN_NAME as COUNTER_STATE_TOKEN_NAME,
   buildUpgradeTx,
+  STATE_TOKEN_NAME as COUNTER_STATE_TOKEN_NAME,
   counterForwarderScript,
   counterLogicScript,
   counterMigrationScript,
@@ -48,10 +39,19 @@ import {
   counterV1Script,
   counterV2Script,
 } from "../../src/examples/upgradeability/counter";
+import {
+  counterDatumFromUtxo,
+  counterDatumToData,
+  steppedCounterDatumToData,
+  steppedCounterFromUtxo,
+  tickRedeemer,
+  upgradeRedeemer,
+} from "../../src/examples/upgradeability/datum";
 import type {
   CounterDatum,
   Credential,
 } from "../../src/examples/upgradeability/types";
+import { registryToData } from "../../src/upgradeability/datum";
 import type {
   Registry,
   SettingsRefParams,

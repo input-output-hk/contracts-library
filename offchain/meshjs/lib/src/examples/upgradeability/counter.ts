@@ -14,15 +14,15 @@
 import {
   applyCborEncoding,
   applyParamsToScript,
+  type Data,
   deserializeAddress,
+  type MeshTxBuilder,
   mConStr0,
   mConStr1,
-  resolveScriptHash,
-  serializePlutusScript,
-  type Data,
-  type MeshTxBuilder,
   type Network,
   type PlutusScript,
+  resolveScriptHash,
+  serializePlutusScript,
   type UTxO,
 } from "@meshsdk/core";
 
@@ -30,12 +30,6 @@ import type { ScriptAuthorizer } from "../../authorization";
 import { opaqueRedeemer } from "../../upgradeability/datum";
 import type { SettingsRefParams } from "../../upgradeability/types";
 import { addDelegateInvocation } from "../../upgradeability/upgradeability";
-import {
-  counterDatumFromUtxo,
-  counterDatumToData,
-  tickRedeemer,
-  upgradeRedeemer,
-} from "./datum";
 import {
   forwarderCompiledCode,
   logicCompiledCode,
@@ -45,7 +39,13 @@ import {
   v1CompiledCode,
   v2CompiledCode,
 } from "./blueprint";
-import type { Credential, CounterDatum, MigrationParams } from "./types";
+import {
+  counterDatumFromUtxo,
+  counterDatumToData,
+  tickRedeemer,
+  upgradeRedeemer,
+} from "./datum";
+import type { CounterDatum, Credential, MigrationParams } from "./types";
 
 /**
  * Asset name (hex) of the counter's state token, `"counter"`. It is minted

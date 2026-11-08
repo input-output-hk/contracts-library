@@ -10,11 +10,11 @@
  */
 
 import {
+  type MeshTxBuilder,
   mConStr0,
+  type PlutusScript,
   resolveScriptHash,
   serializeRewardAddress,
-  type MeshTxBuilder,
-  type PlutusScript,
 } from "@meshsdk/core";
 import { CredentialType, Serialization } from "@meshsdk/core-cst";
 
