@@ -1,8 +1,8 @@
-import Universal.NoSignature.Witnesses
+import tests.UP002.Prototype.NoSignature.Witnesses
 
 set_option Elab.async false
 
-namespace Universal.Demo.Vault
+namespace tests.UP002.Prototype.Demo.Vault
 
 /-- The full unsigned antecedent has a concrete, nondust model witness. -/
 theorem unsigned_model_applies :
@@ -28,9 +28,9 @@ theorem unsigned_control_does_not_accept :
 #print axioms signed_control_accepts
 #print axioms unsigned_control_does_not_accept
 
-end Universal.Demo.Vault
+end tests.UP002.Prototype.Demo.Vault
 
-namespace Universal.Demo.Vault_buggy
+namespace tests.UP002.Prototype.Demo.Vault_buggy
 
 /-- An explicit unsigned transaction satisfies every primary guard and is accepted. -/
 theorem unsigned_counterexample_accepts :
@@ -43,4 +43,4 @@ theorem unsigned_counterexample_accepts :
 
 #print axioms unsigned_counterexample_accepts
 
-end Universal.Demo.Vault_buggy
+end tests.UP002.Prototype.Demo.Vault_buggy

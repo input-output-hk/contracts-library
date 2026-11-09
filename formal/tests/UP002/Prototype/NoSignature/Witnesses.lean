@@ -1,14 +1,14 @@
-import Universal.Demo.Vault.NoSignatureSpend
-import Universal.Demo.Vault_buggy.NoSignatureSpend
-import Universal.Demo.Linear_vesting.NoSignatureClaim
-import Universal.Demo.Linear_vesting.NoSignatureCancel
+import tests.UP002.Prototype.Demo.Vault.NoSignatureSpend
+import tests.UP002.Prototype.Demo.Vault_buggy.NoSignatureSpend
+import tests.UP002.Prototype.Demo.Linear_vesting.NoSignatureClaim
+import tests.UP002.Prototype.Demo.Linear_vesting.NoSignatureCancel
 
 /-!
 Concrete controls for Jonathan's historical UP-002 models. These values do not
 restrict the universally quantified Holes domains in the primary propositions.
 -/
 
-namespace Universal.Demo.Vault
+namespace tests.UP002.Prototype.Demo.Vault
 
 def unsignedWitness : Holes :=
   { in2 := false, out2 := false, out1Script := false, out1Foreign := false
@@ -24,9 +24,9 @@ def unsignedWitness : Holes :=
 
 def signedWitness : Holes := { unsignedWitness with sig1 := true }
 
-end Universal.Demo.Vault
+end tests.UP002.Prototype.Demo.Vault
 
-namespace Universal.Demo.Vault_buggy
+namespace tests.UP002.Prototype.Demo.Vault_buggy
 
 def unsignedWitness : Holes :=
   { in2 := false, out2 := false, out1Script := false, out1Foreign := false
@@ -40,9 +40,9 @@ def unsignedWitness : Holes :=
     inLov := 3000000, inLov2 := 2000000, outLov := 2000000, outLov2 := 2000000
     qty := 0, lo := 0, fee := 1000000 }
 
-end Universal.Demo.Vault_buggy
+end tests.UP002.Prototype.Demo.Vault_buggy
 
-namespace Universal.Demo.Linear_vesting
+namespace tests.UP002.Prototype.Demo.Linear_vesting
 
 /-- The modeled asset is fully vested at the finite lower bound. -/
 def unsignedWitness : Holes :=
@@ -62,4 +62,4 @@ def unsignedWitness : Holes :=
 
 def signedWitness : Holes := { unsignedWitness with sig1 := true }
 
-end Universal.Demo.Linear_vesting
+end tests.UP002.Prototype.Demo.Linear_vesting

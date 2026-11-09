@@ -1,8 +1,8 @@
-import Universal.NoSignature.Witnesses
+import tests.UP002.Prototype.NoSignature.Witnesses
 
 set_option Elab.async false
 
-namespace Universal.Demo.Linear_vesting
+namespace tests.UP002.Prototype.Demo.Linear_vesting
 
 theorem unsigned_claim_model_applies :
     unsignedWitness.sig1 = false ∧ unsignedWitness.sig2 = false ∧
@@ -35,4 +35,4 @@ theorem signed_cancel_control_accepts :
 #print axioms signed_claim_control_accepts
 #print axioms signed_cancel_control_accepts
 
-end Universal.Demo.Linear_vesting
+end tests.UP002.Prototype.Demo.Linear_vesting

@@ -26,10 +26,11 @@ name = "CardanoLedgerApi"
 git = "https://github.com/input-output-hk/CardanoLedgerApiBlaster"
 rev = "7b743afcd64c1d2fc6c7ef24b2a260b8b31828fc"
 
-# Universal-property demo: generated obligations, built on their own.
+# UP-002 prototype definitions; symbolic proof jobs remain separate.
 [[lean_lib]]
-name = "Universal"
-globs = ["Universal.+"]
+name = "UP002Prototype"
+roots = ["tests.UP002.Prototype"]
+globs = ["tests.UP002.Prototype.+"]
 
 [[lean_exe]]
 name = "up016_verify_artifact"

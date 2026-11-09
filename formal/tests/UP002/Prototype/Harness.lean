@@ -13,7 +13,7 @@ A Bool argument named like a presence flag (`b`, `b1`, `toOwn`) selects whether 
 the transaction or where it goes. Lists are bounded: `upTo2` holds at most two items.
 -/
 
-namespace Universal.Harness
+namespace tests.UP002.Prototype.Harness
 
 open PlutusCore.ByteString (ByteString)
 open PlutusCore.Data (Data)
@@ -80,4 +80,4 @@ def spending (t : TxInfo) (ref : CardanoLedgerApi.V3.TxOutRef) (d r : Data) : Sc
     scriptContextRedeemer := r
     scriptContextScriptInfo := .SpendingScript ref (some d) }
 
-end Universal.Harness
+end tests.UP002.Prototype.Harness
