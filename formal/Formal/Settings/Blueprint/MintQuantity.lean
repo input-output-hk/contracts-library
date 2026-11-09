@@ -1,4 +1,4 @@
--- Preserved propositions and concrete controls; standalone proof checks live in tests/UP016.
+-- Preserved propositions and concrete controls; standalone proof checks live in Formal/Properties/Universal/UP016/Tests/Standalone.
 import Formal.Settings.Blueprint.Tx
 
 namespace Formal.Settings.Blueprint

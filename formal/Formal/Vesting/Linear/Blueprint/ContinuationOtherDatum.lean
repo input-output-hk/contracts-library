@@ -1,5 +1,5 @@
 -- Original UP-014 statements from process_blueprint.py / PR #44.
--- Standalone solver invocations live in tests/UP014/Checks.lean.
+-- Standalone solver invocations live in Formal/Properties/Universal/UP014/Tests/Standalone/Checks.lean.
 import Formal.Support.CandidateHelpers
 import Formal.Vesting.Linear.Blueprint.Types
 import Formal.Vesting.Linear.Blueprint.Tx

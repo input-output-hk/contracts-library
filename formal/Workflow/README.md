@@ -43,10 +43,9 @@ The final human-friendly report remains separate work in
 | `Metadata/` | Property/model metadata readers and binding validation |
 | [Declarative/](Declarative/README.md) | Property-owned discovery, shared model binding, and generation |
 | `Preparation/` | Reusable program decoding and model-input compatibility checks |
-| [Tests/](Tests/README.md) | Component controls and the UP001/UP012 workflow scenarios |
+| [Tests/](Tests/README.md) | Component controls and the UP001/UP012/UP015 workflow scenarios |
 | [Formal/Properties](../Formal/Properties/README.md) | Native primary definitions, metadata, and category/code indexes |
 | [Formal/TxModels](../Formal/TxModels/README.md) | Native context constructors and their metadata |
-| [Declarative/](Declarative/README.md) | Selected property-run discovery, model imports, and shared goal generation |
 
 Each property owns its run declaration and enabled model entries beside its
 definition, metadata, and tests. An entry names a compatible model and retains

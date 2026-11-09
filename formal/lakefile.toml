@@ -29,12 +29,12 @@ rev = "7b743afcd64c1d2fc6c7ef24b2a260b8b31828fc"
 # UP-002 prototype definitions; symbolic proof jobs remain separate.
 [[lean_lib]]
 name = "UP002Prototype"
-roots = ["tests.UP002.Prototype"]
-globs = ["tests.UP002.Prototype.+"]
+roots = ["Formal.Properties.Universal.UP002.Tests.Standalone.Prototype"]
+globs = ["Formal.Properties.Universal.UP002.Tests.Standalone.Prototype.+"]
 
 [[lean_exe]]
 name = "up016_verify_artifact"
-root = "tests.UP016.VerifyArtifact"
+root = "Formal.Properties.Universal.UP016.Tests.Standalone.VerifyArtifact"
 
 [[lean_lib]]
 name = "Formal"
@@ -150,3 +150,12 @@ root = "Workflow.Tests.Unit.Declarative.Discovery"
 [[lean_exe]]
 name = "workflow_public_cli_tests"
 root = "Workflow.Tests.Unit.Declarative.PublicCLI"
+
+# Validator-milestone suite; intentionally separate from workflow tests.
+[[lean_exe]]
+name = "test_m12"
+root = "Formal.Vesting.Linear.Tests.Main"
+
+[[lean_exe]]
+name = "test_m12_runner_tests"
+root = "Formal.Vesting.Linear.Tests.RunnerTests"
