@@ -6,7 +6,7 @@ namespace Formal.Settings.Blueprint
 open PlutusCore.Data (Data)
 open PlutusCore.UPLC.Term (Const)
 open CardanoLedgerApi.V3 (ScriptContext validScriptContext)
-open Formal.Universal.Properties (ledgerFuel)
+open Formal.Support (ledgerFuel)
 
 /-- Rejection proposition; its standalone proof invocation does not alter this definition. -/
 def quantityIncreaseRejects : Prop :=
@@ -36,7 +36,7 @@ It does not replace the generated accepts/rejects predicates used above.
 def executionOutcome (ctx : ScriptContext) (fuel : Nat) : String :=
   match program with
   | .Program _ body =>
-      match Formal.Universal.Properties.runFor
+      match Formal.Support.runFor
         (PlutusCore.UPLC.CekMachine.initialState
           (PlutusCore.UPLC.CekMachine.applyParams body (args ctx))) fuel with
       | none => "fuel_exhausted"
@@ -63,8 +63,8 @@ def concreteAssertions (p : MintLeaves) (fuel : Nat) : List (String × Bool) :=
     ("canonical_mint", decide (m.scriptContextTxInfo.txInfoMint =
        [(.B ownPolicy, .Map [(.B tokenName, .I 2)])])),
     ("canonical_output1_credit", decide (m.scriptContextTxInfo.txInfoOutputs[1]? =
-       some (Formal.Universal.TxBuilder.toKey applyKey
-         (Formal.Universal.TxBuilder.adaAnd p.ada1 ownPolicy tokenName 1)))),
+       some (Formal.Support.TxBuilder.toKey applyKey
+         (Formal.Support.TxBuilder.adaAnd p.ada1 ownPolicy tokenName 1)))),
     ("protected_output_unchanged", decide (m.scriptContextTxInfo.txInfoOutputs[0]? =
        h.scriptContextTxInfo.txInfoOutputs[0]?)),
     ("other_fields_unchanged", decide
@@ -73,7 +73,7 @@ def concreteAssertions (p : MintLeaves) (fuel : Nat) : List (String × Bool) :=
            txInfoOutputs := h.scriptContextTxInfo.txInfoOutputs } } = h)),
     ("output1_nonvalue_fields_unchanged", decide (m.scriptContextTxInfo.txInfoOutputs[1]? =
        some { changeOutput p with txOutValue :=
-         Formal.Universal.TxBuilder.adaAnd p.ada1 ownPolicy tokenName 1 })),
+         Formal.Support.TxBuilder.adaAnd p.ada1 ownPolicy tokenName 1 })),
     ("zero_delta_is_identity", decide (changed p 0 = h)),
     ("negative_delta_is_invalid", !(validScriptContext (changed p (-1)))),
     ("datum_encoding", decide (settingsDatum p.current =

@@ -34,13 +34,13 @@ example {A : Type} (accepts : Nat → CardanoLedgerApi.V3.ScriptContext → Prop
     (context : A → CardanoLedgerApi.V3.ScriptContext) :
     statement CardanoLedgerApi.V3.validScriptContext (accepts 1000000) context ↔
       statement CardanoLedgerApi.V3.validScriptContext
-        (accepts Formal.Universal.Properties.ledgerFuel) context := Iff.rfl
+        (accepts Formal.Support.ledgerFuel) context := Iff.rfl
 
 example {A : Type} (accepts : Nat → CardanoLedgerApi.V3.ScriptContext → Prop)
     (context : A → CardanoLedgerApi.V3.ScriptContext) :
     applicability CardanoLedgerApi.V3.validScriptContext (accepts 1000000) context ↔
       applicability CardanoLedgerApi.V3.validScriptContext
-        (accepts Formal.Universal.Properties.ledgerFuel) context := Iff.rfl
+        (accepts Formal.Support.ledgerFuel) context := Iff.rfl
 
 def unit : IO Unit := do
   let reviewed ← IO.ofExcept (← CombinedCheck.read "Formal/Properties/Universal/UP015/Tests/Expected/combined-checks.json")

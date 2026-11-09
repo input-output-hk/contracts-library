@@ -6,8 +6,8 @@ compiled with Aiken v1.1.22+39d6b04. This file requires no generation step.
 -/
 import PlutusCore.UPLC
 import CardanoLedgerApi
-import Formal.Universal.Properties
-import Formal.Universal.ReturnDatum
+import Formal.Support.Compatibility
+import Formal.Support.ReturnDatum
 
 namespace UP006
 
@@ -101,11 +101,11 @@ def accepts (fuel : Nat) (ctx : ScriptContext) : Prop :=
 
 /-- The script genuinely fails within `fuel` steps (running out of steps is not a failure). -/
 def rejects (fuel : Nat) (ctx : ScriptContext) : Prop :=
-  Formal.Universal.Properties.rejectedWithin program (args ctx) fuel
+  Formal.Support.rejectedWithin program (args ctx) fuel
 
 open CardanoLedgerApi.V3 (validScriptContext TxOut Value TxInInfo)
-open Formal.Universal.Properties (ledgerFuel)
-open Formal.Universal.ReturnDatum (allReturnDatumsValid)
+open Formal.Support (ledgerFuel)
+open Formal.Support.ReturnDatum (allReturnDatumsValid)
 
 /-- The 28 hash bytes recorded for the frozen Plutus V3 script. -/
 def returnDatumScriptHash : ByteString :=

@@ -2,8 +2,8 @@ import tests.UP006.Fixture
 
 namespace UP006
 
-open Formal.Universal.ReturnDatum (allReturnDatumsValid)
-open Formal.Universal.Properties (ledgerFuel)
+open Formal.Support.ReturnDatum (allReturnDatumsValid)
+open Formal.Support (ledgerFuel)
 open CardanoLedgerApi.V3 (validScriptContext)
 
 theorem originalConforms :

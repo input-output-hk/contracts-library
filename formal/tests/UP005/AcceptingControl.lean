@@ -1,5 +1,5 @@
 import Blaster
-import Formal.Universal.Properties
+import Formal.Support.Compatibility
 
 set_option Elab.async false
 
@@ -11,7 +11,7 @@ open PlutusCore.UPLC.Term (Program Term Const)
 open PlutusCore.UPLC.CekMachine (cekExecuteProgram State)
 open CardanoLedgerApi.IsData.Class (toTerm)
 open CardanoLedgerApi.V3 (ScriptContext)
-open Formal.Universal.Properties
+open Formal.Support
 
 /-!
 Synthetic negative control: a UPLC lambda that ignores its context and returns

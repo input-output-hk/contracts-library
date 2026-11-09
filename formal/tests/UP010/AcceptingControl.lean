@@ -1,5 +1,5 @@
 import Blaster
-import Formal.Universal.CandidateHelpers
+import Formal.Support.CandidateHelpers
 import Formal.Vesting.Linear.Blueprint.Tx
 
 set_option Elab.async false
@@ -10,7 +10,7 @@ open PlutusCore.UPLC.Term (Program Const)
 open PlutusCore.UPLC.CekMachine (cekExecuteProgram State)
 open CardanoLedgerApi.IsData.Class (toTerm)
 open CardanoLedgerApi.V3 (ScriptContext validScriptContext)
-open Formal.Universal.Properties
+open Formal.Support
 open Formal.Vesting.Linear.Blueprint (claim cancel)
 
 /-!

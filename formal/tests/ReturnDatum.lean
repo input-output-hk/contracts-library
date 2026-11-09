@@ -1,11 +1,11 @@
-import Formal.Universal.ReturnDatum
+import Formal.Support.ReturnDatum
 
 namespace ReturnDatumTests
 open PlutusCore.Data (Data)
 open PlutusCore.ByteString (ByteString)
 open CardanoLedgerApi.IsData.Class (IsData)
 open CardanoLedgerApi.V3 (TxOut OutputDatum)
-open Formal.Universal.ReturnDatum
+open Formal.Support.ReturnDatum
 
 -- Structural predicate tests; these outputs are not complete transactions.
 def output (script : ByteString) (datum : OutputDatum) : TxOut :=

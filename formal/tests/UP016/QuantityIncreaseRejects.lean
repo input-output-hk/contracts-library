@@ -6,7 +6,7 @@ set_option Elab.async false
 namespace Tests.UP016
 
 open Formal.Settings.Blueprint
-open Formal.Universal.Properties (ledgerFuel)
+open Formal.Support (ledgerFuel)
 
 /-- Stronger proof obligation: positive delta alone forces explicit bounded rejection.
 Removing the original acceptance and model-validity premises strengthens the

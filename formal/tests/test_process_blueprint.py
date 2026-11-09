@@ -49,7 +49,7 @@ class BlueprintFoundationTests(unittest.TestCase):
         source = self.generated()
         self.assertIn("PlutusV3 single_cbor_hex", source)
         self.assertIn('"Scripts/fixture.example.cbor"', source)
-        self.assertIn("Formal.Universal.Properties.rejectedWithin", source)
+        self.assertIn("Formal.Support.rejectedWithin", source)
         self.assertNotIn("theorem ", source)
         self.assertNotIn("sorry", source)
 
@@ -353,7 +353,7 @@ class BlueprintFoundationTests(unittest.TestCase):
     def return_source(self):
         lines, info = BLUEPRINT.generate(self.blueprint, "example", "Formal.Fixture.Blueprint.ReturnDatum",
                                          "Scripts", inline_script=True)
-        return "\n".join(["import Blaster", "import Formal.Universal.ReturnDatum"] + lines
+        return "\n".join(["import Blaster", "import Formal.Support.ReturnDatum"] + lines
                           + BLUEPRINT.return_datum_checks(self.blueprint, info)) + "\n"
 
     def use_matching_hash(self):

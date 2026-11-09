@@ -3,7 +3,7 @@ import Formal.Vault.Blueprint.Tx
 namespace Formal.Vault.Blueprint.UP009
 
 open CardanoLedgerApi.V3
-open Formal.Universal.Properties (ledgerFuel)
+open Formal.Support (ledgerFuel)
 
 /-- The current spending input uses the hash of its supplied datum's serialized bytes,
 and the transaction's datum map resolves that hash to the supplied datum. -/

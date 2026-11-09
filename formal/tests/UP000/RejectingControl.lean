@@ -1,5 +1,5 @@
 import Blaster
-import Formal.Universal.Properties
+import Formal.Support.Compatibility
 import Formal.Vesting.Linear.Blueprint.Types
 import Formal.Vesting.Linear.Blueprint.Tx
 
@@ -10,7 +10,7 @@ namespace Tests.UP000.RejectingControl
 open PlutusCore.UPLC.Term (Program Const)
 open PlutusCore.UPLC.CekMachine (cekExecuteProgram)
 open CardanoLedgerApi.V3 (ScriptContext validScriptContext)
-open Formal.Universal.Properties
+open Formal.Support
 open Formal.Vesting.Linear.Blueprint
 
 /-!

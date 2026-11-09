@@ -8,7 +8,7 @@ open PlutusCore.Data (Data)
 open PlutusCore.ByteString (ByteString)
 open CardanoLedgerApi.IsData.Class (IsData)
 open CardanoLedgerApi.V3
-open Formal.Universal.TxBuilder (ada toKey)
+open Formal.Support.TxBuilder (ada toKey)
 
 /-- Blake2b-256 on the CBOR byte string, without UTF-8 re-encoding. -/
 def hashDatumBytes (bytes : String) : ByteString :=

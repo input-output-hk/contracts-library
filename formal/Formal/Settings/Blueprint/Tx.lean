@@ -7,7 +7,7 @@ open PlutusCore.Data (Data)
 open PlutusCore.ByteString (ByteString)
 open CardanoLedgerApi.IsData.Class (IsData)
 open CardanoLedgerApi.V3
-open Formal.Universal.TxBuilder
+open Formal.Support.TxBuilder
 
 -- ByteString stores one character per byte. These are bytes, not ASCII hex text.
 def ownPolicy : ByteString :=

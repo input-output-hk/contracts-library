@@ -1,5 +1,5 @@
 import Blaster
-import Formal.Universal.Properties
+import Formal.Support.Compatibility
 import tests.UP005.Fixture
 
 set_option Elab.async false
@@ -8,7 +8,7 @@ namespace Tests.UP005
 
 open PlutusCore.Data (Data)
 open PlutusCore.ByteString (ByteString)
-open Formal.Universal.Properties
+open Formal.Support
 open Fixture (accepts)
 
 /-!

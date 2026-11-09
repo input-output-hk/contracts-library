@@ -1,7 +1,7 @@
 import Lean.Data.Json
 import PlutusCore.UPLC
 import CardanoLedgerApi
-import Formal.Universal.CandidateHelpers
+import Formal.Support.CandidateHelpers
 
 namespace Tests.UP011.Fixture
 
@@ -38,7 +38,7 @@ def accepts (fuel : Nat) (ctx : ScriptContext) : Prop :=
   cekExecuteProgram program (args ctx) fuel = .Halt (.VCon Const.Unit)
 
 def rejects (fuel : Nat) (ctx : ScriptContext) : Prop :=
-  Formal.Universal.Properties.rejectedWithin program (args ctx) fuel
+  Formal.Support.rejectedWithin program (args ctx) fuel
 
 /-- Match the authored inputs, frozen bytes, and program to the tracked blueprint. -/
 def checkSource : IO Unit := do

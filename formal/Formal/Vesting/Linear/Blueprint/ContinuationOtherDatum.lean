@@ -1,6 +1,6 @@
 -- Original UP-014 statements from process_blueprint.py / PR #44.
 -- Standalone solver invocations live in tests/UP014/Checks.lean.
-import Formal.Universal.CandidateHelpers
+import Formal.Support.CandidateHelpers
 import Formal.Vesting.Linear.Blueprint.Types
 import Formal.Vesting.Linear.Blueprint.Tx
 
@@ -10,7 +10,7 @@ open PlutusCore.Data (Data)
 open PlutusCore.ByteString (ByteString)
 open CardanoLedgerApi.IsData.Class (IsData)
 open CardanoLedgerApi.V3 (Address Credential PubKeyHash StakingCredential TxOutRef validScriptContext)
-open Formal.Universal.Properties
+open Formal.Support
 
 /-- Reject replacing the first Claim continuation datum with constructor 0 and an empty
     vesting list, under the original validity, acceptance, and continuation-reliance guards. -/

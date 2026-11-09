@@ -6,7 +6,7 @@ open PlutusCore.UPLC.Term (Term Const Program)
 open PlutusCore.UPLC.CekMachine (cekExecuteProgram)
 open PlutusCore.UPLC.PlutusScript
 open CardanoLedgerApi.V3 (ScriptContext StakingCredential validScriptContext)
-open Formal.Universal.Properties
+open Formal.Support
 open Formal.Vesting.Linear.Blueprint (claim args)
 
 /-- Frozen Aiken v1.1.21 control; see Project/validators/stake_control.ak and artifact.json. -/

@@ -1,5 +1,5 @@
 import Blaster
-import Formal.Universal.CandidateHelpers
+import Formal.Support.CandidateHelpers
 import Formal.Vesting.Linear.Blueprint.Types
 import Formal.Vesting.Linear.Blueprint.Tx
 
@@ -10,7 +10,7 @@ namespace Formal.Tests.UP013
 open PlutusCore.UPLC.Term (Program Const)
 open PlutusCore.UPLC.CekMachine (cekExecuteProgram)
 open CardanoLedgerApi.V3 (ScriptContext validScriptContext)
-open Formal.Universal.Properties
+open Formal.Support
 open Formal.Vesting.Linear.Blueprint
 
 /-- TEST ONLY: ignore the script context and return unit. -/

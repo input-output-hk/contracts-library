@@ -31,8 +31,8 @@ that pairing's reviewed `limitations`. This one list controls execution enableme
 authoring a descriptive record does not independently register a check.
 Model exports identify native builders, admission requirements, and an optional
 fixed purpose using the shared target types. Generic evaluator
-helpers live in `Formal/Universal/Execution.lean`, without a model-bank aggregate
-dependency. `Formal/Universal/Properties.lean` keeps legacy purpose aliases.
+helpers live in `Formal/Support/Execution.lean`, without a model-bank aggregate
+dependency. `Formal/Support/Compatibility.lean` keeps legacy purpose aliases.
 
 [UP001/Run.lean](../../Formal/Properties/Universal/UP001/Run.lean) owns the rule
 that skips declared purposes. The shared generator returns no modules or goals
@@ -157,7 +157,7 @@ clears official metadata when changing the property proposition.
 | `Generated/Tx.lean` | Alias for the selected native context constructor |
 | `Generated/Checks.lean` | Concrete target/model theorem expressions and tactic calls |
 
-[Formal/Universal/Properties.lean](../../Formal/Universal/Properties.lean) retains
+[Formal/Support/Compatibility.lean](../../Formal/Support/Compatibility.lean) retains
 current context aliases and evaluation/signatory helpers. UP-012 uses its
 `rejectedWithin` predicate and 1,000,000-step `ledgerFuel`; UP-001 supplies literal
 5,000,000 to its acceptance predicate. These are distinct rejection meanings.

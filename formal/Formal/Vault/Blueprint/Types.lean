@@ -1,6 +1,6 @@
 import PlutusCore.UPLC
 import CardanoLedgerApi
-import Formal.Universal.Properties
+import Formal.Support.Compatibility
 
 namespace Formal.Vault.Blueprint
 
@@ -25,6 +25,6 @@ def accepts (fuel : Nat) (ctx : ScriptContext) : Prop :=
 
 /-- A bounded error or non-unit halt; exhaustion is not rejection. -/
 def rejects (fuel : Nat) (ctx : ScriptContext) : Prop :=
-  Formal.Universal.Properties.rejectedWithin program (args ctx) fuel
+  Formal.Support.rejectedWithin program (args ctx) fuel
 
 end Formal.Vault.Blueprint

@@ -99,7 +99,7 @@ Both proof modules are intentionally outside the default `Formal` import graph.
 After the pinned dependencies are prepared, definition-only compilation is:
 
 ```sh
-lake build Formal.Universal.Properties Formal.Vault.Blueprint.Types Formal.Vault.Blueprint.Tx Formal.Vault.Blueprint.UP009Definition
+lake build Formal.Support.Compatibility Formal.Vault.Blueprint.Types Formal.Vault.Blueprint.Tx Formal.Vault.Blueprint.UP009Definition
 ```
 
 The following opt-in target currently fails at the structural serialization

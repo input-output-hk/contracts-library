@@ -34,8 +34,8 @@ private def normalize (statement : String) : String :=
 example {A : Type} (accepts rejects : Nat → CardanoLedgerApi.V3.ScriptContext → Prop)
     (context : A → CardanoLedgerApi.V3.ScriptContext) :
     statement CardanoLedgerApi.V3.validScriptContext (accepts 1000000) (rejects 1000000) context ↔
-      statement CardanoLedgerApi.V3.validScriptContext (accepts Formal.Universal.Properties.ledgerFuel)
-        (rejects Formal.Universal.Properties.ledgerFuel) context := Iff.rfl
+      statement CardanoLedgerApi.V3.validScriptContext (accepts Formal.Support.ledgerFuel)
+        (rejects Formal.Support.ledgerFuel) context := Iff.rfl
 
 def runTests : IO Unit := do
   let reviewed ← IO.ofExcept (← CombinedCheck.read "Formal/Properties/Universal/UP012/Tests/Expected/combined-checks.json")

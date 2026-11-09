@@ -26,7 +26,7 @@ Use `module.validator` when a short validator name is ambiguous.
 With the existing pinned Lean dependencies available, compile the new modules:
 
 ```sh
-lake build Formal.Universal.Properties Formal.Vesting.Linear.Blueprint.Types
+lake build Formal.Support.Compatibility Formal.Vesting.Linear.Blueprint.Types
 ```
 
 No automatic Aiken rebuild or dependency update occurs.
@@ -52,7 +52,7 @@ After copying CBOR as above, generate the selected checks and run them:
 ```sh
 python3 -I scripts/process_blueprint.py ../onchain/plutus.json linear_vesting --out Formal/Vesting/Linear/Blueprint --check otherPurpose
 lake clean formal
-lake build Formal.Universal.Properties Formal.Vesting.Linear.Blueprint.Types
+lake build Formal.Support.Compatibility Formal.Vesting.Linear.Blueprint.Types
 lake env lean Formal/Vesting/Linear/Blueprint/Checks.lean
 ```
 
@@ -75,7 +75,7 @@ After copying CBOR as above, generate and run the selected cases:
 ```sh
 python3 -I scripts/process_blueprint.py ../onchain/plutus.json linear_vesting --out Formal/Vesting/Linear/Blueprint --check malformedRedeemer
 lake clean formal
-lake build Formal.Universal.Properties Formal.Vesting.Linear.Blueprint.Types
+lake build Formal.Support.Compatibility Formal.Vesting.Linear.Blueprint.Types
 lake env lean Formal/Vesting/Linear/Blueprint/Checks.lean
 ```
 
@@ -116,7 +116,7 @@ already be available:
 
 ```sh
 python3 -I scripts/process_blueprint.py ../onchain/plutus.json linear_vesting --out Formal/Vesting/Linear/Blueprint --check returnDatum &&
-timeout --kill-after=5s 30s lake build Formal.Universal.ReturnDatum &&
+timeout --kill-after=5s 30s lake build Formal.Support.ReturnDatum &&
 timeout --kill-after=5s 30s lake env lean Formal/Vesting/Linear/Blueprint/Checks.lean
 ```
 

@@ -1,5 +1,5 @@
 import Workflow.Generator.Basic
-import Formal.Universal.Properties
+import Formal.Support.Compatibility
 import Formal.Properties.Universal.UP001.Definition
 
 namespace Workflow.Tests.Legacy.Candidates.UP001
@@ -49,9 +49,9 @@ private def checksHeader (modulePrefix : String) : String :=
   String.intercalate "\n" [
     "-- UP-001 domains and predicate from candidate PR #49 at b44b6b0757a75d79b79a4de4712523ee3978760e.",
     "-- Reviewed workflow bound: 5,000,000 CEK steps (candidate: 1,000,000).",
-    "import Blaster", "import Formal.Universal.Properties", "import Formal.Properties.Universal.UP001.Definition", s!"import {modulePrefix}.Types", "",
+    "import Blaster", "import Formal.Support.Compatibility", "import Formal.Properties.Universal.UP001.Definition", s!"import {modulePrefix}.Types", "",
     "set_option Elab.async false", "", s!"namespace {modulePrefix}", "",
-    "open PlutusCore.Data (Data)", "open Formal.Universal.Properties", "",
+    "open PlutusCore.Data (Data)", "open Formal.Support", "",
     "/-! UP-001: no success within 5,000,000 CEK steps for undeclared purposes.",
     "The full TxInfo, redeemer, and purpose fields are variables.",
     "Fuel exhaustion satisfies this claim; it does not establish an explicit error.",

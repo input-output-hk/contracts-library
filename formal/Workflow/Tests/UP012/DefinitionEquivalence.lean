@@ -8,7 +8,7 @@ These kernel-checked equivalences do not invoke the SMT tactic. -/
 namespace Workflow.Tests.UP012.DefinitionEquivalence
 
 open CardanoLedgerApi.V3 (ScriptContext validScriptContext)
-open Formal.Universal.Properties
+open Formal.Support
 
 variable (accepts rejects : Nat → ScriptContext → Prop)
 variable (claim : Formal.TxModels.TxM007.ClaimLeaves → ScriptContext)
