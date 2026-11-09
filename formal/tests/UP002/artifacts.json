@@ -21,7 +21,7 @@
   "validators": [
     {
       "name": "Vault",
-      "lean": "formal/Universal/Demo/Vault/Base.lean",
+      "lean": "formal/tests/UP002/Prototype/Demo/Vault/Base.lean",
       "blueprint": "formal/tests/UP002/Project/plutus.json",
       "title": "vault.vault.spend",
       "compiledCodeBytes": 190,
@@ -30,7 +30,7 @@
     },
     {
       "name": "Vault_buggy",
-      "lean": "formal/Universal/Demo/Vault_buggy/Base.lean",
+      "lean": "formal/tests/UP002/Prototype/Demo/Vault_buggy/Base.lean",
       "blueprint": "formal/tests/UP002/Project/plutus.json",
       "title": "vault_buggy.vault_buggy.spend",
       "compiledCodeBytes": 94,
@@ -39,7 +39,7 @@
     },
     {
       "name": "Linear_vesting",
-      "lean": "formal/Universal/Demo/Linear_vesting/Base.lean",
+      "lean": "formal/tests/UP002/Prototype/Demo/Linear_vesting/Base.lean",
       "blueprint": "onchain/plutus.json",
       "title": "linear_vesting.linear_vesting.spend",
       "compiledCodeBytes": 1404,

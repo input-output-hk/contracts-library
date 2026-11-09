@@ -32,7 +32,6 @@ formal/
 │   ├── App/                # current CLI and orchestration
 │   ├── Input/, Generator/, Executor/, Assessor/
 │   └── Tests/Legacy/       # older providers, reports, and internal fixture driver
-├── Universal/              # earlier harness/demo prototype
 ├── tests/                  # standalone candidate and translator tests/fixtures
 ├── docs/                   # foundation and standalone-check documentation
 └── scripts/                # shared translation and proof utility scripts
@@ -134,12 +133,12 @@ These apply to any contract:
 ## Candidate checks
 
 See [UP-002 preparation, bounds, and standalone proof jobs](docs/UP002.md).
-The files below define the historical propositions; `lake build Universal`
+The files below define the historical propositions; `lake build UP002Prototype`
 typechecks their models without running the separate solver jobs.
 
 | Candidate | Validator/action | Lean file |
 | --- | --- | --- |
-| UP-002 | Linear vesting / Claim | [NoSignatureClaim.lean](Universal/Demo/Linear_vesting/NoSignatureClaim.lean) |
-| UP-002 | Linear vesting / Cancel | [NoSignatureCancel.lean](Universal/Demo/Linear_vesting/NoSignatureCancel.lean) |
-| UP-002 | Vault / Spend | [NoSignatureSpend.lean](Universal/Demo/Vault/NoSignatureSpend.lean) |
-| UP-002 | Buggy vault / Spend (negative example) | [NoSignatureSpend.lean](Universal/Demo/Vault_buggy/NoSignatureSpend.lean) |
+| UP-002 | Linear vesting / Claim | [NoSignatureClaim.lean](tests/UP002/Prototype/Demo/Linear_vesting/NoSignatureClaim.lean) |
+| UP-002 | Linear vesting / Cancel | [NoSignatureCancel.lean](tests/UP002/Prototype/Demo/Linear_vesting/NoSignatureCancel.lean) |
+| UP-002 | Vault / Spend | [NoSignatureSpend.lean](tests/UP002/Prototype/Demo/Vault/NoSignatureSpend.lean) |
+| UP-002 | Buggy vault / Spend (negative example) | [NoSignatureSpend.lean](tests/UP002/Prototype/Demo/Vault_buggy/NoSignatureSpend.lean) |

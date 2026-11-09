@@ -5,7 +5,7 @@ import CardanoLedgerApi.V3
 import CardanoLedgerApi.V1.Time
 import PlutusCore.UPLC.PreProcess
 import Formal.Common
-import Universal.Harness
+import tests.UP002.Prototype.Harness
 
 /-!
 # Universal checks for `linear_vesting`
@@ -18,7 +18,7 @@ review history are in `Universal/Notes.lean`; this header is the short form.
 
 Every open value is a field of the `Holes` structure below; each check quantifies over one
 `h : Holes` and pins the fields it needs with hypotheses. The transaction is composed from the
-builders in `Universal.Harness`.
+builders in `tests.UP002.Prototype.Harness`.
 
 - Shape flags: a second script input, a second output, where the first output goes (own script,
   a key, another script), two signers, one minted asset, a finite or absent lower validity bound.
@@ -45,7 +45,7 @@ pinned CardanoLedgerApi model predicate. `ledgerFloor` constrains the four lovel
 proof term. Separate proof jobs in `tests/UP002` run these checks; see `docs/UP002.md`.
 -/
 
-namespace Universal.Demo.Linear_vesting
+namespace tests.UP002.Prototype.Demo.Linear_vesting
 
 open PlutusCore.UPLC.Term (Program)
 open PlutusCore.ByteString (ByteString)
@@ -54,7 +54,7 @@ open CardanoLedgerApi.IsData.Class (IsData)
 open CardanoLedgerApi.V3 (Address ScriptContext ScriptInfo ScriptPurpose TxInfo TxInInfo TxOut Value)
 open CardanoLedgerApi.V1.Time (POSIXTimeRange after everything)
 open PlutusCore.UPLC.Utils (isSuccessful isUnsuccessful)
-open Universal.Harness
+open tests.UP002.Prototype.Harness
 
 /-- The compiled validator, as the blueprint holds it. -/
 abbrev script : PlutusCore.UPLC.PlutusScript.PlutusScript :=
@@ -133,7 +133,7 @@ def txOf (h : Holes) (od r : Data) : TxInfo :=
   let d := datum h
   let minted := token h.mint1 h.policy h.name h.qty
   tx (scriptInput ownRef own (ada h.inLov) d :: optList h.in2 (scriptInput ref2 own (ada h.inLov2) d))
-     (outputWithDatum (destination h.out1Script h.out1Foreign own h.payee) (ada h.outLov ++ minted) od
+     (outputWithDatum (destination h.out1Script h.out1Foreign own h.payee) (List.append (ada h.outLov) minted) od
        :: optList h.out2 (payment (keyAddress h.payee2) (ada h.outLov2)))
      h.fee minted (validity h.lowFin h.lo) (upTo2 h.sig1 h.sig2 h.s1 h.s2)
      ((.Spending ownRef, r) :: optList h.in2 (.Spending ref2, r))
@@ -146,4 +146,4 @@ def otherCtx (info : ScriptInfo) (key : ScriptPurpose) (rp : Data) (t : TxInfo) 
     scriptContextRedeemer := rp
     scriptContextScriptInfo := info }
 
-end Universal.Demo.Linear_vesting
+end tests.UP002.Prototype.Demo.Linear_vesting
