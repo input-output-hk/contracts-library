@@ -7,7 +7,7 @@ or categories.
 
 Place `properties.json` in the relevant property-set folder under `formal/Formal/`,
 alongside its Lean modules. It contains an array of property entries; see the
-[Universal sample](../../formal/Formal/Universal/properties.json).
+[Evaluator/ledger theory entries](../../formal/Formal/Theory/properties.json).
 
 Each entry requires `id`, `title`, `category`, `summary`, and `theorems`.
 The `id` identifies the property, not a validator. Give the property a descriptive
@@ -62,7 +62,7 @@ The check validates both schemas and every `properties.json` and
 and synthetic metadata, not real validator snapshots. These checks establish
 structure only, not source provenance, CBOR correctness, or proof results.
 
-For a selected property set, run `node scripts/check-property-axioms.mjs Universal`
+For a selected property set, run `node scripts/check-property-axioms.mjs Theory`
 with the pinned Lean toolchain and solver available. This builds the selected
 module and inspects the listed theorems' direct and indirect axiom dependencies.
 

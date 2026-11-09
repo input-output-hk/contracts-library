@@ -5,9 +5,9 @@
     "category": "universal",
     "summary": "If a program halts within n CEK steps, it halts in the same final state for any fuel m >= n. Failure is not preserved: running out of fuel ends in the same error state as a genuine failure.",
     "theorems": [
-      "Formal.Universal.Evaluator.runSteps_eq_of_halt",
-      "Formal.Universal.Evaluator.cekExecuteProgram_eq_of_success",
-      "Formal.Universal.Evaluator.cekExecuteProgram_mono_in_fuel"
+      "Formal.Theory.Evaluator.runSteps_eq_of_halt",
+      "Formal.Theory.Evaluator.cekExecuteProgram_eq_of_success",
+      "Formal.Theory.Evaluator.cekExecuteProgram_mono_in_fuel"
     ]
   },
   {
@@ -16,8 +16,8 @@
     "category": "universal",
     "summary": "A successful run never ends in the error state, and every run with zero fuel is unsuccessful.",
     "theorems": [
-      "Formal.Universal.Evaluator.ne_error_of_success",
-      "Formal.Universal.Evaluator.unsuccessful_of_zero_fuel"
+      "Formal.Theory.Evaluator.ne_error_of_success",
+      "Formal.Theory.Evaluator.unsuccessful_of_zero_fuel"
     ]
   },
   {
@@ -26,8 +26,8 @@
     "category": "universal",
     "summary": "Every transaction accepted by the V3 model has at least one input and a strictly positive fee.",
     "theorems": [
-      "Formal.Universal.Ledger.inputs_ne_nil",
-      "Formal.Universal.Ledger.fee_pos"
+      "Formal.Theory.Ledger.inputs_ne_nil",
+      "Formal.Theory.Ledger.fee_pos"
     ]
   },
   {
@@ -36,7 +36,7 @@
     "category": "universal",
     "summary": "For every transaction accepted by the V3 model with an empty mint, the non-ada tokens in the inputs equal those in the outputs.",
     "theorems": [
-      "Formal.Universal.Ledger.tokens_conserved_of_no_mint"
+      "Formal.Theory.Ledger.tokens_conserved_of_no_mint"
     ]
   },
   {
@@ -45,9 +45,9 @@
     "category": "universal",
     "summary": "For every transaction accepted by the V3 model, input ada equals output ada plus the fee, so outputs contain less ada than inputs. This is a model result; correspondence with Cardano ledger validation is not established here.",
     "theorems": [
-      "Formal.Universal.Ledger.ada_balanced",
-      "Formal.Universal.Ledger.ada_decreases",
-      "Formal.Universal.Ledger.ada_balanced_of_simple_tx"
+      "Formal.Theory.Ledger.ada_balanced",
+      "Formal.Theory.Ledger.ada_decreases",
+      "Formal.Theory.Ledger.ada_balanced_of_simple_tx"
     ]
   },
   {
@@ -56,7 +56,7 @@
     "category": "universal",
     "summary": "For every transaction accepted by the V3 model, the mint field holds no ada: its lovelace amount is zero.",
     "theorems": [
-      "Formal.Universal.Ledger.mint_lovelace_eq_zero"
+      "Formal.Theory.Ledger.mint_lovelace_eq_zero"
     ]
   }
 ]

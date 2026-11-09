@@ -5,7 +5,7 @@ accepts (`validTxInfo`), independent of any validator.
 import Blaster
 import CardanoLedgerApi
 
-namespace Formal.Universal.Ledger
+namespace Formal.Theory.Ledger
 
 open CardanoLedgerApi.IsData.Class
 open CardanoLedgerApi.V3
@@ -73,4 +73,4 @@ theorem ada_balanced_of_simple_tx (ctx : ScriptContext)
     lovelaceOf (valueSpent ctx) = lovelaceOf (valueProduced ctx) + ctx.scriptContextTxInfo.txInfoFee := by
       simp_all [validTxInfo, isBalanced]
 
-end Formal.Universal.Ledger
+end Formal.Theory.Ledger

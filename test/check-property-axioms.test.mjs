@@ -42,9 +42,9 @@ function fixture(t, properties = [entry]) {
     join(directory, "node_modules"),
     "dir",
   );
-  mkdirSync(join(directory, "formal/Formal/Universal"), { recursive: true });
+  mkdirSync(join(directory, "formal/Formal/Theory"), { recursive: true });
   writeFileSync(
-    join(directory, "formal/Formal/Universal/properties.json"),
+    join(directory, "formal/Formal/Theory/properties.json"),
     JSON.stringify(properties),
   );
   const bin = join(directory, "bin");
@@ -67,7 +67,7 @@ process.exit(Number(args[0] === "build" ? process.env.AXIOM_BUILD_STATUS || 0 : 
       existsSync(log)
         ? readFileSync(log, "utf8").trim().split("\n").map(JSON.parse)
         : [],
-    run(args = ["Universal"], env = {}) {
+    run(args = ["Theory"], env = {}) {
       const result = spawnSync(
         process.execPath,
         [join(directory, "scripts/check-property-axioms.mjs"), ...args],
@@ -93,10 +93,10 @@ test("axiom checker builds one module, deduplicates names, and cleans up", (t) =
   const result = check.run();
   assert.equal(result.status, 0, result.stdout + result.stderr);
   const calls = check.calls();
-  assert.deepEqual(calls[0].args, ["build", "+Formal.Universal"]);
+  assert.deepEqual(calls[0].args, ["build", "+Formal.Theory"]);
   assert.equal(
     calls[1].source,
-    axiomAuditSource("Universal", ["Formal.Sample.first"]),
+    axiomAuditSource("Theory", ["Formal.Sample.first"]),
   );
   assert.equal(existsSync(calls[1].args[2]), false);
   assert.match(result.stdout, /1 theorem references/);
@@ -135,7 +135,7 @@ test("empty theorem lists explicitly report that no proofs were inspected", (t) 
   assert.match(result.stdout, /no proofs inspected/);
 });
 
-for (const args of [[], ["../Universal"], ["Universal", "extra"]]) {
+for (const args of [[], ["../Theory"], ["Theory", "extra"]]) {
   test(`axiom checker rejects invalid arguments: ${JSON.stringify(args)}`, (t) => {
     const check = fixture(t);
     assert.equal(check.run(args).status, 1);

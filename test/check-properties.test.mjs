@@ -28,7 +28,7 @@ const entry = {
   ],
 };
 
-function fixture(t, module = "Universal", properties = [entry]) {
+function fixture(t, module = "Theory", properties = [entry]) {
   const directory = mkdtempSync(join(tmpdir(), "properties-check-test-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   for (const file of [
@@ -117,12 +117,12 @@ test("checker uses locked schemas, builds one module, and checks unique names", 
   assert.equal(result.status, 0, result.stdout + result.stderr);
   const calls = check.calls();
   assert.equal(calls.length, 2);
-  assert.deepEqual(calls[0].args, ["build", "+Formal.Universal"]);
+  assert.deepEqual(calls[0].args, ["build", "+Formal.Theory"]);
   assert.equal(calls[0].cwd, calls[1].cwd);
   assert.deepEqual(calls[1].args.slice(0, 2), ["env", "lean"]);
   assert.equal(
     calls[1].source,
-    "import Formal.Universal\n\n#check Formal.Sample.first\n#check Formal.Sample.second\n",
+    "import Formal.Theory\n\n#check Formal.Sample.first\n#check Formal.Sample.second\n",
   );
   assert.equal(existsSync(calls[1].args[2]), false);
   assert.match(result.stdout, /Checked 2 theorem references/);
@@ -133,7 +133,7 @@ for (const [label, data] of [
   ["schema-invalid entries", [{}]],
 ]) {
   test(`checker rejects ${label} before building`, (t) => {
-    const check = fixture(t, "Universal", data);
+    const check = fixture(t, "Theory", data);
     const result = check.run();
     assert.equal(result.status, 1, result.stdout + result.stderr);
     assert.deepEqual(check.calls(), []);
@@ -142,7 +142,7 @@ for (const [label, data] of [
 
 test("checker validates metadata in the selected folder", (t) => {
   const check = fixture(t);
-  check.write("formal/Formal/Universal/validator-metadata.json", {});
+  check.write("formal/Formal/Theory/validator-metadata.json", {});
   const result = check.run();
   assert.equal(result.status, 1);
   assert.match(result.stderr, /validator-metadata.json/);
@@ -157,7 +157,7 @@ test("checker propagates build failure without checking theorem names", (t) => {
 });
 
 test("checker fails on a missing theorem and removes its temporary file", (t) => {
-  const check = fixture(t, "Universal", [
+  const check = fixture(t, "Theory", [
     { ...entry, theorems: ["Formal.Sample.missing"] },
   ]);
   const result = check.run();
@@ -174,7 +174,7 @@ test("checker propagates a Lean process failure", (t) => {
 });
 
 test("checker accepts an empty theorem list and reports zero references", (t) => {
-  const check = fixture(t, "Universal", [{ ...entry, theorems: [] }]);
+  const check = fixture(t, "Theory", [{ ...entry, theorems: [] }]);
   const result = check.run();
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stdout, /Checked 0 theorem references/);
@@ -188,7 +188,7 @@ test("checker maps dotted modules to nested property-set folders", (t) => {
 });
 
 test("checker rejects a theorem string containing Lean commands", (t) => {
-  const check = fixture(t, "Universal", [
+  const check = fixture(t, "Theory", [
     {
       ...entry,
       theorems: ['Formal.Sample.first\n#eval IO.println "unexpected"'],
@@ -200,7 +200,7 @@ test("checker rejects a theorem string containing Lean commands", (t) => {
   assert.deepEqual(check.calls(), []);
 });
 
-for (const args of [[], ["../Universal"], ["--help"], ["Universal", "extra"]]) {
+for (const args of [[], ["../Theory"], ["--help"], ["Theory", "extra"]]) {
   test(`checker rejects invalid arguments: ${JSON.stringify(args)}`, (t) => {
     const check = fixture(t);
     const result = check.run(args);

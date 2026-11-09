@@ -12,7 +12,7 @@ const isName = (value) => plainName.test(value) && !/\s/u.test(value);
 try {
   const [module, ...extra] = process.argv.slice(2);
   if (!module || extra.length > 0 || !isName(module)) {
-    throw new Error("Usage: check_properties.sh <module>, e.g. Universal");
+    throw new Error("Usage: check_properties.sh <module>, e.g. Theory");
   }
 
   const directory = join(formal, "Formal", ...module.split("."));

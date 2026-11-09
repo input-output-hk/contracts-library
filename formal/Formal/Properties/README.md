@@ -57,6 +57,6 @@ an `items` reference to its `$id`. The Lean collection reader remains available.
 The old central `Candidates/property-definitions.json` source is replaced by these property files.
 Runtime reports retain the selected record and exact submitted theorem expressions.
 
-The legacy `U-*` catalogue under `Formal/Universal` is a separate set of entries.
+The `U-*` theory catalogue under `Formal/Theory` is a separate set of entries.
 It is not automatically renamed or migrated to `UP-*`. Issue #66 tracks the
 wider cross-branch migration.
