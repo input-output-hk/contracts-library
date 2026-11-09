@@ -1,5 +1,5 @@
 -- Standalone UP-007 obligations for the frozen linear-vesting fixture.
--- Definitions retain the original propositions; tests/UP007/Checks.lean runs them.
+-- Definitions retain the original propositions; Formal/Properties/Universal/UP007/Tests/Standalone/Checks.lean runs them.
 import Formal.Support.CandidateHelpers
 import Formal.Vesting.Linear.Blueprint.Types
 import Formal.Vesting.Linear.Blueprint.Tx

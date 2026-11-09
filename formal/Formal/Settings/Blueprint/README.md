@@ -4,7 +4,7 @@ Standalone candidate for [issue #37](https://github.com/no-witness-labs/contract
 and [draft PR #64](https://github.com/no-witness-labs/contracts-library/pull/64).
 The original rejection and applicability propositions remain unchanged.
 Separate proof invocations and a synthetic accepting control are in
-[`tests/UP016`](../../../tests/UP016/).
+[`Formal/Properties/Universal/UP016/Tests/Standalone`](../../Properties/Universal/UP016/Tests/Standalone).
 
 UP-016 is an **incomplete proof checkpoint**. On 2026-11-03, the owner approved
 consolidating the retained implementation while carrying unfinished proofs to
@@ -79,7 +79,7 @@ From `formal/`, with the pinned dependencies available:
 lake build Blaster Formal.Settings.Blueprint.MintQuantity
 lake build up016_verify_artifact
 timeout --kill-after=5s 60s .lake/build/bin/up016_verify_artifact
-timeout --kill-after=5s 60s lake env lean --threads=4 --run tests/UP016/ConcreteControls.lean
+timeout --kill-after=5s 60s lake env lean --threads=4 --run Formal/Properties/Universal/UP016/Tests/Standalone/ConcreteControls.lean
 ```
 
 The proof commands below are opt-in references, not a batch to run during
@@ -87,9 +87,9 @@ consolidation. Select the file or files and obtain a fresh execution budget
 before a new proof attempt:
 
 ```sh
-timeout --kill-after=5s 300s lake env lean --threads=4 tests/UP016/QuantityIncreaseRejects.lean
-timeout --kill-after=5s 300s lake env lean --threads=4 tests/UP016/QuantityIncreaseApplies.lean
-timeout --kill-after=5s 300s lake env lean --threads=4 tests/UP016/AcceptingControl.lean
+timeout --kill-after=5s 300s lake env lean --threads=4 Formal/Properties/Universal/UP016/Tests/Standalone/QuantityIncreaseRejects.lean
+timeout --kill-after=5s 300s lake env lean --threads=4 Formal/Properties/Universal/UP016/Tests/Standalone/QuantityIncreaseApplies.lean
+timeout --kill-after=5s 300s lake env lean --threads=4 Formal/Properties/Universal/UP016/Tests/Standalone/AcceptingControl.lean
 ```
 
 Run selected proof files sequentially within the agreed total deadline and
@@ -119,7 +119,7 @@ the expected observation.
 The support modules build. Native artifact verification passed the source,
 SHA-256, policy-hash, and five-parameter syntax-tree checks. All 17 original
 concrete controls passed. The earlier interpreted artifact command
-(`lake env lean --run tests/UP016/VerifyArtifact.lean`) reached its 60-second
+(`lake env lean --run tests/UP016/VerifyArtifact.lean`, at its former path) reached its 60-second
 deadline; the native executable above provides the completed verification.
 
 The first direct rejection proof reached its 300-second deadline without a

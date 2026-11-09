@@ -1,5 +1,5 @@
 -- Original UP-008 statements from candidate 0e5fb61, preserved as propositions.
--- Solver checks, including the expected falsifications, are in tests/UP008/Checks.lean.
+-- Solver checks, including the expected falsifications, are in Formal/Properties/Universal/UP008/Tests/Standalone/Checks.lean.
 import Formal.Support.CandidateHelpers
 import Formal.Vesting.Linear.Blueprint.Types
 import Formal.Vesting.Linear.Blueprint.Tx

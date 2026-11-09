@@ -1,5 +1,5 @@
 -- Standalone UP-011 propositions extracted from the generated blueprint checks.
--- Solver observations live in tests/UP011/Checks.lean, including inapplicable Cancel.
+-- Solver observations live in Formal/Properties/Universal/UP011/Tests/Standalone/Checks.lean, including inapplicable Cancel.
 import Formal.Support.CandidateHelpers
 import Formal.Vesting.Linear.Blueprint.Types
 import Formal.Vesting.Linear.Blueprint.Tx

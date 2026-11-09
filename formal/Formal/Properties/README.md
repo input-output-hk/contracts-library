@@ -1,10 +1,15 @@
 # Property bank
 
-Property definitions live here by category and stable code. Each property folder
-contains its primary `Definition.lean`, descriptive `metadata.json`, and README.
-UP-001, UP-012, and UP-015 also own `Run.lean` and tests; the public CLI discovers
-those run declarations without a manual central registration entry.
+Property work lives here by category and stable code. The maintained UP-001,
+UP-012, and UP-015 entries contain a primary `Definition.lean`, descriptive
+`metadata.json`, README, and `Run.lean`. The public CLI discovers their run
+declarations without a manual central registration entry.
 Folder names use Lean module spelling such as `UP001`; metadata keeps `UP-001`.
+
+Other candidate folders currently hold only retained tests and fixtures under
+`Tests/Standalone/`. Their presence does not register a runnable property or imply
+that a native definition or metadata record is ready. Their existing standalone
+definition modules and proof limits remain documented in their guides.
 
 ```text
 Properties/
@@ -18,12 +23,28 @@ Properties/
     UP001/{Definition.lean, Run.lean, metadata.json, README.md, Tests.lean}
     UP012/{Definition.lean, Run.lean, metadata.json, README.md, Tests.lean}
     UP015/{Definition.lean, Run.lean, metadata.json, README.md, Tests.lean}
+    UPxxx/Tests/Standalone/  # retained candidate checks, controls, and fixtures
 ```
 
 [Index.lean](Index.lean) references category indexes. Each category index imports
 its definitions and supplies code-owned IDs, versions, checked Lean names, and
 metadata paths. [Common.lean](Common.lean) defines that small reference type.
 The index contains no duplicate property statements and imports no workflow code.
+
+## Test ownership
+
+Each property's tests belong with that property. The current `Tests.lean` entry
+modules exercise formula, model-list, binding, and admission behavior. Their
+`Tests/` folders hold supporting controls and expected records; `Tests/Standalone/`
+preserves the earlier direct candidate checks and artifact fixtures. These groups
+can use different models and expected outcomes, so shared ownership does not
+make them interchangeable.
+
+The workflow aggregate includes selected property test suites. Standalone
+proof jobs remain explicit commands and may include expected falsifications or
+unfinished proofs. Read their recorded limits before running them.
+[Workflow tests](../../Workflow/Tests/README.md) check the app and engine;
+validator milestone suites live beside each validator's specification proofs.
 
 A candidate has one clear primary property statement. Its definition file can
 also contain helper definitions, applicability predicates, and lemmas. Applying
@@ -37,6 +58,7 @@ that pairing's reviewed `limitations`; this one list controls registration.
 UP-001, UP-012, and UP-015 use this path. Models expose
 one native `runnable` declaration; the indexes remain available for legacy tools
 and metadata consumers.
+
 The registered UP-001, UP-012, and UP-015 bindings are experimental workflow
 scenarios. Registration and metadata validation do not establish general property
 or model readiness. Their wider definitions remain tracked in issues #23, #33,
@@ -46,10 +68,12 @@ bank does not add multi-validator selection or change the verification-core cont
 
 ## Metadata
 
-Every property folder must contain one metadata file using the shared
+Each maintained property definition has one metadata file using the shared
 [record schema](property-definition.schema.json). Each file holds its property
 record as an object. Individual-field required/optional and list-cardinality
 policy remain open; runtime use still requires the registered identity and version.
+Tests-only candidate folders do not create placeholder metadata or executable
+registrations. Wider definition and metadata adoption remains tracked in #66/#96.
 
 The former workflow collection-schema wrapper is removed. Validate these records
 with the shared schema; array consumers can wrap it using `type: "array"` and
