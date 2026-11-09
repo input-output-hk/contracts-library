@@ -6,7 +6,7 @@ open PlutusCore.Data (Data)
 open PlutusCore.UPLC.Term (Program Const)
 open PlutusCore.UPLC.CekMachine (initialState applyParams)
 open CardanoLedgerApi.V3 (ScriptContext validScriptContext)
-open Formal.Universal.Properties
+open Formal.Support
 open Formal.Vesting.Linear.Blueprint (ClaimLeaves claim args)
 
 /-- A concrete witness in the unchanged Claim model. -/

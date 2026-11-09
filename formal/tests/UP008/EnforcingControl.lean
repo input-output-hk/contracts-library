@@ -6,7 +6,7 @@ open PlutusCore.UPLC.Term (Program Term Const)
 open PlutusCore.UPLC.CekMachine (cekExecuteProgram)
 open CardanoLedgerApi.IsData.Class (toTerm)
 open CardanoLedgerApi.V3 (ScriptContext TxOutRef validScriptContext)
-open Formal.Universal.Properties
+open Formal.Support
 open Formal.Vesting.Linear.Blueprint (claim)
 
 /-!

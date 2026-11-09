@@ -1,6 +1,6 @@
 -- Original UP-008 statements from candidate 0e5fb61, preserved as propositions.
 -- Solver checks, including the expected falsifications, are in tests/UP008/Checks.lean.
-import Formal.Universal.CandidateHelpers
+import Formal.Support.CandidateHelpers
 import Formal.Vesting.Linear.Blueprint.Types
 import Formal.Vesting.Linear.Blueprint.Tx
 
@@ -10,7 +10,7 @@ open PlutusCore.Data (Data)
 open PlutusCore.ByteString (ByteString)
 open CardanoLedgerApi.IsData.Class (IsData)
 open CardanoLedgerApi.V3 (Address Credential PubKeyHash StakingCredential TxOutRef validScriptContext)
-open Formal.Universal.Properties
+open Formal.Support
 
 /-- A `claim` transaction with a junk token, from a new input, appended to its first output back
     to the script is rejected (for transactions that need their outputs back to the script:

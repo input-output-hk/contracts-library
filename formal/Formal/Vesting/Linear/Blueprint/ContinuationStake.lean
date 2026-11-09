@@ -1,6 +1,6 @@
 -- Standalone UP-007 obligations for the frozen linear-vesting fixture.
 -- Definitions retain the original propositions; tests/UP007/Checks.lean runs them.
-import Formal.Universal.CandidateHelpers
+import Formal.Support.CandidateHelpers
 import Formal.Vesting.Linear.Blueprint.Types
 import Formal.Vesting.Linear.Blueprint.Tx
 
@@ -10,7 +10,7 @@ open PlutusCore.Data (Data)
 open PlutusCore.ByteString (ByteString)
 open CardanoLedgerApi.IsData.Class (IsData)
 open CardanoLedgerApi.V3 (Address Credential PubKeyHash StakingCredential TxOutRef validScriptContext)
-open Formal.Universal.Properties
+open Formal.Support
 
 /-- A `claim` transaction whose first output back to the script gets another staking credential
     is rejected (for transactions that need their outputs back to the script: with those sent

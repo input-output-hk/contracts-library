@@ -40,7 +40,7 @@
     },
     {
       "label": "Per-purpose context domains and shared evaluation helpers",
-      "target": "formal/Formal/Universal/Properties.lean"
+      "target": "formal/Formal/Support/Compatibility.lean"
     },
     {
       "label": "Original candidate source before the reviewed workflow bound change",

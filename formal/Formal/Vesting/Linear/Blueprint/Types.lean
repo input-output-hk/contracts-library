@@ -2,7 +2,7 @@
 -- Program bytes are embedded so Lean tracks the checked artifact without an external Scripts file.
 import PlutusCore.UPLC
 import CardanoLedgerApi
-import Formal.Universal.Properties
+import Formal.Support.Compatibility
 
 namespace Formal.Vesting.Linear.Blueprint
 
@@ -95,6 +95,6 @@ def accepts (fuel : Nat) (ctx : ScriptContext) : Prop :=
 
 /-- The script genuinely fails within `fuel` steps (running out of steps is not a failure). -/
 def rejects (fuel : Nat) (ctx : ScriptContext) : Prop :=
-  Formal.Universal.Properties.rejectedWithin program (args ctx) fuel
+  Formal.Support.rejectedWithin program (args ctx) fuel
 
 end Formal.Vesting.Linear.Blueprint

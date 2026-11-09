@@ -59,7 +59,7 @@ before running the checks. The package config uses four Lean workers; the direct
 Lean invocations below also specify four workers.
 
 ```sh
-timeout --kill-after=5s 300s lake build Formal.Universal.Properties
+timeout --kill-after=5s 300s lake build Formal.Support.Compatibility
 mkdir -p .lake/build/lib/lean/tests/UP005
 timeout --kill-after=5s 300s lake env lean -j4 -o .lake/build/lib/lean/tests/UP005/Fixture.olean tests/UP005/Fixture.lean
 timeout --kill-after=5s 300s lake env lean -j4 --json tests/UP005/Checks.lean

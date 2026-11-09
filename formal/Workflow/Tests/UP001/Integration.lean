@@ -1,7 +1,7 @@
 import Workflow.Input
 import Workflow.Generator
 import Workflow.Tests.Legacy.Candidates.UP001
-import Formal.Universal.Properties
+import Formal.Support.Compatibility
 
 open Workflow
 
@@ -25,10 +25,10 @@ private def statements (plan : GenerationPlan) (modulePrefix : String) : Generat
     s!"def {job.name}_statement : Prop :=\n{job.statement}\n")
   { name := s!"{modulePrefix}.Statements"
     source := String.intercalate "\n" [
-      s!"import {modulePrefix}.Types", "import Formal.Universal.Properties",
+      s!"import {modulePrefix}.Types", "import Formal.Support.Compatibility",
       "import Formal.Properties.Universal.UP001.Definition", "",
       s!"namespace {modulePrefix}", "open PlutusCore.Data (Data)",
-      "open Formal.Universal.Properties", body, s!"end {modulePrefix}", ""] }
+      "open Formal.Support", body, s!"end {modulePrefix}", ""] }
 
 private def exercise (directory : System.FilePath) (leanPath : String)
     (path : System.FilePath) (selector modulePrefix : String) : IO Unit := do

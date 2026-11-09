@@ -8,7 +8,7 @@ set_option warningAsError true
 namespace Tests.UP011
 
 open CardanoLedgerApi.V3 (Credential validScriptContext)
-open Formal.Universal.Properties
+open Formal.Support
 open Formal.Vesting.Linear.Blueprint (claim)
 
 #eval Fixture.checkSource

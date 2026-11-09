@@ -79,7 +79,7 @@ Use the repository's pinned Lean toolchain and `lake-manifest.json`, with Z3
 support modules:
 
 ```sh
-lake build Blaster Formal.Universal.Properties Formal.Universal.ReturnDatum
+lake build Blaster Formal.Support.Compatibility Formal.Support.ReturnDatum
 mkdir -p .lake/build/lib/lean/tests/UP006
 lake env lean -o .lake/build/lib/lean/tests/UP006/Fixture.olean tests/UP006/Fixture.lean
 lake env lean -o .lake/build/lib/lean/tests/UP006/ModelFacts.olean tests/UP006/ModelFacts.lean

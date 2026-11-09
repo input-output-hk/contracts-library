@@ -22,7 +22,7 @@ set_option Elab.async false
 namespace Formal.Vesting.Linear.Blueprint
 
 open CardanoLedgerApi.V3 (validScriptContext)
-open Formal.Universal.Properties (ledgerFuel)
+open Formal.Support (ledgerFuel)
 
 /-- Reversing the two Claim outputs preserves bounded acceptance. -/
 theorem reverseOutputs_claim :

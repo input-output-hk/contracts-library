@@ -1,4 +1,4 @@
-import Formal.Universal.Execution
+import Formal.Support.Execution
 import Formal.TxModels.Definitions.TxM001
 import Formal.TxModels.Definitions.TxM002
 import Formal.TxModels.Definitions.TxM003
@@ -8,7 +8,7 @@ import Formal.TxModels.Definitions.TxM006
 
 /-! Compatibility aliases for existing purpose models and transaction builders. -/
 
-namespace Formal.Universal.Properties
+namespace Formal.Support
 
 /-- Compatibility names for the models now owned by Formal.TxModels. -/
 abbrev mkCtx := Formal.TxModels.mkCtx
@@ -32,9 +32,9 @@ abbrev EveryPropose := Formal.TxModels.EveryPropose
 abbrev EveryPropose.ctx := Formal.TxModels.EveryPropose.ctx
 
 
-end Formal.Universal.Properties
+end Formal.Support
 
-namespace Formal.Universal.TxBuilder
+namespace Formal.Support.TxBuilder
 
 abbrev ada := Formal.TxModels.TxBuilder.ada
 abbrev adaAnd := Formal.TxModels.TxBuilder.adaAnd
@@ -46,4 +46,4 @@ abbrev input := Formal.TxModels.TxBuilder.input
 abbrev Spend := Formal.TxModels.TxBuilder.Spend
 abbrev Spend.context := Formal.TxModels.TxBuilder.Spend.context
 
-end Formal.Universal.TxBuilder
+end Formal.Support.TxBuilder

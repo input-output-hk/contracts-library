@@ -7,7 +7,7 @@ set_option Elab.async false
 namespace Tests.UP010.OutputDependentControl
 
 open CardanoLedgerApi.V3 (validScriptContext)
-open Formal.Universal.Properties
+open Formal.Support
 open Formal.Vesting.Linear.Blueprint (claim)
 open Tests.UP010.OutputDependentFixture (accepts rejects)
 

@@ -32,7 +32,7 @@ Use Lean 4.24.0, Z3 4.15.2, and the dependency revisions pinned by
 `lake-manifest.json`. From `formal/`:
 
 ```sh
-lake build Formal.Universal.Properties
+lake build Formal.Support.Compatibility
 mkdir -p .lake/build/lib/lean/tests/UP001
 lake env lean -o .lake/build/lib/lean/tests/UP001/Fixture.olean tests/UP001/Fixture.lean
 timeout --kill-after=5s 300s lake env lean -j4 --json tests/UP001/Checks.lean

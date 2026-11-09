@@ -1,6 +1,6 @@
 import CardanoLedgerApi
 
-namespace Formal.Universal.ReturnDatum
+namespace Formal.Support.ReturnDatum
 
 open PlutusCore.Data (Data)
 open CardanoLedgerApi.V3 (ScriptHash TxOut)
@@ -17,4 +17,4 @@ def allReturnDatumsValid
       | _ => false
     else true
 
-end Formal.Universal.ReturnDatum
+end Formal.Support.ReturnDatum

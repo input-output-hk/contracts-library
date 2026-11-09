@@ -1,5 +1,5 @@
 import Lean.Data.Json
-import Formal.Universal.CandidateHelpers
+import Formal.Support.CandidateHelpers
 import Formal.Vesting.Linear.Blueprint.Types
 
 namespace Tests.UP010.OutputDependentFixture
@@ -25,7 +25,7 @@ def accepts (fuel : Nat) (ctx : ScriptContext) : Prop :=
   cekExecuteProgram program [toTerm ctx] fuel = .Halt (.VCon Const.Unit)
 
 def rejects (fuel : Nat) (ctx : ScriptContext) : Prop :=
-  Formal.Universal.Properties.rejectedWithin program [toTerm ctx] fuel
+  Formal.Support.rejectedWithin program [toTerm ctx] fuel
 
 /-- Check both dispatched entries, the compiler, version, and absence of parameters. -/
 private def checkBlueprint (path entryPrefix compilerVersion expectedHash : String)

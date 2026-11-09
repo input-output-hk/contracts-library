@@ -2,7 +2,7 @@
 -- transaction with a fixed structure whose leaves are the fields of a structure. Written once by
 -- process_blueprint.py as a stub; it is never replaced, so edit it freely.
 import CardanoLedgerApi
-import Formal.Universal.Properties
+import Formal.Support.Compatibility
 import Formal.Vesting.Linear.Blueprint.Types
 
 namespace Formal.Vesting.Linear.Blueprint
@@ -11,7 +11,7 @@ open PlutusCore.Data (Data)
 open PlutusCore.ByteString (ByteString)
 open CardanoLedgerApi.IsData.Class.IsData (toData)
 open CardanoLedgerApi.V3 (ScriptContext)
-open Formal.Universal.TxBuilder
+open Formal.Support.TxBuilder
 
 /-- The policy of the vested asset. A literal: a symbolic policy stops Blaster inside
     `validScriptContext` (docs/Universal/DEAD_ENDS.md §17). -/

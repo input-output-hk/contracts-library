@@ -15,7 +15,7 @@ UP-001 uses its existing generator through a compatibility bridge.
 
 Discovery evaluates selected `Run.lean` files in Lean, then compiles only the
 model names those declarations return. Evaluator helpers moved to
-`Formal/Universal/Execution.lean` without changing their names or definitions.
+`Formal/Support/Execution.lean` without changing their names or definitions.
 The public entry point no longer imports the candidate catalogue or model-bank
 aggregate. Explicit module imports remain dependencies.
 

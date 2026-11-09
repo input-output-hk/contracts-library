@@ -1,9 +1,9 @@
-import Formal.Universal.Execution
+import Formal.Support.Execution
 
 namespace Formal.Properties.Universal.UP012
 
 open CardanoLedgerApi.V3 (ScriptContext)
-open Formal.Universal.Properties (signatoriesOf withSignatories)
+open Formal.Support (signatoriesOf withSignatories)
 
 /-- The primary signer-removal claim, parameterized by a context family and evaluator predicates. -/
 def statement {A : Type} (valid : ScriptContext → Bool)

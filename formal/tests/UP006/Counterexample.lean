@@ -5,7 +5,7 @@ set_option Elab.async false
 
 namespace UP006
 
-open Formal.Universal.Properties (ledgerFuel)
+open Formal.Support (ledgerFuel)
 open CardanoLedgerApi.V3 (validScriptContext)
 
 /-- The original claim satisfies the pinned ledger model. -/

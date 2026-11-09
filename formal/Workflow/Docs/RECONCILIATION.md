@@ -169,7 +169,7 @@ owner decisions.
 [old-generator]: https://github.com/no-witness-labs/contracts-library/blob/0dde8ae76e3f8a239bf06685f72327aed4a7c3ef/formal/scripts/GenUniversalChecks.lean
 [old-predicates]: https://github.com/no-witness-labs/contracts-library/blob/0dde8ae76e3f8a239bf06685f72327aed4a7c3ef/formal/Formal/Common.lean
 [new-provider]: ../Tests/Legacy/Candidates/UP001.lean
-[new-contexts]: https://github.com/no-witness-labs/contracts-library/blob/d3bce414a3417b9227fa92f1e0a33672d2829749/formal/Formal/Universal/Properties.lean
+[new-contexts]: https://github.com/no-witness-labs/contracts-library/blob/d3bce414a3417b9227fa92f1e0a33672d2829749/formal/Formal/Support/Compatibility.lean
 
 The TxM-009 pilot adds reusable structural admission under `Workflow/Preparation`.
 It keeps the native constructor, property, fuel, and ten-combination Lean catalogue.

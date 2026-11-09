@@ -8,7 +8,7 @@ namespace Tests.UP016.AcceptingControl
 open PlutusCore.UPLC.Term (Program Const)
 open PlutusCore.UPLC.CekMachine (cekExecuteProgram)
 open CardanoLedgerApi.V3 (ScriptContext validScriptContext)
-open Formal.Universal.Properties (ledgerFuel rejectedWithin)
+open Formal.Support (ledgerFuel rejectedWithin)
 open Formal.Settings.Blueprint (MintLeaves original changed args)
 
 /-- Synthetic UPLC control that ignores its context and returns unit. -/

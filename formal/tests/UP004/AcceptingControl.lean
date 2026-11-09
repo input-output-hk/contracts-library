@@ -1,5 +1,5 @@
 import Blaster
-import Formal.Universal.Properties
+import Formal.Support.Compatibility
 import Formal.Vesting.Linear.Blueprint.Tx
 
 set_option Elab.async false
@@ -8,7 +8,7 @@ namespace Tests.UP004.AcceptingControl
 
 open PlutusCore.UPLC.Term (Program)
 open CardanoLedgerApi.V3 (ScriptContext validScriptContext)
-open Formal.Universal.Properties
+open Formal.Support
 open Formal.Vesting.Linear.Blueprint (args claim cancel)
 
 /-!

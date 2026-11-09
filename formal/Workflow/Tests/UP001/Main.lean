@@ -1,6 +1,6 @@
 import Workflow.Tests.Support
 import Workflow.Tests.UP001.Tests
-import Formal.Universal.Properties
+import Formal.Support.Compatibility
 
 open Workflow.Tests.Support
 

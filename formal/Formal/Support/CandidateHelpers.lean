@@ -1,4 +1,4 @@
-import Formal.Universal.Properties
+import Formal.Support.Compatibility
 
 /-! Shared legacy candidate helpers consolidated from these fork PR snapshots:
 - PR #21: b1b7e5c745ad3729b8a7e36347dc183a3eeb45fc
@@ -9,11 +9,11 @@ import Formal.Universal.Properties
 - PR #61: df712cb869e1cf67537ef0c0f7b1241aaae5fa65
 - PR #62: 7c5dce717ca1d2b1d975c1c1b044bc48c07e0687
 
-The definitions retain their original bodies and fully qualified names.
+The definitions retain their original bodies under the shared support namespace.
 The `redirectOutputs` comment describes only that particular mutation.
 -/
 
-namespace Formal.Universal.Properties
+namespace Formal.Support
 
 open PlutusCore.Data (Data)
 open PlutusCore.ByteString (ByteString)
@@ -127,4 +127,4 @@ def asSpendOf (h g : ScriptContext) (r : TxOutRef) : ScriptContext :=
                                     scriptContextScriptInfo := .SpendingScript r d }
   | _ => h
 
-end Formal.Universal.Properties
+end Formal.Support

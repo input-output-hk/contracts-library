@@ -8,7 +8,7 @@ open PlutusCore.UPLC.Term (Program Const)
 open PlutusCore.UPLC.CekMachine (cekExecuteProgram)
 open CardanoLedgerApi.IsData.Class (IsData)
 open CardanoLedgerApi.V3 (Credential ScriptContext validScriptContext)
-open Formal.Universal.Properties
+open Formal.Support
 open Formal.Vesting.Linear.Blueprint (args claim)
 
 /-- Compiled from Project/validators/continuation_gate.ak with Aiken v1.1.21+42babe5,

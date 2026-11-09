@@ -6,7 +6,7 @@ set_option Elab.async false
 namespace Formal.Vault.Blueprint.UP009
 
 open CardanoLedgerApi.V3
-open Formal.Universal.Properties (ledgerFuel)
+open Formal.Support (ledgerFuel)
 
 theorem hashed_valid : validScriptContext Tx.hashed = true := by
   blaster

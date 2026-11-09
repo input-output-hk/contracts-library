@@ -2,7 +2,7 @@ import Workflow.Input
 import Workflow.Generator
 import Workflow.Tests.Legacy.Candidates.UP001
 import Workflow.Tests.Unit.Executor.Controls
-import Formal.Universal.Properties
+import Formal.Support.Compatibility
 
 open Workflow
 

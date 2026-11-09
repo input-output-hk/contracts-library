@@ -2,7 +2,7 @@
 -- The retained applied program below replaces only the ignored-file import.
 import PlutusCore.UPLC
 import CardanoLedgerApi
-import Formal.Universal.Properties
+import Formal.Support.Compatibility
 
 namespace Formal.Settings.Blueprint
 
@@ -98,6 +98,6 @@ def accepts (fuel : Nat) (ctx : ScriptContext) : Prop :=
 
 /-- The script genuinely fails within `fuel` steps (running out of steps is not a failure). -/
 def rejects (fuel : Nat) (ctx : ScriptContext) : Prop :=
-  Formal.Universal.Properties.rejectedWithin program (args ctx) fuel
+  Formal.Support.rejectedWithin program (args ctx) fuel
 
 end Formal.Settings.Blueprint

@@ -3,7 +3,7 @@ import CardanoLedgerApi
 
 /-! Evaluator and context operations without a transaction-model catalogue dependency. -/
 
-namespace Formal.Universal.Properties
+namespace Formal.Support
 
 open PlutusCore.UPLC.Term (Program Term Const)
 open PlutusCore.UPLC.CekMachine (State step initialState applyParams)
@@ -35,4 +35,4 @@ def withSignatories (h : ScriptContext) (sigs : List PubKeyHash) : ScriptContext
   { h with scriptContextTxInfo := { h.scriptContextTxInfo with txInfoSignatories := sigs } }
 
 
-end Formal.Universal.Properties
+end Formal.Support

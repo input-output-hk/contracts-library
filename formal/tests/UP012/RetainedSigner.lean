@@ -1,5 +1,5 @@
 import Blaster
-import Formal.Universal.Properties
+import Formal.Support.Compatibility
 import Formal.Vesting.Linear.Blueprint.Types
 import Formal.Vesting.Linear.Blueprint.Tx
 
@@ -16,7 +16,7 @@ set_option Elab.async false
 namespace Tests.UP012.RetainedSigner
 
 open CardanoLedgerApi.V3 (validScriptContext)
-open Formal.Universal.Properties
+open Formal.Support
 open Formal.Vesting.Linear.Blueprint
 
 /-- Expected Falsified: require rejection after retaining the Claim signatory. -/
