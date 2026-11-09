@@ -20,3 +20,6 @@ Import `Formal.Support.Execution` for evaluator/context operations without model
 catalogue imports. The `Formal.Support.Compatibility` module provides the older
 model/builder aliases for existing consumers. Broader candidate migration remains
 a separate task.
+
+[Validation](VALIDATION.md) records source preservation and the local regression
+results for this relocation.
