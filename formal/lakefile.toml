@@ -150,3 +150,12 @@ root = "Workflow.Tests.Unit.Declarative.Discovery"
 [[lean_exe]]
 name = "workflow_public_cli_tests"
 root = "Workflow.Tests.Unit.Declarative.PublicCLI"
+
+# Validator-milestone suite; intentionally separate from workflow tests.
+[[lean_exe]]
+name = "test_m12"
+root = "Formal.Vesting.Linear.Tests.Main"
+
+[[lean_exe]]
+name = "test_m12_runner_tests"
+root = "Formal.Vesting.Linear.Tests.RunnerTests"

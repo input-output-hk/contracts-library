@@ -7,6 +7,20 @@ instead of defining candidate logic in the engine.
 These experimental scenarios test integration; they do not establish general
 readiness of the three properties or their transaction models.
 
+## Ownership and suite membership
+
+| Owner | Test location | Purpose |
+| --- | --- | --- |
+| Workflow | This folder | Engine, app, CLI, output, and integration behavior |
+| Reusable property | `Formal/Properties/<category>/<code>/Tests.lean` and `Tests/` | Property implementation, model bindings, and positive/negative controls |
+| Validator milestone | The validator's `Tests/Main.lean` | Its specification/proof checks and milestone results |
+
+The aggregate below invokes selected property suites as well as workflow tests.
+Their files still belong to the property they test. Retained standalone checks
+now live under each property's `Tests/Standalone/`; they and validator milestone
+suites are not automatically included in the workflow aggregate. Shared helper
+and translator checks are described in [the shared-test index](../../tests/README.md).
+
 [Aiken test projects](Projects/README.md) provide editable examples for manual
 inspection. Start with [vault-demo](Projects/vault-demo/README.md) to see generated
 UP-001 Lean files for passing and deliberately failing validators.
@@ -28,7 +42,8 @@ The aggregate command registers 25 suites, including component units, metadata,
 run evidence, selection, shared source capture/compilation, relative review links,
 output controls, and installer/launcher checks. It also runs real app/core solver cases, runner failure
 controls, Input-to-Generator type-checking, Executor/Reporter solver controls, and
-the scenarios below. Each scenario invokes its candidate-specific checks.
+the scenarios below. It includes the three property-owned parity suites, but does
+not execute every retained standalone candidate proof or the validator milestones.
 Optional manual integration probes are not additional suite runs.
 Register new workflow test executables in `Runner.defaultSuites` so the aggregate
 command includes them.
@@ -84,8 +99,8 @@ sources, compiler artifacts, logs, and reports appear only in the local ignored
 where supporting definitions live.
 
 `workflow_preparation_tests` adds pure compatibility and compiled-program admission
-coverage. The aggregate now registers 25 suites. The new runtime scenarios in
-UP012 use `preparation-demo`; the full UP-012 suite and the public CLI produced
+coverage. The runtime scenarios in UP012 use `preparation-demo`; earlier full
+UP-012 and public CLI validation produced
 the expected positive, negative, and failed-applicability outcomes. Existing vault-demo
 expectations remain 30 selected combinations and 45 generated Lean files; this
-pilot has not rerun that demo.
+historical pilot record does not claim a new run of that demo.

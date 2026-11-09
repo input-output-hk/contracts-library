@@ -6,9 +6,12 @@ model banks, and contract-specific specification proofs.
 For Plutus UPV (Universal Property Verifier), use the
 [CLI quickstart](Workflow/Docs/USER-GUIDE.md). The app uses Lean for property discovery,
 model preparation, and verification with the installed Lean/Z3 tools.
-From `formal/`, `./plutus-upv test` runs all workflow tests with verbose
+From `formal/`, `./plutus-upv test` runs the registered workflow test suites with verbose
 logs; `./plutus-upv run ...` verifies properties of a supplied compiled validator.
 The guide includes passing, failing, and inconclusive examples.
+
+Use the [documentation map](docs/README.md) to find the app, reusable banks,
+standalone candidate guides, and contract specification proofs.
 
 Proofs are written in [Lean 4](https://lean-lang.org/) and discharged with
 [Lean-Blaster](https://github.com/input-output-hk/Lean-blaster), an SMT (Z3)
@@ -23,17 +26,18 @@ formal/
 ├── lean-toolchain          # pinned Lean version
 ├── Formal/
 │   ├── Properties/         # property definitions, run instructions, metadata, tests
+│   │   └── Universal/UPxxx/Tests/Standalone/  # retained candidate checks and fixtures
 │   ├── TxModels/           # reusable transaction models and their metadata
 │   ├── Theory/             # evaluator and ledger model theorems (U-* catalogue)
 │   ├── Support/            # execution, context, and compatibility helpers
-│   ├── Vesting/            # specification proofs and standalone checkpoints
+│   ├── Vesting/            # specification proofs, milestone suites, standalone checkpoints
 │   ├── Vault/              # standalone hashed-datum checkpoint
 │   └── Settings/           # standalone minting checkpoint
 ├── Workflow/
 │   ├── App/                # current CLI and orchestration
 │   ├── Input/, Generator/, Executor/, Assessor/
-│   └── Tests/Legacy/       # older providers, reports, and internal fixture driver
-├── tests/                  # standalone candidate and translator tests/fixtures
+│   └── Tests/              # workflow integration, component controls, legacy comparisons
+├── tests/                  # shared support and blueprint-translator tests/fixtures
 ├── docs/                   # foundation and standalone-check documentation
 └── scripts/                # shared translation and proof utility scripts
 ```
@@ -131,15 +135,17 @@ These apply to any contract:
 - **vesting/linear**: see [`Formal/Vesting/Linear/README.md`](Formal/Vesting/Linear/README.md)
   for its coverage tables and open targets.
 
-## Candidate checks
+## Test ownership
 
-See [UP-002 preparation, bounds, and standalone proof jobs](docs/UP002.md).
-The files below define the historical propositions; `lake build UP002Prototype`
-typechecks their models without running the separate solver jobs.
+| What you want to test | Location and entry point |
+| --- | --- |
+| App, engine, and integration behavior | [Workflow tests](Workflow/Tests/README.md), `./plutus-upv test` |
+| A reusable property's definition, model binding, and retained examples | [Property bank](Formal/Properties/README.md), each property's `Tests.lean` and `Tests/` |
+| One validator milestone's specification proofs | [Linear vesting M1.2 suite](Formal/Vesting/Linear/Tests/README.md), `lake exe test_m12` |
+| Shared support or blueprint translation | [Shared-test index](tests/README.md) |
 
-| Candidate | Validator/action | Lean file |
-| --- | --- | --- |
-| UP-002 | Linear vesting / Claim | [NoSignatureClaim.lean](tests/UP002/Prototype/Demo/Linear_vesting/NoSignatureClaim.lean) |
-| UP-002 | Linear vesting / Cancel | [NoSignatureCancel.lean](tests/UP002/Prototype/Demo/Linear_vesting/NoSignatureCancel.lean) |
-| UP-002 | Vault / Spend | [NoSignatureSpend.lean](tests/UP002/Prototype/Demo/Vault/NoSignatureSpend.lean) |
-| UP-002 | Buggy vault / Spend (negative example) | [NoSignatureSpend.lean](tests/UP002/Prototype/Demo/Vault_buggy/NoSignatureSpend.lean) |
+The workflow aggregate includes selected property suites. Standalone candidate
+proof jobs and validator milestone suites run separately. A property's retained
+`Tests/Standalone/` folder does not mean its native definition, metadata, or app
+registration is complete. Historical proof outcomes keep their original model,
+artifact, dependency, and execution limits; moving files does not rerun them.

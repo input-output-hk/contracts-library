@@ -23,10 +23,11 @@ artifacts through reusable TxM-009 preparation: normal vault PASS, buggy vault F
 applicability PASS for both are the expected outcomes. These expectations do not
 replace execution evidence. The existing vesting identity control remains.
 
-The vesting suite uses the public CLI and expects Valid for Claim signer removal,
+The vesting suite uses the internal legacy fixture driver and expects Valid for Claim signer removal,
 Claim applicability, Cancel signer removal, and Cancel applicability. It also
 checks explicit rejection of an unsupported artifact. Generated files and
-reports stay under `formal/output/`.
+reports stay under `formal/output/`. Public product-command behavior has separate
+coverage in `workflow_public_cli_tests` and the recorded public-run validations.
 
 The [negative control](NegativeControl.lean) runs the four component APIs with
 the same validator and model, but retains the signer in the generated checks.

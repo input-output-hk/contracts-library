@@ -1,4 +1,4 @@
-# vesting/linear — formal proofs
+# vesting/linear: formal proofs
 
 Machine-checked proofs for the **linear vesting** contract, against the compiled
 validator. See the spec [`spec.md`](../../../../docs/vesting/spec.md)
@@ -7,14 +7,19 @@ on-chain types [`types.ak`](../../../../onchain/lib/vesting/types.ak). For the
 toolchain, build, and general `blaster` notes, see the
 [`formal/` README](../../../README.md).
 
+Run the [M1.2 milestone suite](Tests/README.md) with `lake exe test_m12` from
+`formal/`. It builds the five modules below and audits their theorem axioms,
+retaining separate results for incomplete proofs, missing artifacts, and timeouts.
+This suite is separate from reusable property tests and workflow integration.
+
 ## Modules
 
-- `Spec.lean` — the pure model (`vested`/`required`, datum/redeemer encoding,
+- `Spec.lean`: the pure model (`vested`/`required`, datum/redeemer encoding,
   shared datum fixtures); no UPLC.
-- `Script.lean` — loads the compiled `spend` validator (`spendValidator`).
-- `Completeness.lean` — `spec ⇒ accepts` (§8).
-- `Soundness.lean` — `accepts ⇒ spec` (§9), plus the shared context builders.
-- `Robustness.lean` — rejection theorems (§9 R-clauses, §5.1).
+- `Script.lean`: loads the compiled `spend` validator (`spendValidator`).
+- `Completeness.lean`: `spec ⇒ accepts` (§8).
+- `Soundness.lean`: `accepts ⇒ spec` (§9), plus the shared context builders.
+- `Robustness.lean`: rejection theorems (§9 R-clauses, §5.1).
 
 ## Standard instance
 
@@ -34,18 +39,18 @@ instance is comprehensive across all three directions.
 | `vested_nonneg`, `required_nonneg` | `vested ∈ [0, total]` |
 | `vested_mono` | B2 (`vested` non-decreasing in `now`) |
 
-### Completeness — `spec ⇒ accepts` (§8)
+### Completeness: `spec ⇒ accepts` (§8)
 
 | Theorem | Spec clause |
 |---|---|
-| `claim_accept_generic_schedule` | C0–C4, I3 (general single-asset partial claim: symbolic identities, total, **schedule**, `now`, amount) |
-| `claim_accept_anytime` | C0–C4 across all `now`, symbolic ada (full-retention) |
+| `claim_accept_generic_schedule` | C0 through C4, I3 (general single-asset partial claim: symbolic identities, total, **schedule**, `now`, amount) |
+| `claim_accept_anytime` | C0 through C4 across all `now`, symbolic ada (full-retention) |
 | `claim_complete_full` | §8.2, I4 (full claim once `now ≥ end`) |
 | `claim_accept_script_auth` | C1 (script beneficiary via withdraw-0) |
 | `claim_accept_two_inputs` | §5.1 (correctly funded batch accepted) |
-| `cancel_complete` | C6–C8 (authorized cancel after recovery) |
+| `cancel_complete` | C6 through C8 (authorized cancel after recovery) |
 
-### Robustness — rejection (§9 R-clauses, §5.1)
+### Robustness: rejection (§9 R-clauses, §5.1)
 
 | Theorem | Spec clause |
 |---|---|
@@ -58,7 +63,7 @@ instance is comprehensive across all three directions.
 | `reject_script_no_withdrawal` | R1 (script beneficiary, no withdrawal) |
 | `no_double_satisfaction` | §5.1, I2 (`k`-scaling: one continuation cannot satisfy two inputs) |
 
-### Soundness — `accepts ⇒ spec` (§9)
+### Soundness: `accepts ⇒ spec` (§9)
 
 | Theorem | Spec clause |
 |---|---|
