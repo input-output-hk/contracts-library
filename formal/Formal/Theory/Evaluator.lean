@@ -1,6 +1,6 @@
 import PlutusCore.UPLC.Utils
 
-namespace Formal.Universal.Evaluator
+namespace Formal.Theory.Evaluator
 
 open PlutusCore.Default (BuiltinSemanticsVariant)
 open PlutusCore.UPLC.CekMachine
@@ -64,4 +64,4 @@ theorem cekExecuteProgram_mono_in_fuel
     rw [runSteps_eq_of_halt _ _ _ _ hSuccess hNM]
     exact hSuccess
 
-end Formal.Universal.Evaluator
+end Formal.Theory.Evaluator

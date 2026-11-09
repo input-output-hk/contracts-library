@@ -24,7 +24,8 @@ formal/
 ├── Formal/
 │   ├── Properties/         # property definitions, run instructions, metadata, tests
 │   ├── TxModels/           # reusable transaction models and their metadata
-│   ├── Universal/          # evaluator/ledger theory and shared helpers
+│   ├── Theory/             # evaluator and ledger model theorems (U-* catalogue)
+│   ├── Universal/          # execution and compatibility helpers
 │   ├── Vesting/            # specification proofs and standalone checkpoints
 │   ├── Vault/              # standalone hashed-datum checkpoint
 │   └── Settings/           # standalone minting checkpoint
