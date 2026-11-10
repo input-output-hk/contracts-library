@@ -59,6 +59,8 @@ ADA requirement and prints no accepted transaction witness.
 
 ## Tests and provenance
 
+The [validation record](VALIDATION.md) documents the tested revision and results.
+
 From `formal/`:
 
 ```sh
