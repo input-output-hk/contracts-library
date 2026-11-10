@@ -3,9 +3,11 @@
 Plutus UPV (Universal Property Verifier) checks universal properties against
 compiled Plutus validators using Lean and configured proof tools. The prototype
 accepts the documented Aiken-style Plutus V3 blueprint profile. By default, one
-command processes all logical validators and all ten registered property/model
-combinations. They comprise six for UP-001, three for UP-012, and one for UP-015. These are
-experimental workflow bindings; registration does not establish general readiness
+command processes all logical validators and all twelve registered property/model
+combinations. They comprise two for UP-000, six for UP-001, three for UP-012, and
+one for UP-015.
+
+These are experimental workflow bindings; registration does not establish general readiness
 of the properties or models.
 
 The app prints a terminal summary and retains local run files. The separate
@@ -77,11 +79,12 @@ other validators continue. Invalid shared JSON/title structure stops discovery.
 
 ## Select properties with a file
 
-Start with [checks.example.json](../../checks.example.json), which enables all three
+Start with [checks.example.json](../../checks.example.json), which enables all four
 registered properties, or save your own `checks.json`. For example, enable only UP-001:
 
 ```json
 {
+  "UP-000": false,
   "UP-001": true,
   "UP-012": false,
   "UP-015": false
@@ -171,7 +174,7 @@ characters such as `/`; `run.json` preserves canonical validator names.
 | Per-check `check-result.json` | The assessed six-field result, including scope, reasons, and evidence references |
 | Per-check `input.json` | The same captured blueprint used to prepare that validator |
 | Per-check `execution.json` | Attempted commands, timing, raw observations, and diagnostics |
-| `Generated/` | Generated Lean, stdout/stderr logs, and successful compiled modules; UP-012 and UP-015 also generate `Tx.lean` |
+| `Generated/` | Generated Lean, stdout/stderr logs, and successful compiled modules; UP-000, UP-012, and UP-015 also generate `Tx.lean` |
 
 An interrupted run can leave its last saved index unfinished. Files depend on how
 far an attempt progressed: unreadable input has no snapshot, and validator
@@ -216,6 +219,29 @@ result files. The former `universal` entry point is retired. Use `plutus-upv run
 verification and `plutus-upv test` for local workflow checks.
 
 ## Property scope and examples
+
+Run UP-000 against the original reference vesting fixture from `formal/`:
+
+```sh
+./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-000
+```
+
+This selects Claim (TxM-007) and Cancel (TxM-008). Each checks for a model-valid
+accepted context within **1,000,000 CEK steps**, using one existential goal and
+no separate applicability obligation. The expected reference outcome is two PASS
+results when both goals complete successfully. Inspect the actual table and
+retained files to determine the run's outcome.
+
+Open the printed `Review` path. Each `UP-000-v1-TxM-007` or `UP-000-v1-TxM-008`
+folder contains generated `Types.lean`, `Tx.lean`, and `Checks.lean` plus results
+and logs. The checks are `someAccepted_claim` and `someAccepted_cancel`.
+
+UP-000 admits only this original compiled artifact; its run declaration skips
+the second artifact recognized by native model admission. Other artifacts remain
+unsupported. This route adds no minimum ADA premise and prints no accepted
+transaction witness. A PASS establishes existence within the selected model and
+bound, without establishing deployed-ledger reachability or funds safety. See
+the [UP-000 scope](../../Formal/Properties/Universal/UP000/README.md).
 
 UP-001 checks nonacceptance for undeclared purposes within **5,000,000 CEK steps**.
 A selected combination for an already declared purpose has no obligations and
@@ -268,8 +294,9 @@ and all registered combinations. The app and test command do not build Aiken
 sources automatically. The original UP-012 regression input remains unchanged;
 the reviewed demo build has an independent shared regression snapshot.
 
-The three scenarios test workflow behavior. They do not establish general
+The four scenarios test workflow behavior. They do not establish general
 property or model readiness. Definition work remains open in
+[UP-000 #22](https://github.com/no-witness-labs/contracts-library/issues/22),
 [UP-001 #23](https://github.com/no-witness-labs/contracts-library/issues/23),
 [UP-012 #33](https://github.com/no-witness-labs/contracts-library/issues/33), and
 [UP-015 #36](https://github.com/no-witness-labs/contracts-library/issues/36).
