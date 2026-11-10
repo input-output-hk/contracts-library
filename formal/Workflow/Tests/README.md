@@ -1,11 +1,11 @@
 # Workflow tests
 
-The four reusable components have separate unit coverage. UP000, UP001, UP012,
-and UP015 are the four workflow scenarios; they reference candidate implementations
+The four reusable components have separate unit coverage. UP000, UP001, UP004,
+UP012, and UP015 are the five workflow scenarios; they reference candidate implementations
 instead of defining candidate logic in the engine.
 
 These experimental scenarios test integration; they do not establish general
-readiness of the four properties or their transaction models.
+readiness of the five properties or their transaction models.
 
 ## Ownership and suite membership
 
@@ -38,11 +38,11 @@ stops the run; a suite failure allows the remaining independent suites to run.
 Only a complete successful test run returns zero. Expected negative controls
 print FAIL or INCONCLUSIVE without making their enclosing suite fail.
 
-The aggregate command registers 27 suites, including component units, metadata,
+The aggregate command registers 29 suites, including component units, metadata,
 run evidence, selection, shared source capture/compilation, relative review links,
 output controls, and installer/launcher checks. It also runs real app/core solver cases, runner failure
 controls, Input-to-Generator type-checking, Executor/Reporter solver controls, and
-the scenarios below. It includes four property-owned suites, but does
+the scenarios below. It includes five property-owned suites, but does
 not execute every retained standalone candidate proof or the validator milestones.
 Optional manual integration probes are not additional suite runs.
 Register new workflow test executables in `Runner.defaultSuites` so the aggregate
@@ -54,6 +54,8 @@ For focused scenario debugging:
 lake exe workflow_up000_tests
 lake exe workflow_up000_tests --unit
 lake exe workflow_up001_tests
+lake exe workflow_up004_tests
+lake exe workflow_up004_tests --unit
 lake exe workflow_up012_tests --unit
 lake exe workflow_up012_tests
 lake exe workflow_up015_tests --unit
@@ -65,6 +67,7 @@ lake exe workflow_property_discovery_tests
 lake exe workflow_declarative_tests
 lake exe workflow_declarative_up000_tests
 lake exe workflow_declarative_up001_tests
+lake exe workflow_declarative_up004_tests
 lake exe workflow_declarative_up015_tests
 lake exe workflow_public_cli_tests
 lake exe workflow_sources_tests
@@ -75,12 +78,14 @@ lake exe workflow_review_tests
 | --- | --- | --- |
 | [UP000](UP000/README.md) | Native app/engine Claim/Cancel acceptance, retained output, two skip paths, and synthetic always-error controls | Native UP-000, TxM-007/008, and the original UP012 fixture |
 | [UP001](UP001/README.md) | Passing and failing vaults, invalid input, and timeout | `Workflow.Tests.Legacy.Candidates.UP001` and fixed demo inputs |
+| [UP004](UP004/README.md) | Native app/engine Claim/Cancel rejection, retained output, two skip paths, timeout handling, and synthetic always-accepting controls | Native UP-004, TxM-007/008, and the original UP012 fixture |
 | [UP012](UP012/README.md) | Four original vesting propositions, native TxM-009 vault and reusable preparation checks, unsupported-profile handling, and a semantic negative control | `Workflow.Tests.Legacy.Candidates.UP012` plus test-owned vesting and vault profiles |
 | [UP015](UP015/README.md) | Claim output swap, nonidentity applicability, shared-model app scenarios, unsupported-profile handling, and a counterfactual rejection control | `Workflow.Tests.Legacy.Candidates.UP015`, native TxM-007, and shared test-only linear-vesting preparation |
 
 The UP001/UP012 scenario harnesses preserve the old report contract through the internal legacy fixture driver.
-UP000 uses the native catalogue and app with `UP012/Inputs/plutus.json` and TxM-007/008.
-Its property-owned skip rule excludes the second native-allowlist vesting artifact.
+UP000 and UP004 use the native catalogue and app with `UP012/Inputs/plutus.json`
+and TxM-007/008. Their property-owned skip rules exclude the second native-allowlist
+vesting artifact. Public CLI runs remain separate from these automated app scenarios.
 UP015 reuses the same original fixture and TxM-007.
 UP012 and UP015 `--unit` modes skip solver cases. Their default runs include
 app scenarios and test-only negative controls. [Profiles/LinearVesting.lean](Profiles/LinearVesting.lean)
@@ -109,6 +114,6 @@ coverage. The runtime scenarios in UP012 use `preparation-demo`; earlier full
 UP-012 and public CLI validation produced
 the expected positive, negative, and failed-applicability outcomes. The historical
 vault-demo pilot expectations covered 30 combinations and 45 generated Lean files.
-With UP-000 registered, its default selection has 36 combinations; the six new
+With UP-000 and UP-004 registered, its default selection has 42 combinations; the twelve added
 pairs are skipped and generate no Lean files. These expectations do not claim a
 new run of that demo.

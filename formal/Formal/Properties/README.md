@@ -1,7 +1,7 @@
 # Property bank
 
 Property work lives here by category and stable code. The maintained UP-000,
-UP-001, UP-012, and UP-015 entries contain a primary `Definition.lean`, descriptive
+UP-001, UP-004, UP-012, and UP-015 entries contain a primary `Definition.lean`, descriptive
 `metadata.json`, README, and `Run.lean`. The public CLI discovers their run
 declarations without a manual central registration entry.
 Folder names use Lean module spelling such as `UP001`; metadata keeps `UP-001`.
@@ -22,6 +22,7 @@ Properties/
     Index.lean
     UP000/{Definition.lean, Run.lean, metadata.json, README.md, Tests.lean}
     UP001/{Definition.lean, Run.lean, metadata.json, README.md, Tests.lean}
+    UP004/{Definition.lean, Run.lean, metadata.json, README.md, Tests.lean}
     UP012/{Definition.lean, Run.lean, metadata.json, README.md, Tests.lean}
     UP015/{Definition.lean, Run.lean, metadata.json, README.md, Tests.lean}
     UPxxx/Tests/Standalone/  # retained candidate checks, controls, and fixtures
@@ -56,14 +57,14 @@ remain in the [model bank](../TxModels/README.md).
 Property-owned run declarations select models and define goal arguments for the
 shared execution engine. Each enabled `ModelUse` entry contains a model `id` and
 that pairing's reviewed `limitations`; this one list controls registration.
-UP-000, UP-001, UP-012, and UP-015 use this path. Models expose
+UP-000, UP-001, UP-004, UP-012, and UP-015 use this path. Models expose
 one native `runnable` declaration; the indexes remain available for legacy tools
 and metadata consumers.
 
-The registered UP-000, UP-001, UP-012, and UP-015 bindings are experimental workflow
+The registered UP-000, UP-001, UP-004, UP-012, and UP-015 bindings are experimental workflow
 scenarios. Registration and metadata validation do not establish general property
 or model readiness. Their wider definitions remain tracked in issues #22, #23,
-#33, and #36. Model authoring and candidate integration remain in #89 and #96.
+#25, #33, and #36. Model authoring and candidate integration remain in #89 and #96.
 The CLI can currently bundle several applications for a selected property. This
 bank does not add multi-validator selection or change the verification-core contract.
 

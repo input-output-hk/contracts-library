@@ -8,15 +8,16 @@ applies to every validator, model, or protocol.
 | --- | --- | --- |
 | UP-000 | Existence of a model-valid accepted context within the configured bound | [UP000](UP000/README.md) |
 | UP-001 | Nonacceptance over the configured context family | [UP001](UP001/README.md) |
+| UP-004 | Existence of a model-valid explicitly rejected context within the configured bound | [UP004](UP004/README.md) |
 | UP-012 | Experimental signer-removal rejection with explicit premises | [UP012](UP012/README.md) |
 | UP-015 | Experimental Claim output-reversal acceptance with nonidentity applicability | [UP015](UP015/README.md) |
 
-[Index.lean](Index.lean) imports these four definitions and points to their metadata.
+[Index.lean](Index.lean) imports these five definitions and points to their metadata.
 Each listed entry has one primary definition, metadata, and a README. Concrete check
 bindings select the model, evaluator predicates, bounds, and supported target.
-The four registered properties and their models remain experimental. Successful
+The five registered properties and their models remain experimental. Successful
 workflow tests do not establish their general readiness. Definition work remains
-in issues #22, #23, #33, and #36; broader model authoring and integration stay in #89
+in issues #22, #23, #25, #33, and #36; broader model authoring and integration stay in #89
 and #96.
 
 Other `UPxxx` folders retain property-owned checks and fixtures in

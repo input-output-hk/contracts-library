@@ -1,0 +1,64 @@
+{
+  "schema_version": 2,
+  "identity": {
+    "id": "UP-004",
+    "definition_version": 1,
+    "title": "Bounded existence of rejected action contexts",
+    "category": "universal"
+  },
+  "explanation": {
+    "summary": "Check that the reference linear-vesting program explicitly rejects at least one model-valid Claim and at least one model-valid Cancel within 1,000,000 CEK steps.",
+    "claim": "For each selected Claim or Cancel model, there exists a context satisfying validScriptContext that the supplied program explicitly rejects with an error or a non-unit halt within 1,000,000 CEK steps. Fuel exhaustion does not establish rejection. Each existential statement includes its own validity and rejection witness, so there is no separate applicability obligation.",
+    "purpose": "Check bounded model-valid rejection existence for the original pinned vesting action scenarios through the native property workflow."
+  },
+  "scope": {
+    "relevance_conditions": [
+      "Relevant to the selected Claim and Cancel actions of the reference linear-vesting compiled artifact.",
+      "The transaction families must represent the action scenarios being checked. The workflow does not discover or enumerate all actions from the blueprint."
+    ],
+    "preconditions": [
+      "The target is the exact reference compiled artifact in Formal.TxModels.Artifacts.LinearVesting.referenceCompiledCode and is an unparameterized Plutus V3 spending program."
+    ],
+    "limitations": [
+      "The shared TxM-007 and TxM-008 models admit two compiler artifacts. UP-004 restricts this binding to the original reference artifact and skips the second artifact without generating proof obligations.",
+      "Claim has two inputs and two outputs; Cancel has two inputs and one output. Both use one signer, one vested asset under fixed policyA, key credentials in the vesting datum, and a finite validity lower bound with no upper bound. Reference inputs, minting, and withdrawals are absent.",
+      "The script credential p.script remains symbolic and is not constrained to the supplied program's hash.",
+      "Model-valid rejection existence does not establish full ledger reachability, deployment exposure, arbitrary transaction coverage, or general validator safety. It does not show that every invalid transaction rejects or that authorization is correct.",
+      "The check adds no requirement that every output contain at least 1 ADA and does not print a rejected transaction witness.",
+      "Explicit rejection requires an error or a non-unit halt within the CEK bound. Fuel exhaustion does not count as rejection. The bound is not a ledger CPU or memory budget.",
+      "A FAIL means the rejection-existence obligation failed within the selected model and bound; it does not establish that the program accepts every context. A timeout or solver error leaves the result unresolved.",
+      "Successful generated Blaster checks retain the blasterProven SMT trust assumption. This metadata records the property definition and does not assert a target-specific proof result.",
+      "The broader checkpoint 2 and workflow work in issues #25 and #96 remains open."
+    ]
+  },
+  "formalization": {
+    "primary": "Formal.Properties.Universal.UP004.statement",
+    "theorems": []
+  },
+  "references": [
+    {
+      "label": "Primary model-valid rejection existence definition",
+      "target": "formal/Formal/Properties/Universal/UP004/Definition.lean"
+    },
+    {
+      "label": "Property-owned model selection and reference-artifact restriction",
+      "target": "formal/Formal/Properties/Universal/UP004/Run.lean"
+    },
+    {
+      "label": "Original standalone Claim and Cancel obligations",
+      "target": "formal/Formal/Vesting/Linear/Blueprint/SomeRejected.lean"
+    },
+    {
+      "label": "Shared compiled artifact constants",
+      "target": "formal/Formal/TxModels/Artifacts/LinearVesting.lean"
+    },
+    {
+      "label": "Open broader rejection-existence checkpoint work",
+      "target": "https://github.com/no-witness-labs/contracts-library/issues/25"
+    },
+    {
+      "label": "Open workflow integration and follow-up work",
+      "target": "https://github.com/no-witness-labs/contracts-library/issues/96"
+    }
+  ]
+}
