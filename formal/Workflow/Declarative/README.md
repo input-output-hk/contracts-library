@@ -1,11 +1,12 @@
 # Property-owned execution
 
 The public `plutus-upv run` command discovers maintained run declarations for
+[UP-000](../../Formal/Properties/Universal/UP000/Run.lean),
 [UP-001](../../Formal/Properties/Universal/UP001/Run.lean),
 [UP-012](../../Formal/Properties/Universal/UP012/Run.lean), and
 [UP-015](../../Formal/Properties/Universal/UP015/Run.lean). Lean handles discovery,
 selection, model preparation, and application launch. The earlier `universal`
-executable remains available for compatibility and regression comparisons.
+executable is retired; internal legacy fixtures retain regression comparisons.
 
 `Definition.lean` states the reusable property. Its sibling `Run.lean` supplies
 execution instructions and one list of enabled models. Each list entry names a
@@ -28,6 +29,7 @@ From `formal/`:
 
 ```sh
 ./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-012 --check UP-015 --timeout-ms 300000
+./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-000
 ```
 
 ## Authoring contract
@@ -58,6 +60,13 @@ existing meanings. Lean checks the generated applications.
 UP-001 uses its six native purpose models through this same route. Its property
 run skips purposes declared by an admitted target. A skip generates no modules,
 proof observations, or passing verdict.
+
+UP-000 selects TxM-007/008, with one existential model-valid acceptance goal per
+combination and no separate applicability goal. Its property-owned skip rule
+restricts execution to the original vesting artifact, even though native model
+admission also recognizes the second reviewed artifact. The skipped artifact
+produces no proof verdict. The [UP-000 guide](../../Formal/Properties/Universal/UP000/README.md)
+describes the 1,000,000-step bound, generated files, and remaining scope limits.
 
 ## Discovery and retained evidence
 
@@ -100,8 +109,10 @@ Focused checks from `formal/`:
 lake exe workflow_property_discovery_tests
 lake exe workflow_public_cli_tests
 lake exe workflow_declarative_tests
+lake exe workflow_declarative_up000_tests
 lake exe workflow_declarative_up001_tests
 lake exe workflow_declarative_up015_tests
+lake exe workflow_up000_tests
 ./plutus-upv test
 ```
 

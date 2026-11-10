@@ -29,17 +29,22 @@ five-minute default; `--timeout-ms` can override it.
 The demo's blueprint, build cache, and optional generated artifacts stay ignored
 by Git. No automatic Aiken build is added to the app or aggregate workflow tests.
 
-The default command selects all three validators and all ten registered
+The default command selects all three validators and all twelve registered
 property/model combinations. The expected terminal counts, when every supported
 check finishes conclusively, are:
 
 | Validator | PASS | FAIL | SKIPPED | ERROR | TIMEOUT |
 | --- | --- | --- | --- | --- | --- |
-| `vault.vault` | 6 | 0 | 4 | 0 | 0 |
-| `vault_buggy.vault_buggy` | 0 | 6 | 4 | 0 | 0 |
-| `linear_vesting.linear_vesting` | 8 | 0 | 2 | 0 | 0 |
+| `vault.vault` | 6 | 0 | 6 | 0 | 0 |
+| `vault_buggy.vault_buggy` | 0 | 6 | 6 | 0 | 0 |
+| `linear_vesting.linear_vesting` | 8 | 0 | 4 | 0 | 0 |
 
-These are expected counts for 30 selected combinations, pending a complete run.
+These are expected counts for 36 selected combinations, pending a complete run.
+UP-000 adds two SKIPPED combinations per validator. The vault artifacts are
+unsupported by its models; its property-owned rule skips this second vesting
+artifact even though shared native admission recognizes it. UP-000 runs only
+against the original fixture in `UP012/Inputs/plutus.json`.
+
 The declared spend-purpose UP-001 combination is SKIPPED with a not-applicable reason.
 UP-012's two vesting combinations and UP-015's one combination are SKIPPED for the
 vaults because their compiled artifacts are outside the vesting allowlist.
@@ -88,7 +93,7 @@ The vesting adapter recognizes two exact compiled artifacts: the original PR #55
 fixture and this reviewed Aiken 1.1.21/stdlib 3.0.0 build. Other compiled code stays
 unsupported for TxM-007/008. TxM-009 instead uses reusable structural admission.
 Admission does not establish general
-readiness of UP-001, UP-012, UP-015, or their models.
+readiness of UP-000, UP-001, UP-012, UP-015, or their models.
 
 The app's exit code describes completion and retention. A deliberately failing
 vault check can therefore appear in a completed run with exit code 0; inspect
