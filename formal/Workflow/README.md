@@ -3,11 +3,11 @@
 Plutus UPV (Universal Property Verifier) checks universal properties against
 compiled Plutus validators using ordinary Lean code and configured proof tools.
 The prototype supports the documented Aiken-style Plutus V3 blueprint profile.
-The app processes all logical validators and all twelve registered property/model
+The app processes all logical validators and all fourteen registered property/model
 combinations by default, with optional validator/property filters and a property
-switch file. UP-000 checks the original vesting artifact with Claim and Cancel.
+switch file. UP-000 and UP-004 check the original vesting artifact with Claim and Cancel.
 UP-012 supports pinned vesting profiles and reusable TxM-009 preparation; UP-015 uses
-the pinned vesting profiles. These four properties and their models support prototype
+the pinned vesting profiles. These five properties and their models support prototype
 testing; their broader definitions and coverage still need review.
 
 | Guide | Use |
@@ -44,7 +44,7 @@ The final human-friendly report remains separate work in
 | `Metadata/` | Property/model metadata readers and binding validation |
 | [Declarative/](Declarative/README.md) | Property-owned discovery, shared model binding, and generation |
 | `Preparation/` | Reusable program decoding and model-input compatibility checks |
-| [Tests/](Tests/README.md) | Component controls and the UP000/UP001/UP012/UP015 workflow scenarios |
+| [Tests/](Tests/README.md) | Component controls and the UP000/UP001/UP004/UP012/UP015 workflow scenarios |
 | [Formal/Properties](../Formal/Properties/README.md) | Native primary definitions, metadata, and category/code indexes |
 | [Formal/TxModels](../Formal/TxModels/README.md) | Native context constructors and their metadata |
 
@@ -72,6 +72,10 @@ implementations. Application composition supplies those dependencies.
   artifact; it supplies neither a printed transaction witness nor ledger reachability.
 - UP-001 checks nonacceptance for undeclared purposes within 5,000,000 CEK steps.
   Exhaustion satisfies this claim; explicit rejection is a different statement.
+- UP-004 asks for a model-valid explicitly rejected context within 1,000,000 CEK
+  steps, separately for Claim and Cancel on the original vesting artifact.
+  An error or non-unit halt counts as rejection; fuel exhaustion does not.
+  Each existential goal includes validity and rejection, with no separate applicability job.
 - UP-012 applies the experimental signer-removal definition to the fixed Claim
   and Cancel models and the key-datum spend model. Its applicability obligations qualify the corresponding
   property obligations. It is not a general required-signer audit for new validators.

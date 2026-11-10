@@ -39,10 +39,11 @@ for their results.
 
 ## Current delivery status
 
-The product app now runs all logical validators and all twelve registered
+The product app now runs all logical validators and all fourteen registered
 property-definition/model combinations by default. These comprise two UP-000
-Claim/Cancel models, six UP-001 purpose models, three UP-012 models, and one
-UP-015 Claim reversal binding. UP-000 admits only the original vesting artifact.
+Claim/Cancel models, six UP-001 purpose models, two UP-004 Claim/Cancel models,
+three UP-012 models, and one UP-015 Claim reversal binding. UP-000 and UP-004
+admit only the original vesting artifact.
 These remain experimental workflow bindings, with general property/model readiness
 outside this integration.
 
@@ -74,7 +75,7 @@ not provision a managed runtime or build the caller's Aiken project.
 | Input selection | Several validators per command; requires a spend handler and `name.name.handler` titles | App defaults to all logical validators; Input prepares each selected validator, accepts canonical or unambiguous short names, validates explicit V3 metadata, and decodes code | App supplies batch orchestration; additional input formats remain separate work |
 | Schema handling | Translates datum and redeemer schemas into bounded symbolic data | Input preserves schemas; UP-001 uses raw redeemer data without schema translation | General schema translation/integration remains open; review the old translation before reuse |
 | Parameters | Rejects any entry with a `parameters` field, including an empty array | Input preserves descriptions; current adapters accept absent or empty lists and reject nonempty lists | Typed parameter generation/application remains open; PR #47 does not supply it |
-| Candidate checks | UP-000, UP-001, UP-002, UP-004, UP-005, and UP-011 | Registry supplies two UP-000 existential acceptance combinations at 1,000,000 steps, six UP-001 purpose combinations at 5,000,000 steps, three UP-012 combinations (two vesting and one key-datum spend), and one UP-015 Claim reversal combination; CLI filters registered properties | Experimental integration does not establish general readiness; definitions #22/#23/#33/#36, model authoring #89, and further integration #96 remain open |
+| Candidate checks | UP-000, UP-001, UP-002, UP-004, UP-005, and UP-011 | Registry supplies two UP-000 existential acceptance and two UP-004 existential rejection combinations at 1,000,000 steps, six UP-001 purpose combinations at 5,000,000 steps, three UP-012 combinations (two vesting and one key-datum spend), and one UP-015 Claim reversal combination; CLI filters registered properties | Experimental integration does not establish general readiness; definitions #22/#23/#25/#33/#36, model authoring #89, and further integration #96 remain open |
 | Metadata and models | Generator-owned check definitions and transaction builders | Native property/model banks, checked metadata, and fixed executable bindings; selected snapshots follow generated obligations and assessed results | Native banks supply metadata/binding integration; general transaction-model authoring remains open |
 | Cases and reachability | Full constructor splits, weaker quick mode, and UNREACHED classification using UP-000 | No schema case splitting or cross-check reachability classification | Review case domains and aggregation before porting spend checks |
 | Generated code | Embeds script bytes in the generated Base module; writes modules in the checkout | Embeds script bytes in generated Types; each combination uses a fresh evidence directory | Retain embedded artifacts and isolated execution |
@@ -176,7 +177,7 @@ owner decisions.
 
 The TxM-009 pilot added reusable structural admission under `Workflow/Preparation`.
 That checkpoint kept the native constructor, property, fuel, and then-current
-ten-combination Lean catalogue. The UP-000 integration adds two combinations
+ten-combination Lean catalogue. UP-000 and UP-004 add two combinations each
 without changing TxM-009 admission.
 Compatible compiled programs need no allowlist entries, but schema compatibility
 alone establishes no security role or coverage claim. The supported subset and

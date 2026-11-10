@@ -3,9 +3,9 @@
 Plutus UPV (Universal Property Verifier) checks universal properties against
 compiled Plutus validators using Lean and configured proof tools. The prototype
 accepts the documented Aiken-style Plutus V3 blueprint profile. By default, one
-command processes all logical validators and all twelve registered property/model
-combinations. They comprise two for UP-000, six for UP-001, three for UP-012, and
-one for UP-015.
+command processes all logical validators and all fourteen registered property/model
+combinations. They comprise two for UP-000, six for UP-001, two for UP-004,
+three for UP-012, and one for UP-015.
 
 These are experimental workflow bindings; registration does not establish general readiness
 of the properties or models.
@@ -79,13 +79,14 @@ other validators continue. Invalid shared JSON/title structure stops discovery.
 
 ## Select properties with a file
 
-Start with [checks.example.json](../../checks.example.json), which enables all four
+Start with [checks.example.json](../../checks.example.json), which enables all five
 registered properties, or save your own `checks.json`. For example, enable only UP-001:
 
 ```json
 {
   "UP-000": false,
   "UP-001": true,
+  "UP-004": false,
   "UP-012": false,
   "UP-015": false
 }
@@ -174,7 +175,7 @@ characters such as `/`; `run.json` preserves canonical validator names.
 | Per-check `check-result.json` | The assessed six-field result, including scope, reasons, and evidence references |
 | Per-check `input.json` | The same captured blueprint used to prepare that validator |
 | Per-check `execution.json` | Attempted commands, timing, raw observations, and diagnostics |
-| `Generated/` | Generated Lean, stdout/stderr logs, and successful compiled modules; UP-000, UP-012, and UP-015 also generate `Tx.lean` |
+| `Generated/` | Generated Lean, stdout/stderr logs, and successful compiled modules; UP-000, UP-004, UP-012, and UP-015 also generate `Tx.lean` |
 
 An interrupted run can leave its last saved index unfinished. Files depend on how
 far an attempt progressed: unreadable input has no snapshot, and validator
@@ -257,6 +258,28 @@ plutus-upv run Workflow/Tests/UP001/Inputs/plutus.json vault_buggy.vault_buggy -
 plutus-upv run Workflow/Tests/UP001/Inputs/invalid-code.json invalid.invalid --check UP-001
 ```
 
+Run UP-004 against the original reference vesting fixture from `formal/`:
+
+```sh
+./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-004
+```
+
+The Claim and Cancel combinations each ask for a model-valid explicitly rejected
+context within **1,000,000 CEK steps**. Rejection means an error or a non-unit halt;
+fuel exhaustion does not count. The two primary existential goals,
+`someRejected_claim` and `someRejected_cancel`, include validity and rejection,
+so these checks need no separate applicability jobs. The expected reference outcome is
+two PASS results; inspect the retained results to confirm the actual outcome.
+
+The `Review` path links `UP-004-v1-TxM-007` and `UP-004-v1-TxM-008` folders,
+each retaining generated `Types.lean`, `Tx.lean`, and `Checks.lean` plus results
+and logs. UP-004 skips the second artifact recognized by native model admission;
+unknown artifacts remain unsupported. This route adds no minimum ADA premise
+and prints no rejected transaction witness. A PASS establishes existence in the
+selected model and bound, without establishing ledger reachability, arbitrary
+action coverage, or funds safety. See the
+[UP-004 scope](../../Formal/Properties/Universal/UP004/README.md).
+
 Run the experimental vesting profile with:
 
 ```sh
@@ -294,10 +317,11 @@ and all registered combinations. The app and test command do not build Aiken
 sources automatically. The original UP-012 regression input remains unchanged;
 the reviewed demo build has an independent shared regression snapshot.
 
-The four scenarios test workflow behavior. They do not establish general
+The five scenarios test workflow behavior. They do not establish general
 property or model readiness. Definition work remains open in
 [UP-000 #22](https://github.com/no-witness-labs/contracts-library/issues/22),
 [UP-001 #23](https://github.com/no-witness-labs/contracts-library/issues/23),
+[UP-004 #25](https://github.com/no-witness-labs/contracts-library/issues/25),
 [UP-012 #33](https://github.com/no-witness-labs/contracts-library/issues/33), and
 [UP-015 #36](https://github.com/no-witness-labs/contracts-library/issues/36).
 [Model authoring #89](https://github.com/no-witness-labs/contracts-library/issues/89)

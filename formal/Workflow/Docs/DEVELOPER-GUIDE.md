@@ -25,7 +25,7 @@ only the selected exports. [Declarative/Catalogue.lean](../Declarative/Catalogue
 validates those discovered records and supplies the existing callable core. The
 [execution guide](../Declarative/README.md) describes model conventions and limits.
 
-UP-000, UP-001, UP-012, and UP-015 own their run declarations beside their definitions.
+UP-000, UP-001, UP-004, UP-012, and UP-015 own their run declarations beside their definitions.
 Each `models` entry names an enabled native model through `ModelUse.id` and retains
 that pairing's reviewed `limitations`. This one list controls execution enablement;
 authoring a descriptive record does not independently register a check.
@@ -40,10 +40,11 @@ for those pairs, so they receive no passing verdict. The older
 [Legacy comparison catalogue](../Tests/Legacy/Candidates/Catalogue.lean), candidate adapters,
 and test profiles remain only for regression comparisons under `Tests/Legacy`.
 
-[UP000/Run.lean](../../Formal/Properties/Universal/UP000/Run.lean) owns a separate
-artifact restriction: it skips the second vesting artifact recognized by native
-model admission. Only the original reference artifact receives UP-000 goals.
-This property restriction leaves the shared TxM-007/008 allowlist unchanged.
+[UP000/Run.lean](../../Formal/Properties/Universal/UP000/Run.lean) and
+[UP004/Run.lean](../../Formal/Properties/Universal/UP004/Run.lean) each own an
+artifact restriction: they skip the second vesting artifact recognized by native
+model admission. Only the original reference artifact receives UP-000 or UP-004
+goals. These property restrictions leave the shared TxM-007/008 allowlist unchanged.
 
 The product app repeats the callable core for exact property/version/model
 identities. Legacy providers can still emit several combinations in a plan.
@@ -110,6 +111,8 @@ tracks their wider migration and other branches.
 | UP-001 vote | [TxM-004 / EveryVote](../../Formal/TxModels/Definitions/TxM004.lean) |
 | UP-001 propose | [TxM-005 / EveryPropose](../../Formal/TxModels/Definitions/TxM005.lean) |
 | UP-001 spend, when undeclared | [TxM-006 / EverySpend](../../Formal/TxModels/Definitions/TxM006.lean) |
+| UP-004 Claim rejection | [UP004 statement](../../Formal/Properties/Universal/UP004/Definition.lean), [TxM-007](../../Formal/TxModels/Definitions/TxM007.lean) |
+| UP-004 Cancel rejection | The same UP004 statement, [TxM-008](../../Formal/TxModels/Definitions/TxM008.lean) |
 | UP-012 Claim | [Shared UP012 definition](../../Formal/Properties/Universal/UP012/Definition.lean), [TxM-007](../../Formal/TxModels/Definitions/TxM007.lean) |
 | UP-012 Cancel | [TxM-008](../../Formal/TxModels/Definitions/TxM008.lean) |
 | UP-012 key-datum spend | [TxM-009](../../Formal/TxModels/Definitions/TxM009.lean), [reusable preparation](../Preparation/TxM009.lean) |
@@ -123,6 +126,16 @@ applicability goal. The original `Workflow/Tests/UP012/Inputs/plutus.json` artif
 is the only admitted UP-000 target. It adds neither a minimum ADA premise nor
 a printed accepted-transaction witness. An established model witness does not
 establish deployed-ledger reachability or funds safety.
+
+UP-004 applies an existential rejection statement to the same Claim/Cancel
+families and original artifact. `someRejected_claim` and `someRejected_cancel`
+each require a context satisfying `validScriptContext` that the selected program
+rejects within 1,000,000 CEK steps. Rejection requires an error or non-unit halt;
+fuel exhaustion never counts. Each primary goal includes validity and rejection
+of the same witness, with no separate applicability goal. The script credential
+remains symbolic; neither model ties it to the supplied program's hash.
+The route adds no minimum ADA premise or printed witness and does not establish
+full ledger reachability, arbitrary action coverage, or funds safety.
 
 Every* models expose full `TxInfo` and purpose fields; the theorem supplies a raw
 redeemer. [Common.mkCtx](../../Formal/TxModels/Common.lean) assembles the context.
@@ -219,8 +232,8 @@ user guide for `run.json`, `input.json`, and command details in `execution.json`
 
 Generated output remains local. Tests that use fixed validators/models are evidence
 of those bounded scenarios; their fixtures are not client onboarding requirements.
-UP-000, UP-001, UP-012, UP-015, and their models remain experimental; these tests do not
-establish general readiness. Definition work stays in issues #22, #23, #33, and #36;
+UP-000, UP-001, UP-004, UP-012, UP-015, and their models remain experimental; these tests do not
+establish general readiness. Definition work stays in issues #22, #23, #25, #33, and #36;
 general model authoring and candidate integration stay in #89 and #96.
 
 ## Module paths and validation
@@ -284,8 +297,9 @@ to the configured combo and is retained with the result.
 
 The catalogue resolves only the exact registered property/version/model. A new
 JSON record cannot add executable code. Single-model adapters generate only the
-chosen obligations: one undeclared purpose for UP-001, or one UP-012/UP-015 main/applicability
-pair. The core rejects mixed bindings, support-only plans, orphan applicability,
+chosen obligations: one existential goal for UP-000 or UP-004, one undeclared
+purpose for UP-001, or one UP-012/UP-015 main/applicability pair.
+The core rejects mixed bindings, support-only plans, orphan applicability,
 and empty plans containing executable modules. Registered generators remain trusted
 code; metadata checks alone cannot inspect arbitrary Lean semantics. Tests check
 the exact selected theorem set across generated sources.
@@ -326,8 +340,8 @@ terminal printing for the product executable.
 The app reads the blueprint once, uses `Input.discover` to enumerate logical
 validator groups, and prepares each selected validator once from that snapshot.
 `App.Selection` owns CLI and JSON-switch selection. Defaults choose all logical
-validators and all twelve registered combinations (two UP-000, six UP-001, three
-UP-012, and one UP-015). Repeat `--validator` or
+validators and all fourteen registered combinations (two UP-000, six UP-001,
+two UP-004, three UP-012, and one UP-015). Repeat `--validator` or
 `--check` to narrow them, or use `--checks-file` with a flat property-ID/boolean
 object. With a file, only explicit `true` entries run. Unknown IDs and nonboolean
 values are errors; property flags and a file cannot be combined. An empty enabled
@@ -401,8 +415,8 @@ in [issue #33](https://github.com/no-witness-labs/contracts-library/issues/33).
 model metadata. `TxM009.inputs` requires a constructor-zero datum with one bytes
 field and an empty constructor-zero redeemer. A developer declares a model's
 complete encoding requirements in Lean and supplies its preparation binding.
-The current Lean-owned catalogue has twelve registered combinations, including
-the two UP-000 combinations that use separate artifact restrictions.
+The current Lean-owned catalogue has fourteen registered combinations, including
+the two UP-000 and two UP-004 combinations with property-owned artifact restrictions.
 
 `Workflow.Preparation.Compatibility.check` is pure and conservative. It requires
 V3, no parameters, and exactly one declared spending handler; other handlers may

@@ -3,6 +3,7 @@
 The public `plutus-upv run` command discovers maintained run declarations for
 [UP-000](../../Formal/Properties/Universal/UP000/Run.lean),
 [UP-001](../../Formal/Properties/Universal/UP001/Run.lean),
+[UP-004](../../Formal/Properties/Universal/UP004/Run.lean),
 [UP-012](../../Formal/Properties/Universal/UP012/Run.lean), and
 [UP-015](../../Formal/Properties/Universal/UP015/Run.lean). Lean handles discovery,
 selection, model preparation, and application launch. The earlier `universal`
@@ -30,6 +31,7 @@ From `formal/`:
 ```sh
 ./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-012 --check UP-015 --timeout-ms 300000
 ./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-000
+./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-004
 ```
 
 ## Authoring contract
@@ -67,6 +69,13 @@ restricts execution to the original vesting artifact, even though native model
 admission also recognizes the second reviewed artifact. The skipped artifact
 produces no proof verdict. The [UP-000 guide](../../Formal/Properties/Universal/UP000/README.md)
 describes the 1,000,000-step bound, generated files, and remaining scope limits.
+
+UP-004 uses the same models and original-artifact restriction. Its primary
+existential goal requires a model-valid context explicitly rejected within
+1,000,000 CEK steps, with no separate applicability goal. An error or non-unit
+halt counts as rejection; fuel exhaustion does not. The
+[UP-004 guide](../../Formal/Properties/Universal/UP004/README.md) describes its
+generated files, synthetic controls, and scope limits.
 
 ## Discovery and retained evidence
 
@@ -111,8 +120,10 @@ lake exe workflow_public_cli_tests
 lake exe workflow_declarative_tests
 lake exe workflow_declarative_up000_tests
 lake exe workflow_declarative_up001_tests
+lake exe workflow_declarative_up004_tests
 lake exe workflow_declarative_up015_tests
 lake exe workflow_up000_tests
+lake exe workflow_up004_tests
 ./plutus-upv test
 ```
 
