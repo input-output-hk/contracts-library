@@ -1,6 +1,6 @@
 # MeshJS end-to-end tests
 
-These tests run the published library (`@contracts-library/meshjs`, consumed by its package name via `file:../lib`) against a real local [Yaci DevKit](https://devkit.yaci.xyz) devnet. They are a **separate package**, so they exercise the library exactly as a downstream consumer would and never ship with it.
+These tests run the published library (`@contracts-library/meshjs`, consumed by its package name via `file:../lib`) against a real local [Yaci DevKit](https://devkit.yaci.xyz) devnet; the tokenized-bond builders checks run offline instead (see below). They are a **separate package**, so they exercise the library exactly as a downstream consumer would and never ship with it.
 
 ## What they cover
 
@@ -39,6 +39,8 @@ npm run test:devnet
 
 `test:devnet` (`scripts/devnet-test.sh`) starts an ephemeral devnet, waits for its API to serve blocks, runs the suite, and always tears the devnet down. The Yaci DevKit CLI is pinned as a devDependency (`@bloxbean/yaci-devkit@0.10.6`; the 0.12.x launcher does not work with this setup) and preferred over any global install. If yaci-devkit is not installed it falls back to `npm test` with no devnet, and the suite **skips itself** (so it is safe to run anywhere).
 
+Test files without the `.e2e.` marker (currently `event_triggered.builders.test.ts`) are offline suites: they build transactions against a mock fetcher and need no devnet. A full `test:devnet` run executes them first, before any devnet boots; pass a file path (`npm run test:devnet -- <file>`) to skip them when iterating on a single devnet suite.
+
 `npm test` alone runs the suite against whatever devnet is already reachable (or skips). Endpoints come from env, matching the shared lifecycle convention: `INDEXER_URL` / `YACI_STORE_URL` for the store API (default `http://localhost:8080/api/v1/`) and `YACI_ADMIN_URL` for the admin API (default `http://localhost:10000`).
 
 ## Authorizer fixtures
@@ -52,7 +54,7 @@ Their compiled CBOR is committed in [`src/fixtures.ts`](./src/fixtures.ts), so r
 
 ## CI
 
-`.github/workflows/ci.yml` runs these on every push and PR to `main`: it builds the library, installs the e2e package (pulling the pinned Yaci DevKit), starts the devnet, waits until the store API is serving blocks, and runs this suite.
+`.github/workflows/ci.yml` runs these on pushes to `main` and on PRs (runs not targeting `main` are advisory): it builds the library, installs the e2e package (pulling the pinned Yaci DevKit), runs the offline suites, then for each devnet suite starts an ephemeral devnet, waits until the store API is serving blocks, runs it, and always tears it down.
 
 ## Notes on time
 

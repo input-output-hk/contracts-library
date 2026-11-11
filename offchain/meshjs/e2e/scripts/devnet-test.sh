@@ -16,6 +16,10 @@
 # with no devnet and skips itself, so local runs stay green. Set
 # REQUIRE_DEVNET=1 (as CI does) to fail instead of silently skipping.
 #
+# Test files without the `.e2e.` marker (e.g. event_triggered.builders.test.ts)
+# are offline suites: they need no devnet, so a full run executes them first,
+# before the per-file devnet lifecycle starts. A single-file run skips them.
+#
 # Invoked via `npm run test:devnet`. Yaci DevKit supports Linux x64 and
 # macOS arm64 (not Windows).
 set -u
@@ -165,11 +169,34 @@ run_file() {
   return $TEST_EXIT
 }
 
+HAD_FILE_ARG=0
 if [[ $# -gt 0 && "$1" != -* ]]; then
+  HAD_FILE_ARG=1
   TEST_FILES=("$1")
   shift
 fi
 
+# Offline suites (test files without the .e2e. marker) run once, without a
+# devnet, in a full run; a single-file run is targeted debugging and skips
+# them. Like the devnet glob above, a new offline test file is picked up
+# automatically.
+if [ "$HAD_FILE_ARG" -eq 0 ]; then
+  shopt -s nullglob
+  OFFLINE_FILES=()
+  for file in test/*.test.ts; do
+    case "$file" in *.e2e.test.ts) ;; *) OFFLINE_FILES+=("$file") ;; esac
+  done
+  shopt -u nullglob
+  if [ ${#OFFLINE_FILES[@]} -gt 0 ]; then
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  offline suites (no devnet)"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    npx vitest run "${OFFLINE_FILES[@]}" --reporter=verbose || exit 1
+  else
+    echo "• no offline test files found (test/*.test.ts without .e2e.)"
+  fi
+fi
 
 FAILED=0
 for file in "${TEST_FILES[@]}"; do
