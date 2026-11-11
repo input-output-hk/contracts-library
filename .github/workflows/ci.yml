@@ -1,10 +1,12 @@
 name: CI
 
+# PRs to any branch run the full suite, but runs not targeting main are
+# advisory: continue-on-error on every job reports a failure as
+# success-with-annotation instead of blocking the merge.
 on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
 
 # New pushes cancel stale runs of the same branch (a full tx3 run takes ~41 min).
 concurrency:
@@ -18,6 +20,7 @@ jobs:
   format:
     name: Format & lint (biome) + aiken fmt
     runs-on: ubuntu-latest
+    continue-on-error: ${{ github.event_name == 'pull_request' && github.base_ref != 'main' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -40,6 +43,7 @@ jobs:
   onchain:
     name: On-chain (aiken)
     runs-on: ubuntu-latest
+    continue-on-error: ${{ github.event_name == 'pull_request' && github.base_ref != 'main' }}
     steps:
       - uses: actions/checkout@v4
       - uses: taiki-e/install-action@v2
@@ -63,6 +67,7 @@ jobs:
   offchain-unit:
     name: Off-chain unit (MeshJS lib)
     runs-on: ubuntu-latest
+    continue-on-error: ${{ github.event_name == 'pull_request' && github.base_ref != 'main' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -86,6 +91,7 @@ jobs:
   e2e:
     name: Off-chain e2e (Yaci devnet)
     runs-on: ubuntu-latest
+    continue-on-error: ${{ github.event_name == 'pull_request' && github.base_ref != 'main' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -118,6 +124,7 @@ jobs:
   tx3-devnet:
     name: Off-chain tx3 (trix devnet)
     runs-on: ubuntu-latest
+    continue-on-error: ${{ github.event_name == 'pull_request' && github.base_ref != 'main' }}
     timeout-minutes: 80
     steps:
       - uses: actions/checkout@v4
