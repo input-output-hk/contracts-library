@@ -23,8 +23,13 @@ provider. Generator preserves that record in the plan without passing metadata
 to the proposition-generating function. Descriptions cannot change the emitted
 statements or their expectations. See the [metadata contract](../Docs/DEVELOPER-GUIDE.md#metadata-and-schemas).
 
-UP-001 binds its shared definition to generic purpose contexts. UP-012's test
-profile applies one shared definition and its applicability predicate to the
+UP-001 binds its shared definition to generic purpose contexts. UP-011's native
+run binds its guarded payment-credential statement and linked applicability to
+TxM-007 Claim only, producing two obligations. Its original-artifact restriction
+and five premises appear in the
+[UP-011 guide](../../Formal/Properties/Universal/UP011/README.md).
+
+UP-012's test profile applies one shared definition and its applicability predicate to the
 Claim/Cancel models, producing four obligations. Native statements and metadata
 live in the [property bank](../../Formal/Properties/README.md). UP-015 applies
 output-reversal acceptance and nonidentity applicability to the same native Claim
@@ -68,10 +73,11 @@ snapshots. Legacy generation can bundle combinations; the
 [single-check API](../Docs/DEVELOPER-GUIDE.md#callable-single-check-api) selects
 one exact property/version/model binding.
 
-The fixed UP-012 and UP-015 vesting profiles supply integration tests. UP-001,
-UP-012, UP-015, and their models remain experimental; these tests do not establish
-general readiness. Definition work stays in issues #23, #33, and #36, model
-authoring in #89, and wider candidate integration in #96. Client-specific model
+The fixed UP-012 and UP-015 vesting profiles supply integration tests. The seven
+registered properties and their models remain experimental; these tests do not
+establish general readiness. Definition work stays in issues #22, #23, #25, #32,
+#33, #34, and #36. Model authoring stays in #89 and wider candidate integration
+in #96. Client-specific model
 authoring is not a prerequisite of the intended workflow.
 
 ## Tests
@@ -84,10 +90,10 @@ lake exe workflow_generator_integration
 ```
 
 The first command runs only generic contract checks with stub providers. The
-UP001, UP012, and UP015 workflow suites own their candidate-specific declaration/profile
+property-owned and workflow scenario suites own their candidate-specific declaration/profile
 checks. The second command preserves the Input-to-Generator type-checking check;
 it compiles support and proposition definitions without proving them.
 
-The [test index](../Tests/README.md) lists the three experimental workflow scenarios
+The [test index](../Tests/README.md) lists the seven experimental workflow scenarios
 and component checks. The [validation history](../Docs/VALIDATION.md) keeps generation,
 type-checking, and actual solver observations distinct.

@@ -4,6 +4,7 @@ The public `plutus-upv run` command discovers maintained run declarations for
 [UP-000](../../Formal/Properties/Universal/UP000/Run.lean),
 [UP-001](../../Formal/Properties/Universal/UP001/Run.lean),
 [UP-004](../../Formal/Properties/Universal/UP004/Run.lean),
+[UP-011](../../Formal/Properties/Universal/UP011/Run.lean),
 [UP-012](../../Formal/Properties/Universal/UP012/Run.lean),
 [UP-013](../../Formal/Properties/Universal/UP013/Run.lean), and
 [UP-015](../../Formal/Properties/Universal/UP015/Run.lean). Lean handles discovery,
@@ -33,6 +34,7 @@ From `formal/`:
 ./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-012 --check UP-015 --timeout-ms 300000
 ./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-000
 ./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-004
+./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-011 --timeout-ms 300000
 ./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-013 --timeout-ms 300000
 ```
 
@@ -78,6 +80,16 @@ existential goal requires a model-valid context explicitly rejected within
 halt counts as rejection; fuel exhaustion does not. The
 [UP-004 guide](../../Formal/Properties/Universal/UP004/README.md) describes its
 generated files, synthetic controls, and scope limits.
+
+UP-011 registers only TxM-007 Claim on the original artifact, with a main goal
+and linked applicability at 1,000,000 CEK steps. It preserves all five standalone
+guards and changes only the first continuation's payment credential. Staking,
+value, and datum remain unchanged. Its redirect guard changes both address and
+datum, so it does not independently establish address reliance. Cancel has no
+continuation and remains an expected false standalone applicability diagnostic.
+The [UP-011 guide](../../Formal/Properties/Universal/UP011/README.md) records the
+compiled address-ignoring control and explains why this is not a full-address rule.
+Default selection and the existing all-enabled switch example include UP-011.
 
 UP-013 uses the same models and original-artifact restriction, with a main goal
 and linked applicability for each combination. From a model-valid accepted
@@ -134,10 +146,12 @@ lake exe workflow_declarative_tests
 lake exe workflow_declarative_up000_tests
 lake exe workflow_declarative_up001_tests
 lake exe workflow_declarative_up004_tests
+lake exe workflow_declarative_up011_tests
 lake exe workflow_declarative_up013_tests
 lake exe workflow_declarative_up015_tests
 lake exe workflow_up000_tests
 lake exe workflow_up004_tests
+lake exe workflow_up011_tests
 lake exe workflow_up013_tests
 ./plutus-upv test
 ```

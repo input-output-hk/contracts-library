@@ -64,7 +64,7 @@ private def counts (result : IO.Process.Output) (validator : String) (expected :
 
 private def emptyAndCaller (root evidence : FilePath) : IO Unit := do
   let switches := evidence / "all disabled.json"
-  IO.FS.writeFile switches "{\"UP-000\":false,\"UP-001\":false,\"UP-004\":false,\"UP-012\":false,\"UP-013\":false,\"UP-015\":false}"
+  IO.FS.writeFile switches "{\"UP-000\":false,\"UP-001\":false,\"UP-004\":false,\"UP-011\":false,\"UP-012\":false,\"UP-013\":false,\"UP-015\":false}"
   let unsupported := root / "Workflow/Tests/UP012/Inputs/unsupported.json"
   let empty ← invoke root evidence "empty-selection"
     #["run", unsupported.toString, "--checks-file", switches.toString]
@@ -76,7 +76,7 @@ private def emptyAndCaller (root evidence : FilePath) : IO Unit := do
   let caller := evidence / "caller with spaces"
   IO.FS.createDirAll caller
   IO.FS.writeBinFile (caller / "plutus.json") (← IO.FS.readBinFile unsupported)
-  let source := "{\r\n\"UP-000\":false,\"UP-001\":false,\"UP-004\":false,\"UP-012\":false,\"UP-013\":false,\"UP-015\":true\r\n}\r\n"
+  let source := "{\r\n\"UP-000\":false,\"UP-001\":false,\"UP-004\":false,\"UP-011\":false,\"UP-012\":false,\"UP-013\":false,\"UP-015\":true\r\n}\r\n"
   IO.FS.writeFile (caller / "my checks.json") source
   let invoked ← invoke root evidence "caller-paths"
     #["run", "--checks-file", "my checks.json"] 0 (some caller)
@@ -103,11 +103,11 @@ private def defaultSelection (root evidence : FilePath) : IO Unit := do
   IO.FS.writeFile path ((input.setObjVal! "validators" (.arr prepared)).pretty ++ "\n")
   let result ← invoke root evidence "default-selection" #["run", path.toString]
   let (_, _, results) ← outputRun result
-  check "default discovery keeps all sixteen current combinations"
-    (results.size == 16 && results.all fun checkResult =>
+  check "default discovery keeps all seventeen current combinations"
+    (results.size == 17 && results.all fun checkResult =>
       (checkResult.getObjValAs? String "status").toOption == some "INCONCLUSIVE" &&
       (checkResult.getObjVal? "obligations" >>= Json.getArr?).toOption.any (·.isEmpty))
-  counts result "vault.vault" ["0", "0", "16", "0", "0"]
+  counts result "vault.vault" ["0", "0", "17", "0", "0"]
 
 private def declaredPurposes (root evidence : FilePath) : IO Unit := do
   let input ← json (root / "Workflow/Tests/UP012/Inputs/reusable.json")
