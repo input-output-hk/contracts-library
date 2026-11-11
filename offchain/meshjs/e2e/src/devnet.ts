@@ -9,9 +9,6 @@
 
 import { registerWithdrawalScript } from "@contracts-library/meshjs";
 import {
-  DEFAULT_V1_COST_MODEL_LIST,
-  DEFAULT_V2_COST_MODEL_LIST,
-  DEFAULT_V3_COST_MODEL_LIST,
   deserializeAddress,
   MeshTxBuilder,
   MeshWallet,
@@ -149,7 +146,7 @@ export function makeProvider(): YaciProvider {
         };
       };
       const evaluationResult = data.result?.EvaluationResult;
-      if (res.status === 202 && evaluationResult) {
+      if (res.ok && evaluationResult) {
         const tagMap: Record<string, string> = {
           spend: "SPEND",
           mint: "MINT",
@@ -174,10 +171,33 @@ export function makeProvider(): YaciProvider {
     }
   };
 
-  const submit = patch.submitTx.bind(provider);
+  // YaciProvider does not implement cost models (it throws "Method not
+  // implemented"), and MeshJS's built-in defaults are the previous protocol
+  // era's: pinning them makes the script-data hash fail with
+  // `ScriptIntegrityHashMismatch` once the devnet runs a newer node (Yaci 0.12
+  // / node 11 / PV11). Fetch the live devnet params instead, as
+  // `BlockfrostProvider.fetchCostModels` does, so the hash always matches.
+  patch.fetchCostModels = fetchCostModels;
+
+  // YaciProvider.submitTx only accepts HTTP 202; Yaci Store 2.0.7 answers 200
+  // with the tx hash as the body, so submit directly and accept any 2xx.
   patch.submitTx = async (...args: unknown[]) => {
+    const txHex = args[0] as string;
     try {
-      return await submit(...args);
+      const res = await fetch(`${STORE_URL}tx/submit`, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: txHex,
+      });
+      const body = await res.text();
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${body}`);
+      }
+      try {
+        return JSON.parse(body) as string;
+      } catch {
+        return body;
+      }
     } catch (err) {
       throw new Error(`submitTx rejected: ${describeError(err)}`);
     }
@@ -186,13 +206,52 @@ export function makeProvider(): YaciProvider {
   return provider;
 }
 
+/**
+ * The devnet's Plutus cost models, as `[PlutusV1, PlutusV2, PlutusV3]` flat
+ * lists. Cached: every provider instance and builder shares one fetch.
+ */
+let costModels: Promise<[number[], number[], number[]]> | null = null;
+function fetchCostModels(): Promise<[number[], number[], number[]]> {
+  costModels ??= (async () => {
+    const res = await fetch(`${STORE_URL}epochs/latest/parameters`);
+    if (!res.ok) {
+      throw new Error(`fetchCostModels: HTTP ${res.status}`);
+    }
+    const data = (await res.json()) as {
+      cost_models_raw?: {
+        PlutusV1: number[];
+        PlutusV2: number[];
+        PlutusV3: number[];
+      };
+      cost_models?: Record<string, Record<string, number>>;
+    };
+    const raw = data.cost_models_raw;
+    if (raw?.PlutusV1 && raw.PlutusV2 && raw.PlutusV3) {
+      return [raw.PlutusV1, raw.PlutusV2, raw.PlutusV3];
+    }
+    const models = data.cost_models;
+    if (!models?.PlutusV1 || !models.PlutusV2 || !models.PlutusV3) {
+      throw new Error("fetchCostModels: devnet params carry no cost models");
+    }
+    const toList = (model: Record<string, number>) =>
+      Object.entries(model)
+        .sort(([a], [b]) => Number(a) - Number(b))
+        .map(([, value]) => value);
+    return [
+      toList(models.PlutusV1),
+      toList(models.PlutusV2),
+      toList(models.PlutusV3),
+    ];
+  })();
+  return costModels;
+}
+
 export function newTxBuilder(provider: YaciProvider): MeshTxBuilder {
   const builder = new MeshTxBuilder({
     fetcher: provider,
     submitter: provider,
     evaluator: provider,
   });
-  pinCostModels(builder);
   return builder;
 }
 
@@ -209,23 +268,7 @@ export function newTxBuilderManualExUnits(
     fetcher: provider,
     submitter: provider,
   });
-  pinCostModels(builder);
   return builder;
-}
-
-/**
- * Pin the Plutus cost models the script-data hash is computed from. These are
- * the current protocol-era constants (what every Cardano network uses), so tx
- * building is deterministic and does not depend on the provider implementing
- * `fetchCostModels` — YaciProvider does not, and its default-model fallback
- * produces a script-data hash the devnet rejects.
- */
-function pinCostModels(builder: MeshTxBuilder): void {
-  builder.setNetwork([
-    DEFAULT_V1_COST_MODEL_LIST,
-    DEFAULT_V2_COST_MODEL_LIST,
-    DEFAULT_V3_COST_MODEL_LIST,
-  ]);
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
