@@ -1,11 +1,25 @@
 # Root task runner: every command CI runs is a recipe here, so local runs and
 # CI cannot drift. Recipes assume the toolchain is present — run `just doctor`
-# first, and `npm ci` in the package you are about to test.
+# first. `just install` runs npm ci in every package (or pass one: root|lib|e2e|tx3).
 
 set shell := ["bash", "-uc"]
 
 default:
     @just --list
+
+# npm ci in one package (root|lib|e2e|tx3), or in all of them (default).
+install package="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    npmci() { (cd "$1" && npm ci); }
+    case "{{package}}" in
+      "")   npmci . && npmci offchain/meshjs/lib && npmci offchain/meshjs/e2e && npmci offchain/tx3 ;;
+      root) npmci . ;;
+      lib)  npmci offchain/meshjs/lib ;;
+      e2e)  npmci offchain/meshjs/e2e ;;
+      tx3)  npmci offchain/tx3 ;;
+      *)    echo "unknown package '{{package}}' — expected root|lib|e2e|tx3" >&2; exit 1 ;;
+    esac
 
 # Rewrite formatting in place (Biome for TS/JS/JSON).
 fmt:
@@ -26,6 +40,10 @@ onchain:
     cd onchain && aiken build
     cd onchain && git diff --exit-code -- plutus.json
 
+# Nightly-strength property tests, as .github/workflows/onchain-pbt.yml runs.
+pbt:
+    cd onchain && aiken check --max-success=1000
+
 # Re-pin the off-chain blueprints from onchain/plutus.json (writes).
 blueprints:
     npm run blueprint:update
@@ -33,6 +51,10 @@ blueprints:
 # Fail when the pinned blueprints drift from onchain/plutus.json.
 blueprints-check:
     npm run blueprint:check
+
+# Build the MeshJS lib that the e2e and tx3 suites import (installs deps too).
+build: (install "lib")
+    cd offchain/meshjs/lib && npm run build
 
 # MeshJS lib: typecheck + unit tests.
 unit:
@@ -44,6 +66,26 @@ e2e file="":
     cd offchain/meshjs/e2e && npm run typecheck
     cd offchain/meshjs/e2e && REQUIRE_DEVNET=1 npm run test:devnet {{file}}
 
+# Install the pinned tx3 toolchain (trix, dolos) under ~/.tx3 — same pin as CI.
+tx3-toolchain:
+    #!/usr/bin/env bash
+    # Both layers are pinned so a toolchain release cannot silently change
+    # what runs: the tx3up installer at its release tag, and the toolchain
+    # manifest via `tx3up install --release` (tx3-lang/toolchain tags; this
+    # one ships trix ^0.28.0, dolos ^1.6.1). Bump deliberately, then re-run
+    # the devnet suites (`just tx3`).
+    set -euo pipefail
+    curl -LsSf https://github.com/tx3-lang/tx3up/releases/download/v0.8.0/tx3up-installer.sh | sh
+    export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$PATH"
+    tx3up install --release sha-3f2296a
+    # CI runs each step in a fresh shell: hand the toolchain bins to
+    # GITHUB_PATH. Locally the tx3up installer already put them on PATH.
+    for d in "$HOME"/.tx3/*/bin; do
+      if [ -d "$d" ] && [ -n "${GITHUB_PATH:-}" ]; then
+        echo "$d" >> "$GITHUB_PATH"
+      fi
+    done
+
 # Regenerate the tx3 TypeScript clients (gitignored; CI runs this too).
 tx3-codegen:
     #!/usr/bin/env bash
@@ -54,11 +96,27 @@ tx3-codegen:
       fi
     done
 
+# Fail when dolos < 1.4.0 (POSIXTime-in-seconds bug); `just tx3` runs it first.
+dolos-check:
+    #!/usr/bin/env bash
+    # dolos < 1.4.0 injects Plutus POSIXTime in seconds during mempool
+    # validation, so time-dependent validators fail cryptically
+    # (see offchain/tx3/README.md).
+    set -euo pipefail
+    command -v dolos >/dev/null 2>&1 || { echo "dolos not on PATH — run \`just tx3-toolchain\`" >&2; exit 1; }
+    version="$(dolos --version | grep -oE '[0-9]+(\.[0-9]+)+' | head -n1)"
+    if [ "$(printf '%s\n' "1.4.0" "$version" | sort -V | head -n1)" != "1.4.0" ]; then
+      echo "dolos $version < 1.4.0 — upgrade it (see offchain/tx3/README.md, dolos version requirement)" >&2
+      exit 1
+    fi
+    echo "dolos $version"
+
 # Tx3 suites on ephemeral dolos devnets; `just tx3 <protocol>` runs one.
 tx3 protocol="":
     #!/usr/bin/env bash
     set -euo pipefail
     # Protocol dir: settings, dao, smart_wallet, event-triggered-assets, vesting.
+    just dolos-check
     cd offchain/tx3
     npm run typecheck
     if [ -n "{{protocol}}" ]; then
@@ -71,11 +129,14 @@ tx3 protocol="":
 formal:
     cd formal && just verify
 
-# Everything CI runs, in CI's order.
-ci: fmt-check lint blueprints-check onchain unit e2e tx3
+# Everything the PR CI workflow (ci.yml) runs, in its order.
+ci: (install "root") fmt-check lint blueprints-check onchain build unit (install "e2e") e2e
 
-# Everything CI runs plus the formal proofs.
-all: ci formal
+# Everything the tx3 devnet workflow (tx3-devnet.yml) runs: prep, then suites.
+tx3-suite: build (install "e2e") tx3-codegen (install "tx3") tx3
+
+# Everything the CI workflows run plus the formal proofs.
+all: ci tx3-suite formal
 
 # Preflight: check node, aiken, Java 21, yaci-devkit, trix, dolos.
 doctor:
@@ -103,17 +164,27 @@ doctor:
       ok "yaci-devkit (pinned, e2e node_modules)"
     elif command -v yaci-devkit >/dev/null; then
       echo "! yaci-devkit is global; the pinned version is an e2e devDependency" >&2
-      echo "  run \`npm ci\` in offchain/meshjs/e2e" >&2
+      echo "  run \`just install e2e\`" >&2
     else
-      fail "yaci-devkit not installed — run \`npm ci\` in offchain/meshjs/e2e"
+      fail "yaci-devkit not installed — run \`just install e2e\`"
+    fi
+
+    # Yaci keeps its components in a global ~/.yaci-cli and reuses whatever it
+    # finds there: a cardano-node left behind by a newer Yaci is reused by the
+    # pinned 0.10.6 ("cardano-node already exists") and then dies with
+    # `key "DijkstraGenesisFile" not found`, which the devnet script can only
+    # report as a timeout. Bump the expected major when the devkit pin moves.
+    node_bin="$HOME/.yaci-cli/cardano-node/bin/cardano-node"
+    if [ -x "$node_bin" ]; then
+      cached="$("$node_bin" --version 2>/dev/null | grep -oE '[0-9]+(\.[0-9]+)+' | head -n1 || true)"
+      case "$cached" in
+        10.*) ok "~/.yaci-cli cardano-node $cached (matches the pinned devkit 0.10.6)" ;;
+        "") echo "! could not read the cardano-node version in ~/.yaci-cli" >&2 ;;
+        *) fail "~/.yaci-cli has cardano-node $cached but the pinned yaci-devkit 0.10.6 needs 10.x — delete ~/.yaci-cli/cardano-node so it re-downloads its own" ;;
+      esac
     fi
 
     command -v trix >/dev/null || fail "trix not on PATH — run \`tx3up\`"
     ok "trix $(trix --version)"
 
-    command -v dolos >/dev/null || fail "dolos not on PATH — run \`tx3up\`"
-    dolos_version="$(dolos --version | grep -oE '[0-9]+(\.[0-9]+)+' | head -n1)"
-    if [ "$(printf '%s\n' "1.4.0" "$dolos_version" | sort -V | head -n1)" != "1.4.0" ]; then
-      fail "dolos $dolos_version < 1.4.0 — upgrade (see offchain/tx3/README.md)"
-    fi
-    ok "dolos $dolos_version"
+    just dolos-check

@@ -8,7 +8,9 @@ on:
     branches: [main]
   pull_request:
 
-# New pushes cancel stale runs of the same branch (a full tx3 run takes ~41 min).
+# New pushes cancel stale runs of the same branch (a PR run takes ~30 min,
+# dominated by the Yaci e2e suite; the ~45 min tx3 devnet suites live in
+# tx3-devnet.yml, nightly + on demand).
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -117,49 +119,3 @@ jobs:
       # it down.
       - name: Typecheck & run e2e against an ephemeral devnet
         run: just e2e
-
-  tx3-devnet:
-    name: Off-chain tx3 (trix devnet)
-    runs-on: ubuntu-latest
-    continue-on-error: ${{ github.event_name == 'pull_request' && github.base_ref != 'main' }}
-    timeout-minutes: 80
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-          cache-dependency-path: |
-            offchain/meshjs/lib/package-lock.json
-            offchain/meshjs/e2e/package-lock.json
-            offchain/tx3/package-lock.json
-
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: just
-
-      # The suites drive an ephemeral dolos devnet booted by `trix devnet`
-      # (see offchain/tx3/README.md). The tx3up installer + toolchain release
-      # pins live in the `tx3-toolchain` recipe — bump there, then re-run the
-      # devnet suites.
-      - name: Install the tx3 toolchain (trix, dolos)
-        run: just tx3-toolchain
-
-      - name: Build library
-        run: just build
-
-      - name: Install MeshJS e2e dependencies (vendored CIP-113 helpers)
-        run: just install e2e
-
-      - name: Generate TypeScript clients (gitignored — absent on a fresh checkout)
-        run: just tx3-codegen
-
-      - name: Install tx3 dependencies
-        run: just install tx3
-
-      # The recipe enforces dolos >= 1.4.0 (older dolos injects Plutus
-      # POSIXTime in seconds — see offchain/tx3/README.md), typechecks, then
-      # boots one ephemeral dolos devnet per suite, serially (fixed ports),
-      # always tearing down.
-      - name: Typecheck & run devnet suites
-        run: just tx3

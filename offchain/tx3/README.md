@@ -27,31 +27,30 @@ vitest by the harness in [`devnet/utils.ts`](devnet/utils.ts).
 
 ## Requirements
 
-- Node.js + workspace dependencies installed (`npm install` in this folder).
-- The **tx3 toolchain** (`trix`, plus the dolos it spawns) under `~/.tx3`:
+- Node.js + npm dependencies (`just install tx3`, or `just install` for every package).
+- The **tx3 toolchain** (`trix`, plus the dolos it spawns) under `~/.tx3`, at
+  the same pinned release CI uses:
 
   ```bash
-  curl -LsSf https://github.com/tx3-lang/tx3up/releases/latest/download/tx3up-installer.sh | sh
-  tx3up
+  just tx3-toolchain
   ```
 
-- **dolos ≥ 1.4.0**: older versions inject Plutus `POSIXTime` in *seconds*
-  during mempool validation, so time-dependent spend validators fail. As of this
-  writing `tx3up` may still install dolos 1.3.2 — check `dolos --version` and replace
-  `~/.tx3/stable/bin/dolos` with a newer release if needed.
+- **dolos ≥ 1.4.0**: the pinned toolchain enforces this, and `just tx3`
+  re-checks it (`just dolos-check`). Older versions inject Plutus `POSIXTime`
+  in *seconds* during mempool validation, so time-dependent spend validators
+  fail.
 
 ## Running the tests
 
 **Before the tests:** build the MeshJS library the suites import, install the
 MeshJS e2e dependencies (the event-triggered suite imports the vendored CIP-113
-core blueprint/helpers from there), then generate the TypeScript client
-(gitignored) from each protocol directory where `trix.toml` lives:
+core blueprint/helpers from there), and generate the TypeScript clients
+(gitignored) — the same recipes CI runs:
 
 ```bash
-(cd ../meshjs/lib && npm install && npm run build)
-(cd ../meshjs/e2e && npm install)
-cd offchain/tx3/<protocol-name>
-trix codegen --plugin ts-client
+just build         # npm ci + build of offchain/meshjs/lib
+just install e2e
+just tx3-codegen   # trix codegen for every protocol with a trix.toml
 ```
 
 The event-triggered suite deploys the vendored CIP-113 core itself through the
@@ -80,6 +79,17 @@ npx vitest run settings/tests/devnet.test.ts -t 'launches, proposes, applies, an
 ```
 
 Set `DEBUG_TRIX=1` to stream the trix/dolos logs while booting.
+
+## CI
+
+The tx3 devnet suites are the slowest CI leg (~45 min), so they don't gate
+PRs: `.github/workflows/tx3-devnet.yml` runs them nightly and on demand —
+Actions → "Tx3 devnet (nightly)" → Run workflow, or
+`gh workflow run tx3-devnet.yml --ref <branch>` before merging tx3 changes.
+It installs the pinned tx3 toolchain, generates the TypeScript clients, then
+`just tx3` boots one ephemeral dolos devnet per protocol, serially (fixed
+ports), and always tears them down. Locally the same suites run via
+`just tx3-suite` (or `just all` for everything).
 
 ## Troubleshooting
 
