@@ -3,6 +3,7 @@ import Formal.Properties.Universal.UP000.Definition
 import Formal.Properties.Universal.UP001.Definition
 import Formal.Properties.Universal.UP004.Definition
 import Formal.Properties.Universal.UP012.Definition
+import Formal.Properties.Universal.UP013.Definition
 import Formal.Properties.Universal.UP015.Definition
 
 namespace Formal.Properties.Universal.Index
@@ -31,12 +32,18 @@ def up012 : Entry := {
   primary := ``Formal.Properties.Universal.UP012.statement
   metadataPath := "Formal/Properties/Universal/UP012/metadata.json" }
 
+def up013 : Entry := {
+  id := "UP-013"
+  definitionVersion := 1
+  primary := ``Formal.Properties.Universal.UP013.statement
+  metadataPath := "Formal/Properties/Universal/UP013/metadata.json" }
+
 def up015 : Entry := {
   id := "UP-015"
   definitionVersion := 1
   primary := ``Formal.Properties.Universal.UP015.statement
   metadataPath := "Formal/Properties/Universal/UP015/metadata.json" }
 
-def entries : Array Entry := #[up000, up001, up004, up012, up015]
+def entries : Array Entry := #[up000, up001, up004, up012, up013, up015]
 
 end Formal.Properties.Universal.Index
