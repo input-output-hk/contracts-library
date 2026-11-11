@@ -154,14 +154,52 @@ doctor:
     command -v aiken >/dev/null || fail "aiken not on PATH"
     ok "aiken $(aiken --version | awk '{print $2}')"
 
-    command -v java >/dev/null || fail "java not on PATH (needs 21, e.g. temurin)"
+    command -v java >/dev/null || fail "java not on PATH (needs 21+, e.g. temurin)"
     java_major="$(java -version 2>&1 | head -n1 | grep -oE '[0-9]+' | head -n1)"
-    [ "$java_major" = "21" ] || fail "java $java_major but the devnet needs 21"
-    ok "java 21"
+    [ "${java_major:-0}" -ge 21 ] || fail "java $java_major but the devnet needs 21+"
+    ok "java $java_major"
 
     yaci="offchain/meshjs/e2e/node_modules/.bin/yaci-devkit"
     if [ -x "$yaci" ]; then
-      ok "yaci-devkit (pinned, e2e node_modules)"
+      yaci_version="$(node -e "console.log(require('./offchain/meshjs/e2e/node_modules/@bloxbean/yaci-devkit/package.json').version)")"
+      ok "yaci-devkit $yaci_version (pinned, e2e node_modules)"
+
+      # Version-isolated component cache used by the e2e devnet script
+      # (offchain/meshjs/e2e/scripts/devnet-test.sh); flag a mismatched cache.
+      platform="offchain/meshjs/e2e/node_modules/@bloxbean/yaci-devkit-linux-x64"
+      [ -d "$platform" ] || platform="offchain/meshjs/e2e/node_modules/@bloxbean/yaci-devkit-macos-arm64"
+      yaci_home="${YACI_HOME:-$PWD/.yaci/$yaci_version}"
+      if [ -f "$platform/config/download.properties" ]; then
+        expected_node="$(grep -E '^node\.version=' "$platform/config/download.properties" | cut -d= -f2)"
+        expected_yano="$(grep -E '^yano\.version=' "$platform/config/download.properties" | cut -d= -f2)"
+        if [ ! -d "$yaci_home" ]; then
+          echo "• no Yaci component cache at $yaci_home yet (the first e2e run downloads it)"
+        else
+          if [ -x "$yaci_home/cardano-node/bin/cardano-node" ]; then
+            have_node="$("$yaci_home/cardano-node/bin/cardano-node" --version 2>/dev/null | grep -oE '[0-9]+(\.[0-9]+)+' | head -n1)"
+            if [ -n "$expected_node" ] && [ "$have_node" != "$expected_node" ]; then
+              echo "! cached cardano-node $have_node != expected $expected_node — remove $yaci_home to re-download" >&2
+            else
+              ok "yaci cache cardano-node $have_node"
+            fi
+          fi
+          yano_manifest="$yaci_home/components/yano/yano-distribution-v1.json"
+          if [ -f "$yano_manifest" ]; then
+            have_yano="$(node -e "console.log(require('$yano_manifest').version)")"
+            if [ -n "$expected_yano" ] && [ "$have_yano" != "$expected_yano" ]; then
+              echo "! cached yano $have_yano != expected $expected_yano — remove $yaci_home to re-download" >&2
+            else
+              ok "yaci cache yano $have_yano"
+            fi
+          fi
+        fi
+
+        # The node's Unix socket path has a 108-byte limit (sun_path).
+        socket="$yaci_home/local-clusters/default/node/node.sock"
+        if [ ${#socket} -gt 107 ]; then
+          fail "YACI_HOME is too long for the node socket (${#socket} > 107 bytes): $yaci_home"
+        fi
+      fi
     elif command -v yaci-devkit >/dev/null; then
       echo "! yaci-devkit is global; the pinned version is an e2e devDependency" >&2
       echo "  run \`just install e2e\`" >&2
@@ -169,20 +207,9 @@ doctor:
       fail "yaci-devkit not installed — run \`just install e2e\`"
     fi
 
-    # Yaci keeps its components in a global ~/.yaci-cli and reuses whatever it
-    # finds there: a cardano-node left behind by a newer Yaci is reused by the
-    # pinned 0.10.6 ("cardano-node already exists") and then dies with
-    # `key "DijkstraGenesisFile" not found`, which the devnet script can only
-    # report as a timeout. Bump the expected major when the devkit pin moves.
-    node_bin="$HOME/.yaci-cli/cardano-node/bin/cardano-node"
-    if [ -x "$node_bin" ]; then
-      cached="$("$node_bin" --version 2>/dev/null | grep -oE '[0-9]+(\.[0-9]+)+' | head -n1 || true)"
-      case "$cached" in
-        10.*) ok "~/.yaci-cli cardano-node $cached (matches the pinned devkit 0.10.6)" ;;
-        "") echo "! could not read the cardano-node version in ~/.yaci-cli" >&2 ;;
-        *) fail "~/.yaci-cli has cardano-node $cached but the pinned yaci-devkit 0.10.6 needs 10.x — delete ~/.yaci-cli/cardano-node so it re-downloads its own" ;;
-      esac
-    fi
+    # The version-isolated cache above replaces the old global ~/.yaci-cli
+    # reuse trap: another Yaci version cannot leave a cardano-node behind that
+    # this one picks up (`DijkstraGenesisFile` / key-not-found crashes).
 
     command -v trix >/dev/null || fail "trix not on PATH — run \`tx3up\`"
     ok "trix $(trix --version)"

@@ -1,16 +1,23 @@
+#!/usr/bin/env bash
 # Ephemeral Yaci devnet lifecycle for the MeshJS e2e tests.
 #
-# Starts a fresh throwaway devnet before each test file, waits until its
+# Starts a throwaway devnet before each test file, waits until its
 # Blockfrost-compatible API is serving blocks, runs the file against it, then
-# tear down before moving to the next file. Each file gets a completely clean
-# chain, so test files never pollute each other's state (e.g. stake credential
-# registrations).
+# tears it down before moving to the next file. The chain is kept across files
+# (Yaci 0.12 restarts the existing cluster); each suite creates its own wallets
+# and contracts, so no state leaks between them.
 #
-# The CLI is pinned as an e2e devDependency (`@bloxbean/yaci-devkit@0.10.6`) so
-# local runs and CI use the exact same version. Do not bump to 0.12.x blindly:
-# that line replaced the launcher with a different architecture (Yano-based
-# sync) whose `cardano-submit-api` fails to start and whose store API never
-# came up for us. A globally installed CLI is used as a fallback.
+# Yaci DevKit 0.12 runs a Yano-based bootstrap in companion mode: the node
+# catches up to wall-clock time from a Yano backfill, so no genesis or clock
+# overrides are needed (the 0.10.6 `shiftStartTimeBehind` workaround and
+# `config/node.properties` are gone).
+#
+# The CLI keeps its components and clusters under `yaci.cli.home` (default
+# `~/.yaci-cli`). This script isolates it per pinned version under
+# `<repo>/.yaci/<version>`, so a global install of another version can neither
+# be reused nor broken by a version mismatch. The home must stay under the
+# 108-byte limit of the node's Unix socket path, hence the repo root and not
+# this package directory.
 #
 # Degrades gracefully when yaci-devkit is not installed: the suite then runs
 # with no devnet and skips itself, so local runs stay green. Set
@@ -24,6 +31,7 @@
 # macOS arm64 (not Windows).
 set -u
 
+ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 
 shopt -s globstar 2>/dev/null \
   || echo "⚠ bash lacks globstar; nested test files under test/ are not discovered"
@@ -32,6 +40,7 @@ API_URL="http://localhost:8080/api/v1/"
 ADMIN_URL="http://localhost:10000"
 LOG=".yaci-devnet.log"
 REPORT=".vitest-report.json"
+WAIT_SECONDS="${YACI_WAIT_SECONDS:-240}"
 
 # Every e2e file under test/ is picked up by glob, so a new test file runs
 # here without anyone remembering to extend a hand-maintained list. Pass a
@@ -44,59 +53,39 @@ if [ ${#TEST_FILES[@]} -eq 0 ]; then
   exit 1
 fi
 
-# Genesis overrides for the ephemeral devnet.
-#
-# The yaci-devkit npm launcher (start.mjs) injects its *bundled* config via
-# `-Dspring.config.import=<install>/config/node.properties`, which ships
-# `conwayHardForkAtEpoch=1` + `shiftStartTimeBehind=true`. That combination
-# time-travels the genesis start ~1 epoch (600 slots x 1s = ~600s) behind
-# wall-clock to reach the Conway era quickly. The side effect: the node's
-# ledger clock (used for phase-2 script validation at submit time) ends up
-# ~600000ms out of step with the Yaci Store clock that the offchain builder
-# and evaluator use. Datums that bake an absolute time (e.g. settings
-# `next_apply == now + apply_delay`) then pass offchain evaluation but fail
-# on-chain at submit.
-#
-# The launcher spawns the CLI with an empty environment
-# (`env: {}`), so env vars are dropped entirely. That's a known upstream bug
-# (bloxbean/yaci-devkit#171, fixed by #172 via `...process.env`) that so far
-# only shipped in the beta line, not the stable 0.10.x we use.
-#
-# Independently of that, the workspace `./config/node.properties` is ignored:
-# the launcher's `-Dspring.config.import` system property overrides the
-# relative `optional:file:./config/node.properties` import in the bundled
-# application.properties. So the only reliable override channel is JVM system
-# properties passed *before* the `up` subcommand: Spring ranks system
-# properties above config files, so these win over the bundled node.properties.
-# We read the values from config/node.properties to keep a single source of
-# truth (see its comment for rationale).
-GENESIS_OVERRIDES=()
-NODE_PROPS="config/node.properties"
-if [ -f "$NODE_PROPS" ]; then
-  while IFS='=' read -r key val; do
-    key="${key//[[:space:]]/}"
-    val="${val//[[:space:]]/}"
-    case "$key" in
-      shiftStartTimeBehind|conwayHardForkAtEpoch)
-        GENESIS_OVERRIDES+=("-D${key}=${val}")
-        ;;
-    esac
-  done < <(grep -E '^[[:space:]]*(shiftStartTimeBehind|conwayHardForkAtEpoch)[[:space:]]*=' "$NODE_PROPS")
+# Version-isolated Yaci home. The pinned e2e devDependency decides the version
+# segment, so bumping it starts from a clean component cache.
+YACI_VERSION=""
+if [ -f node_modules/@bloxbean/yaci-devkit/package.json ]; then
+  YACI_VERSION="$(node -p "require('./node_modules/@bloxbean/yaci-devkit/package.json').version" 2>/dev/null || true)"
+fi
+YACI_HOME="${YACI_HOME:-$ROOT/.yaci/${YACI_VERSION:-dev}}"
+
+# The node binds its Unix socket under `<home>/local-clusters/<cluster>/node/`,
+# and `sun_path` holds 108 bytes including the terminator.
+SOCKET_PATH="$YACI_HOME/local-clusters/default/node/node.sock"
+if [ ${#SOCKET_PATH} -gt 107 ]; then
+  echo "✗ YACI_HOME is too long for the node's Unix socket (${#SOCKET_PATH} > 107 bytes):"
+  echo "  $SOCKET_PATH"
+  echo "  Set YACI_HOME to a shorter path and retry."
+  exit 1
 fi
 
 YACI_BIN=""
 if [ -x "node_modules/.bin/yaci-devkit" ]; then
   YACI_BIN="$PWD/node_modules/.bin/yaci-devkit"
-  echo "• Using pinned yaci-devkit: $YACI_BIN"
+  echo "• Using pinned yaci-devkit ${YACI_VERSION:-?}: $YACI_BIN"
+  echo "• Isolated Yaci home: $YACI_HOME"
 elif command -v yaci-devkit >/dev/null 2>&1; then
   YACI_BIN="$(command -v yaci-devkit)"
   echo "• Using a global yaci-devkit: $YACI_BIN"
-  echo "  The pinned version is an e2e devDependency; run \`npm install\` in offchain/meshjs/e2e."
+  echo "  The pinned version is an e2e devDependency; run \`npm ci\` in offchain/meshjs/e2e."
+  echo "• Isolated Yaci home: $YACI_HOME"
 fi
 
 if [ -z "$YACI_BIN" ]; then
   echo "• yaci-devkit not installed. Running the suite without a devnet (it will skip)."
-  echo "  Run \`npm install\` in offchain/meshjs/e2e for the full e2e run."
+  echo "  Run \`npm ci\` in offchain/meshjs/e2e for the full e2e run."
   if [ "${REQUIRE_DEVNET:-0}" = "1" ]; then
     echo "✗ REQUIRE_DEVNET=1: refusing to run an e2e suite that would skip everything."
     exit 1
@@ -105,14 +94,25 @@ if [ -z "$YACI_BIN" ]; then
 fi
 
 CURRENT_DEVNET_PID=""
+
+show_devnet_errors() {
+  echo "----- $LOG (last 60 lines) -----"
+  tail -n 60 "$LOG" | sed 's/^/  /' || true
+  echo "----- error lines -----"
+  grep -iE 'error|exception|not found|failed|refused|ENAMETOOLONG' "$LOG" \
+    | tail -n 20 | sed 's/^/  /' || true
+}
+
 stop_devnet() {
-  if [ -n "$CURRENT_DEVNET_PID" ]; then kill "$CURRENT_DEVNET_PID" >/dev/null 2>&1 || true; fi
-  # The npm launcher forks the JVM CLI, which in turn forks cardano-node;
-  # killing the launcher pid alone leaves those running.
-  for pat in "yaci-devkit-linux-x64/yaci-cli" "yaci-devkit-macos-arm64/yaci-cli"; do
-    pkill -f "$pat" >/dev/null 2>&1 || true
-  done
-  pkill -f "$HOME/.yaci-cli/" >/dev/null 2>&1 || true
+  if [ -n "$CURRENT_DEVNET_PID" ]; then
+    kill "$CURRENT_DEVNET_PID" >/dev/null 2>&1 || true
+    pkill -TERM -P "$CURRENT_DEVNET_PID" >/dev/null 2>&1 || true
+  fi
+  # The launcher and its components (cardano-node, Yano, Yaci Store, Ogmios)
+  # carry the isolated home in their command line or their install path.
+  pkill -TERM -f "$YACI_HOME" >/dev/null 2>&1 || true
+  sleep 1
+  pkill -KILL -f "$YACI_HOME" >/dev/null 2>&1 || true
   CURRENT_DEVNET_PID=""
 }
 teardown() {
@@ -120,6 +120,15 @@ teardown() {
   stop_devnet
 }
 trap 'teardown; exit 1' INT TERM
+
+# Is the devnet's Blockfrost-compatible API answering?
+devnet_api_up() {
+  node -e "
+    fetch('${API_URL}blocks/latest', { signal: AbortSignal.timeout(3000) })
+      .then((res) => process.exit(res.ok ? 0 : 1))
+      .catch(() => process.exit(1));
+  " >/dev/null 2>&1
+}
 
 run_file() {
   local TEST_FILE="$1"
@@ -129,23 +138,30 @@ run_file() {
   echo "  $TEST_FILE"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-  nohup "$YACI_BIN" "${GENESIS_OVERRIDES[@]+"${GENESIS_OVERRIDES[@]}"}" up --enable-yaci-store >"$LOG" 2>&1 &
+  mkdir -p "$YACI_HOME"
+  nohup "$YACI_BIN" -Dyaci.cli.home="$YACI_HOME" up --enable-yaci-store \
+    >"$LOG" 2>&1 &
   CURRENT_DEVNET_PID=$!
 
-  echo "Waiting for the devnet API (up to 150s) ..."
-  node -e "
-  const url = '${API_URL}blocks/latest';
-  const deadline = Date.now() + 150000;
-  const probe = async () => {
-    try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
-      if (res.ok) process.exit(0);
-    } catch {}
-    if (Date.now() > deadline) { console.error('timed out waiting for the devnet API'); process.exit(1); }
-    setTimeout(probe, 3000);
-  };
-  probe();
-  " || { echo "Devnet did not become ready."; return 1; }
+  echo "Waiting for the devnet API (up to ${WAIT_SECONDS}s) ..."
+  local waited=0
+  while ! devnet_api_up; do
+    if ! kill -0 "$CURRENT_DEVNET_PID" >/dev/null 2>&1 \
+      && ! pgrep -f "$YACI_HOME" >/dev/null 2>&1; then
+      echo "✗ The devnet process exited before its API came up."
+      show_devnet_errors
+      stop_devnet
+      return 1
+    fi
+    if [ "$waited" -ge "$WAIT_SECONDS" ]; then
+      echo "✗ The devnet API did not come up in ${WAIT_SECONDS}s."
+      show_devnet_errors
+      stop_devnet
+      return 1
+    fi
+    sleep 3
+    waited=$((waited + 3))
+  done
 
   echo "Devnet is up. Running e2e tests ..."
   INDEXER_URL="$API_URL" YACI_ADMIN_URL="$ADMIN_URL" npx vitest run "$TEST_FILE" --reporter=verbose --reporter=json --outputFile.json="$REPORT"

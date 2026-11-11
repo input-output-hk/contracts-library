@@ -92,6 +92,9 @@ jobs:
   e2e:
     name: Off-chain e2e (Yaci devnet)
     runs-on: ubuntu-latest
+    # A cold runner downloads the pinned devnet components (node 11, Yano,
+    # Yaci Store, Ogmios) before the per-file devnet lifecycle.
+    timeout-minutes: 60
     continue-on-error: ${{ github.event_name == 'pull_request' && github.base_ref != 'main' }}
     steps:
       - uses: actions/checkout@v4
