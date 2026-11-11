@@ -33,8 +33,9 @@ The core (CIP-113 programmable tokens) is deployed once, then each scenario appl
 ## Running locally
 
 ```sh
-npm install
-npm run test:devnet
+just build          # the library under test: npm ci + build of offchain/meshjs/lib
+just install e2e
+just e2e            # typecheck + ephemeral devnet; `just e2e <file>` runs one suite
 ```
 
 `test:devnet` (`scripts/devnet-test.sh`) starts an ephemeral devnet, waits for its API to serve blocks, runs the suite, and always tears the devnet down. The Yaci DevKit CLI is pinned as a devDependency (`@bloxbean/yaci-devkit@0.10.6`; the 0.12.x launcher does not work with this setup) and preferred over any global install. If yaci-devkit is not installed it falls back to `npm test` with no devnet, and the suite **skips itself** (so it is safe to run anywhere).
