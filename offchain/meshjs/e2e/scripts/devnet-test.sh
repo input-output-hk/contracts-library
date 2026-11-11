@@ -24,6 +24,10 @@
 # macOS arm64 (not Windows).
 set -u
 
+
+shopt -s globstar 2>/dev/null \
+  || echo "⚠ bash lacks globstar; nested test files under test/ are not discovered"
+
 API_URL="http://localhost:8080/api/v1/"
 ADMIN_URL="http://localhost:10000"
 LOG=".yaci-devnet.log"
@@ -33,10 +37,10 @@ REPORT=".vitest-report.json"
 # here without anyone remembering to extend a hand-maintained list. Pass a
 # file path to run a single file instead.
 shopt -s nullglob
-TEST_FILES=(test/*.e2e.test.ts)
+TEST_FILES=(test/**/*.e2e.test.ts)
 shopt -u nullglob
 if [ ${#TEST_FILES[@]} -eq 0 ]; then
-  echo "✗ no e2e test files found (test/*.e2e.test.ts)"
+  echo "✗ no e2e test files found (test/**/*.e2e.test.ts)"
   exit 1
 fi
 
@@ -183,7 +187,7 @@ fi
 if [ "$HAD_FILE_ARG" -eq 0 ]; then
   shopt -s nullglob
   OFFLINE_FILES=()
-  for file in test/*.test.ts; do
+  for file in test/**/*.test.ts; do
     case "$file" in *.e2e.test.ts) ;; *) OFFLINE_FILES+=("$file") ;; esac
   done
   shopt -u nullglob
