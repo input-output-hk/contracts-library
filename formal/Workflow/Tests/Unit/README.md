@@ -42,7 +42,8 @@ lake exe workflow_runner_tests
 | `Runner/Tests.lean` | Build failure blocks stale binaries, later suites continue after a failure, logs persist, and expected negative text can pass |
 
 `workflow_generator_tests` runs only the generic Generator contract checks.
-The UP001, UP012, and UP015 workflow suites run their own scenario checks.
+The UP000, UP001, UP004, UP011, UP012, UP013, and UP015 workflow suites run
+their own scenario checks.
 The [single-check suite](../SingleCheck/Tests.lean) provides controlled preparation,
 assessment, binding, isolation, and evidence-failure checks. Its default command
 also runs actual single-model solver cases through the app and core; `--unit` omits those cases.

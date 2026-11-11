@@ -1,0 +1,81 @@
+{
+  "schema_version": 2,
+  "identity": {
+    "id": "UP-011",
+    "definition_version": 1,
+    "title": "Bounded rejection of a changed continuation payment credential",
+    "category": "universal"
+  },
+  "explanation": {
+    "summary": "Check that the reference linear-vesting program explicitly rejects a valid Claim context after changing the first continuation's payment credential under the original five guards.",
+    "claim": "For the selected Claim model, quantify over its leaves and a replacement Credential. Require baseline validScriptContext, baseline acceptance, explicit rejection after redirectContinuations, the original firstContinuation?.any payment-credential equality test to be false, and validScriptContext after changing only the first continuation's payment credential. Under these five premises, the changed context must explicitly reject. A separate applicability obligation requires a witness to all five premises. Acceptance and explicit rejection use 1,000,000 CEK steps; rejection means an error or a non-unit halt, and fuel exhaustion does not count.",
+    "purpose": "Preserve the original guarded Claim rejection and applicability formulas through the native property workflow."
+  },
+  "scope": {
+    "relevance_conditions": [
+      "Relevant to the Claim action of the reference linear-vesting compiled artifact within TxM-007.",
+      "The property requires rejection after a combined address-and-datum redirection. That guard does not independently prove that the validator relies on continuation addresses."
+    ],
+    "preconditions": [
+      "The target is the exact reference compiled artifact in Formal.TxModels.Artifacts.LinearVesting.referenceCompiledCode and is an unparameterized Plutus V3 spending program.",
+      "The original modeled context satisfies validScriptContext.",
+      "The supplied program accepts the original context within 1,000,000 CEK steps.",
+      "The supplied program explicitly rejects redirectContinuations of the original context within the same bound.",
+      "The original firstContinuation?.any payment-credential equality test against the replacement Credential is false.",
+      "The context with only the first continuation's payment credential changed still satisfies validScriptContext."
+    ],
+    "limitations": [
+      "The shared TxM-007 model admits two compiler artifacts. UP-011 restricts this binding to the original reference artifact and skips the second artifact without generating proof obligations.",
+      "Only Claim is bound to the native workflow. The retained standalone Cancel model has no continuation and an inapplicable applicability observation; its implication supplies no mutation coverage.",
+      "Claim has two inputs and two outputs: a script continuation with an inline datum followed by a signer payout. It uses one signer, one vested asset under fixed policyA, key credentials in the vesting datum, no constructed staking credentials, and a finite lower validity bound with no upper bound. Reference inputs, minting, and withdrawals are absent.",
+      "Continuations are identified by payment-credential equality with the spent input, without comparing staking credentials. Only the first matching output's payment credential changes; its staking credential, datum, value, and other fields are preserved. This does not establish the full address rule or arbitrary output-order coverage.",
+      "The redirect guard instead changes every matching output's entire address to keyAddr attackerKey and removes its datum. The fixed attackerKey bytes remain 61747461636b6572. Rejection after these combined changes does not independently prove address reliance.",
+      "The primary statement retains exactly the original five premises. Applicability separately requires a context and replacement credential satisfying all five. The explicit inequality guard is the original Option.any equality test, with no stronger replacement predicate.",
+      "The script credential p.script remains symbolic and is not constrained to the supplied program's hash.",
+      "These checks concern the fixed model and pinned program. They do not establish arbitrary transaction coverage, full ledger reachability, deployment exposure, or general validator safety.",
+      "The check adds no requirement that every output contain at least 1 ADA and does not print a transaction witness.",
+      "Acceptance and explicit rejection use 1,000,000 CEK steps. Rejection requires an error or a non-unit halt; fuel exhaustion does not count. This bound is not a ledger CPU or memory budget.",
+      "A primary rejection result needs the separate applicability result to exclude vacuity under the selected model. A timeout or solver error leaves the affected obligation unresolved.",
+      "Successful generated Blaster checks retain the blasterProven SMT trust assumption. This metadata records the property definition and does not assert a target-specific proof result.",
+      "Broader address protection and additional models in issue #32, and broader workflow integration and follow-up work in issue #96, remain open."
+    ]
+  },
+  "formalization": {
+    "primary": "Formal.Properties.Universal.UP011.statement",
+    "theorems": []
+  },
+  "references": [
+    {
+      "label": "Primary credential-mutation definition and separate applicability predicate",
+      "target": "formal/Formal/Properties/Universal/UP011/Definition.lean"
+    },
+    {
+      "label": "Claim-only model selection and reference-artifact restriction",
+      "target": "formal/Formal/Properties/Universal/UP011/Run.lean"
+    },
+    {
+      "label": "Original standalone Claim and Cancel rejection and applicability obligations",
+      "target": "formal/Formal/Vesting/Linear/Blueprint/ContinuationElsewhere.lean"
+    },
+    {
+      "label": "Original candidate scope and retained standalone evidence",
+      "target": "formal/Formal/Vesting/Linear/Blueprint/UP011.md"
+    },
+    {
+      "label": "Original helper bodies preserved by the native definition",
+      "target": "formal/Formal/Support/CandidateHelpers.lean"
+    },
+    {
+      "label": "Shared compiled artifact constants",
+      "target": "formal/Formal/TxModels/Artifacts/LinearVesting.lean"
+    },
+    {
+      "label": "Open broader address protection and additional model work",
+      "target": "https://github.com/no-witness-labs/contracts-library/issues/32"
+    },
+    {
+      "label": "Open workflow integration and follow-up work",
+      "target": "https://github.com/no-witness-labs/contracts-library/issues/96"
+    }
+  ]
+}
