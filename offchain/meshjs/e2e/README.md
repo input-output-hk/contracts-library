@@ -40,7 +40,7 @@ just e2e            # typecheck + ephemeral devnet; `just e2e <file>` runs one s
 
 `test:devnet` (`scripts/devnet-test.sh`) starts an ephemeral devnet, waits for its API to serve blocks, runs the suite, and always tears the devnet down. The Yaci DevKit CLI is pinned as a devDependency (`@bloxbean/yaci-devkit@0.12.0`) and preferred over any global install. If yaci-devkit is not installed it falls back to `npm test` with no devnet, and the suite **skips itself** (so it is safe to run anywhere).
 
-Test files without the `.e2e.` marker (currently `event_triggered.builders.test.ts`) are offline suites: they build transactions against a mock fetcher and need no devnet. A full `test:devnet` run executes them first, before any devnet boots; pass a file path (`npm run test:devnet -- <file>`) to skip them when iterating on a single devnet suite.
+Test files without the `.e2e.` marker (currently `event_triggered.builders.test.ts`) are offline suites: they build transactions against a mock fetcher and need no devnet. A full `test:devnet` run executes them first, before any devnet boots; pass a file path (`just e2e <file>`) to skip them when iterating on a single devnet suite.
 
 `npm test` alone runs the suite against whatever devnet is already reachable (or skips). Endpoints come from env, matching the shared lifecycle convention: `INDEXER_URL` / `YACI_STORE_URL` for the store API (default `http://localhost:8080/api/v1/`) and `YACI_ADMIN_URL` for the admin API (default `http://localhost:10000`).
 
