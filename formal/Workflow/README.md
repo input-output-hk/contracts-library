@@ -3,12 +3,12 @@
 Plutus UPV (Universal Property Verifier) checks universal properties against
 compiled Plutus validators using ordinary Lean code and configured proof tools.
 The prototype supports the documented Aiken-style Plutus V3 blueprint profile.
-The app processes all logical validators and all seventeen registered property/model
+The app processes all logical validators and all eighteen registered property/model
 combinations by default, with optional validator/property filters and a property
 switch file. UP-000, UP-004, and UP-013 check the original vesting artifact with Claim and Cancel.
-UP-011 checks that artifact with Claim only.
+UP-011 and UP-014 check that artifact with Claim only.
 UP-012 supports pinned vesting profiles and reusable TxM-009 preparation; UP-015 uses
-the pinned vesting profiles. These seven properties and their models support prototype
+the pinned vesting profiles. These eight properties and their models support prototype
 testing; their broader definitions and coverage still need review.
 
 | Guide | Use |
@@ -45,7 +45,7 @@ The final human-friendly report remains separate work in
 | `Metadata/` | Property/model metadata readers and binding validation |
 | [Declarative/](Declarative/README.md) | Property-owned discovery, shared model binding, and generation |
 | `Preparation/` | Reusable program decoding and model-input compatibility checks |
-| [Tests/](Tests/README.md) | Component controls and the UP000/UP001/UP004/UP011/UP012/UP013/UP015 workflow scenarios |
+| [Tests/](Tests/README.md) | Component controls and the UP000/UP001/UP004/UP011/UP012/UP013/UP014/UP015 workflow scenarios |
 | [Formal/Properties](../Formal/Properties/README.md) | Native primary definitions, metadata, and category/code indexes |
 | [Formal/TxModels](../Formal/TxModels/README.md) | Native context constructors and their metadata |
 
@@ -91,6 +91,11 @@ implementations. Application composition supplies those dependencies.
   require a model-valid accepted baseline and a model-valid changed context,
   with separate linked applicability. The claim concerns this single range on
   the original vesting artifact; it is not a universal requirement for all validators.
+- **UP-014** replaces the first Claim continuation's inline datum with two
+  symbolic credentials, an empty vesting-asset list, and three symbolic integers.
+  All five original guards and separate applicability remain, with a
+  1,000,000-step bound. Only the original artifact and TxM-007 Claim are registered;
+  broader datum integrity remains unproven.
 - Within one combination, a qualified, trustworthy FAIL takes precedence. Missing,
   interrupted, or untrusted evidence cannot establish PASS. An empty plan is
   INCONCLUSIVE. The app displays per-validator counts without an overall verdict.

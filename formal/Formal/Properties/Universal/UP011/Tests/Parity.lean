@@ -28,11 +28,11 @@ theorem changeFirstParity : changeFirst = Formal.Support.changeFirst := by
   induction outputs with
   | nil => rfl
   | cons output rest ih =>
-      simp only [changeFirst, Formal.Support.changeFirst, ih]
+      simp only [changeFirst, Formal.Support.Continuations.changeFirst, Formal.Support.changeFirst, ih]
 
 theorem changeContinuationParity : changeContinuation = Formal.Support.changeContinuation := by
   funext ctx transform
-  simp only [changeContinuation, Formal.Support.changeContinuation,
+  simp only [changeContinuation, Formal.Support.Continuations.changeContinuation, Formal.Support.changeContinuation,
     withOutputsParity, isContinuationParity, changeFirstParity]
 
 theorem firstContinuationParity : firstContinuation? = Formal.Support.firstContinuation? := rfl

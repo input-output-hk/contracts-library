@@ -39,12 +39,12 @@ for their results.
 
 ## Current delivery status
 
-The product app now runs all logical validators and all seventeen registered
+The product app now runs all logical validators and all eighteen registered
 property-definition/model combinations by default. These comprise two UP-000
 Claim/Cancel models, six UP-001 purpose models, two UP-004 Claim/Cancel models,
-one UP-011 Claim model, three UP-012 models, two UP-013 Claim/Cancel models, and
-one UP-015 Claim reversal binding.
-UP-000, UP-004, UP-011, and UP-013
+one UP-011 Claim model, three UP-012 models, two UP-013 Claim/Cancel models,
+one UP-014 Claim model, and one UP-015 Claim reversal binding.
+UP-000, UP-004, UP-011, UP-013, and UP-014
 admit only the original vesting artifact.
 These remain experimental workflow bindings, with general property/model readiness
 outside this integration.
@@ -59,6 +59,15 @@ The [UP-011 guide](../../Formal/Properties/Universal/UP011/README.md) records
 that scope and the compiled address-ignoring control. This integration supplies
 neither a full-address rule nor general parity with PR #47's schema-generated
 action models.
+
+UP-014 likewise registers Claim only and preserves all five standalone premises,
+separate applicability, and the 1,000,000-step bound. Its exact inline replacement
+contains two symbolic credentials, an empty vesting-asset list, and three symbolic
+integers. Cancel remains a standalone no-applicability diagnostic. The compiled
+continuation-gate control checks the payment credential while ignoring the datum.
+It requires a Falsified main goal with Valid applicability. The
+[UP-014 guide](../../Formal/Properties/Universal/UP014/README.md) distinguishes
+this fixed replacement from broader datum integrity, which remains unproven.
 
 Repeated `--validator` and `--check`
 options filter that work. `--checks-file` instead enables only properties marked
@@ -88,7 +97,7 @@ not provision a managed runtime or build the caller's Aiken project.
 | Input selection | Several validators per command; requires a spend handler and `name.name.handler` titles | App defaults to all logical validators; Input prepares each selected validator, accepts canonical or unambiguous short names, validates explicit V3 metadata, and decodes code | App supplies batch orchestration; additional input formats remain separate work |
 | Schema handling | Translates datum and redeemer schemas into bounded symbolic data | Input preserves schemas; UP-001 uses raw redeemer data without schema translation | General schema translation/integration remains open; review the old translation before reuse |
 | Parameters | Rejects any entry with a `parameters` field, including an empty array | Input preserves descriptions; current adapters accept absent or empty lists and reject nonempty lists | Typed parameter generation/application remains open; PR #47 does not supply it |
-| Candidate checks | UP-000, UP-001, UP-002, UP-004, UP-005, and UP-011 | Registry supplies two UP-000 acceptance, two UP-004 rejection, one UP-011 guarded Claim credential-change, three UP-012 signer-removal, two UP-013 fully unbounded-range, and one UP-015 Claim reversal combinations at 1,000,000 steps, plus six UP-001 purpose combinations at 5,000,000 steps; CLI filters registered properties | Experimental integration does not establish general readiness; definitions #22/#23/#25/#32/#33/#34/#36, model authoring #89, and further integration #96 remain open |
+| Candidate checks | UP-000, UP-001, UP-002, UP-004, UP-005, and UP-011 | Registry supplies two UP-000 acceptance, two UP-004 rejection, one UP-011 guarded Claim credential-change, three UP-012 signer-removal, two UP-013 fully unbounded-range, one UP-014 guarded Claim empty-list datum-replacement, and one UP-015 Claim reversal combinations at 1,000,000 steps, plus six UP-001 purpose combinations at 5,000,000 steps; CLI filters registered properties | Experimental integration does not establish general readiness; definitions #22/#23/#25/#32/#33/#34/#35/#36, model authoring #89, and further integration #96 remain open |
 | Metadata and models | Generator-owned check definitions and transaction builders | Native property/model banks, checked metadata, and fixed executable bindings; selected snapshots follow generated obligations and assessed results | Native banks supply metadata/binding integration; general transaction-model authoring remains open |
 | Cases and reachability | Full constructor splits, weaker quick mode, and UNREACHED classification using UP-000 | No schema case splitting or cross-check reachability classification | Review case domains and aggregation before porting spend checks |
 | Generated code | Embeds script bytes in the generated Base module; writes modules in the checkout | Embeds script bytes in generated Types; each combination uses a fresh evidence directory | Retain embedded artifacts and isolated execution |
@@ -191,7 +200,7 @@ owner decisions.
 The TxM-009 pilot added reusable structural admission under `Workflow/Preparation`.
 That checkpoint kept the native constructor, property, fuel, and then-current
 ten-combination Lean catalogue. UP-000, UP-004, and UP-013 add two combinations each,
-and UP-011 adds one Claim combination, without changing TxM-009 admission.
+and UP-011 and UP-014 each add one Claim combination, without changing TxM-009 admission.
 Compatible compiled programs need no allowlist entries, but schema compatibility
 alone establishes no security role or coverage claim. The supported subset and
 conservative rejection behavior are described in the developer guide. This is a
