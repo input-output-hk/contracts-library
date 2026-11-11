@@ -4,7 +4,8 @@ The public `plutus-upv run` command discovers maintained run declarations for
 [UP-000](../../Formal/Properties/Universal/UP000/Run.lean),
 [UP-001](../../Formal/Properties/Universal/UP001/Run.lean),
 [UP-004](../../Formal/Properties/Universal/UP004/Run.lean),
-[UP-012](../../Formal/Properties/Universal/UP012/Run.lean), and
+[UP-012](../../Formal/Properties/Universal/UP012/Run.lean),
+[UP-013](../../Formal/Properties/Universal/UP013/Run.lean), and
 [UP-015](../../Formal/Properties/Universal/UP015/Run.lean). Lean handles discovery,
 selection, model preparation, and application launch. The earlier `universal`
 executable is retired; internal legacy fixtures retain regression comparisons.
@@ -32,6 +33,7 @@ From `formal/`:
 ./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-012 --check UP-015 --timeout-ms 300000
 ./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-000
 ./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-004
+./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-013 --timeout-ms 300000
 ```
 
 ## Authoring contract
@@ -77,6 +79,17 @@ halt counts as rejection; fuel exhaustion does not. The
 [UP-004 guide](../../Formal/Properties/Universal/UP004/README.md) describes its
 generated files, synthetic controls, and scope limits.
 
+UP-013 uses the same models and original-artifact restriction, with a main goal
+and linked applicability for each combination. From a model-valid accepted
+baseline, it replaces only the validity range with the fully unbounded range.
+If the changed context is also model-valid, the validator must explicitly reject
+it within 1,000,000 CEK steps. Fuel exhaustion does not establish rejection.
+The main goal cannot establish PASS without trustworthy applicability evidence.
+The [UP-013 guide](../../Formal/Properties/Universal/UP013/README.md) describes
+the single-range scope, synthetic accepting control, and preserved standalone
+provenance. Default selection and the all-enabled example switch file include
+UP-013 under the existing selection rules.
+
 ## Discovery and retained evidence
 
 The launcher scans conventional property paths and metadata identities, then
@@ -121,9 +134,11 @@ lake exe workflow_declarative_tests
 lake exe workflow_declarative_up000_tests
 lake exe workflow_declarative_up001_tests
 lake exe workflow_declarative_up004_tests
+lake exe workflow_declarative_up013_tests
 lake exe workflow_declarative_up015_tests
 lake exe workflow_up000_tests
 lake exe workflow_up004_tests
+lake exe workflow_up013_tests
 ./plutus-upv test
 ```
 

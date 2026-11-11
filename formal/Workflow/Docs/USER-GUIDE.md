@@ -3,9 +3,9 @@
 Plutus UPV (Universal Property Verifier) checks universal properties against
 compiled Plutus validators using Lean and configured proof tools. The prototype
 accepts the documented Aiken-style Plutus V3 blueprint profile. By default, one
-command processes all logical validators and all fourteen registered property/model
+command processes all logical validators and all sixteen registered property/model
 combinations. They comprise two for UP-000, six for UP-001, two for UP-004,
-three for UP-012, and one for UP-015.
+three for UP-012, two for UP-013, and one for UP-015.
 
 These are experimental workflow bindings; registration does not establish general readiness
 of the properties or models.
@@ -79,7 +79,7 @@ other validators continue. Invalid shared JSON/title structure stops discovery.
 
 ## Select properties with a file
 
-Start with [checks.example.json](../../checks.example.json), which enables all five
+Start with [checks.example.json](../../checks.example.json), which enables all six
 registered properties, or save your own `checks.json`. For example, enable only UP-001:
 
 ```json
@@ -88,6 +88,7 @@ registered properties, or save your own `checks.json`. For example, enable only 
   "UP-001": true,
   "UP-004": false,
   "UP-012": false,
+  "UP-013": false,
   "UP-015": false
 }
 ```
@@ -175,7 +176,7 @@ characters such as `/`; `run.json` preserves canonical validator names.
 | Per-check `check-result.json` | The assessed six-field result, including scope, reasons, and evidence references |
 | Per-check `input.json` | The same captured blueprint used to prepare that validator |
 | Per-check `execution.json` | Attempted commands, timing, raw observations, and diagnostics |
-| `Generated/` | Generated Lean, stdout/stderr logs, and successful compiled modules; UP-000, UP-004, UP-012, and UP-015 also generate `Tx.lean` |
+| `Generated/` | Generated Lean, stdout/stderr logs, and successful compiled modules; UP-000, UP-004, UP-012, UP-013, and UP-015 also generate `Tx.lean` |
 
 An interrupted run can leave its last saved index unfinished. Files depend on how
 far an attempt progressed: unreadable input has no snapshot, and validator
@@ -297,6 +298,33 @@ SKIPPED in the app, with an unsupported reason. Owner, signer, and recipient var
 TxM-009; passing does not establish correct-owner authorization. Its intended universal meaning remains
 separate work in [issue #33](https://github.com/no-witness-labs/contracts-library/issues/33).
 
+Run UP-013 against the original reference vesting fixture from `formal/`:
+
+```sh
+./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-013 --timeout-ms 300000
+```
+
+The Claim (TxM-007) and Cancel (TxM-008) combinations replace the baseline's
+validity range with the fully unbounded range `(-∞, +∞)`. Each requires a
+model-valid accepted baseline and a model-valid changed context, then checks
+explicit rejection of the change within **1,000,000 CEK steps**. Fuel exhaustion
+does not count as rejection. Each main obligation has separate linked
+applicability; a main result cannot establish PASS without trustworthy evidence
+that its premises have a witness.
+
+The expected reference outcome is two PASS combinations, supported by four Valid
+observations. Inspect the actual results and logs under the printed `Review`
+path. The `UP-013-v1-TxM-007` and `UP-013-v1-TxM-008` folders retain generated
+`Types.lean`, `Tx.lean`, and `Checks.lean` plus results and execution evidence.
+These expectations are not a record of a new run.
+
+UP-013 skips the second artifact recognized by native model admission; unknown
+artifacts remain unsupported. It concerns one fully unbounded range, not every
+range missing a lower bound, and does not require every validator to reject
+unbounded ranges. Model validity does not establish ledger reachability or funds
+safety. See the [UP-013 scope](../../Formal/Properties/Universal/UP013/README.md)
+for the fixed models, original-artifact restriction, and open definition work.
+
 UP-015 uses the same validator input and native Claim model, TxM-007:
 
 ```sh
@@ -317,12 +345,13 @@ and all registered combinations. The app and test command do not build Aiken
 sources automatically. The original UP-012 regression input remains unchanged;
 the reviewed demo build has an independent shared regression snapshot.
 
-The five scenarios test workflow behavior. They do not establish general
+The six scenarios test workflow behavior. They do not establish general
 property or model readiness. Definition work remains open in
 [UP-000 #22](https://github.com/no-witness-labs/contracts-library/issues/22),
 [UP-001 #23](https://github.com/no-witness-labs/contracts-library/issues/23),
 [UP-004 #25](https://github.com/no-witness-labs/contracts-library/issues/25),
-[UP-012 #33](https://github.com/no-witness-labs/contracts-library/issues/33), and
+[UP-012 #33](https://github.com/no-witness-labs/contracts-library/issues/33),
+[UP-013 #34](https://github.com/no-witness-labs/contracts-library/issues/34), and
 [UP-015 #36](https://github.com/no-witness-labs/contracts-library/issues/36).
 [Model authoring #89](https://github.com/no-witness-labs/contracts-library/issues/89)
 and [candidate integration #96](https://github.com/no-witness-labs/contracts-library/issues/96)

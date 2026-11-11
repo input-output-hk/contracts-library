@@ -3,11 +3,11 @@
 Plutus UPV (Universal Property Verifier) checks universal properties against
 compiled Plutus validators using ordinary Lean code and configured proof tools.
 The prototype supports the documented Aiken-style Plutus V3 blueprint profile.
-The app processes all logical validators and all fourteen registered property/model
+The app processes all logical validators and all sixteen registered property/model
 combinations by default, with optional validator/property filters and a property
-switch file. UP-000 and UP-004 check the original vesting artifact with Claim and Cancel.
+switch file. UP-000, UP-004, and UP-013 check the original vesting artifact with Claim and Cancel.
 UP-012 supports pinned vesting profiles and reusable TxM-009 preparation; UP-015 uses
-the pinned vesting profiles. These five properties and their models support prototype
+the pinned vesting profiles. These six properties and their models support prototype
 testing; their broader definitions and coverage still need review.
 
 | Guide | Use |
@@ -44,7 +44,7 @@ The final human-friendly report remains separate work in
 | `Metadata/` | Property/model metadata readers and binding validation |
 | [Declarative/](Declarative/README.md) | Property-owned discovery, shared model binding, and generation |
 | `Preparation/` | Reusable program decoding and model-input compatibility checks |
-| [Tests/](Tests/README.md) | Component controls and the UP000/UP001/UP004/UP012/UP015 workflow scenarios |
+| [Tests/](Tests/README.md) | Component controls and the UP000/UP001/UP004/UP012/UP013/UP015 workflow scenarios |
 | [Formal/Properties](../Formal/Properties/README.md) | Native primary definitions, metadata, and category/code indexes |
 | [Formal/TxModels](../Formal/TxModels/README.md) | Native context constructors and their metadata |
 
@@ -79,6 +79,11 @@ implementations. Application composition supplies those dependencies.
 - UP-012 applies the experimental signer-removal definition to the fixed Claim
   and Cancel models and the key-datum spend model. Its applicability obligations qualify the corresponding
   property obligations. It is not a general required-signer audit for new validators.
+- **UP-013** replaces the validity range with the fully unbounded range and
+  requires explicit rejection within 1,000,000 CEK steps. Claim and Cancel each
+  require a model-valid accepted baseline and a model-valid changed context,
+  with separate linked applicability. The claim concerns this single range on
+  the original vesting artifact; it is not a universal requirement for all validators.
 - Within one combination, a qualified, trustworthy FAIL takes precedence. Missing,
   interrupted, or untrusted evidence cannot establish PASS. An empty plan is
   INCONCLUSIVE. The app displays per-validator counts without an overall verdict.

@@ -39,10 +39,11 @@ for their results.
 
 ## Current delivery status
 
-The product app now runs all logical validators and all fourteen registered
+The product app now runs all logical validators and all sixteen registered
 property-definition/model combinations by default. These comprise two UP-000
 Claim/Cancel models, six UP-001 purpose models, two UP-004 Claim/Cancel models,
-three UP-012 models, and one UP-015 Claim reversal binding. UP-000 and UP-004
+three UP-012 models, two UP-013 Claim/Cancel models, and one UP-015 Claim reversal binding.
+UP-000, UP-004, and UP-013
 admit only the original vesting artifact.
 These remain experimental workflow bindings, with general property/model readiness
 outside this integration.
@@ -177,7 +178,7 @@ owner decisions.
 
 The TxM-009 pilot added reusable structural admission under `Workflow/Preparation`.
 That checkpoint kept the native constructor, property, fuel, and then-current
-ten-combination Lean catalogue. UP-000 and UP-004 add two combinations each
+ten-combination Lean catalogue. UP-000, UP-004, and UP-013 add two combinations each
 without changing TxM-009 admission.
 Compatible compiled programs need no allowlist entries, but schema compatibility
 alone establishes no security role or coverage claim. The supported subset and
