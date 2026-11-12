@@ -1,11 +1,11 @@
 # Workflow tests
 
 The four reusable components have separate unit coverage. UP000, UP001, UP004,
-UP011, UP012, UP013, UP014, and UP015 are the eight workflow scenarios; they reference candidate implementations
+UP007, UP011, UP012, UP013, UP014, and UP015 are the nine workflow scenarios; they reference candidate implementations
 instead of defining candidate logic in the engine.
 
 These experimental scenarios test integration; they do not establish general
-readiness of the eight properties or their transaction models.
+readiness of the nine properties or their transaction models.
 
 ## Ownership and suite membership
 
@@ -38,14 +38,14 @@ stops the run; a suite failure allows the remaining independent suites to run.
 Only a complete successful test run returns zero. Expected negative controls
 print FAIL or INCONCLUSIVE without making their enclosing suite fail.
 
-The aggregate command registers 35 suites, including component units, metadata,
+The aggregate command registers 37 suites, including component units, metadata,
 run evidence, selection, shared source capture/compilation, relative review links,
 output controls, and installer/launcher checks. It also runs real app/core solver cases, runner failure
 controls, Input-to-Generator type-checking, Executor/Reporter solver controls, and
-the scenarios below. It includes eight property-owned suites, but does
+the scenarios below. It includes nine property-owned suites, but does
 not execute every retained standalone candidate proof or the validator milestones.
 Optional manual integration probes are not additional suite runs.
-These are registration counts, not a claim that a complete 35-suite run passed.
+These are registration counts, not a claim that a complete 37-suite run passed.
 Register new workflow test executables in `Runner.defaultSuites` so the aggregate
 command includes them.
 
@@ -57,6 +57,9 @@ lake exe workflow_up000_tests --unit
 lake exe workflow_up001_tests
 lake exe workflow_up004_tests
 lake exe workflow_up004_tests --unit
+lake exe workflow_up007_tests
+lake exe workflow_up007_tests --unit
+lake exe workflow_up007_tests --control
 lake exe workflow_up011_tests
 lake exe workflow_up011_tests --unit
 lake exe workflow_up012_tests --unit
@@ -76,6 +79,7 @@ lake exe workflow_declarative_tests
 lake exe workflow_declarative_up000_tests
 lake exe workflow_declarative_up001_tests
 lake exe workflow_declarative_up004_tests
+lake exe workflow_declarative_up007_tests
 lake exe workflow_declarative_up011_tests
 lake exe workflow_declarative_up013_tests
 lake exe workflow_declarative_up014_tests
@@ -90,6 +94,7 @@ lake exe workflow_review_tests
 | [UP000](UP000/README.md) | Native app/engine Claim/Cancel acceptance, retained output, two skip paths, and synthetic always-error controls | Native UP-000, TxM-007/008, and the original UP012 fixture |
 | [UP001](UP001/README.md) | Passing and failing vaults, invalid input, and timeout | `Workflow.Tests.Legacy.Candidates.UP001` and fixed demo inputs |
 | [UP004](UP004/README.md) | Native app/engine Claim/Cancel rejection, retained output, two skip paths, timeout handling, and synthetic always-accepting controls | Native UP-004, TxM-007/008, and the original UP012 fixture |
+| [UP007](UP007/README.md) | Native app/engine Claim staking-credential rejection with expected official FAIL, linked applicability, retained output, skip paths, and compiled stake-enforcing control PASS | Native UP-007, TxM-007, and the original UP012 fixture |
 | [UP011](UP011/README.md) | Native app/engine Claim payment-credential rejection, linked applicability, retained output, skip paths, and the compiled address-ignoring control | Native UP-011, TxM-007, and the original UP012 fixture |
 | [UP012](UP012/README.md) | Four original vesting propositions, native TxM-009 vault and reusable preparation checks, unsupported-profile handling, and a semantic negative control | `Workflow.Tests.Legacy.Candidates.UP012` plus test-owned vesting and vault profiles |
 | [UP013](UP013/README.md) | Native app/engine fully unbounded-range rejection, linked applicability, retained output, two skip paths, and synthetic always-accepting controls | Native UP-013, TxM-007/008, and the original UP012 fixture |
@@ -97,11 +102,17 @@ lake exe workflow_review_tests
 | [UP015](UP015/README.md) | Claim output swap, nonidentity applicability, shared-model app scenarios, unsupported-profile handling, and a counterfactual rejection control | `Workflow.Tests.Legacy.Candidates.UP015`, native TxM-007, and shared test-only linear-vesting preparation |
 
 The UP001/UP012 scenario harnesses preserve the old report contract through the internal legacy fixture driver.
-UP000, UP004, UP011, UP013, and UP014 use the native catalogue and app with `UP012/Inputs/plutus.json`.
-UP011 and UP014 register only TxM-007 Claim; the other three use TxM-007/008.
+UP000, UP004, UP007, UP011, UP013, and UP014 use the native catalogue and app with `UP012/Inputs/plutus.json`.
+UP007, UP011, and UP014 register only TxM-007 Claim; the other three use TxM-007/008.
 Their property-owned skip rules exclude the second native-allowlist
 vesting artifact. Public CLI runs remain separate from these automated app scenarios.
 UP015 reuses the same original fixture and TxM-007.
+
+UP007 preserves the native goal's Valid expectation while requiring the reference
+run to record main Falsified and applicability Valid, yielding official FAIL.
+Its compiled enforcing control expects two Valid observations and a test-only PASS.
+A completed app run may exit zero while retaining the official failure; a passing
+regression suite confirms that expected behavior, not a passing reference property.
 
 UP012 and UP015 `--unit` modes skip solver cases. Their default runs include
 app scenarios and test-only negative controls. [Profiles/LinearVesting.lean](Profiles/LinearVesting.lean)
@@ -131,6 +142,6 @@ coverage. The runtime scenarios in UP012 use `preparation-demo`; earlier full
 UP-012 and public CLI validation produced
 the expected positive, negative, and failed-applicability outcomes. The historical
 vault-demo pilot expectations covered 30 combinations and 45 generated Lean files.
-With UP-000, UP-004, UP-011, UP-013, and UP-014 registered, its default selection has 54 combinations;
-the twenty-four added pairs are skipped and generate no Lean files. These expectations do not claim a
+With UP-000, UP-004, UP-007, UP-011, UP-013, and UP-014 registered, its default selection has 57 combinations;
+the twenty-seven added pairs are skipped and generate no Lean files. These expectations do not claim a
 new run of that demo.
