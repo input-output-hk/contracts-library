@@ -33,8 +33,10 @@ set -u
 
 ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 
+# `**` needs globstar to recurse; without it the glob matches nothing and the
+# count check below reports it.
 shopt -s globstar 2>/dev/null \
-  || echo "⚠ bash lacks globstar; nested test files under test/ are not discovered"
+  || echo "⚠ bash lacks globstar; e2e test discovery (test/**/*.e2e.test.ts) will fail"
 
 API_URL="http://localhost:8080/api/v1/"
 ADMIN_URL="http://localhost:10000"
