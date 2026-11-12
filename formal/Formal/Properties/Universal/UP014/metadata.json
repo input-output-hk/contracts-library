@@ -1,0 +1,86 @@
+{
+  "schema_version": 2,
+  "identity": {
+    "id": "UP-014",
+    "definition_version": 1,
+    "title": "Bounded rejection of an empty-list continuation datum replacement",
+    "category": "universal"
+  },
+  "explanation": {
+    "summary": "Check that the reference linear-vesting program explicitly rejects a valid Claim context after replacing the first continuation's datum with the original empty-list constructor under five guards.",
+    "claim": "For the selected Claim model, quantify over its leaves, two Credentials, and three Int fields. The replacement datum is exactly Constr 0 [toData c1, toData c2, List [], I start, I finish, I recovery]. Require baseline validScriptContext, baseline acceptance, explicit rejection after redirectContinuations, the original firstContinuation?.any datum equality test to be false, and validScriptContext after replacing only the first continuation's datum. Under these five premises, the changed context must explicitly reject. A separate applicability obligation requires a witness to all five premises. Acceptance and explicit rejection use 1,000,000 CEK steps; rejection means an error or a non-unit halt, and fuel exhaustion does not count.",
+    "purpose": "Preserve the original guarded Claim rejection and applicability formulas through the native property workflow, including the empty-list-only replacement scope."
+  },
+  "scope": {
+    "relevance_conditions": [
+      "Relevant to the Claim action of the reference linear-vesting compiled artifact within TxM-007.",
+      "The property requires rejection after a combined address-and-datum redirection. That guard does not independently prove that the validator relies on continuation datums."
+    ],
+    "preconditions": [
+      "The target is the exact reference compiled artifact in Formal.TxModels.Artifacts.LinearVesting.referenceCompiledCode and is an unparameterized Plutus V3 spending program.",
+      "The original modeled context satisfies validScriptContext.",
+      "The supplied program accepts the original context within 1,000,000 CEK steps.",
+      "The supplied program explicitly rejects redirectContinuations of the original context within the same bound.",
+      "The original firstContinuation?.any datum equality test against OutputDatum (Constr 0 [toData c1, toData c2, List [], I start, I finish, I recovery]) is false.",
+      "The context with only the first continuation's datum replaced still satisfies validScriptContext."
+    ],
+    "limitations": [
+      "The shared TxM-007 model admits two compiler artifacts. UP-014 restricts this binding to the original reference artifact and skips the second artifact without generating proof obligations.",
+      "Only Claim is bound to the native workflow. The retained standalone Cancel model has no continuation and an inapplicable applicability observation; its implication supplies no mutation coverage.",
+      "Claim has two inputs and two outputs: a script continuation with an inline datum followed by a signer payout. It uses one signer, one vested asset under fixed policyA, key credentials in the original vesting datum, no constructed staking credentials, and a finite lower validity bound with no upper bound. Reference inputs, minting, and withdrawals are absent.",
+      "The replacement uses constructor 0 with exactly two encoded Credentials, an empty vesting list, and three Int fields. The original Claim datum has one vested asset, so this replacement removes that entry. Nonempty replacement vesting lists, arbitrary typed VestingDatum values, semantically valid alternative schedules, and general datum protection are outside this check. No semantic validity requirement is added for the replacement fields.",
+      "Continuations are identified by payment-credential equality with the spent input, without comparing staking credentials. Only the first matching output's datum changes; its entire address, value, reference script, and other fields are preserved. This does not establish arbitrary output-order coverage.",
+      "The redirect guard instead changes every matching output's entire address to keyAddr attackerKey and removes its datum. The fixed attackerKey bytes remain 61747461636b6572. Rejection after these combined changes does not independently prove datum reliance.",
+      "The primary statement retains exactly the original five premises. Applicability separately requires a context, two Credentials, and three Int fields satisfying all five. The explicit inequality guard is the original Option.any datum equality test, with no stronger replacement predicate.",
+      "The script credential p.script remains symbolic and is not constrained to the supplied program's hash.",
+      "These checks concern the fixed model and pinned program. They do not establish arbitrary transaction coverage, full ledger reachability, deployment exposure, or general validator safety.",
+      "The check adds no requirement that every output contain at least 1 ADA and does not print a transaction witness.",
+      "Acceptance and explicit rejection use 1,000,000 CEK steps. Rejection requires an error or a non-unit halt; fuel exhaustion does not count. This bound is not a ledger CPU or memory budget.",
+      "A primary rejection result needs the separate applicability result to exclude vacuity under the selected model. A timeout or solver error leaves the affected obligation unresolved.",
+      "Successful generated Blaster checks retain the blasterProven SMT trust assumption. This metadata records the property definition and does not assert a target-specific proof result.",
+      "Broader datum protection and the intended general rule in issue #35, and broader workflow integration and follow-up work in issue #96, remain open."
+    ]
+  },
+  "formalization": {
+    "primary": "Formal.Properties.Universal.UP014.statement",
+    "theorems": []
+  },
+  "references": [
+    {
+      "label": "Primary empty-list datum replacement and separate applicability predicate",
+      "target": "formal/Formal/Properties/Universal/UP014/Definition.lean"
+    },
+    {
+      "label": "Claim-only model selection and reference-artifact restriction",
+      "target": "formal/Formal/Properties/Universal/UP014/Run.lean"
+    },
+    {
+      "label": "Original standalone Claim and Cancel rejection and applicability obligations",
+      "target": "formal/Formal/Vesting/Linear/Blueprint/ContinuationOtherDatum.lean"
+    },
+    {
+      "label": "Original candidate scope and retained standalone evidence",
+      "target": "formal/Formal/Vesting/Linear/Blueprint/UP014.md"
+    },
+    {
+      "label": "Shared native continuation helper bodies",
+      "target": "formal/Formal/Support/Continuations.lean"
+    },
+    {
+      "label": "Original legacy helper bodies retained for parity",
+      "target": "formal/Formal/Support/CandidateHelpers.lean"
+    },
+    {
+      "label": "Shared compiled artifact constants",
+      "target": "formal/Formal/TxModels/Artifacts/LinearVesting.lean"
+    },
+    {
+      "label": "Open broader datum protection and general rule work",
+      "target": "https://github.com/no-witness-labs/contracts-library/issues/35"
+    },
+    {
+      "label": "Open workflow integration and follow-up work",
+      "target": "https://github.com/no-witness-labs/contracts-library/issues/96"
+    }
+  ]
+}

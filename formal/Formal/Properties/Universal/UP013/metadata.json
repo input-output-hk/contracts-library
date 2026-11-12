@@ -1,0 +1,77 @@
+{
+  "schema_version": 2,
+  "identity": {
+    "id": "UP-013",
+    "definition_version": 1,
+    "title": "Bounded rejection of a fully unbounded validity range",
+    "category": "universal"
+  },
+  "explanation": {
+    "summary": "Check that the reference linear-vesting program explicitly rejects valid Claim and Cancel contexts after replacing an accepted baseline's validity range with (-infinity, +infinity).",
+    "claim": "For each selected Claim or Cancel model, if the original context satisfies validScriptContext and is accepted within 1,000,000 CEK steps, and replacing only its validity range with rangeAlways preserves validScriptContext, the changed context is explicitly rejected within the same bound. Separate applicability obligations require a witness to these three premises for each action. Explicit rejection means an error or a non-unit halt; fuel exhaustion does not count.",
+    "purpose": "Preserve the original fully unbounded-range rejection and applicability checks for the pinned, time-sensitive vesting action scenarios through the native property workflow."
+  },
+  "scope": {
+    "relevance_conditions": [
+      "Relevant to the time-sensitive Claim and Cancel actions of the reference linear-vesting compiled artifact.",
+      "Rejecting a fully unbounded validity range is not a universal requirement for all validators. This binding does not infer whether another validator requires a finite lower bound."
+    ],
+    "preconditions": [
+      "The target is the exact reference compiled artifact in Formal.TxModels.Artifacts.LinearVesting.referenceCompiledCode and is an unparameterized Plutus V3 spending program.",
+      "The original modeled context satisfies validScriptContext.",
+      "The supplied program accepts the original context within 1,000,000 CEK steps.",
+      "The context with its validity range replaced by rangeAlways still satisfies validScriptContext."
+    ],
+    "limitations": [
+      "The shared TxM-007 and TxM-008 models admit two compiler artifacts. UP-013 restricts this binding to the original reference artifact and skips the second artifact without generating proof obligations.",
+      "Claim has two inputs and two outputs; Cancel has two inputs and one output. Both use one signer, one vested asset under fixed policyA, and key credentials in the vesting datum. Reference inputs, minting, and withdrawals are absent.",
+      "The baseline range has a finite lower bound and no upper bound. The only mutation replaces the entire validity range with rangeAlways, the fully unbounded interval (-infinity, +infinity). The property does not quantify over every range with a missing lower bound.",
+      "The primary statement retains exactly the original three premises: baseline validity, baseline acceptance, and changed-context validity. Applicability separately requires those premises to have a witness for each action. No extra premise requires the mutation to change the original range.",
+      "The script credential p.script remains symbolic and is not constrained to the supplied program's hash.",
+      "These checks establish statements within the fixed models and pinned program. They do not establish arbitrary transaction coverage, full ledger reachability, deployment exposure, or general validator safety.",
+      "The check adds no requirement that every output contain at least 1 ADA and does not print a transaction witness.",
+      "Both acceptance and explicit rejection use 1,000,000 CEK steps. Rejection requires an error or a non-unit halt; fuel exhaustion does not count. This bound is not a ledger CPU or memory budget.",
+      "A primary rejection result needs the separate applicability result to exclude vacuity under the selected model. A timeout or solver error leaves the affected obligation unresolved.",
+      "Successful generated Blaster checks retain the blasterProven SMT trust assumption. This metadata records the property definition and does not assert a target-specific proof result.",
+      "Broader range coverage and property meaning in issue #34, and broader workflow integration and follow-up work in issue #96, remain open."
+    ]
+  },
+  "formalization": {
+    "primary": "Formal.Properties.Universal.UP013.statement",
+    "theorems": []
+  },
+  "references": [
+    {
+      "label": "Primary range-mutation definition and separate applicability predicate",
+      "target": "formal/Formal/Properties/Universal/UP013/Definition.lean"
+    },
+    {
+      "label": "Property-owned model selection and reference-artifact restriction",
+      "target": "formal/Formal/Properties/Universal/UP013/Run.lean"
+    },
+    {
+      "label": "Original standalone Claim and Cancel rejection and applicability obligations",
+      "target": "formal/Formal/Vesting/Linear/Blueprint/UnboundedRange.lean"
+    },
+    {
+      "label": "Original candidate scope and retained standalone evidence",
+      "target": "formal/Formal/Vesting/Linear/Blueprint/UP013.md"
+    },
+    {
+      "label": "Original validity-range replacement and fully unbounded range definitions",
+      "target": "formal/Formal/Support/CandidateHelpers.lean"
+    },
+    {
+      "label": "Shared compiled artifact constants",
+      "target": "formal/Formal/TxModels/Artifacts/LinearVesting.lean"
+    },
+    {
+      "label": "Open broader validity-range and property-suitability work",
+      "target": "https://github.com/no-witness-labs/contracts-library/issues/34"
+    },
+    {
+      "label": "Open workflow integration and follow-up work",
+      "target": "https://github.com/no-witness-labs/contracts-library/issues/96"
+    }
+  ]
+}

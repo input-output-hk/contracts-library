@@ -1,0 +1,5 @@
+/build/
+/artifacts/
+/docs/
+/plutus.json
+/*.uplc

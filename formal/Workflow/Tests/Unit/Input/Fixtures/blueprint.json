@@ -1,0 +1,39 @@
+{
+  "preamble": {
+    "plutusVersion": "v3",
+    "compiler": { "name": "fixture", "version": "1" }
+  },
+  "validators": [
+    {
+      "title": "samples.alpha.spend",
+      "compiledCode": "480100002221200101",
+      "parameters": [
+        { "title": "owner", "schema": { "dataType": "bytes" } },
+        { "title": "threshold", "schema": { "dataType": "integer" } }
+      ],
+      "datum": { "schema": { "$ref": "#/definitions/Datum" } },
+      "redeemer": { "schema": { "$ref": "#/definitions/Action" } }
+    },
+    {
+      "title": "samples.alpha.else",
+      "compiledCode": "480100002221200101",
+      "parameters": [
+        { "title": "owner", "schema": { "dataType": "bytes" } },
+        { "title": "threshold", "schema": { "dataType": "integer" } }
+      ]
+    },
+    {
+      "title": "other.beta.mint",
+      "compiledCode": "480100002221200101",
+      "redeemer": { "schema": { "dataType": "integer" } }
+    }
+  ],
+  "definitions": {
+    "Datum": { "dataType": "integer" },
+    "Action": {
+      "anyOf": [
+        { "title": "Use", "dataType": "constructor", "index": 0, "fields": [] }
+      ]
+    }
+  }
+}

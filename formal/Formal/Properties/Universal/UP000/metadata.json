@@ -1,0 +1,64 @@
+{
+  "schema_version": 2,
+  "identity": {
+    "id": "UP-000",
+    "definition_version": 1,
+    "title": "Bounded existence of accepted action contexts",
+    "category": "universal"
+  },
+  "explanation": {
+    "summary": "Check that the reference linear-vesting program accepts at least one model-valid Claim and at least one model-valid Cancel within 1,000,000 CEK steps.",
+    "claim": "For each selected Claim or Cancel model, there exists a context satisfying validScriptContext that the supplied program accepts by returning unit within 1,000,000 CEK steps. Each existential statement includes its own validity and acceptance witness, so there is no separate applicability obligation.",
+    "purpose": "Check bounded model-valid existence for the original pinned vesting action scenarios through the native property workflow."
+  },
+  "scope": {
+    "relevance_conditions": [
+      "Relevant to the selected Claim and Cancel actions of the reference linear-vesting compiled artifact.",
+      "The transaction families must represent the action scenarios being checked. The workflow does not discover or enumerate all actions from the blueprint."
+    ],
+    "preconditions": [
+      "The target is the exact reference compiled artifact in Formal.TxModels.Artifacts.LinearVesting.referenceCompiledCode and is an unparameterized Plutus V3 spending program."
+    ],
+    "limitations": [
+      "The shared TxM-007 and TxM-008 models admit two compiler artifacts. UP-000 restricts this binding to the original reference artifact and skips the second artifact without generating proof obligations.",
+      "Claim has two inputs and two outputs; Cancel has two inputs and one output. Both use one signer, one vested asset under fixed policyA, key credentials in the vesting datum, and a finite validity lower bound with no upper bound. Reference inputs, minting, and withdrawals are absent.",
+      "The script credential p.script remains symbolic and is not constrained to the supplied program's hash.",
+      "Model-valid existence does not establish full ledger reachability, deployment exposure, arbitrary transaction coverage, or general validator safety.",
+      "The check adds no requirement that every output contain at least 1 ADA and does not print an accepted transaction witness.",
+      "Acceptance requires a unit-valued halt within the CEK bound. The bound is not a ledger CPU or memory budget.",
+      "A FAIL means the existence obligation failed within the selected model and bound; it does not by itself establish that funds are stuck. A timeout or solver error leaves the result unresolved.",
+      "Successful generated Blaster checks retain the blasterProven SMT trust assumption. This metadata records the property definition and does not assert a target-specific proof result.",
+      "The broader action-reachability and workflow work in issues #22 and #96 remains open."
+    ]
+  },
+  "formalization": {
+    "primary": "Formal.Properties.Universal.UP000.statement",
+    "theorems": []
+  },
+  "references": [
+    {
+      "label": "Primary model-valid existence definition",
+      "target": "formal/Formal/Properties/Universal/UP000/Definition.lean"
+    },
+    {
+      "label": "Property-owned model selection and reference-artifact restriction",
+      "target": "formal/Formal/Properties/Universal/UP000/Run.lean"
+    },
+    {
+      "label": "Original standalone Claim and Cancel obligations",
+      "target": "formal/Formal/Vesting/Linear/Blueprint/SomeAccepted.lean"
+    },
+    {
+      "label": "Shared compiled artifact constants",
+      "target": "formal/Formal/TxModels/Artifacts/LinearVesting.lean"
+    },
+    {
+      "label": "Open broader action-reachability work",
+      "target": "https://github.com/no-witness-labs/contracts-library/issues/22"
+    },
+    {
+      "label": "Open workflow integration and follow-up work",
+      "target": "https://github.com/no-witness-labs/contracts-library/issues/96"
+    }
+  ]
+}

@@ -24,7 +24,194 @@ rev = "main"
 [[require]]
 name = "CardanoLedgerApi"
 git = "https://github.com/input-output-hk/CardanoLedgerApiBlaster"
-rev = "main"
+rev = "7b743afcd64c1d2fc6c7ef24b2a260b8b31828fc"
+
+# UP-002 prototype definitions; symbolic proof jobs remain separate.
+[[lean_lib]]
+name = "UP002Prototype"
+roots = ["Formal.Properties.Universal.UP002.Tests.Standalone.Prototype"]
+globs = ["Formal.Properties.Universal.UP002.Tests.Standalone.Prototype.+"]
+
+[[lean_exe]]
+name = "up016_verify_artifact"
+root = "Formal.Properties.Universal.UP016.Tests.Standalone.VerifyArtifact"
 
 [[lean_lib]]
 name = "Formal"
+
+# Independent workflow components, built separately from validator proofs.
+[[lean_lib]]
+name = "Workflow"
+
+[[lean_exe]]
+name = "workflow_input_tests"
+root = "Workflow.Tests.Unit.Input.Tests"
+
+[[lean_exe]]
+name = "workflow_generator_tests"
+root = "Workflow.Tests.Unit.Generator.Tests"
+
+[[lean_exe]]
+name = "workflow_generator_integration"
+root = "Workflow.Tests.UP001.Integration"
+
+[[lean_exe]]
+name = "workflow_executor_tests"
+root = "Workflow.Tests.Unit.Executor.Tests"
+
+[[lean_exe]]
+name = "workflow_executor_integration"
+root = "Workflow.Tests.UP001.ExecutorIntegration"
+
+[[lean_exe]]
+name = "workflow_reporter_tests"
+root = "Workflow.Tests.Unit.Reporter.Tests"
+
+[[lean_exe]]
+name = "workflow_reporter_integration"
+root = "Workflow.Tests.Unit.Reporter.Integration"
+
+[[lean_exe]]
+name = "workflow_runner_tests"
+root = "Workflow.Tests.Unit.Runner.Tests"
+
+[[lean_exe]]
+name = "workflow_metadata_tests"
+root = "Workflow.Tests.Unit.Metadata.Tests"
+
+[[lean_exe]]
+name = "workflow_evidence_tests"
+root = "Workflow.Tests.Unit.Evidence.Tests"
+
+[[lean_exe]]
+name = "workflow_single_check_tests"
+root = "Workflow.Tests.SingleCheck.Main"
+
+[[lean_exe]]
+name = "workflow_selection_tests"
+root = "Workflow.Tests.Unit.Selection.Tests"
+
+[[lean_exe]]
+name = "workflow_app_tests"
+root = "Workflow.Tests.Unit.App.Tests"
+
+[[lean_exe]]
+name = "workflow_sources_tests"
+root = "Workflow.Tests.Unit.Sources.Tests"
+
+[[lean_exe]]
+name = "workflow_review_tests"
+root = "Workflow.Tests.Unit.Review.Tests"
+
+[[lean_exe]]
+name = "workflow_preparation_tests"
+root = "Workflow.Tests.Unit.Preparation.Main"
+
+[[lean_exe]]
+name = "workflow_installation_tests"
+root = "Workflow.Tests.Unit.Installation.Tests"
+
+[[lean_exe]]
+name = "workflow_legacy_fixture"
+root = "Workflow.Tests.Legacy.Driver"
+
+[[lean_exe]]
+name = "plutus-upv"
+root = "Workflow.App.ProductCLI"
+
+[[lean_exe]]
+name = "workflow_up001_tests"
+root = "Workflow.Tests.UP001.Main"
+
+[[lean_exe]]
+name = "workflow_up000_tests"
+root = "Workflow.Tests.UP000.Main"
+
+[[lean_exe]]
+name = "workflow_declarative_up000_tests"
+root = "Formal.Properties.Universal.UP000.Tests"
+
+[[lean_exe]]
+name = "workflow_up004_tests"
+root = "Workflow.Tests.UP004.Main"
+
+[[lean_exe]]
+name = "workflow_declarative_up004_tests"
+root = "Formal.Properties.Universal.UP004.Tests"
+
+[[lean_exe]]
+name = "workflow_up013_tests"
+root = "Workflow.Tests.UP013.Main"
+
+[[lean_exe]]
+name = "workflow_declarative_up013_tests"
+root = "Formal.Properties.Universal.UP013.Tests"
+
+[[lean_exe]]
+name = "workflow_up011_tests"
+root = "Workflow.Tests.UP011.Main"
+
+[[lean_exe]]
+name = "workflow_declarative_up011_tests"
+root = "Formal.Properties.Universal.UP011.Tests"
+
+[[lean_exe]]
+name = "workflow_up014_tests"
+root = "Workflow.Tests.UP014.Main"
+
+[[lean_exe]]
+name = "workflow_declarative_up014_tests"
+root = "Formal.Properties.Universal.UP014.Tests"
+
+[[lean_exe]]
+name = "workflow_up007_tests"
+root = "Workflow.Tests.UP007.Main"
+
+[[lean_exe]]
+name = "workflow_declarative_up007_tests"
+root = "Formal.Properties.Universal.UP007.Tests"
+
+[[lean_exe]]
+name = "workflow_up008_tests"
+root = "Workflow.Tests.UP008.Main"
+
+[[lean_exe]]
+name = "workflow_declarative_up008_tests"
+root = "Formal.Properties.Universal.UP008.Tests"
+
+[[lean_exe]]
+name = "workflow_up012_tests"
+root = "Workflow.Tests.UP012.Main"
+
+[[lean_exe]]
+name = "workflow_up015_tests"
+root = "Workflow.Tests.UP015.Main"
+
+[[lean_exe]]
+name = "workflow_declarative_tests"
+root = "Formal.Properties.Universal.UP012.Tests"
+
+[[lean_exe]]
+name = "workflow_declarative_up015_tests"
+root = "Formal.Properties.Universal.UP015.Tests"
+
+[[lean_exe]]
+name = "workflow_declarative_up001_tests"
+root = "Formal.Properties.Universal.UP001.Tests"
+
+[[lean_exe]]
+name = "workflow_property_discovery_tests"
+root = "Workflow.Tests.Unit.Declarative.Discovery"
+
+[[lean_exe]]
+name = "workflow_public_cli_tests"
+root = "Workflow.Tests.Unit.Declarative.PublicCLI"
+
+# Validator-milestone suite; intentionally separate from workflow tests.
+[[lean_exe]]
+name = "test_m12"
+root = "Formal.Vesting.Linear.Tests.Main"
+
+[[lean_exe]]
+name = "test_m12_runner_tests"
+root = "Formal.Vesting.Linear.Tests.RunnerTests"

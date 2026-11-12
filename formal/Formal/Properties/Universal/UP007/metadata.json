@@ -1,0 +1,91 @@
+{
+  "schema_version": 2,
+  "identity": {
+    "id": "UP-007",
+    "definition_version": 1,
+    "title": "Bounded rejection of a continuation staking-credential replacement",
+    "category": "universal"
+  },
+  "explanation": {
+    "summary": "Check whether the reference linear-vesting program explicitly rejects a valid Claim context after replacing only the first continuation's staking credential under five guards.",
+    "claim": "For the selected Claim model, quantify over its leaves and sc : Option StakingCredential. Require baseline validScriptContext, baseline acceptance, explicit rejection after redirectContinuations, the original firstContinuation?.any staking-credential equality test against sc to be false, and validScriptContext after replacing only the first continuation's staking credential with sc. Under these five premises, the changed context must explicitly reject. A separate applicability obligation requires a witness to all five premises. Acceptance and explicit rejection use 1,000,000 CEK steps; rejection means an error or a non-unit halt, and fuel exhaustion does not count.",
+    "purpose": "Preserve the original guarded Claim rejection and applicability formulas through the native property workflow. Both obligations retain the expected result Valid; reproducing the historical original Claim pair of Falsified rejection and Valid applicability yields an official FAIL."
+  },
+  "scope": {
+    "relevance_conditions": [
+      "Relevant to the Claim action of the reference linear-vesting compiled artifact within TxM-007.",
+      "The property requires rejection after a combined address-and-datum redirection. That guard does not independently prove that the validator relies on continuation staking credentials."
+    ],
+    "preconditions": [
+      "The target is the exact reference compiled artifact in Formal.TxModels.Artifacts.LinearVesting.referenceCompiledCode and is an unparameterized Plutus V3 spending program.",
+      "The original modeled context satisfies validScriptContext.",
+      "The supplied program accepts the original context within 1,000,000 CEK steps.",
+      "The supplied program explicitly rejects redirectContinuations of the original context within the same bound.",
+      "The original firstContinuation?.any test for addressStakingCredential == sc is false.",
+      "The context with only the first continuation's staking credential replaced by sc still satisfies validScriptContext."
+    ],
+    "limitations": [
+      "The shared TxM-007 model admits two compiler artifacts. UP-007 restricts this binding to the original reference artifact and skips the second artifact without generating proof obligations.",
+      "Only Claim is bound to the native workflow. The retained standalone Cancel model has no continuation and an inapplicable applicability observation; its implication supplies no mutation coverage.",
+      "Claim has two inputs and two outputs: a script continuation with an inline datum followed by a signer payout. It uses one signer, one vested asset under fixed policyA, key credentials in the original vesting datum, and a finite lower validity bound with no upper bound. Reference inputs, minting, and withdrawals are absent.",
+      "The spent script input and baseline continuation both have staking credential none. The replacement ranges over Option StakingCredential, retaining the exact Option.any equality test against sc being false. Baselines with staking credentials are outside this fixed model.",
+      "Continuations are identified by payment-credential equality with the spent input, without comparing staking credentials. Only the first matching output's staking credential changes; its payment credential, datum, value, reference script, and other fields are preserved. This does not establish arbitrary output-order coverage, multiple-continuation coverage, or full input/output staking-credential preservation.",
+      "The redirect guard instead changes every matching output's entire address to keyAddr attackerKey and removes its datum. The fixed attackerKey bytes remain 61747461636b6572. Rejection after these combined changes does not independently prove staking-credential reliance.",
+      "The primary statement retains exactly the original five premises. Applicability separately requires a context and sc : Option StakingCredential satisfying all five. The explicit inequality guard is the original Option.any staking-credential equality test, with no stronger replacement predicate.",
+      "The script credential p.script remains symbolic and is not constrained to the supplied program's hash.",
+      "The historical original Claim result is Falsified rejection with Valid applicability. Both native obligations still expect Valid, so reproducing that pair yields an official FAIL. That artifact/model result does not by itself establish a general bug verdict or full stake preservation.",
+      "These checks concern the fixed model and pinned program. They do not establish arbitrary transaction coverage, full ledger reachability, deployment exposure, or general validator safety.",
+      "The check adds no requirement that every output contain at least 1 ADA and does not print a transaction witness.",
+      "Acceptance and explicit rejection use 1,000,000 CEK steps. Rejection requires an error or a non-unit halt; fuel exhaustion does not count. This bound is not a ledger CPU or memory budget.",
+      "A primary rejection result needs the separate applicability result to exclude vacuity under the selected model. A timeout or solver error leaves the affected obligation unresolved.",
+      "Successful generated Blaster checks retain the blasterProven SMT trust assumption. This metadata preserves historical observations and the property definition; it does not assert a new target-specific proof result.",
+      "The full input/output staking-credential preservation rule and broader scope in issue #28, and broader workflow integration and follow-up work in issue #96, remain open."
+    ]
+  },
+  "formalization": {
+    "primary": "Formal.Properties.Universal.UP007.statement",
+    "theorems": []
+  },
+  "references": [
+    {
+      "label": "Primary staking-credential replacement and separate applicability predicate",
+      "target": "formal/Formal/Properties/Universal/UP007/Definition.lean"
+    },
+    {
+      "label": "Claim-only model selection and reference-artifact restriction",
+      "target": "formal/Formal/Properties/Universal/UP007/Run.lean"
+    },
+    {
+      "label": "Original standalone Claim and Cancel rejection and applicability obligations",
+      "target": "formal/Formal/Vesting/Linear/Blueprint/ContinuationStake.lean"
+    },
+    {
+      "label": "Original candidate scope and retained standalone observations",
+      "target": "formal/docs/UP007.md"
+    },
+    {
+      "label": "Retained standalone original and synthetic enforcing-control checks",
+      "target": "formal/Formal/Properties/Universal/UP007/Tests/Standalone/Checks.lean"
+    },
+    {
+      "label": "Shared native continuation helper bodies",
+      "target": "formal/Formal/Support/Continuations.lean"
+    },
+    {
+      "label": "Original legacy helper bodies retained for parity",
+      "target": "formal/Formal/Support/CandidateHelpers.lean"
+    },
+    {
+      "label": "Shared compiled artifact constants",
+      "target": "formal/Formal/TxModels/Artifacts/LinearVesting.lean"
+    },
+    {
+      "label": "Open full input/output staking-credential preservation work",
+      "target": "https://github.com/no-witness-labs/contracts-library/issues/28"
+    },
+    {
+      "label": "Open workflow integration and follow-up work",
+      "target": "https://github.com/no-witness-labs/contracts-library/issues/96"
+    }
+  ]
+}

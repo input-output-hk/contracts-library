@@ -1,0 +1,4 @@
+Target: fixture.target
+PASS fixture proof
+Summary: 1 PASS, 0 FAIL, 0 INCONCLUSIVE
+Overall: PASS (exit 0)

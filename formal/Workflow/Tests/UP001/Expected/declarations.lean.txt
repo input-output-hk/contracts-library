@@ -1,0 +1,24 @@
+theorem otherPurpose_mint :
+    Formal.Properties.Universal.UP001.statement (accepts 5000000) EveryMint.ctx := by
+  unfold Formal.Properties.Universal.UP001.statement
+  blaster
+
+theorem otherPurpose_withdraw :
+    Formal.Properties.Universal.UP001.statement (accepts 5000000) EveryWithdraw.ctx := by
+  unfold Formal.Properties.Universal.UP001.statement
+  blaster
+
+theorem otherPurpose_publish :
+    Formal.Properties.Universal.UP001.statement (accepts 5000000) EveryPublish.ctx := by
+  unfold Formal.Properties.Universal.UP001.statement
+  blaster
+
+theorem otherPurpose_vote :
+    Formal.Properties.Universal.UP001.statement (accepts 5000000) EveryVote.ctx := by
+  unfold Formal.Properties.Universal.UP001.statement
+  blaster
+
+theorem otherPurpose_propose :
+    Formal.Properties.Universal.UP001.statement (accepts 5000000) EveryPropose.ctx := by
+  unfold Formal.Properties.Universal.UP001.statement
+  blaster
