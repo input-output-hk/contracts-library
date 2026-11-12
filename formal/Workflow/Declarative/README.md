@@ -5,6 +5,7 @@ The public `plutus-upv run` command discovers maintained run declarations for
 [UP-001](../../Formal/Properties/Universal/UP001/Run.lean),
 [UP-004](../../Formal/Properties/Universal/UP004/Run.lean),
 [UP-007](../../Formal/Properties/Universal/UP007/Run.lean),
+[UP-008](../../Formal/Properties/Universal/UP008/Run.lean),
 [UP-011](../../Formal/Properties/Universal/UP011/Run.lean),
 [UP-012](../../Formal/Properties/Universal/UP012/Run.lean),
 [UP-013](../../Formal/Properties/Universal/UP013/Run.lean),
@@ -37,6 +38,7 @@ From `formal/`:
 ./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-000
 ./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-004
 ./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-007 --timeout-ms 300000
+./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-008 --timeout-ms 300000
 ./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-011 --timeout-ms 300000
 ./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-013 --timeout-ms 300000
 ./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-014 --timeout-ms 300000
@@ -99,6 +101,22 @@ The [UP-007 guide](../../Formal/Properties/Universal/UP007/README.md) distinguis
 this guarded rejection rule from full staking-credential preservation and a
 vulnerability verdict. Default selection and the all-enabled switch example
 include UP-007.
+
+UP-008 registers only TxM-007 Claim on the original artifact. It adds one unit
+of the fixed `zzzzjunk` / `zzzzjunk` asset to the first continuation, with an
+appended funding input and separate lovelace change output. The quantified
+integer is lovelace, not token count. All four standalone guards, linked
+applicability, and the 1,000,000-step bound remain. Expected reference observations
+are main Falsified and applicability Valid, producing official FAIL while both
+native expectations stay Valid. Trustworthy applicability qualifies either verdict.
+
+Its compiled exact-asset enforcing control expects Valid/Valid and a test-only
+PASS, with official property/binding metadata set to null and the executed input
+retained separately from the reference. Cancel remains unregistered. The
+[UP-008 guide](../../Formal/Properties/Universal/UP008/README.md) explains the
+fixed model and why this rule supplies neither a configurable token-count limit
+nor a vulnerability verdict. Default selection and the all-enabled switch example
+include UP-008; issues #29 and #96 retain the wider work.
 
 UP-011 registers only TxM-007 Claim on the original artifact, with a main goal
 and linked applicability at 1,000,000 CEK steps. It preserves all five standalone
@@ -177,6 +195,7 @@ lake exe workflow_declarative_up000_tests
 lake exe workflow_declarative_up001_tests
 lake exe workflow_declarative_up004_tests
 lake exe workflow_declarative_up007_tests
+lake exe workflow_declarative_up008_tests
 lake exe workflow_declarative_up011_tests
 lake exe workflow_declarative_up013_tests
 lake exe workflow_declarative_up014_tests
@@ -185,6 +204,8 @@ lake exe workflow_up000_tests
 lake exe workflow_up004_tests
 lake exe workflow_up007_tests
 lake exe workflow_up007_tests --control
+lake exe workflow_up008_tests
+lake exe workflow_up008_tests --control
 lake exe workflow_up011_tests
 lake exe workflow_up013_tests
 lake exe workflow_up014_tests

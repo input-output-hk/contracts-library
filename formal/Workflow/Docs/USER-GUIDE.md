@@ -3,9 +3,9 @@
 Plutus UPV (Universal Property Verifier) checks universal properties against
 compiled Plutus validators using Lean and configured proof tools. The prototype
 accepts the documented Aiken-style Plutus V3 blueprint profile. By default, one
-command processes all logical validators and all nineteen registered property/model
+command processes all logical validators and all twenty registered property/model
 combinations. They comprise two for UP-000, six for UP-001, two for UP-004,
-one for UP-007, one for UP-011, three for UP-012, two for UP-013, one for UP-014,
+one for UP-007, one for UP-008, one for UP-011, three for UP-012, two for UP-013, one for UP-014,
 and one for UP-015.
 
 These are experimental workflow bindings; registration does not establish general readiness
@@ -80,7 +80,7 @@ other validators continue. Invalid shared JSON/title structure stops discovery.
 
 ## Select properties with a file
 
-Start with [checks.example.json](../../checks.example.json), which enables all nine
+Start with [checks.example.json](../../checks.example.json), which enables all ten
 registered properties, or save your own `checks.json`. For example, enable only UP-001:
 
 ```json
@@ -89,6 +89,7 @@ registered properties, or save your own `checks.json`. For example, enable only 
   "UP-001": true,
   "UP-004": false,
   "UP-007": false,
+  "UP-008": false,
   "UP-011": false,
   "UP-012": false,
   "UP-013": false,
@@ -180,7 +181,7 @@ characters such as `/`; `run.json` preserves canonical validator names.
 | Per-check `check-result.json` | The assessed six-field result, including scope, reasons, and evidence references |
 | Per-check `input.json` | The same captured blueprint used to prepare that validator |
 | Per-check `execution.json` | Attempted commands, timing, raw observations, and diagnostics |
-| `Generated/` | Generated Lean, stdout/stderr logs, and successful compiled modules; UP-000, UP-004, UP-007, UP-011, UP-012, UP-013, UP-014, and UP-015 also generate `Tx.lean` |
+| `Generated/` | Generated Lean, stdout/stderr logs, and successful compiled modules; UP-000, UP-004, UP-007, UP-008, UP-011, UP-012, UP-013, UP-014, and UP-015 also generate `Tx.lean` |
 
 An interrupted run can leave its last saved index unfinished. Files depend on how
 far an attempt progressed: unreadable input has no snapshot, and validator
@@ -322,6 +323,41 @@ applicability observations yield a test-only PASS without an official binding.
 Automated scenarios use the app API; the command above checks the public CLI
 separately.
 
+Run UP-008 against the original reference vesting fixture from `formal/`:
+
+```sh
+./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-008 --timeout-ms 300000
+```
+
+This selects one Claim combination, TxM-007. It adds one unit of the fixed
+`zzzzjunk` / `zzzzjunk` asset to the first continuation. An appended input funds
+the asset and lovelace; a separate appended output returns the lovelace.
+The quantified integer is lovelace, not token quantity or count. Four premises
+require baseline validity, bounded baseline acceptance, bounded rejection after
+redirection, and validity after the mutation. Acceptance and explicit rejection
+use **1,000,000 CEK steps**; exhaustion is not rejection. Linked applicability
+asks for a witness satisfying all four premises and qualifies both PASS and FAIL.
+
+The expected observations are Falsified for `junkToken_claim` and Valid for
+`junkToken_claim_applies`, producing one official FAIL while both native
+expectations stay Valid. A zero app exit means the run completed and retained
+its results. Inspect the printed `Review` path for actual observations and
+`UP-008-v1-TxM-007` generated `Types.lean`, `Tx.lean`, and `Checks.lean`, plus
+results and execution evidence. These expectations do not record a fresh run.
+
+UP-008 admits only the original vesting artifact and skips the second artifact
+recognized by native model admission. Its model script credential remains
+symbolic; the separate redirect guard changes both address and datum. Cancel
+has no continuation and is not registered. A qualified failure refutes this
+fixed-asset rejection rule without establishing a configurable token-count limit,
+token flooding, locked funds, a vulnerability, or ledger reachability.
+
+The [UP-008 scope](../../Formal/Properties/Universal/UP008/README.md) records the
+compiled exact-asset enforcing control. Its expected Valid main and applicability
+observations yield test-only PASS with null official property/binding metadata.
+Automated scenarios use the app API; the command above checks the public CLI
+separately. Issues #29 and #96 retain the wider property and integration work.
+
 Run UP-011 against the original reference vesting fixture from `formal/`:
 
 ```sh
@@ -454,12 +490,13 @@ and all registered combinations. The app and test command do not build Aiken
 sources automatically. The original UP-012 regression input remains unchanged;
 the reviewed demo build has an independent shared regression snapshot.
 
-The nine scenarios test workflow behavior. They do not establish general
+The ten scenarios test workflow behavior. They do not establish general
 property or model readiness. Definition work remains open in
 [UP-000 #22](https://github.com/no-witness-labs/contracts-library/issues/22),
 [UP-001 #23](https://github.com/no-witness-labs/contracts-library/issues/23),
 [UP-004 #25](https://github.com/no-witness-labs/contracts-library/issues/25),
 [UP-007 #28](https://github.com/no-witness-labs/contracts-library/issues/28),
+[UP-008 #29](https://github.com/no-witness-labs/contracts-library/issues/29),
 [UP-011 #32](https://github.com/no-witness-labs/contracts-library/issues/32),
 [UP-012 #33](https://github.com/no-witness-labs/contracts-library/issues/33),
 [UP-013 #34](https://github.com/no-witness-labs/contracts-library/issues/34),

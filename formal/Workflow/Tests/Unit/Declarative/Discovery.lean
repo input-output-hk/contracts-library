@@ -367,8 +367,8 @@ private def selectedExportIsChecked : IO Unit := IO.FS.withTempDir fun root => d
 private def maintainedProperties : IO Unit := do
   let (entries, errors) ← Workflow.Declarative.Discovery.scan "."
   check "all maintained properties share discovery" (errors.isEmpty &&
-    #["UP-000", "UP-001", "UP-004", "UP-007", "UP-011", "UP-012", "UP-013", "UP-014", "UP-015"].all fun id => entries.any (·.id == id))
-  for code in #["UP000", "UP001", "UP004", "UP007", "UP011", "UP012", "UP013", "UP014", "UP015"] do
+    #["UP-000", "UP-001", "UP-004", "UP-007", "UP-008", "UP-011", "UP-012", "UP-013", "UP-014", "UP-015"].all fun id => entries.any (·.id == id))
+  for code in #["UP000", "UP001", "UP004", "UP007", "UP008", "UP011", "UP012", "UP013", "UP014", "UP015"] do
     let source ← IO.FS.readFile s!"Formal/Properties/Universal/{code}/Run.lean"
     check "Run declarations do not directly import concrete model implementations"
       (!(has source "import Formal.TxModels.Definitions."))
