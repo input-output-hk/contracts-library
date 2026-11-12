@@ -29,22 +29,27 @@ five-minute default; `--timeout-ms` can override it.
 The demo's blueprint, build cache, and optional generated artifacts stay ignored
 by Git. No automatic Aiken build is added to the app or aggregate workflow tests.
 
-The default command selects all three validators and all eighteen registered
+The default command selects all three validators and all nineteen registered
 property/model combinations. The expected terminal counts, when every supported
 check finishes conclusively, are:
 
 | Validator | PASS | FAIL | SKIPPED | ERROR | TIMEOUT |
 | --- | --- | --- | --- | --- | --- |
-| `vault.vault` | 6 | 0 | 12 | 0 | 0 |
-| `vault_buggy.vault_buggy` | 0 | 6 | 12 | 0 | 0 |
-| `linear_vesting.linear_vesting` | 8 | 0 | 10 | 0 | 0 |
+| `vault.vault` | 6 | 0 | 13 | 0 | 0 |
+| `vault_buggy.vault_buggy` | 0 | 6 | 13 | 0 | 0 |
+| `linear_vesting.linear_vesting` | 8 | 0 | 11 | 0 | 0 |
 
-These are expected counts for 54 selected combinations, pending a complete run.
+These are expected counts for 57 selected combinations, pending a complete run.
 UP-000, UP-004, and UP-013 each add two SKIPPED combinations per validator;
-UP-011 and UP-014 each add one Claim-only SKIPPED combination per validator. The vault
+UP-007, UP-011, and UP-014 each add one Claim-only SKIPPED combination per validator. The vault
 artifacts are unsupported by their models; property-owned rules skip this second
-vesting artifact even though shared native admission recognizes it. All five run only
+vesting artifact even though shared native admission recognizes it. All six run only
 against the original fixture in `UP012/Inputs/plutus.json`.
+
+UP-007's expected official FAIL applies to that original artifact. This demo's
+Aiken 1.1.21 vesting artifact remains SKIPPED for UP-007, so its added combination
+does not change the expected FAIL or generated-file counts. These updated
+expectations do not record a fresh demo run.
 
 The declared spend-purpose UP-001 combination is SKIPPED with a not-applicable reason.
 UP-012's two vesting combinations and UP-015's one combination are SKIPPED for the
@@ -94,7 +99,7 @@ The vesting adapter recognizes two exact compiled artifacts: the original PR #55
 fixture and this reviewed Aiken 1.1.21/stdlib 3.0.0 build. Other compiled code stays
 unsupported for TxM-007/008. TxM-009 instead uses reusable structural admission.
 Admission does not establish general
-readiness of UP-000, UP-001, UP-004, UP-011, UP-012, UP-013, UP-014, UP-015, or their models.
+readiness of UP-000, UP-001, UP-004, UP-007, UP-011, UP-012, UP-013, UP-014, UP-015, or their models.
 
 The app's exit code describes completion and retention. A deliberately failing
 vault check can therefore appear in a completed run with exit code 0; inspect

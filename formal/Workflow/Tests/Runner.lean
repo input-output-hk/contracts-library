@@ -26,6 +26,7 @@ def defaultSuites : Array Suite := #[
   ⟨"Property-owned UP-013 range mutation and applicability", "workflow_declarative_up013_tests"⟩,
   ⟨"Property-owned UP-011 Claim credential mutation and applicability", "workflow_declarative_up011_tests"⟩,
   ⟨"Property-owned UP-014 Claim datum mutation and applicability", "workflow_declarative_up014_tests"⟩,
+  ⟨"Property-owned UP-007 Claim staking mutation and applicability", "workflow_declarative_up007_tests"⟩,
   ⟨"Property-owned UP-001 purpose selection and model bindings", "workflow_declarative_up001_tests"⟩,
   ⟨"Property-owned UP-012 goal and model bindings", "workflow_declarative_tests"⟩,
   ⟨"Property-owned UP-015 goal and model bindings", "workflow_declarative_up015_tests"⟩,
@@ -44,6 +45,7 @@ def defaultSuites : Array Suite := #[
   ⟨"UP-013 scoped Claim/Cancel range scenario", "workflow_up013_tests"⟩,
   ⟨"UP-011 scoped Claim continuation scenario", "workflow_up011_tests"⟩,
   ⟨"UP-014 scoped Claim datum scenario", "workflow_up014_tests"⟩,
+  ⟨"UP-007 scoped Claim staking scenario", "workflow_up007_tests"⟩,
   ⟨"UP-012 whole-workflow scenario", "workflow_up012_tests"⟩,
   ⟨"UP-015 shared-model output-swap scenario", "workflow_up015_tests"⟩]
 

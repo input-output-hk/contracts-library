@@ -4,6 +4,7 @@ The public `plutus-upv run` command discovers maintained run declarations for
 [UP-000](../../Formal/Properties/Universal/UP000/Run.lean),
 [UP-001](../../Formal/Properties/Universal/UP001/Run.lean),
 [UP-004](../../Formal/Properties/Universal/UP004/Run.lean),
+[UP-007](../../Formal/Properties/Universal/UP007/Run.lean),
 [UP-011](../../Formal/Properties/Universal/UP011/Run.lean),
 [UP-012](../../Formal/Properties/Universal/UP012/Run.lean),
 [UP-013](../../Formal/Properties/Universal/UP013/Run.lean),
@@ -35,6 +36,7 @@ From `formal/`:
 ./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-012 --check UP-015 --timeout-ms 300000
 ./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-000
 ./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-004
+./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-007 --timeout-ms 300000
 ./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-011 --timeout-ms 300000
 ./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-013 --timeout-ms 300000
 ./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-014 --timeout-ms 300000
@@ -82,6 +84,21 @@ existential goal requires a model-valid context explicitly rejected within
 halt counts as rejection; fuel exhaustion does not. The
 [UP-004 guide](../../Formal/Properties/Universal/UP004/README.md) describes its
 generated files, synthetic controls, and scope limits.
+
+UP-007 registers only TxM-007 Claim on the original artifact. It changes only
+the first continuation's staking credential and preserves all five standalone
+premises, linked applicability, and the 1,000,000-step bound. The expected
+reference observations are main Falsified and applicability Valid, producing
+official FAIL while both native goal expectations stay Valid. A passing
+regression suite preserves that failure.
+
+Its compiled stake-enforcing control
+expects two Valid observations and a test-only PASS, with official binding
+metadata cleared. Cancel remains a standalone no-applicability diagnostic.
+The [UP-007 guide](../../Formal/Properties/Universal/UP007/README.md) distinguishes
+this guarded rejection rule from full staking-credential preservation and a
+vulnerability verdict. Default selection and the all-enabled switch example
+include UP-007.
 
 UP-011 registers only TxM-007 Claim on the original artifact, with a main goal
 and linked applicability at 1,000,000 CEK steps. It preserves all five standalone
@@ -159,12 +176,15 @@ lake exe workflow_declarative_tests
 lake exe workflow_declarative_up000_tests
 lake exe workflow_declarative_up001_tests
 lake exe workflow_declarative_up004_tests
+lake exe workflow_declarative_up007_tests
 lake exe workflow_declarative_up011_tests
 lake exe workflow_declarative_up013_tests
 lake exe workflow_declarative_up014_tests
 lake exe workflow_declarative_up015_tests
 lake exe workflow_up000_tests
 lake exe workflow_up004_tests
+lake exe workflow_up007_tests
+lake exe workflow_up007_tests --control
 lake exe workflow_up011_tests
 lake exe workflow_up013_tests
 lake exe workflow_up014_tests
