@@ -79,9 +79,9 @@ snapshots. Legacy generation can bundle combinations; the
 [single-check API](../Docs/DEVELOPER-GUIDE.md#callable-single-check-api) selects
 one exact property/version/model binding.
 
-The fixed UP-012 and UP-015 vesting profiles supply integration tests. The nine
+The fixed UP-012 and UP-015 vesting profiles supply integration tests. The ten
 registered properties and their models remain experimental; these tests do not
-establish general readiness. Definition work stays in issues #22, #23, #25, #28, #32,
+establish general readiness. Definition work stays in issues #22, #23, #25, #28, #29, #32,
 #33, #34, #35, and #36. Model authoring stays in #89 and wider candidate integration
 in #96. Client-specific model
 authoring is not a prerequisite of the intended workflow.
@@ -100,6 +100,6 @@ property-owned and workflow scenario suites own their candidate-specific declara
 checks. The second command preserves the Input-to-Generator type-checking check;
 it compiles support and proposition definitions without proving them.
 
-The [test index](../Tests/README.md) lists the nine experimental workflow scenarios
+The [test index](../Tests/README.md) lists the ten experimental workflow scenarios
 and component checks. The [validation history](../Docs/VALIDATION.md) keeps generation,
 type-checking, and actual solver observations distinct.

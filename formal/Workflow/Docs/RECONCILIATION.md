@@ -39,12 +39,12 @@ for their results.
 
 ## Current delivery status
 
-The product app now runs all logical validators and all nineteen registered
+The product app now runs all logical validators and all twenty registered
 property-definition/model combinations by default. These comprise two UP-000
 Claim/Cancel models, six UP-001 purpose models, two UP-004 Claim/Cancel models,
-one UP-007 Claim model, one UP-011 Claim model, three UP-012 models, two UP-013 Claim/Cancel models,
+one UP-007 Claim model, one UP-008 Claim model, one UP-011 Claim model, three UP-012 models, two UP-013 Claim/Cancel models,
 one UP-014 Claim model, and one UP-015 Claim reversal binding.
-UP-000, UP-004, UP-007, UP-011, UP-013, and UP-014
+UP-000, UP-004, UP-007, UP-008, UP-011, UP-013, and UP-014
 admit only the original vesting artifact.
 These remain experimental workflow bindings, with general property/model readiness
 outside this integration.
@@ -58,6 +58,18 @@ test-only PASS, with no official binding. Cancel stays standalone only. The
 [UP-007 guide](../../Formal/Properties/Universal/UP007/README.md) explains why this
 guarded rejection result establishes neither a vulnerability nor full
 staking-credential preservation.
+
+UP-008 preserves four Claim premises, linked applicability, and the
+1,000,000-step bound while adding one unit of one fixed junk asset to the first
+continuation. An appended input funds the asset and lovelace; a separate output
+returns the lovelace. The quantified integer is lovelace, not token count.
+Historical Falsified/Valid observations remain the expected official FAIL, with
+both native expectations Valid. The compiled exact-asset enforcing control
+expects a test-only PASS with null official metadata and distinct retained input.
+The [UP-008 guide](../../Formal/Properties/Universal/UP008/README.md) records
+Cancel's exclusion, applicability qualification, and model/trust limits.
+This integration does not implement issue #29's configurable token-count limit
+or establish a vulnerability; #29 and #96 remain open.
 
 UP-011 preserves the standalone Claim formula's five premises and
 1,000,000-step allowance. It changes only the first continuation's payment
@@ -107,7 +119,7 @@ not provision a managed runtime or build the caller's Aiken project.
 | Input selection | Several validators per command; requires a spend handler and `name.name.handler` titles | App defaults to all logical validators; Input prepares each selected validator, accepts canonical or unambiguous short names, validates explicit V3 metadata, and decodes code | App supplies batch orchestration; additional input formats remain separate work |
 | Schema handling | Translates datum and redeemer schemas into bounded symbolic data | Input preserves schemas; UP-001 uses raw redeemer data without schema translation | General schema translation/integration remains open; review the old translation before reuse |
 | Parameters | Rejects any entry with a `parameters` field, including an empty array | Input preserves descriptions; current adapters accept absent or empty lists and reject nonempty lists | Typed parameter generation/application remains open; PR #47 does not supply it |
-| Candidate checks | UP-000, UP-001, UP-002, UP-004, UP-005, and UP-011 | Registry supplies two UP-000 acceptance, two UP-004 rejection, one UP-007 guarded Claim staking-change, one UP-011 guarded Claim payment-change, three UP-012 signer-removal, two UP-013 fully unbounded-range, one UP-014 guarded Claim empty-list datum-replacement, and one UP-015 Claim reversal combinations at 1,000,000 steps, plus six UP-001 purpose combinations at 5,000,000 steps; CLI filters registered properties | Experimental integration does not establish general readiness; definitions #22/#23/#25/#28/#32/#33/#34/#35/#36, model authoring #89, and further integration #96 remain open |
+| Candidate checks | UP-000, UP-001, UP-002, UP-004, UP-005, and UP-011 | Registry supplies two UP-000 acceptance, two UP-004 rejection, one UP-007 guarded Claim staking-change, one UP-008 guarded Claim fixed-junk addition, one UP-011 guarded Claim payment-change, three UP-012 signer-removal, two UP-013 fully unbounded-range, one UP-014 guarded Claim empty-list datum-replacement, and one UP-015 Claim reversal combinations at 1,000,000 steps, plus six UP-001 purpose combinations at 5,000,000 steps; CLI filters registered properties | Experimental integration does not establish general readiness; definitions #22/#23/#25/#28/#29/#32/#33/#34/#35/#36, model authoring #89, and further integration #96 remain open |
 | Metadata and models | Generator-owned check definitions and transaction builders | Native property/model banks, checked metadata, and fixed executable bindings; selected snapshots follow generated obligations and assessed results | Native banks supply metadata/binding integration; general transaction-model authoring remains open |
 | Cases and reachability | Full constructor splits, weaker quick mode, and UNREACHED classification using UP-000 | No schema case splitting or cross-check reachability classification | Review case domains and aggregation before porting spend checks |
 | Generated code | Embeds script bytes in the generated Base module; writes modules in the checkout | Embeds script bytes in generated Types; each combination uses a fresh evidence directory | Retain embedded artifacts and isolated execution |
@@ -210,7 +222,7 @@ owner decisions.
 The TxM-009 pilot added reusable structural admission under `Workflow/Preparation`.
 That checkpoint kept the native constructor, property, fuel, and then-current
 ten-combination Lean catalogue. UP-000, UP-004, and UP-013 add two combinations each,
-and UP-007, UP-011, and UP-014 each add one Claim combination, without changing TxM-009 admission.
+and UP-007, UP-008, UP-011, and UP-014 each add one Claim combination, without changing TxM-009 admission.
 Compatible compiled programs need no allowlist entries, but schema compatibility
 alone establishes no security role or coverage claim. The supported subset and
 conservative rejection behavior are described in the developer guide. This is a
