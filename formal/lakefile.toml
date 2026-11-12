@@ -156,6 +156,14 @@ name = "workflow_declarative_up011_tests"
 root = "Formal.Properties.Universal.UP011.Tests"
 
 [[lean_exe]]
+name = "workflow_up014_tests"
+root = "Workflow.Tests.UP014.Main"
+
+[[lean_exe]]
+name = "workflow_declarative_up014_tests"
+root = "Formal.Properties.Universal.UP014.Tests"
+
+[[lean_exe]]
 name = "workflow_up012_tests"
 root = "Workflow.Tests.UP012.Main"
 

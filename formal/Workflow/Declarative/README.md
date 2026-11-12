@@ -6,7 +6,8 @@ The public `plutus-upv run` command discovers maintained run declarations for
 [UP-004](../../Formal/Properties/Universal/UP004/Run.lean),
 [UP-011](../../Formal/Properties/Universal/UP011/Run.lean),
 [UP-012](../../Formal/Properties/Universal/UP012/Run.lean),
-[UP-013](../../Formal/Properties/Universal/UP013/Run.lean), and
+[UP-013](../../Formal/Properties/Universal/UP013/Run.lean),
+[UP-014](../../Formal/Properties/Universal/UP014/Run.lean), and
 [UP-015](../../Formal/Properties/Universal/UP015/Run.lean). Lean handles discovery,
 selection, model preparation, and application launch. The earlier `universal`
 executable is retired; internal legacy fixtures retain regression comparisons.
@@ -36,6 +37,7 @@ From `formal/`:
 ./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-004
 ./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-011 --timeout-ms 300000
 ./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-013 --timeout-ms 300000
+./plutus-upv run Workflow/Tests/UP012/Inputs/plutus.json --check UP-014 --timeout-ms 300000
 ```
 
 ## Authoring contract
@@ -102,6 +104,17 @@ the single-range scope, synthetic accepting control, and preserved standalone
 provenance. Default selection and the all-enabled example switch file include
 UP-013 under the existing selection rules.
 
+UP-014 registers TxM-007 Claim only on the original artifact. It replaces the
+first continuation's inline datum with two symbolic credentials, an empty
+vesting-asset list, and three symbolic integers. Its main goal and separate
+applicability preserve the five standalone premises and 1,000,000-step bound.
+The compiled continuation gate ignores this datum mutation while preserving the
+redirect guard; the control requires a Falsified main goal and Valid applicability.
+Cancel remains a standalone no-applicability diagnostic. The
+[UP-014 guide](../../Formal/Properties/Universal/UP014/README.md) records the exact
+replacement and explains why it does not establish general datum integrity.
+Default selection and the all-enabled switch example include UP-014.
+
 ## Discovery and retained evidence
 
 The launcher scans conventional property paths and metadata identities, then
@@ -148,11 +161,13 @@ lake exe workflow_declarative_up001_tests
 lake exe workflow_declarative_up004_tests
 lake exe workflow_declarative_up011_tests
 lake exe workflow_declarative_up013_tests
+lake exe workflow_declarative_up014_tests
 lake exe workflow_declarative_up015_tests
 lake exe workflow_up000_tests
 lake exe workflow_up004_tests
 lake exe workflow_up011_tests
 lake exe workflow_up013_tests
+lake exe workflow_up014_tests
 ./plutus-upv test
 ```
 
