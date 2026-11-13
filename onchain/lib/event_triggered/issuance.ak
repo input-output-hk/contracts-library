@@ -19,7 +19,7 @@ use aiken/crypto.{ScriptHash}
 use aiken/interval.{Finite, Interval}
 use authorization.{is_authorized}
 use cardano/address.{Credential, Inline, Script, VerificationKey}
-use cardano/assets.{PolicyId, quantity_of, tokens}
+use cardano/assets.{PolicyId, lovelace_of, quantity_of, tokens}
 use cardano/transaction.{InlineDatum, Input, Output, Transaction}
 use event_triggered/certificate
 use event_triggered/registry
@@ -237,11 +237,7 @@ fn vault_continues(
             vin.output.address == vout.address,
             vin.output.datum == vout.datum,
             vault_cnt(vin.output) == Some(cnt),
-            quantity_of(vout.value, #"", #"") == quantity_of(
-              vin.output.value,
-              #"",
-              #"",
-            ) + principal,
+            lovelace_of(vout.value) == lovelace_of(vin.output.value) + principal,
           }
         _ -> False
       }

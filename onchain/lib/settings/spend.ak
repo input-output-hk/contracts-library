@@ -1,3 +1,6 @@
+//// Settings spend rules: propose, apply and close.
+//// See `docs/settings/spec.md` §3.d, §5.b–§5.d and §6.c–§6.d.
+
 use aiken/collection/dict
 use aiken/interval.{Finite}
 use authorization.{is_authorized}
@@ -8,6 +11,11 @@ use settings/types.{SettingsDatum}
 use settings/utils.{expect_continuation}
 
 /// Validate a proposal to change settings.
+///
+/// The delay floor is anchored to the validity range's *upper* bound: the
+/// ledger only includes a transaction whose range covers the actual slot, so
+/// the upper bound cannot be chosen before the proposal lands on-chain
+/// (spec §5.b, §6.a).
 pub fn validate_propose(
   auth: Credential,
   apply_delay: Int,
@@ -20,7 +28,7 @@ pub fn validate_propose(
 ) {
   let Transaction { inputs, outputs, validity_range, .. } = self
 
-  expect Finite(latest) = validity_range.upper_bound.bound_type
+  expect Finite(upper) = validity_range.upper_bound.bound_type
 
   expect Some(input_datum) = datum
   let SettingsDatum { current, .. } = input_datum
@@ -37,7 +45,7 @@ pub fn validate_propose(
     expect cont_datum: SettingsDatum = cont_datum
     expect Some(next_data) = cont_datum.next
     expect Some(next_apply_time) = cont_datum.next_apply
-    cont_datum.current == current && next_apply_time >= latest + apply_delay && validate_datum(
+    cont_datum.current == current && next_apply_time >= upper + apply_delay && validate_datum(
       next_data,
     ) && next_data != current
   }
@@ -79,8 +87,7 @@ pub fn validate_apply(
   )
 
   let correct_datum = {
-    expect cont_datum: SettingsDatum = cont_datum
-    let expected_datum = SettingsDatum {
+    let expected_datum: Data = SettingsDatum {
       current: next_data,
       next: None,
       next_apply: None,

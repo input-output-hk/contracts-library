@@ -1,3 +1,7 @@
+//// Proposal lifecycle spend rules: cosign, draft acceptance/rejection,
+//// voting-stage transitions, tally and end. See `docs/dao/spec.md` §3.d and
+//// §5.g–§5.n.
+
 use aiken/collection/dict
 use aiken/collection/list
 use aiken/collection/pairs
@@ -12,7 +16,8 @@ use cardano/transaction.{
 }
 use dao/proposal/winner.{winner}
 use dao/types.{
-  CosignProposal, ProposalDatum, ProposalStatus, StakeRedeemer, VoteDatum,
+  CosignProposal, ProposalDatum, ProposalStatus, StakeRedeemer, TallyVote,
+  VoteDatum, VoteRedeemer,
 }
 use dao/utils.{
   find_continuation_output, find_input_by_policy, get_unique_token_name,
@@ -135,7 +140,7 @@ pub fn validate_tally_votes(
   expect ProposalStatus.Tally { votes } = datum.status
   expect Finite(upper) = validity_range.upper_bound.bound_type
   let cont = continuation_datum(outputs, own_addr, own_hash, p_id)
-  let (counted, vote_count) = fold_votes(vote_policy, p_id, inputs, votes)
+  let (counted, vote_count) = fold_votes(self, vote_policy, p_id, inputs, votes)
   let burned = mint |> assets.tokens(vote_policy) |> dict.to_pairs()
   let tally_end = datum.start_time + datum.timing_config.draft_length + datum.timing_config.voting_length + datum.timing_config.tally_length
   and {
@@ -216,6 +221,7 @@ fn immutables_ok(cont: ProposalDatum, datum: ProposalDatum) -> Bool {
 /// Fold the transaction inputs once: each consumed vote is decoded exactly
 /// once, then (if it belongs to this proposal) tallied and counted. Returns (tally, vote_count).
 fn fold_votes(
+  self: Transaction,
   vote_policy: PolicyId,
   p_id: AssetName,
   inputs: List<Input>,
@@ -230,6 +236,11 @@ fn fold_votes(
         expect InlineDatum(d) = input.output.datum
         expect vote: VoteDatum = d
         if vote.proposal == p_id {
+          expect action: VoteRedeemer = spend_redeemer(
+            self,
+            input.output_reference,
+          )
+          expect TallyVote { .. } = action
           (upsert(tally, vote.voted_option, vote.stake), count + 1)
         } else {
           acc

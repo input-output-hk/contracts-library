@@ -1,3 +1,6 @@
+//// Settings NFT mint/burn rules: launch (mint) and close (burn).
+//// See `docs/settings/spec.md` §3.d, §5.a, §5.d and §6.c–§6.d.
+
 use aiken/collection/dict
 use aiken/collection/list
 use authorization.{is_authorized}

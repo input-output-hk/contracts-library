@@ -13,23 +13,33 @@
 
 import {
   applyParamsToScript,
-  resolveScriptHash,
-  serializeRewardAddress,
-  serializePlutusScript,
-  SLOT_CONFIG_NETWORK,
-  type Asset,
   type MeshTxBuilder,
   type PlutusScript,
+  resolveScriptHash,
   type SlotConfig,
+  serializePlutusScript,
+  serializeRewardAddress,
   type UTxO,
 } from "@meshsdk/core";
 
-import { enclosingSlotBound, nftNameFromRef } from "../common";
+import {
+  finalizeTx,
+  type Network,
+  networkIdOf,
+  nftNameFromRef,
+  nftNameOf,
+  slotBound,
+} from "../common";
+import { outputRefToData } from "../settings/datum";
+import {
+  plutusVersion,
+  proposalCompiledCode as proposalCode,
+} from "./blueprint";
 import {
   burnProposalRedeemer,
   burnVotesRedeemer,
   mintProposalRedeemer,
-  outputRefToData,
+  nftValue,
   pollEffectWithdrawalRedeemer,
   proposalDatumToData,
   proposalParamsToData,
@@ -38,35 +48,13 @@ import {
   stakeRedeemerToData,
   tallyVoteRedeemer,
 } from "./datum";
+import { stakeScriptAddress } from "./stake";
 import type {
   ProposalDatum,
   ProposalParams,
   ProposalRedeemer,
   StakePositionDatum,
 } from "./types";
-import {
-  proposalCompiledCode as proposalCode,
-  plutusVersion,
-} from "./blueprint";
-import { stakeScriptAddress } from "./stake";
-
-type Network = "mainnet" | "preprod" | "preview";
-
-function networkIdOf(network: Network): 0 | 1 {
-  return network === "mainnet" ? 1 : 0;
-}
-
-/** The enclosing slot + start time for `now` on the given network/devnet. */
-function slotBound(
-  network: Network,
-  now: number,
-  customSlotConfig?: SlotConfig,
-) {
-  return enclosingSlotBound(
-    now,
-    customSlotConfig ?? SLOT_CONFIG_NETWORK[network],
-  );
-}
 
 /** Phase end times (POSIX ms) derived from a proposal's immutable fields. */
 function phaseBounds(datum: ProposalDatum) {
@@ -75,8 +63,6 @@ function phaseBounds(datum: ProposalDatum) {
   const tallyEnd = votingEnd + datum.timingConfig.tallyLength;
   return { draftEnd, votingEnd, tallyEnd };
 }
-
-const DEFAULT_MIN_UTXO_LOVELACE = 2_000_000n;
 
 /** The Plutus V3 script in the form MeshJS expects (parameterized). */
 export function proposalScript(params: ProposalParams): PlutusScript {
@@ -96,24 +82,6 @@ export function proposalScriptAddress(
 }
 
 /** Value of a proposal UTxO: ada + proposal NFT. */
-function proposalValue(script: PlutusScript, tokenName: string): Asset[] {
-  return [
-    { unit: "lovelace", quantity: DEFAULT_MIN_UTXO_LOVELACE.toString() },
-    {
-      unit: resolveScriptHash(script.code, script.version) + tokenName,
-      quantity: "1",
-    },
-  ];
-}
-
-/** The proposal NFT token name held by `utxo`, or "" if none. */
-function nftNameOf(utxo: UTxO, policyId: string): string {
-  const unit = utxo.output.amount
-    .map((a) => a.unit)
-    .find((u) => u !== "lovelace" && u.startsWith(policyId));
-  return unit ? unit.slice(policyId.length) : "";
-}
-
 // ---------------------------------------------------- CreateProposal
 
 export interface CreateProposalParams {
@@ -175,7 +143,7 @@ export async function buildCreateProposalTx(
   p.txBuilder
     .txOut(
       proposalScriptAddress(p.proposalScript, networkId),
-      proposalValue(p.proposalScript, proposalTokenName),
+      nftValue(p.proposalScript, proposalTokenName),
     )
     .txOutInlineDatumValue(proposalDatumToData(p.proposalDatum))
     .txOut(
@@ -184,17 +152,12 @@ export async function buildCreateProposalTx(
     )
     .txOutInlineDatumValue(stakePositionDatumToData(p.stakeDatum));
 
-  return await p.txBuilder
-    .invalidBefore(bound.slot)
-    .txInCollateral(
-      p.collateralUtxo.input.txHash,
-      p.collateralUtxo.input.outputIndex,
-      p.collateralUtxo.output.amount,
-      p.collateralUtxo.output.address,
-    )
-    .changeAddress(p.changeAddress)
-    .selectUtxosFrom(p.utxos)
-    .complete();
+  p.txBuilder.invalidBefore(bound.slot);
+  return finalizeTx(p.txBuilder, {
+    collateral: p.collateralUtxo,
+    changeAddress: p.changeAddress,
+    utxos: p.utxos,
+  });
 }
 
 // ---------------------------------------------------- proposal spends
@@ -259,7 +222,7 @@ async function buildProposalSpend(
     p.txBuilder
       .txOut(
         proposalScriptAddress(p.script, networkId),
-        proposalValue(p.script, tokenName),
+        nftValue(p.script, tokenName),
       )
       .txOutInlineDatumValue(proposalDatumToData(continuationDatum));
   } else {
@@ -301,16 +264,11 @@ async function buildProposalSpend(
       .withdrawalRedeemerValue(pollEffectWithdrawalRedeemer());
   }
 
-  return await p.txBuilder
-    .txInCollateral(
-      p.collateralUtxo.input.txHash,
-      p.collateralUtxo.input.outputIndex,
-      p.collateralUtxo.output.amount,
-      p.collateralUtxo.output.address,
-    )
-    .changeAddress(p.changeAddress)
-    .selectUtxosFrom(p.utxos)
-    .complete();
+  return finalizeTx(p.txBuilder, {
+    collateral: p.collateralUtxo,
+    changeAddress: p.changeAddress,
+    utxos: p.utxos,
+  });
 }
 
 // ---------------------------------------------------- Cosign
@@ -356,7 +314,7 @@ export async function buildCosignProposalTx(
     )
     .txOut(
       proposalScriptAddress(p.script, networkId),
-      proposalValue(p.script, tokenName),
+      nftValue(p.script, tokenName),
     )
     .txOutInlineDatumValue(proposalDatumToData(p.proposalDatum))
     .spendingPlutusScriptV3()
@@ -515,7 +473,7 @@ export async function buildTallyTx(p: TallyParams): Promise<string> {
     }
   }
 
-  for (const [i, { voteUtxo, ownerAddress }] of p.votes.entries()) {
+  for (const { voteUtxo, ownerAddress } of p.votes) {
     // Refund the vote artifact's ada (minus the NFT, which this tx burns):
     // pure lovelace, tagged with the vote's own output reference.
     const refund = voteUtxo.output.amount.filter(
@@ -543,7 +501,7 @@ export async function buildTallyTx(p: TallyParams): Promise<string> {
     )
     .txOut(
       proposalScriptAddress(p.script, networkId),
-      proposalValue(p.script, tokenName),
+      nftValue(p.script, tokenName),
     )
     .txOutInlineDatumValue(proposalDatumToData(p.continuationDatum));
 

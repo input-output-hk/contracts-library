@@ -1,0 +1,326 @@
+// Linear vesting — Tx3 off-chain.
+//
+// Reference Tx3 implementation of the linear vesting action set, mirroring the
+// on-chain validator in `onchain/validators/linear_vesting.ak` (reusable logic
+// in `onchain/lib/vesting/linear.ak`) and the MeshJS builders in
+// `offchain/meshjs/lib/src/vesting/`. The normative spec is
+// `docs/vesting/spec.md`; the templates follow its §4 action set.
+//
+// A vesting instance is a single UTxO at the (unparameterized) `linear_vesting`
+// script address carrying the immutable `VestingDatum` inline:
+//
+//   lock        the locker locks the bundle — pure off-chain construction, no
+//               script runs; the datum's schedule must satisfy
+//               `start_time < end_time < recovery_time` and the output value
+//               must cover every `vesting` entry (the on-chain code does not
+//               validate the lock, so this is the builder's responsibility,
+//               spec §4.1 / I7)
+//   claim       the beneficiary withdraws the vested portion; before
+//               `end_time` a continuation at the script address reproduces
+//               the datum byte-for-byte and keeps `required_ada` lovelace —
+//               the caller computes `total - vested(now)` with the MeshJS
+//               helpers (`vestedQuantity`), floored at min-UTxO, since Tx3
+//               value expressions cannot evaluate the on-chain floor
+//               division; the excess ada is schedule-unprotected surplus
+//               (spec §7). At or after `end_time` the whole bundle is taken
+//               by `claim_full`, with no continuation (spec §4.2, I4)
+//   cancel      after `recovery_time` the locker recovers the remainder with
+//               no continuing output (spec §4.3)
+//
+// `now` is read on-chain from the validity range's finite lower bound (spec
+// §5.2), so every claim/cancel carries `since_slot` — the slot whose start
+// time the caller uses as the reference instant.
+//
+// Datum / redeemer CBOR layout (must match the Aiken blueprint):
+//   Credential      = Constr 0 [vkh] (key) | Constr 1 [scripthash] (script)
+//   VestedAsset     = Constr 0 [policy, name, total]
+//   VestingDatum    = Constr 0 [beneficiary, locker, [VestedAsset],
+//                                start_time, end_time, recovery_time]
+//   VestingRedeemer = Claim = Constr 0 [] | Cancel = Constr 1 []
+//
+// SCOPE — key-authorized paths only. The on-chain `authorization.is_authorized`
+// accepts a key credential (a required signer) or a script credential (a
+// withdraw-0 reward withdrawal). Tx3 has no runtime key-vs-script branch and
+// cannot wire a withdrawal for a script hash supplied inside the datum, so,
+// like the DAO reference, this protocol implements the key-authorized paths
+// only: `Beneficiary` and `Locker` are bound to the key credentials the datum
+// records.
+//
+// SCOPE — single-input claims, ada-only bundles. Tx3 templates are static:
+// each claim spends exactly one vesting instance (batching several instances
+// stays legal on-chain per spec §5.1, and the multi-input shapes — including
+// the instance-merge attacks they close — are exercised by the MeshJS e2e
+// suite). Tx3 value expressions cannot enumerate an arbitrary asset list, so
+// this reference locks ada only; multi-asset schedules stay with the MeshJS
+// builders.
+
+env {
+    /// The pinned `linear_vesting` validator (single-CBOR flat script). The
+    /// validator is unparameterized; its Blake2b-224 hash is
+    /// `95da21788eb1f59f51aad9669eb8c8b7081ab618c1f29b871925894a` (see
+    /// `offchain/meshjs/lib/src/vesting/blueprint.ts`).
+    vesting_script: Bytes,
+}
+
+/// The grantor: locks the bundle and may `cancel` after `recovery_time`.
+/// Bound to the key credential the datum records as `locker`.
+party Locker;
+
+/// The only party that may `claim`, from `start_time` onward. Bound to the
+/// key credential the datum records as `beneficiary`.
+party Beneficiary;
+
+/// The vesting script address (holds the vesting UTxOs).
+party Vesting;
+
+// ------------------------------------------------------------------- types
+
+// `Credential` in the Aiken sense: constructor 0 is a key credential,
+// constructor 1 a script credential. The carried value is a Blake2b-224 hash.
+type Credential {
+    Key {
+        hash: Bytes,
+    },
+    Script {
+        hash: Bytes,
+    },
+}
+
+// One asset in the vesting bundle with its ORIGINAL total. This reference
+// locks ada only (see the SCOPE note), so the list carries the single ada
+// entry with empty `policy`/`name`.
+type VestedAsset {
+    policy: Bytes,
+    name: Bytes,
+    total: Int,
+}
+
+// Immutable vesting state (spec §3.1). Written once at lock time; every
+// continuation must reproduce it verbatim. Times are POSIX milliseconds.
+type VestingDatum {
+    beneficiary: Credential,
+    locker: Credential,
+    vesting: List<VestedAsset>,
+    start_time: Int,
+    end_time: Int,
+    recovery_time: Int,
+}
+
+// Actions on a vesting UTxO (spec §3.2).
+type VestingRedeemer {
+    Claim,
+    Cancel,
+}
+
+// -------------------------------------------------------------------- lock
+
+// Lock an instance (§4.1): send the bundle to the script with the inline
+// `VestingDatum`. No script runs; the locker signs and funds.
+tx lock(
+    /// Lovelace locked into the instance. Must cover the datum's ada entry
+    /// (plus min-UTxO headroom; extra ada is schedule-unprotected surplus).
+    ada_total: Int,
+    /// The vesting terms. The caller is responsible for the well-formed
+    /// schedule and a `vesting` list covered by the output value.
+    vesting_datum: VestingDatum,
+) {
+    input funding {
+        from: Locker,
+        min_amount: Ada(ada_total) + fees,
+    }
+
+    output vesting_out {
+        to: Vesting,
+        amount: Ada(ada_total),
+        datum: vesting_datum,
+    }
+
+    output {
+        to: Locker,
+        amount: funding - Ada(ada_total) - fees,
+    }
+
+    signers {
+        Locker,
+    }
+}
+
+// ------------------------------------------------------------------- claim
+
+// Partial claim (§4.2, `now < end_time`): spend the vesting UTxO with the
+// `Claim` redeemer and return the required remainder to the script as a
+// continuation reproducing the datum verbatim. The claimed portion flows to
+// the beneficiary with the change.
+tx claim(
+    /// The vesting UTxO being claimed.
+    vesting_ref: UtxoRef,
+    /// The spent instance's datum, reproduced verbatim on the continuation.
+    /// Must equal the on-chain inline datum byte-for-byte.
+    vesting_datum: VestingDatum,
+    /// Lovelace the continuation must keep: `total - vested(now)` floored at
+    /// min-UTxO, where `now` is the start of `since_slot` (spec §5.2).
+    required_ada: Int,
+    /// Slot of the validity lower bound — the on-chain `now`. Must be at or
+    /// after `start_time` for a non-zero claim.
+    since_slot: Int,
+) {
+    input vesting_in {
+        from: Vesting,
+        ref: vesting_ref,
+        redeemer: VestingRedeemer::Claim {},
+    }
+
+    input gas {
+        from: Beneficiary,
+        min_amount: fees,
+    }
+
+    output vesting_out {
+        to: Vesting,
+        amount: Ada(required_ada),
+        datum: vesting_datum,
+    }
+
+    output {
+        to: Beneficiary,
+        amount: vesting_in - Ada(required_ada) + gas - fees,
+    }
+
+    validity {
+        since_slot: since_slot,
+    }
+
+    collateral {
+        from: Beneficiary,
+        min_amount: fees,
+    }
+
+    signers {
+        Beneficiary,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: vesting_script,
+    }
+}
+
+// Full claim (§4.2, `now >= end_time`): the whole bundle is released — no
+// continuing output (I4).
+tx claim_full(
+    /// The vesting UTxO being claimed.
+    vesting_ref: UtxoRef,
+    /// Slot of the validity lower bound; must reach `end_time`.
+    since_slot: Int,
+) {
+    input vesting_in {
+        from: Vesting,
+        ref: vesting_ref,
+        redeemer: VestingRedeemer::Claim {},
+    }
+
+    input gas {
+        from: Beneficiary,
+        min_amount: fees,
+    }
+
+    output {
+        to: Beneficiary,
+        amount: vesting_in + gas - fees,
+    }
+
+    validity {
+        since_slot: since_slot,
+    }
+
+    collateral {
+        from: Beneficiary,
+        min_amount: fees,
+    }
+
+    signers {
+        Beneficiary,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: vesting_script,
+    }
+}
+
+// ------------------------------------------------------------------ cancel
+
+// Locker recovery (§4.3): spend with the `Cancel` redeemer after
+// `recovery_time`; the whole remainder flows to the locker with no
+// continuing output.
+tx cancel(
+    /// The vesting UTxO being recovered.
+    vesting_ref: UtxoRef,
+    /// Slot of the validity lower bound; its start time must be STRICTLY
+    /// after `recovery_time` — a lower bound exactly at `recovery_time` is
+    /// rejected (spec §4.3).
+    since_slot: Int,
+) {
+    input vesting_in {
+        from: Vesting,
+        ref: vesting_ref,
+        redeemer: VestingRedeemer::Cancel {},
+    }
+
+    input gas {
+        from: Locker,
+        min_amount: fees,
+    }
+
+    output {
+        to: Locker,
+        amount: vesting_in + gas - fees,
+    }
+
+    validity {
+        since_slot: since_slot,
+    }
+
+    collateral {
+        from: Locker,
+        min_amount: fees,
+    }
+
+    signers {
+        Locker,
+    }
+
+    cardano::plutus_witness {
+        version: 3,
+        script: vesting_script,
+    }
+}
+
+// ============================================================
+// TEST KIT — devnet infrastructure only.
+//
+// Consumed exclusively by `tests/devnet.test.ts` to fund devnet
+// wallets. Never used by production builders. Safe to delete
+// wholesale.
+// ============================================================
+
+/// Funds every devnet wallet.
+party Faucet;
+
+/// Pay `quantity` lovelace from the faucet to any runtime address.
+tx devnet_pay(destination: Address, quantity: Int) {
+    input source {
+        from: Faucet,
+        min_amount: Ada(quantity) + fees,
+    }
+
+    output {
+        to: destination,
+        amount: Ada(quantity),
+    }
+
+    output {
+        to: Faucet,
+        amount: source - Ada(quantity) - fees,
+    }
+}

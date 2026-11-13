@@ -7,6 +7,7 @@
  *   - YACI_ADMIN_URL  (default http://localhost:10000)
  */
 
+import { registerWithdrawalScript } from "@contracts-library/meshjs";
 import {
   DEFAULT_V1_COST_MODEL_LIST,
   DEFAULT_V2_COST_MODEL_LIST,
@@ -14,14 +15,15 @@ import {
   deserializeAddress,
   MeshTxBuilder,
   MeshWallet,
-  serializeRewardAddress,
   type PlutusScript,
-  YaciProvider,
   type SlotConfig,
+  serializeRewardAddress,
   type UTxO,
+  YaciProvider,
 } from "@meshsdk/core";
 import { Serialization } from "@meshsdk/core-cst";
-import { registerWithdrawalScript } from "@contracts-library/meshjs";
+
+export type { YaciProvider };
 
 // `INDEXER_URL` is the convention used by the shared devnet lifecycle script.
 export const STORE_URL =
@@ -247,6 +249,18 @@ export async function devnetReachable(): Promise<boolean> {
   }
 }
 
+/**
+ * Probed once at module import so every suite shares a single reachability
+ * check (and its warning) instead of five.
+ */
+export const REACHABLE = await devnetReachable();
+if (!REACHABLE) {
+  console.warn(
+    `[e2e] Skipping all e2e tests: no Yaci devnet at ${STORE_URL}. ` +
+      `Run \`npm run test:devnet\` (or start one and set INDEXER_URL / YACI_STORE_URL).`,
+  );
+}
+
 interface Tip {
   slot: number;
   /** POSIX seconds (Blockfrost-compatible). */
@@ -462,4 +476,27 @@ export async function registerScriptStakeCredential(
     .selectUtxosFrom(await payer.wallet.getUtxos())
     .complete();
   await waitForTx(provider, await signAndSubmit(payer, tx));
+}
+
+/**
+ * The collateral → change → select → sign → submit tail the "raw attack" txs
+ * share: builders wire the malicious body themselves and close the same way.
+ */
+export async function finishRawTx(
+  provider: YaciProvider,
+  txBuilder: MeshTxBuilder,
+  signer: Account,
+): Promise<string> {
+  const col = await collateralOf(signer);
+  const unsigned = await txBuilder
+    .txInCollateral(
+      col.input.txHash,
+      col.input.outputIndex,
+      col.output.amount,
+      col.output.address,
+    )
+    .changeAddress(signer.address)
+    .selectUtxosFrom(await signer.wallet.getUtxos())
+    .complete();
+  return provider.submitTx(await signer.wallet.signTx(unsigned, true));
 }

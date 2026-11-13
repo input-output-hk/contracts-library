@@ -203,7 +203,7 @@ Datum (inline, on the stake address):
 
 The **frozen** stake of a position is `max(lock.stake)` over all locks (0 when empty); the **free** stake is `total - frozen`. A lock is **expired** when `unlock_time <= now`; expired locks are dropped by `prune_expired`.
 
-Locks are pruned when `unlock_time <= now` by `Deposit`, `Withdraw`, `ClosePosition`, and `Vote`. A lock also blocks a *second* cosign/vote on the same proposal via `has_proposal`. Creating a proposal is treated as locking until `start_time + draft_length`.
+Locks are pruned when `unlock_time <= now`; `Deposit`, `Withdraw`, and `ClosePosition` drop expired locks, and `Vote` prunes the position's existing locks *before* appending its fresh lock (so a vote at the deadline keeps its own lock). A lock also blocks a *second* cosign/vote on the same proposal via `has_proposal`. Creating a proposal is treated as locking until `start_time + draft_length`.
 
 **Design note (not implemented).** The `locks` list is intended to be at most `max_locks = 100` entries as a safeguard against datum bloat, not because unbounded growth would break the protocol. A delegatee could otherwise cosign many dummy drafts with a victim's position, but the position cannot be permanently frozen: **(1)** the pruning paths (`Deposit`, `Withdraw`, `ClosePosition`) do strictly less work over `locks` than the lock-adding actions, so any datum the attacker can still append to, the owner can still spend and once the dummy locks expire (≤ `draft_length` after the last cosign, the stake frozen meanwhile as with any cosign), a single `Deposit` prunes them all; **(2)** with `draft_length < voting_length` (to be enforced at settings updates), a one-shot fill during a proposal's draft phase expires before the whole voting window passes, so the position can still vote within it; **(3)** the owner can revoke the delegation at any time (`DelegateTo`), immediately stopping further fills. The cap would additionally bound the datum for cost: ~5.1 KB at 100 locks, versus ~14 KB at ~274 locks (the memory budget binds at ~910 locks, the CPU budget at ~1,830 — datum size first).
 
@@ -447,7 +447,7 @@ A position casts its staked weight on one option of a `Voting` proposal: a vote 
 | **Inputs** | The position UTxO. |
 | **Reference inputs** | The proposal UTxO. |
 | **Mint** | Exactly one vote NFT under `vote_validator`, name = hash of the position's reference, quantity `1`. |
-| **Outputs** | 1. One position continuation at the same address: owner/delegatee unchanged, `locks = prune_expired(concat(locks, [Lock { proposal_id, start + draft + voting, in_stake }]), now)`. 2. One vote artifact at `out_idx`: address `Script(vote_policy)`, value holds the NFT and lovelace, inline datum `VoteDatum { stake_owner: owner, proposal: p_id, voted_option, stake }` (`owner` from the stake datum, `stake` = the staked amount), no reference script. |
+| **Outputs** | 1. One position continuation at the same address: owner/delegatee unchanged, `locks = concat(prune_expired(locks, now), [Lock { proposal_id, start + draft + voting, in_stake }])`. 2. One vote artifact at `out_idx`: address `Script(vote_policy)`, value holds the NFT and lovelace, inline datum `VoteDatum { stake_owner: owner, proposal: p_id, voted_option, stake }` (`owner` from the stake datum, `stake` = the staked amount), no reference script. |
 | **Validity range** | Lower and upper bounds finite; `upper <= start + draft + voting` (enforced by the stake validator). |
 | **Authorization** | `vote_auth` (delegatee if set, else owner) on the stake spend; the vote mint has none directly — it requires the stake input consumed with `VoteProposal { proposal_id: p_id, voted_option }`. |
 | **Constraints** | The proposal is `Voting`; `in_stake >= proposal.thresholds.vote`; no existing lock for `proposal_id`; `0 <= voted_option < len(results)` (checked by the vote mint; the stake side ignores `voted_option`). |
@@ -471,7 +471,7 @@ The vote's recorded owner can cancel the artifact at any time, burning its NFT; 
 | **Validity range** | Unconstrained. |
 | **Authorization** | `stake_owner` (the vote's recorded owner) satisfied. |
 
-`Cancel` is valid **at any time** while the artifact exists as long as the artifact is not consumed by a tally in the same transaction. The tally's burned-count check (§5.m) forbids canceling a vote inside the transaction that counts it without it being counted, so a canceled vote can never influence a tally.
+`Cancel` is valid **at any time** while the artifact exists as long as the artifact is not consumed by a tally in the same transaction. A vote consumed with `Cancel` cannot be counted by a tally: the proposal only counts inputs spent with `TallyVote` (§5.m), so a canceled vote can never influence a tally.
 
 ### 5.l End Voting Stage
 
@@ -507,7 +507,7 @@ One or more vote artifacts are consumed in a batch: their stakes are added to th
 | **Mint** | Each consumed vote's NFT is burned (quantity `-1` under the vote policy). |
 | **Outputs** | 1. One proposal continuation at the same address with status `Tally { votes: counted }`; immutables preserved. 2. Per consumed vote, a refund output at its declared `out_idx`: payment credential equal to the vote's recorded `stake_owner`, inline datum equal to the vote UTxO's own output reference (the refund tag), holding **at least** the vote UTxO's lovelace and **nothing but** lovelace, no reference script. |
 | **Validity range** | Upper bound finite and `<= start_time + draft_length + voting_length + tally_length` (enforced by the proposal validator). |
-| **Constraints** | (proposal) Status `Tally { votes }`; at least one vote consumed; the number of burned vote tokens equals the number of votes counted for *this* proposal. (vote, each) The proposal input is located by its NFT among the spent inputs, its payment credential must hash to `proposal_policy`, and the refund output at `out_idx` satisfies the tag, address, lovelace-floor, and lovelace-only checks (enforced by the vote validator). |
+| **Constraints** | (proposal) Status `Tally { votes }`; at least one vote consumed; only votes spent with `TallyVote { out_idx }` are counted (a `Cancel`-spent or redeemer-less vote halts the tally), and the number of burned vote tokens equals the number of votes counted for *this* proposal. (vote, each) The proposal input is located by its NFT among the spent inputs, its payment credential must hash to `proposal_policy`, and the refund output at `out_idx` satisfies the tag, address, lovelace-floor, and lovelace-only checks (enforced by the vote validator). |
 
 Our protection against purposely avoiding counting votes is:
 
@@ -567,7 +567,7 @@ The effect script runs as a reward withdrawal (`withdraw-0`). The reference cand
 - **Double-voting / double-cosigning.** Locks freeze stake and `has_proposal` blocks a second cosign/vote on the same proposal. (I3)
 - **Premature phase transitions.** Every transition is gated by its deadline via the validity range (lower for "after", upper for "before"); a proposal cannot be accepted/tallied/ended early. (I4)
 - **Proposal tampering.** The proposal body is immutable across transitions; a continuation must reproduce it exactly. (I4)
-- **Tally manipulation.** Votes are bound to a proposal and counted once each; the number of burned vote NFTs must match the votes counted; refunds go to the vote's recorded owner (tagged output checked by the vote validator). The declared winner is checked against the tally, and the effect script self-guards via `am_i_the_winner`. (I5, I6)
+- **Tally manipulation.** Votes are bound to a proposal and counted once each, and only when the vote input is spent with `TallyVote`; the number of burned vote NFTs must match the votes counted; refunds go to the vote's recorded owner (tagged output checked by the vote validator). The declared winner is checked against the tally, and the effect script self-guards via `am_i_the_winner`. (I5, I6)
 - **NFT detachment / forgery.** NFT names hash a consumed reference (unique), and continuations must keep the NFT at the script address. (I2)
 
 ### 6.a Assumptions
@@ -584,8 +584,8 @@ The effect script runs as a reward withdrawal (`withdraw-0`). The reference cand
 
 - **I1 — Action authorization.** Deposit/withdraw/delegate/close/create-proposal require the position `owner`; cosign/vote require `vote_auth` (delegatee if set, else owner); vote `Cancel` requires the vote's recorded `stake_owner`; proposal transitions require the corresponding sibling input consumed with the matching redeemer (which the sibling's own validator gates by authorization).
 - **I2 — NFT uniqueness & custody.** Every position/proposal/vote NFT is named by the hash of a consumed output reference, so it is globally unique and unforgeable. Continuations keep the NFT at the exact script address; closing/burning is irreversible.
-- **I3 — Lock enforcement.** Stake committed to a proposal is frozen (`free_stake` excludes the max live lock) until the lock expires; the same position cannot cosign/vote the same proposal twice while the lock is live.
+- **I3 — Lock enforcement.** Stake committed to a proposal is frozen (`free_stake` excludes the max live lock) until the lock expires; a vote's fresh lock is recorded even at the voting deadline, and the same position cannot cosign/vote the same proposal twice while the lock is live.
 - **I4 — Lifecycle integrity.** A proposal advances only in the order Draft → Voting → Tally → End, each transition gated by its deadline and threshold; the proposal body (`thresholds`, `timing_config`, `start_time`, `results`) is immutable across every transition.
 - **I5 — Execution integrity.** `EndProposal`'s declared winner must equal the strict winner of the recorded tally, and executes only if the `execute` threshold is met; a declared effect must run as its withdrawal.
-- **I6 — Vote fidelity.** A vote artifact records the exact staked amount and option at vote time, and is destroyed (NFT burned) exactly once, at tally or cancel; a proposal's tally counts only votes bound to it.
+- **I6 — Vote fidelity.** A vote artifact records the exact staked amount and option at vote time, and is destroyed (NFT burned) exactly once, at tally or cancel; a proposal's tally counts only votes bound to it and spent with `TallyVote`.
 - **I7 — Composability.** Each validator asserts only about its own input, the sibling inputs/outputs it cross-references, the mint under its own policy, the single continuation it recognizes (by address or `out_idx`), the validity range, and the required authorization. It never asserts total input/output counts or unrelated value.

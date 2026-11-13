@@ -7,15 +7,11 @@
  * upgrade-multisig tree) live with the deployment tooling in `e2e/`.
  */
 
-import { mConStr0, mConStr1, mConStr2, type Data } from "@meshsdk/core";
+import { type Data, mConStr0, mConStr1 } from "@meshsdk/core";
 
-import { credentialToData, type Credential } from "../common";
+import { type Credential, credentialToData } from "../common";
 
 // ----------------------------------------------------------------- redeemers
-
-export function registryInitRedeemer(): Data {
-  return mConStr0([]);
-}
 
 export function registryInsertRedeemer(
   key: string,
@@ -38,12 +34,8 @@ export function thirdPartyAct(): Data {
   return mConStr1([]);
 }
 
-export function unfrackingAct(): Data {
-  return mConStr2([]);
-}
-
 /** `RegistryProof`: TokenExists { node_idx } = 0, TokenDoesNotExist = 1. */
-export interface RegistryProof {
+interface RegistryProof {
   nodeIdx: number;
 }
 

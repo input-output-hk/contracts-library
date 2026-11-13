@@ -13,13 +13,12 @@
  */
 
 import {
+  type Data,
   deserializeAddress,
   mConStr,
   mConStr0,
   mConStr1,
   mConStr2,
-  type Data,
-  type TxInput,
 } from "@meshsdk/core";
 
 import { credentialToData } from "../common";
@@ -42,8 +41,6 @@ import type {
   WalletDatum,
   WalletParams,
 } from "./types";
-
-export { credentialToData, outputRefToData };
 
 function pairsToData(scripts: DelegatedScript[]): Map<Data, Data> {
   return new Map(scripts.map((s) => [s.scriptHash, s.data]));

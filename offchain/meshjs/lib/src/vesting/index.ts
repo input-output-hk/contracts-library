@@ -25,8 +25,3 @@ export {
   type ClaimParams,
   type CancelParams,
 } from "./vesting";
-export {
-  compiledCode as vestingCode,
-  validatorHash,
-  plutusVersion,
-} from "./blueprint";

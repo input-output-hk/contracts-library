@@ -1,32 +1,32 @@
-import { afterAll, beforeAll, expect, test } from "vitest";
 import {
-  TrixDevnet,
-  DEVNET_POLL,
-  unwrapCborBytes,
-  type ChainTip,
-  type DevnetKitFactory,
-  type DevnetUtxo,
-  type DevnetWallet,
-} from "../../devnet/utils";
-import {
-  SETTINGS_TOKEN_NAME,
   nftNameFromRef,
+  type ProposalParams,
   pollEffectScript,
   proposalScript,
   proposalScriptAddress,
+  SETTINGS_TOKEN_NAME,
+  type SettingsParams,
+  type StakeParams,
   settingsScript,
   settingsScriptAddress,
   stakeScript,
   stakeScriptAddress,
+  type VoteParams,
   voteScript,
   voteScriptAddress,
-  type ProposalParams,
-  type SettingsParams,
-  type StakeParams,
-  type VoteParams,
 } from "@contracts-library/meshjs";
-import { Party, type SubmittedTx, type TxBuilder } from "tx3-sdk";
 import { applyCborEncoding, resolveScriptHash } from "@meshsdk/core";
+import { Party, type SubmittedTx, type TxBuilder } from "tx3-sdk";
+import { afterAll, beforeAll, expect, test } from "vitest";
+import {
+  type ChainTip,
+  DEVNET_POLL,
+  type DevnetKitFactory,
+  type DevnetUtxo,
+  type DevnetWallet,
+  TrixDevnet,
+  unwrapCborBytes,
+} from "../../devnet/utils";
 import { Client } from "../codegen/ts-client/dao-governance/protocol";
 
 const ADA = 1_000_000n;
@@ -130,8 +130,11 @@ beforeAll(async () => {
 
   // The publisher funds one poll-effect reference-script deployment per test
   // (the candidate is parameterized by each instance's proposal validator).
+  // Sizing: ~3.5 ADA per setup (2 ADA locked in the reference UTxO, deploy
+  // fees, 0.5 ADA registration fee) and every test boots a fresh instance —
+  // 60 ADA covers 12+ setups with headroom for additions.
   registrar = devnet.wallet("bootstrap/registrar");
-  await devnet.payTo(registrar.address, 20n * ADA);
+  await devnet.payTo(registrar.address, 60n * ADA);
 
   // Split the faucet UTxO in two so `devnet_mint_staked` can pull its funding
   // and collateral from separate faucet UTxOs (a Plutus mint needs collateral).
@@ -608,6 +611,108 @@ async function vote(
   };
 }
 
+/** Build and submit the reject-draft transaction (no confirmation wait). */
+function rejectDraftTx(
+  inst: Instance,
+  proposal: ProposalState,
+  signer: DevnetWallet,
+  sinceSlot: number,
+): Promise<SubmittedTx> {
+  return submit(
+    inst
+      .client(signer)
+      .rejectDraft({
+        proposal_ref: proposal.utxo.ref,
+        proposal_token_name: toBytes(proposal.tokenName),
+        since_slot: sinceSlot,
+      } as unknown as Parameters<Client["rejectDraft"]>[0])
+      .env(inst.env),
+  );
+}
+
+/** Reject a draft proposal and wait until it is confirmed on-chain. */
+async function rejectDraft(
+  inst: Instance,
+  proposal: ProposalState,
+  signer: DevnetWallet,
+): Promise<void> {
+  // Rejecting is only legal once the draft window has ended.
+  await devnet.waitForChainTimeMs(proposal.startTime + DRAFT_LENGTH + 1_000);
+  const submitted = await rejectDraftTx(
+    inst,
+    proposal,
+    signer,
+    (await devnet.tip()).slot,
+  );
+  await submitted.waitForConfirmed(DEVNET_POLL);
+}
+
+/** Build and submit the vote-cancel transaction (no confirmation wait). */
+function cancelTx(
+  inst: Instance,
+  signer: DevnetWallet,
+  voteUtxo: DevnetUtxo,
+  voteNftName: string,
+): Promise<SubmittedTx> {
+  return submit(
+    inst
+      .client(signer)
+      .cancel({
+        vote_ref: voteUtxo.ref,
+        vote_nft_name: toBytes(voteNftName),
+      } as unknown as Parameters<Client["cancel"]>[0])
+      .env(inst.env),
+  );
+}
+
+/**
+ * Drive a proposal to the Voting stage: A stakes and creates, B co-signs up to
+ * the accept threshold, then the draft is accepted. Returning voters open
+ * fresh positions — a position locking a proposal cannot vote.
+ */
+async function proposalToVoting(inst: Instance): Promise<{
+  voting: { utxo: DevnetUtxo };
+  proposalTokenName: string;
+  startTime: number;
+}> {
+  const posA = await createPosition(inst, inst.a, inst.seedA, STAKE_A);
+  const posB = await createPosition(inst, inst.b, inst.seedB, STAKE_B);
+  const created = await createProposal(inst, inst.a, posA.utxo, STAKE_A);
+
+  const beforeProposal = await snapshot(inst.proposalAddr);
+  await confirm(
+    inst
+      .client(inst.b)
+      .cosign({
+        settings_ref: inst.settingsRef,
+        proposal_ref: created.utxo.ref,
+        stake_ref: posB.utxo.ref,
+        proposal_token_name: toBytes(created.tokenName),
+        new_proposal_datum: proposalDatum(
+          created.startTime,
+          draftStatus(STAKE_A + STAKE_B),
+          inst.results,
+        ),
+        new_stake_datum: stakeDatum(inst.b.keyHash, noneOpt(), [
+          lock(created.tokenName, created.startTime + DRAFT_LENGTH, STAKE_B),
+        ]),
+        until_slot: devnet.slotAtTimeMs(created.startTime + DRAFT_LENGTH),
+      } as unknown as Parameters<Client["cosign"]>[0])
+      .env(inst.env),
+  );
+  const [proposal2] = await addedSince(inst.proposalAddr, beforeProposal);
+  const voting = await acceptDraft(
+    inst,
+    { ...created, utxo: proposal2 },
+    inst.a,
+  );
+  return {
+    voting,
+    proposalTokenName: created.tokenName,
+    startTime: created.startTime,
+  };
+}
+
 // ---------------------------------------------------------------- happy path
 
 /**
@@ -647,10 +752,8 @@ async function lifecycleToTally(): Promise<{
   const startTime = created.startTime;
   const proposalTokenName = created.tokenName;
   const proposal1 = created.utxo;
-  const posA2 = created.stakeUtxo;
 
   // 3. B co-signs, reaching the accept threshold (20 + 10 = 30).
-  const beforeStake2 = await snapshot(inst.stakeAddr);
   const beforeProposal2 = await snapshot(inst.proposalAddr);
   await confirm(
     inst
@@ -672,7 +775,6 @@ async function lifecycleToTally(): Promise<{
       } as unknown as Parameters<Client["cosign"]>[0])
       .env(inst.env),
   );
-  const [posB2] = await addedSince(inst.stakeAddr, beforeStake2);
   const [proposal2] = await addedSince(inst.proposalAddr, beforeProposal2);
 
   // 4. Accept the draft (still within the draft window).
@@ -1102,4 +1204,90 @@ test("rejects a close while locks are active", async () => {
     ),
     [{ address: inst.stakeAddr, ref: created.stakeUtxo.ref }],
   );
+}, 300_000);
+
+// ------------------------------------------------------------ draft rejection
+
+test("rejects a draft after the draft phase ends", async () => {
+  const inst = await setup();
+  const posA = await createPosition(inst, inst.a, inst.seedA, STAKE_A);
+  const created = await createProposal(inst, inst.a, posA.utxo, STAKE_A);
+
+  // After the draft window the proposer may reject: the proposal token burns
+  // and the proposal UTxO unwinds back to the signer.
+  const beforeWallet = await snapshot(inst.a.address);
+  await rejectDraft(inst, created, inst.a);
+  expect(await devnet.utxosOf(inst.proposalAddr)).toHaveLength(0);
+  const [refund] = await addedSince(inst.a.address, beforeWallet);
+  expect(refund).toBeDefined();
+}, 300_000);
+
+test("rejects a reject-draft while the draft is still open", async () => {
+  const inst = await setup();
+  const posA = await createPosition(inst, inst.a, inst.seedA, STAKE_A);
+  const created = await createProposal(inst, inst.a, posA.utxo, STAKE_A);
+
+  // The validator demands `lower >= draft_end`: rejecting inside the window
+  // must fail phase-2 and leave the draft untouched.
+  await expectAttackRejected(
+    rejectDraftTx(inst, created, inst.a, (await devnet.tip()).slot),
+    [{ address: inst.proposalAddr, ref: created.utxo.ref }],
+  );
+}, 300_000);
+
+// ---------------------------------------------------------------- vote cancel
+
+test("cancels a vote before the voting stage ends", async () => {
+  const inst = await setup();
+  const { voting, proposalTokenName, startTime } = await proposalToVoting(inst);
+
+  // Voter positions need unlocked tokens (`!has_proposal` in the stake
+  // validator), so the voter opens a fresh one from newly minted tokens.
+  const beforeMint = await snapshot(inst.a.address);
+  await devnet.mintTokensTo(inst.a.address, BigInt(STAKE_A));
+  const [seedA2] = await addedSince(inst.a.address, beforeMint);
+  const voterPos = await createPosition(inst, inst.a, seedA2, STAKE_A);
+
+  const votingEnd = startTime + DRAFT_LENGTH + VOTING_LENGTH;
+  const cast = await vote(
+    inst,
+    inst.a,
+    voting.utxo.ref,
+    voterPos.utxo,
+    proposalTokenName,
+    votingEnd,
+    STAKE_A,
+  );
+
+  // The vote's stake owner may withdraw at any time: the vote NFT burns and
+  // the artifact refunds to the voter.
+  const submitted = await cancelTx(inst, inst.a, cast.utxo, cast.nftName);
+  await submitted.waitForConfirmed(DEVNET_POLL);
+  expect(await devnet.utxosOf(inst.voteAddr)).toHaveLength(0);
+}, 300_000);
+
+test("rejects a vote cancel by a non-owner", async () => {
+  const inst = await setup();
+  const { voting, proposalTokenName, startTime } = await proposalToVoting(inst);
+
+  const beforeMint = await snapshot(inst.a.address);
+  await devnet.mintTokensTo(inst.a.address, BigInt(STAKE_A));
+  const [seedA2] = await addedSince(inst.a.address, beforeMint);
+  const voterPos = await createPosition(inst, inst.a, seedA2, STAKE_A);
+
+  const votingEnd = startTime + DRAFT_LENGTH + VOTING_LENGTH;
+  const cast = await vote(
+    inst,
+    inst.a,
+    voting.utxo.ref,
+    voterPos.utxo,
+    proposalTokenName,
+    votingEnd,
+    STAKE_A,
+  );
+
+  // B is not the vote's stake owner: the withdraw-0 authorization fails.
+  await expectAttackRejected(cancelTx(inst, inst.b, cast.utxo, cast.nftName), [
+    { address: inst.voteAddr, ref: cast.utxo.ref },
+  ]);
 }, 300_000);

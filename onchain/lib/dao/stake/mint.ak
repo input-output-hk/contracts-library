@@ -1,6 +1,9 @@
+//// Stake-position NFT mint/burn rules. See `docs/dao/spec.md` §3.d, §5.a
+//// and §5.e.
+
 use aiken/collection/dict
 use aiken/collection/list
-use cardano/address.{Address, Script}
+use cardano/address.{Script}
 use cardano/assets.{AssetName, PolicyId, has_nft, quantity_of}
 use cardano/transaction.{
   InlineDatum, Output, OutputReference, Transaction, find_input,

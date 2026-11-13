@@ -11,12 +11,12 @@
 
 import {
   applyParamsToScript,
+  type Data,
+  type PlutusScript,
   resolveScriptHash,
   scriptAddress,
   serializeAddressObj,
   serializeRewardAddress,
-  type Data,
-  type PlutusScript,
   type UTxO,
 } from "@meshsdk/core";
 

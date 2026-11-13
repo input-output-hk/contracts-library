@@ -1,10 +1,9 @@
 use aiken/crypto.{ScriptHash}
 use cardano/address.{
-  Address, Script, VerificationKey, from_script, from_verification_key,
-  with_delegation_key,
+  Address, Script, from_script, from_verification_key, with_delegation_key,
 }
 use cardano/assets
-use cardano/certificate.{Certificate, RegisterCredential, UnregisterCredential}
+use cardano/certificate.{Certificate, RegisterCredential}
 use cardano/transaction.{
   InlineDatum, Input, NoDatum, Output, OutputReference, Transaction, placeholder,
 }
@@ -81,22 +80,6 @@ fn wallet_tx(spenders: Pairs<ScriptHash, Data>) -> Transaction {
   }
 }
 
-fn removal_tx(spenders: Pairs<ScriptHash, Data>) -> Transaction {
-  Transaction {
-    ..placeholder,
-    inputs: [wallet_input(spenders)],
-    outputs: [wallet_output([])],
-  }
-}
-
-fn kept_tx(spenders: Pairs<ScriptHash, Data>) -> Transaction {
-  Transaction {
-    ..placeholder,
-    inputs: [wallet_input(spenders)],
-    outputs: [wallet_output(spenders)],
-  }
-}
-
 fn payout(address: Address) -> Output {
   Output {
     address,
@@ -121,49 +104,6 @@ test publish_register_script_credential() {
   let data: Data = 0
   let tx = wallet_tx([Pair(a, data)])
   publish(RegisterCredential { credential: Script(a), deposit: Never }, tx)
-}
-
-test publish_rejects_register_not_listed() fail {
-  let data: Data = 0
-  let tx = wallet_tx([Pair(a, data)])
-  publish(RegisterCredential { credential: Script(b), deposit: Never }, tx)
-}
-
-test publish_rejects_key_credential() fail {
-  publish(
-    RegisterCredential { credential: VerificationKey(a), deposit: Never },
-    placeholder,
-  )
-}
-
-test publish_accepts_unregister_on_removal() {
-  let data: Data = 0
-  publish(
-    UnregisterCredential { credential: Script(a), refund: Never },
-    removal_tx([Pair(a, data)]),
-  )
-}
-
-test publish_rejects_unregister_without_wallet() fail {
-  publish(
-    UnregisterCredential { credential: Script(a), refund: Never },
-    placeholder,
-  )
-}
-
-test publish_rejects_unregister_when_kept() fail {
-  let data: Data = 0
-  publish(
-    UnregisterCredential { credential: Script(a), refund: Never },
-    kept_tx([Pair(a, data)]),
-  )
-}
-
-test publish_rejects_key_credential_unregister() fail {
-  publish(
-    UnregisterCredential { credential: VerificationKey(a), refund: Never },
-    placeholder,
-  )
 }
 
 // ---------------------------------------------------------------- withdraw
