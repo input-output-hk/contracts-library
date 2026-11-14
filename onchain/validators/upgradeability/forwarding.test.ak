@@ -63,7 +63,7 @@ fn settings_ref() -> Input {
 }
 
 fn counter_output(
-  value: assets.Value,
+  value: assets.Assets,
   count: Int,
   prev_input: Option<OutputReference>,
 ) -> Output {
@@ -170,7 +170,7 @@ test forwarder_rejects_withdraw_from_another_credential() fail {
 
 const state_name = state_token_name
 
-fn state_token() -> assets.Value {
+fn state_token() -> assets.Assets {
   assets.from_lovelace(2_000_000)
     |> assets.add(forwarder_hash, state_name, 1)
 }
@@ -209,7 +209,7 @@ test logic_ticks_a_genuine_counter() {
   )
 }
 
-fn genesis(minted: assets.Value, output: Output) -> Bool {
+fn genesis(minted: assets.Assets, output: Output) -> Bool {
   run_logic(
     with_logic(Transaction { ..placeholder, outputs: [output], mint: minted }),
   )

@@ -6,7 +6,7 @@ use aiken/collection/list
 use aiken/interval.{Finite}
 use authorization.{is_authorized}
 use cardano/address.{Address, Credential, Script}
-use cardano/assets.{AssetName, PolicyId, Value, has_nft, quantity_of}
+use cardano/assets.{AssetName, Assets, PolicyId, has_nft, quantity_of}
 use cardano/transaction.{
   InlineDatum, Input, Output, OutputReference, Transaction, resolve_input,
 }
@@ -32,7 +32,7 @@ fn position(
   staked_token_name: AssetName,
   own_ref: OutputReference,
   self: Transaction,
-) -> (Address, Value, PolicyId, AssetName, Int) {
+) -> (Address, Assets, PolicyId, AssetName, Int) {
   let Transaction { inputs, .. } = self
   let own_input = resolve_input(inputs, own_ref)
   let Output { address: own_addr, value: own_value, .. } = own_input

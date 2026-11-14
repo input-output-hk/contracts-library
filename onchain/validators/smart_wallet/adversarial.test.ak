@@ -12,7 +12,7 @@ use aiken/interval
 use cardano/address.{
   Address, Inline, Script, VerificationKey, from_script, from_verification_key,
 }
-use cardano/assets.{Value}
+use cardano/assets.{Assets}
 use cardano/certificate.{Certificate, RegisterCredential, UnregisterCredential}
 use cardano/transaction.{
   InlineDatum, Input, NoDatum, Output, OutputReference, Publish, Transaction,
@@ -85,14 +85,14 @@ fn wallet_ref() -> OutputReference {
   OutputReference { transaction_id: tx_id, output_index: 0 }
 }
 
-fn nft_value(lovelace: Int) -> Value {
+fn nft_value(lovelace: Int) -> Assets {
   assets.from_lovelace(lovelace) |> assets.add(wallet_hash, wallet_token, 1)
 }
 
 /// An output at the wallet's script address. With an NFT-less `value` it is a
 /// decoy / stray output sitting at the wallet credential.
 fn wallet_out(
-  value: Value,
+  value: Assets,
   spenders: Pairs<ScriptHash, Data>,
   depositors: Pairs<ScriptHash, Data>,
 ) -> Output {

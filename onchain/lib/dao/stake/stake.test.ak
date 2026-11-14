@@ -3,7 +3,7 @@ use aiken/interval
 use cardano/address.{
   Credential, VerificationKey, from_script, from_verification_key,
 }
-use cardano/assets.{Value}
+use cardano/assets.{Assets}
 use cardano/transaction.{
   InlineDatum, Input, NoDatum, Output, OutputReference, Transaction, placeholder,
 }
@@ -111,7 +111,7 @@ fn pos_ref() -> OutputReference {
   OutputReference { transaction_id: tx_id, output_index: 0 }
 }
 
-fn pos_value(stake: Int) -> Value {
+fn pos_value(stake: Int) -> Assets {
   assets.from_asset(stake_hash, pos_nft, 1)
     |> assets.add(gov_policy, gov_name, stake)
     |> assets.merge(assets.from_lovelace(2_000_000))

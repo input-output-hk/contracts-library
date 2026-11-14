@@ -19,26 +19,26 @@
  * v1beta0 language cannot express. See `../README.md`.
  */
 
-import { afterAll, beforeAll, expect, test } from "vitest";
-import {
-  DEVNET_POLL,
-  TrixDevnet,
-  unwrapCborBytes,
-  type DevnetKitFactory,
-  type DevnetUtxo,
-  type DevnetWallet,
-} from "../../devnet/utils";
 import {
   SETTINGS_TOKEN_NAME,
+  type SettingsParams,
   settingsScript,
   settingsScriptAddress,
   smartWalletScript,
   smartWalletScriptAddress,
-  type SettingsParams,
   type WalletParams,
 } from "@contracts-library/meshjs";
-import { Party, type SubmittedTx, type TxBuilder } from "tx3-sdk";
 import { resolveScriptHash } from "@meshsdk/core";
+import { Party, type SubmittedTx, type TxBuilder } from "tx3-sdk";
+import { afterAll, beforeAll, expect, test } from "vitest";
+import {
+  DEVNET_POLL,
+  type DevnetKitFactory,
+  type DevnetUtxo,
+  type DevnetWallet,
+  TrixDevnet,
+  unwrapCborBytes,
+} from "../../devnet/utils";
 import {
   Client,
   type WalletConfig as Tx3WalletConfig,

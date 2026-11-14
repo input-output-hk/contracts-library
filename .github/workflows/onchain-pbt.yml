@@ -5,6 +5,9 @@ on:
     - cron: "0 3 * * *"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   onchain-pbt:
     name: On-chain property tests (1,000 samples)
@@ -15,6 +18,9 @@ jobs:
       - uses: aiken-lang/setup-aiken@v1
         with:
           version: v1.1.24
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
       - name: Cache Aiken packages
         uses: actions/cache@v4
         with:
@@ -23,5 +29,4 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-aiken-
       - name: aiken check (1,000 samples)
-        working-directory: onchain
-        run: aiken check --max-success=1000
+        run: just pbt

@@ -3,7 +3,7 @@
 
 use aiken/collection/list
 use cardano/address.{Credential, Script}
-use cardano/assets.{AssetName, Lovelace, Value, has_nft}
+use cardano/assets.{AssetName, Assets, Lovelace, has_nft}
 use cardano/transaction.{Output, Transaction}
 
 /// Spending-limit check: the net lovelace outflow `input - output` stays
@@ -13,8 +13,8 @@ use cardano/transaction.{Output, Transaction}
 /// wallet's inputs and outputs; the delegated withdrawal script passes those in
 /// and asserts the outflow is bounded.
 pub fn value_delta_below_bound(
-  input: Value,
-  output: Value,
+  input: Assets,
+  output: Assets,
   bound: Lovelace,
 ) -> Bool {
   assets.lovelace_of(input) - assets.lovelace_of(output) < bound
@@ -45,7 +45,7 @@ fn sum_at_credential(
   outputs: List<Output>,
   credential: Credential,
   wallet_token_name: AssetName,
-) -> Value {
+) -> Assets {
   expect Script(wallet_hash) = credential
   list.foldl(
     outputs,

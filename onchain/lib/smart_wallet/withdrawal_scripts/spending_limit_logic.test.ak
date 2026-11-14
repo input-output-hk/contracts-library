@@ -16,11 +16,11 @@ const wallet_token = "wallet"
 const tx_id =
   #"0000000000000000000000000000000000000000000000000000000000000000"
 
-fn nft() -> assets.Value {
+fn nft() -> assets.Assets {
   assets.from_asset(wallet_policy, wallet_token, 1)
 }
 
-fn wallet_input(value: assets.Value) -> Input {
+fn wallet_input(value: assets.Assets) -> Input {
   Input {
     output_reference: OutputReference { transaction_id: tx_id, output_index: 0 },
     output: Output {
@@ -32,7 +32,7 @@ fn wallet_input(value: assets.Value) -> Input {
   }
 }
 
-fn wallet_output(value: assets.Value) -> Output {
+fn wallet_output(value: assets.Assets) -> Output {
   Output {
     address: from_script(wallet_policy),
     value: assets.merge(value, nft()),
@@ -41,7 +41,7 @@ fn wallet_output(value: assets.Value) -> Output {
   }
 }
 
-fn stray_output(value: assets.Value) -> Output {
+fn stray_output(value: assets.Assets) -> Output {
   Output {
     address: from_script(wallet_policy),
     value,

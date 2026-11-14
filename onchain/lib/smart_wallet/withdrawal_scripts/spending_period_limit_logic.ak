@@ -14,7 +14,7 @@ use aiken/collection/list
 use aiken/crypto.{ScriptHash}
 use aiken/interval.{Finite}
 use cardano/address.{Credential, Script}
-use cardano/assets.{AssetName, Lovelace, Value, has_nft}
+use cardano/assets.{AssetName, Assets, Lovelace, has_nft}
 use cardano/transaction.{Output, Transaction}
 use smart_wallet/withdrawal
 
@@ -135,7 +135,7 @@ fn sum_at_credential(
   outputs: List<Output>,
   credential: Credential,
   wallet_token_name: AssetName,
-) -> Value {
+) -> Assets {
   expect Script(wallet_hash) = credential
   list.foldl(
     outputs,

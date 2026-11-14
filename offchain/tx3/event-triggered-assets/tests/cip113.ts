@@ -11,28 +11,28 @@
  */
 
 import {
+  applyBond,
+  applyScript,
+  type Bond,
+  type CoreConfig,
+  type CoreDeployment,
+  type CoreScripts,
+  type Credential,
+  scriptHashOf,
+  stripCborWrappers,
+} from "@contracts-library/meshjs";
+import {
   deserializeAddress,
   pubKeyAddress,
   scriptAddress,
   serializeAddressObj,
 } from "@meshsdk/core";
 
-import {
-  applyBond,
-  applyScript,
-  scriptHashOf,
-  stripCborWrappers,
-  type Bond,
-  type CoreConfig,
-  type CoreDeployment,
-  type CoreScripts,
-  type Credential,
-} from "@contracts-library/meshjs";
-
 import { issuanceMintCompiledCode } from "../../../meshjs/e2e/src/cip113/blueprint";
 import { applyCoreScripts } from "../../../meshjs/e2e/src/cip113/scripts";
 import { issuanceTemplate } from "../../../meshjs/e2e/src/cip113/template";
 
+export type { CoreConfig, CoreScripts };
 export {
   applyCoreScripts,
   applyScript,
@@ -41,7 +41,6 @@ export {
   scriptHashOf,
   stripCborWrappers,
 };
-export type { CoreConfig, CoreScripts };
 
 export const NETWORK_ID = 0;
 
@@ -116,6 +115,37 @@ export function baseAddr(paymentHash: string, stakeHash: string): string {
 /** Hex bytes of a script's reward (stake) address, for tx3 `Bytes` env. */
 export const rewardAddrHex = (hash: string): string => `f0${hash}`;
 
+/** Aiken `Option<Referenced<Credential>>` piece of the address's stake part. */
+function stakePart(
+  a: ReturnType<typeof deserializeAddress>,
+): Record<string, unknown> {
+  if (a.stakeCredentialHash !== "") {
+    return {
+      Some: {
+        stake: {
+          Inline: {
+            credential: { Key: { hash: bytes(a.stakeCredentialHash) } },
+          },
+        },
+      },
+    };
+  }
+  if (a.stakeScriptCredentialHash !== "") {
+    return {
+      Some: {
+        stake: {
+          Inline: {
+            credential: {
+              Script: { hash: bytes(a.stakeScriptCredentialHash) },
+            },
+          },
+        },
+      },
+    };
+  }
+  return { None: {} };
+}
+
 /**
  * The Aiken `Address` **data** pieces of a bech32 address, for tx3 custom
  * types: `Constr 0 [PaymentCredential, Option<Referenced<Credential>>]`. The
@@ -132,31 +162,7 @@ export function addressParts(address: string): {
     a.pubKeyHash !== ""
       ? { Key: { hash: bytes(a.pubKeyHash) } }
       : { Script: { hash: bytes(a.scriptHash) } };
-  const stake =
-    a.stakeCredentialHash !== ""
-      ? {
-          Some: {
-            stake: {
-              Inline: {
-                credential: { Key: { hash: bytes(a.stakeCredentialHash) } },
-              },
-            },
-          },
-        }
-      : a.stakeScriptCredentialHash !== ""
-        ? {
-            Some: {
-              stake: {
-                Inline: {
-                  credential: {
-                    Script: { hash: bytes(a.stakeScriptCredentialHash) },
-                  },
-                },
-              },
-            },
-          }
-        : { None: {} };
-  return { payment_credential: payment, stake_credential: stake };
+  return { payment_credential: payment, stake_credential: stakePart(a) };
 }
 
 /** `redeem`'s payout args for a bech32 destination, ready to spread. */

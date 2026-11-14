@@ -14,7 +14,7 @@ use aiken/collection/list
 use aiken/primitive/bytearray
 use aiken/primitive/int
 use aiken/primitive/string
-use cardano/assets.{AssetName, PolicyId, Value, tokens}
+use cardano/assets.{AssetName, Assets, PolicyId, tokens}
 
 /// The certificate asset name for step `k`: exactly one byte, big-endian.
 /// `N <= 255` is a deployment invariant.
@@ -71,7 +71,7 @@ pub fn decode_amount(name: AssetName) -> Option<Int> {
 /// burned name is not canonical decimal — the vault fails closed rather than
 /// paying an undecodable coupon. Positive entries are ignored here; the coupon
 /// policy validates those.
-pub fn total_burned(mint: Value, cnt_policy: PolicyId) -> Option<Int> {
+pub fn total_burned(mint: Assets, cnt_policy: PolicyId) -> Option<Int> {
   dict.foldl(
     tokens(mint, cnt_policy),
     Some(0),

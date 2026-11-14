@@ -3,6 +3,7 @@ node_modules/
 
 # Yaci DevKit runtime artifacts (created by `npm run test:devnet`)
 .yaci-devnet.log
+.vitest-report.json
 logs/
 yaci-cli.history
 .yaci*/

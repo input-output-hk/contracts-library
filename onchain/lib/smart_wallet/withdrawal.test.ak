@@ -22,7 +22,7 @@ const tx_id =
 
 const wallet_token = "wallet"
 
-fn nft_value() -> assets.Value {
+fn nft_value() -> assets.Assets {
   assets.from_asset(a, wallet_token, 1)
 }
 
