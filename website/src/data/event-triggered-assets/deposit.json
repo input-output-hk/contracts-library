@@ -1,0 +1,71 @@
+{
+  "name": "eta-deposit",
+  "title": "Deposit (unit)",
+  "inputs": [
+    {
+      "name": "Depositor funds",
+      "address": "depositor_addr",
+      "value": {
+        "ADA": "principal + min_ada",
+        "FeeAsset": "f"
+      }
+    },
+    {
+      "name": "Vault",
+      "address": "vault_addr",
+      "redeemer": "VaultDeposit",
+      "value": {
+        "ADA": "funds",
+        "vaultNFT": "1"
+      },
+      "datum": {
+        "cnt_policy": "coupon policy id"
+      }
+    },
+    {
+      "name": "Protocol params",
+      "address": "protocol_params",
+      "reference": true
+    },
+    {
+      "name": "RegistryNode",
+      "address": "registry_addr",
+      "reference": true,
+      "value": {
+        "registryNode": "1"
+      }
+    }
+  ],
+  "mint": [{ "token": "cipNFT (step 0)", "amount": "1" }],
+  "withdrawals": [
+    "minting_logic (ours) [Deposit]",
+    "issuance_logic (core) [names policy + RegistryNode]"
+  ],
+  "signatures": ["depositor"],
+  "outputs": [
+    {
+      "name": "Vault",
+      "address": "vault_addr",
+      "value": {
+        "ADA": "funds + principal",
+        "vaultNFT": "1"
+      },
+      "datum": {
+        "cnt_policy": "coupon policy id"
+      }
+    },
+    {
+      "name": "Certificate",
+      "address": "plb_addr [stake: depositor]",
+      "value": {
+        "cipNFT (step 0)": "1"
+      },
+      "datum": {
+        "start": "upper (finite)",
+        "commit": "None",
+        "cnt_policy": "vault's"
+      }
+    }
+  ],
+  "notes": "• The deposit is permissionless and per unit: the mint is admitted only when the NFT-authenticated vault gains exactly the unit principal.\n• start is pinned to the transaction's validity upper bound, so the timeline can never be backdated.\n• The certificate is minted at step 0 with commit None and the vault's cnt_policy. No certificate inputs are allowed, so units cannot be merged."
+}

@@ -1,0 +1,31 @@
+{
+  "name": "dao-end-proposal",
+  "title": "End Proposal",
+  "inputs": [
+    {
+      "name": "Proposal UTxO",
+      "address": "proposal_addr",
+      "redeemer": "EndProposal",
+      "value": {
+        "proposalNFT": "1"
+      },
+      "datum": {
+        "thresholds": "",
+        "timingConfig": "",
+        "startTime": "T",
+        "status": {
+          "Tally": {
+            "votes": "V"
+          }
+        },
+        "results": ""
+      }
+    }
+  ],
+  "mint": [{ "token": "proposalNFT", "amount": "-1" }],
+  "withdrawals": ["effect_w (winner)"],
+  "validRange": {
+    "lower": "tally_end"
+  },
+  "notes": "• Anyone can close the poll after tally_end.\n• The strict winner is the unique highest tally.\n• The winner's effect runs as a withdraw-0 only if its total meets thresholds.execute.\n• A tie or a below-threshold winner closes the poll with nothing executed."
+}

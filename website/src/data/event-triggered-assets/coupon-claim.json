@@ -1,0 +1,70 @@
+{
+  "name": "eta-coupon-claim",
+  "title": "Coupon claim (step k)",
+  "inputs": [
+    {
+      "name": "Certificate",
+      "address": "plb_addr [stake: holder]",
+      "redeemer": "BaseSpendRedeemer",
+      "value": {
+        "cipNFT (step k-1)": "1"
+      },
+      "datum": {
+        "start": "…",
+        "commit": "…",
+        "cnt_policy": "…"
+      }
+    },
+    {
+      "name": "Protocol params",
+      "address": "protocol_params",
+      "reference": true
+    },
+    {
+      "name": "RegistryNode",
+      "address": "registry_addr",
+      "reference": true,
+      "value": {
+        "registryNode": "1"
+      }
+    }
+  ],
+  "mint": [
+    { "token": "cipNFT (step k-1)", "amount": "-1" },
+    { "token": "cipNFT (step k)", "amount": "1" },
+    { "token": "coupon (amount_k)", "amount": "1" }
+  ],
+  "withdrawals": [
+    "programmable_logic_global [TransferAct]",
+    "transfer [TransferRedeemer]",
+    "transfer_logic (ours)",
+    "minting_logic (ours) [Advance]",
+    "issuance_logic (core) [names policy + RegistryNode]"
+  ],
+  "signatures": ["holder"],
+  "outputs": [
+    {
+      "name": "Coupon",
+      "address": "holder_payment_addr",
+      "value": {
+        "coupon (amount_k)": "1"
+      }
+    },
+    {
+      "name": "Certificate",
+      "address": "plb_addr [stake: holder]",
+      "value": {
+        "cipNFT (step k)": "1"
+      },
+      "datum": {
+        "start": "…",
+        "commit": "…",
+        "cnt_policy": "…"
+      }
+    }
+  ],
+  "validRange": {
+    "lower": "start + k * interval"
+  },
+  "notes": "• The Advance mode burns exactly the spent name k-1 and mints exactly the name k, preserving the datum, and requires the coupon mint under the certificate's cnt_policy.\n• The coupon policy admits the mint only when the validity range reaches start + k * interval, so each step is claimable exactly once per certificate.\n• The coupon is a native asset whose name is its value in lovelace: name \"1124\" is worth 1124 lovelace.\n• The claim never touches the vault; the coupon is redeemed separately (see Redemption)."
+}

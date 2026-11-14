@@ -1,0 +1,363 @@
+{
+  "name": "eta-holder-lifecycle",
+  "title": "Holder lifecycle",
+  "transactions": [
+    {
+      "block": "Deposit",
+      "name": "deposit",
+      "title": "Deposit (unit)",
+      "inputs": [
+        {
+          "name": "Depositor funds",
+          "address": "depositor_addr",
+          "value": {
+            "ADA": "principal + min_ada",
+            "FeeAsset": "f"
+          }
+        },
+        {
+          "name": "Vault",
+          "address": "vault_addr",
+          "redeemer": "VaultDeposit",
+          "value": {
+            "ADA": "funds",
+            "vaultNFT": "1"
+          },
+          "datum": {
+            "cnt_policy": "coupon policy id"
+          }
+        },
+        {
+          "name": "Protocol params",
+          "address": "protocol_params",
+          "reference": true
+        },
+        {
+          "name": "RegistryNode",
+          "address": "registry_addr",
+          "reference": true,
+          "value": {
+            "registryNode": "1"
+          }
+        }
+      ],
+      "mint": [{ "token": "cipNFT (step 0)", "amount": "1" }],
+      "withdrawals": [
+        "minting_logic (ours) [Deposit]",
+        "issuance_logic (core) [names policy + RegistryNode]"
+      ],
+      "signatures": ["depositor"],
+      "outputs": [
+        {
+          "name": "Vault",
+          "address": "vault_addr",
+          "value": {
+            "ADA": "funds + principal",
+            "vaultNFT": "1"
+          },
+          "datum": {
+            "cnt_policy": "coupon policy id"
+          }
+        },
+        {
+          "id": "cert-v0",
+          "name": "Certificate",
+          "address": "plb_addr [stake: depositor]",
+          "value": {
+            "cipNFT (step 0)": "1"
+          },
+          "datum": {
+            "start": "upper (finite)",
+            "commit": "None",
+            "cnt_policy": "vault's"
+          }
+        }
+      ]
+    },
+    {
+      "block": "Coupon 1",
+      "name": "coupon-1",
+      "title": "Coupon claim (step 1)",
+      "inputs": [
+        {
+          "id": "cert-v0",
+          "name": "Certificate",
+          "redeemer": "BaseSpendRedeemer"
+        },
+        {
+          "name": "Protocol params",
+          "address": "protocol_params",
+          "reference": true
+        },
+        {
+          "name": "RegistryNode",
+          "address": "registry_addr",
+          "reference": true,
+          "value": {
+            "registryNode": "1"
+          }
+        }
+      ],
+      "mint": [
+        { "token": "cipNFT (step 0)", "amount": "-1" },
+        { "token": "cipNFT (step 1)", "amount": "1" },
+        { "token": "coupon (amount_1)", "amount": "1" }
+      ],
+      "withdrawals": [
+        "programmable_logic_global [TransferAct]",
+        "transfer [TransferRedeemer]",
+        "transfer_logic (ours)",
+        "minting_logic (ours) [Advance]",
+        "issuance_logic (core) [names policy + RegistryNode]"
+      ],
+      "signatures": ["holder"],
+      "outputs": [
+        {
+          "id": "coupon-v1",
+          "name": "Coupon",
+          "address": "holder_payment_addr",
+          "value": {
+            "coupon (amount_1)": "1"
+          }
+        },
+        {
+          "id": "cert-v1",
+          "name": "Certificate",
+          "address": "plb_addr [stake: holder]",
+          "value": {
+            "cipNFT (step 1)": "1"
+          },
+          "datum": {
+            "start": "…",
+            "commit": "None",
+            "cnt_policy": "…"
+          }
+        }
+      ],
+      "validRange": {
+        "lower": "start + 1 * interval"
+      }
+    },
+    {
+      "block": "Redeem or continue",
+      "name": "redemption",
+      "title": "Redemption (burn-to-pay)",
+      "inputs": [
+        {
+          "id": "coupon-v1",
+          "name": "Coupon"
+        },
+        {
+          "name": "Vault",
+          "address": "vault_addr",
+          "redeemer": "Redeem { payouts }",
+          "value": {
+            "ADA": "funds",
+            "vaultNFT": "1"
+          },
+          "datum": {
+            "cnt_policy": "coupon policy id"
+          }
+        }
+      ],
+      "mint": [{ "token": "coupon (amount_1)", "amount": "-1" }],
+      "signatures": ["redeemer"],
+      "outputs": [
+        {
+          "name": "Payout",
+          "address": "redeemer-named_addr",
+          "value": {
+            "ADA": "Σ decode(name) × burned"
+          }
+        },
+        {
+          "name": "Vault",
+          "address": "vault_addr",
+          "value": {
+            "ADA": "funds - Σ decode(name) × burned",
+            "vaultNFT": "1"
+          },
+          "datum": {
+            "cnt_policy": "coupon policy id"
+          }
+        }
+      ]
+    },
+    {
+      "block": "Redeem or continue",
+      "name": "coupon-k",
+      "title": "Coupon claim (step k)",
+      "inputs": [
+        {
+          "id": "cert-v1",
+          "name": "Certificate",
+          "redeemer": "BaseSpendRedeemer"
+        },
+        {
+          "name": "Protocol params",
+          "address": "protocol_params",
+          "reference": true
+        },
+        {
+          "name": "RegistryNode",
+          "address": "registry_addr",
+          "reference": true,
+          "value": {
+            "registryNode": "1"
+          }
+        }
+      ],
+      "mint": [
+        { "token": "cipNFT (step 1)", "amount": "-1" },
+        { "token": "cipNFT (step k)", "amount": "1" },
+        { "token": "coupon (amount_k)", "amount": "1" }
+      ],
+      "withdrawals": [
+        "programmable_logic_global [TransferAct]",
+        "transfer [TransferRedeemer]",
+        "transfer_logic (ours)",
+        "minting_logic (ours) [Advance]",
+        "issuance_logic (core) [names policy + RegistryNode]"
+      ],
+      "signatures": ["holder"],
+      "outputs": [
+        {
+          "name": "Coupon",
+          "address": "holder_payment_addr",
+          "value": {
+            "coupon (amount_k)": "1"
+          }
+        },
+        {
+          "id": "cert-v2",
+          "name": "Certificate",
+          "address": "plb_addr [stake: holder]",
+          "value": {
+            "cipNFT (step k)": "1"
+          },
+          "datum": {
+            "start": "…",
+            "commit": "None",
+            "cnt_policy": "…"
+          }
+        }
+      ],
+      "validRange": {
+        "lower": "start + k * interval"
+      }
+    },
+    {
+      "block": "Coupon N",
+      "name": "coupon-n",
+      "title": "Coupon claim (step N)",
+      "inputs": [
+        {
+          "id": "cert-v2",
+          "name": "Certificate",
+          "redeemer": "BaseSpendRedeemer"
+        },
+        {
+          "name": "Protocol params",
+          "address": "protocol_params",
+          "reference": true
+        },
+        {
+          "name": "RegistryNode",
+          "address": "registry_addr",
+          "reference": true,
+          "value": {
+            "registryNode": "1"
+          }
+        }
+      ],
+      "mint": [
+        { "token": "cipNFT (step k)", "amount": "-1" },
+        { "token": "cipNFT (step N)", "amount": "1" },
+        { "token": "coupon (amount_N)", "amount": "1" }
+      ],
+      "withdrawals": [
+        "programmable_logic_global [TransferAct]",
+        "transfer [TransferRedeemer]",
+        "transfer_logic (ours)",
+        "minting_logic (ours) [Advance]",
+        "issuance_logic (core) [names policy + RegistryNode]"
+      ],
+      "signatures": ["holder"],
+      "outputs": [
+        {
+          "name": "Coupon",
+          "address": "holder_payment_addr",
+          "value": {
+            "coupon (amount_N)": "1"
+          }
+        },
+        {
+          "id": "cert-v3",
+          "name": "Certificate",
+          "address": "plb_addr [stake: holder]",
+          "value": {
+            "cipNFT (step N)": "1"
+          },
+          "datum": {
+            "start": "…",
+            "commit": "None",
+            "cnt_policy": "…"
+          }
+        }
+      ],
+      "validRange": {
+        "lower": "start + N * interval"
+      }
+    },
+    {
+      "block": "Graduation",
+      "name": "graduation",
+      "title": "Graduation",
+      "inputs": [
+        {
+          "id": "cert-v3",
+          "name": "Certificate",
+          "redeemer": "BaseSpendRedeemer"
+        },
+        {
+          "name": "Protocol params",
+          "address": "protocol_params",
+          "reference": true
+        },
+        {
+          "name": "RegistryNode",
+          "address": "registry_addr",
+          "reference": true,
+          "value": {
+            "registryNode": "1"
+          }
+        }
+      ],
+      "mint": [
+        { "token": "cipNFT (step N)", "amount": "-1" },
+        { "token": "coupon (principal)", "amount": "1" }
+      ],
+      "withdrawals": [
+        "programmable_logic_global [TransferAct]",
+        "transfer [TransferRedeemer]",
+        "transfer_logic (ours)",
+        "minting_logic (ours) [Retire]",
+        "issuance_logic (core) [names policy + RegistryNode]"
+      ],
+      "signatures": ["holder"],
+      "outputs": [
+        {
+          "name": "Principal coupon",
+          "address": "holder_payment_addr",
+          "value": {
+            "coupon (principal)": "1"
+          }
+        }
+      ],
+      "validRange": {
+        "lower": "start + N * interval"
+      }
+    }
+  ],
+  "notes": "The holder claims directly. After a coupon claim, the holder can redeem the coupon at the vault (top branch) or keep the certificate and continue to the next step (bottom branch). The redemption branch is terminal; the certificate path ends at graduation. Register is a one-time prerequisite above; the issuer path requires an Authorize commitment."
+}

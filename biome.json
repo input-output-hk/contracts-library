@@ -12,6 +12,7 @@
       "!**/dist",
       "!**/*.tsbuildinfo",
       "!**/package-lock.json",
+      "!website/tx-diagram-ui/**",
       "!offchain/tx3/devnet/genesis/**",
       "!offchain/tx3/*/codegen/**",
       "!offchain/tx3/**/.tx3/**",
@@ -41,6 +42,11 @@
   "json": {
     "formatter": {
       "enabled": true
+    }
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
     }
   }
 }

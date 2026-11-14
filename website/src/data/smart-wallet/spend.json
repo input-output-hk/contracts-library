@@ -1,0 +1,54 @@
+{
+  "name": "smart-wallet-spend",
+  "title": "Spend",
+  "inputs": [
+    {
+      "name": "Wallet UTxO",
+      "address": "wallet_addr",
+      "redeemer": "Spend",
+      "value": {
+        "ADA": "x",
+        "walletNFT": "1"
+      },
+      "datum": {
+        "spenders": "Pairs<ScriptHash, Data>",
+        "depositors": "Pairs<ScriptHash, Data>"
+      }
+    },
+    {
+      "name": "Settings UTxO",
+      "address": "governor_addr",
+      "reference": true,
+      "value": {
+        "settingsNFT": "1"
+      },
+      "datum": {
+        "current": "WalletConfig"
+      }
+    }
+  ],
+  "withdrawals": ["each script in spenders"],
+  "outputs": [
+    {
+      "name": "Payout",
+      "address": "payout_addr",
+      "value": {
+        "ADA": "y"
+      }
+    },
+    {
+      "name": "Wallet continuation",
+      "address": "wallet_addr",
+      "value": {
+        "ADA": "x - y",
+        "walletNFT": "1"
+      },
+      "datum": {
+        "spenders": "Pairs<ScriptHash, Data>",
+        "depositors": "Pairs<ScriptHash, Data>"
+      }
+    }
+  ],
+  "signatures": ["m of n members"],
+  "notes": "• At least threshold of members sign; members are verification keys in this version.\n• Every spenders script runs as a withdraw-0 and must approve.\n• The wallet survives: the only output at wallet_addr is NFT-bearing, with depositors unchanged and the spenders key set fixed.\n• The continuation value is a subset of the input's; a spend only removes value.\n• Payout outputs elsewhere are unconstrained.\n• The reference implementation reads members and threshold from the Settings UTxO; design.typ abstracts the config source."
+}

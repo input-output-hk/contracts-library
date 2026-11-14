@@ -1,0 +1,70 @@
+{
+  "name": "eta-issuer-claim",
+  "title": "Issuer claim (step k)",
+  "inputs": [
+    {
+      "name": "Certificate",
+      "address": "plb_addr [stake: owner]",
+      "redeemer": "BaseSpendRedeemer",
+      "value": {
+        "cipNFT (step k-1)": "1"
+      },
+      "datum": {
+        "start": "…",
+        "commit": "Some(pay)",
+        "cnt_policy": "…"
+      }
+    },
+    {
+      "name": "Protocol params",
+      "address": "protocol_params",
+      "reference": true
+    },
+    {
+      "name": "RegistryNode",
+      "address": "registry_addr",
+      "reference": true,
+      "value": {
+        "registryNode": "1"
+      }
+    }
+  ],
+  "mint": [
+    { "token": "cipNFT (step k-1)", "amount": "-1" },
+    { "token": "cipNFT (step k)", "amount": "1" },
+    { "token": "coupon (amount_k)", "amount": "1" }
+  ],
+  "withdrawals": [
+    "programmable_logic_global [ThirdPartyAct]",
+    "third_party [ThirdPartyRedeemer]",
+    "third_party_logic (ours)",
+    "minting_logic (ours) [Advance]",
+    "issuance_logic (core) [names policy + RegistryNode]"
+  ],
+  "signatures": ["issuer"],
+  "outputs": [
+    {
+      "name": "Certificate",
+      "address": "plb_addr [stake: owner]",
+      "value": {
+        "cipNFT (step k)": "1"
+      },
+      "datum": {
+        "start": "…",
+        "commit": "Some(pay)",
+        "cnt_policy": "…"
+      }
+    },
+    {
+      "name": "Coupon",
+      "address": "pay_addr [payment: pay]",
+      "value": {
+        "coupon (amount_k)": "1"
+      }
+    }
+  ],
+  "validRange": {
+    "lower": "start + k * interval"
+  },
+  "notes": "• The third-party path pins the paired output's address and datum, but not the subject policy's asset name, so the pair carries the name k certificate in place — no ghost shell.\n• third_party_logic requires the issuer's signature and commit Some(pay), validates the exact k-1 → k transition, and binds the coupon to pay. No owner signature is needed.\n• The gate and the coupon binding are unchanged: the issuer can trigger but never claim early or redirect."
+}

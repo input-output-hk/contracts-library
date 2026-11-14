@@ -1,0 +1,23 @@
+---
+/**
+ * Points agents at the Markdown twin of the current page and at the llms.txt
+ * index that covers it (https://llmstxt.org). Rendered after Starlight's
+ * default head, so the rest of the document head is untouched.
+ */
+import Default from "@astrojs/starlight/components/Head.astro";
+
+import { docRouteMap } from "../../lib/manifest";
+
+const pathname = Astro.url.pathname.replace(/\/$/, "") || "/";
+// Only pages backed by a canonical document in `docs/` have a twin; the
+// hand-written overview pages under `/contracts` do not.
+const hasMarkdownTwin = new Set(docRouteMap().values()).has(pathname);
+---
+
+<Default>
+  <slot />
+</Default>
+{hasMarkdownTwin && (
+  <link rel="alternate" type="text/markdown" href={`${pathname}.md`} />
+)}
+<link rel="describedby" href="/llms.txt" />

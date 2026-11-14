@@ -1,0 +1,23 @@
+---
+import { getEntry, render } from "astro:content";
+
+import { entryId } from "../lib/manifest";
+
+interface Props {
+  /** Repository-relative path under `docs/`, e.g. `settings/usage.md`. */
+  file: string;
+}
+
+const { file } = Astro.props;
+const entry = await getEntry("upstream", entryId(file));
+
+if (!entry) {
+  throw new Error(
+    `Canonical usage document docs/${file} is missing or not in the upstream collection.`,
+  );
+}
+
+const { Content } = await render(entry);
+---
+
+<Content />

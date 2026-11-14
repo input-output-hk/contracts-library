@@ -1,0 +1,62 @@
+---
+title: Linear Vesting
+description: Release a bundle to a beneficiary on a linear schedule, with locker recovery after a grace period.
+tableOfContents: false
+---
+
+import TxChain from "../../../components/TxChain.astro";
+import cancelLifecycle from "../../../data/vesting/cancel-lifecycle.json";
+import lifecycle from "../../../data/vesting/lifecycle.json";
+import { docUrl } from "../../../lib/manifest";
+
+**Linear Vesting** locks a bundle of ada or native tokens for a single
+**beneficiary** and releases it continuously between `start_time` and
+`end_time`. The beneficiary can claim whatever has vested at any point; the rest
+stays locked under the same terms. The schedule is fixed at lock time and never
+changes.
+
+After `recovery_time` — always strictly after vesting ends — the **locker** can
+recover whatever the beneficiary left unclaimed. Before that, the locker has no
+power over the bundle.
+
+## Full lifecycle
+
+Each claim consumes the vesting UTxO and, before `end_time`, returns the
+unvested remainder in a continuation with the same datum. Scroll horizontally
+to follow the whole cycle.
+
+<TxChain data={lifecycle} />
+
+## Alternative lifecycle: cancel
+
+If the beneficiary leaves funds unclaimed, the locker can end the instance after
+`recovery_time` instead of waiting for another claim. `recovery_time` is always
+strictly after `end_time`, so cancel can never reach unvested funds.
+
+<TxChain data={cancelLifecycle} />
+
+## When to use it
+
+- Token grants, team allocations, and investor vesting with a fixed schedule.
+- Any bundle of ada or native tokens that should unlock linearly over time.
+- Cases where a key, multisig, DAO or smart wallet should hold either role —
+  both `beneficiary` and `locker` are pluggable credentials.
+
+**When not to:** if you need a cliff, a revocable schedule, or a custom unlock
+curve, this linear, immutable contract is not the right shape.
+
+## What this does not protect
+
+The full list is in <a href={docUrl("vesting/spec.md")}>§7 of the specification</a>. The three that change how you deploy:
+
+- **The lock is not validated on-chain.** A malformed lock can strand funds,
+  but it can never release more than the schedule allows. Validate the terms in
+  your builder.
+- **`now` is the validity-range lower bound**, not a wall clock. A builder
+  chooses it; the ledger only guarantees inclusion at or after it.
+- **Surplus value is not schedule-protected.** Only the assets listed in
+  `vesting` are constrained; extra ada or tokens can be swept by the authorized
+  beneficiary.
+
+Next: [specification & usage](/contracts/vesting/guide) ·
+[transactions in detail](/contracts/vesting/transactions).

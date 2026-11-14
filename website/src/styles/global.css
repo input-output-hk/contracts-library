@@ -1,0 +1,235 @@
+@import "tailwindcss";
+
+/* https://tailwindcss.com/docs/dark-mode#using-a-data-attribute */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@theme {
+  --font-sans:
+    "Inter Variable", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
+    "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-mono: "Roboto Mono Variable", ui-monospace, monospace;
+
+  --color-primary: #f41f95;
+  --color-secondary: #3be0fe;
+}
+
+:root {
+  --sl-font:
+    "Inter Variable", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
+    "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --sl-font-mono: "Roboto Mono Variable", ui-monospace, monospace;
+
+  /* Colors */
+  --sl-color-bg-sidebar: #0c0505;
+  --sl-color-bg-nav: #0c0505;
+  --sl-color-bg: #0c0505;
+  --sl-color-bg-inline-code: rgba(255, 255, 255, 0.05);
+  --sl-color-bg-accent: rgba(255, 255, 255, 0.05);
+
+  --sl-color-text-accent: var(--color-primary);
+
+  /* Header */
+  --sl-nav-height: 3.5rem;
+
+  /* Content pane */
+  --sl-content-pad-x: 1rem;
+  --sl-content-pad-y: 2rem;
+}
+
+@media (min-width: 50em) {
+  :root {
+    --sl-nav-height: 6.25rem;
+  }
+}
+
+/* Header */
+.site-title {
+  color: var(--sl-color-white);
+}
+
+.site-title:hover {
+  color: var(--color-primary);
+}
+
+/* Sidebar */
+div.sidebar-content {
+  @apply gap-6;
+}
+
+.sidebar-pane ul.top-level {
+  @apply bg-white/5 px-4 py-6;
+}
+
+.sidebar-pane summary:has(+ ul > li > a[aria-current="page"]) {
+  @apply bg-primary/10;
+}
+
+.sidebar-pane ul > li > a {
+  @apply text-white px-3 py-2;
+}
+
+.sidebar-pane a[aria-current="page"],
+.sidebar-pane a[aria-current="page"]:hover,
+.sidebar-pane a[aria-current="page"]:focus {
+  @apply text-primary bg-transparent;
+}
+
+/* Right sidebar */
+.right-sidebar-panel :where(a):hover {
+  @apply text-primary;
+}
+
+/* Markdown */
+.sl-markdown-content a:not(:where(.not-content *)) {
+  @apply text-white;
+}
+
+/* Justify prose; leave code, tables, cards and diagrams left-aligned. */
+.sl-markdown-content :where(p, li, blockquote) {
+  text-align: justify;
+  hyphens: auto;
+}
+
+.sl-markdown-content :where(.card, .contract-card, .not-content) :where(p, li) {
+  text-align: start;
+  hyphens: manual;
+}
+
+/* Search */
+.search-box button {
+  @apply rounded-full bg-white/2 text-white/50;
+  max-width: 500px;
+}
+
+/* Social icons */
+.social-icons {
+  @apply text-white;
+  --sl-color-text-accent: white;
+}
+
+.social-icons a:hover {
+  @apply text-primary opacity-100;
+}
+
+/* On sidebar pages without a table of contents, keep the content aligned with
+   the rest of the site instead of centring it in the wider main pane. */
+:root[data-has-sidebar]:not([data-has-toc]) {
+  --sl-content-margin-inline: 0;
+}
+
+/* Landing page */
+.hero {
+  padding-block: 3rem 1rem;
+}
+
+@media (min-width: 50rem) {
+  .hero {
+    /* No hero image yet: let the copy use the full content column instead of
+       Starlight's default 7fr/4fr split. */
+    grid-template-columns: 100%;
+    padding-block: 4.5rem 1.5rem;
+  }
+
+  .hero .copy > * {
+    max-width: 46ch;
+  }
+}
+
+.hero h1 {
+  font-size: clamp(var(--sl-text-2xl), 1.4rem + 1.6vw, var(--sl-text-5xl));
+  letter-spacing: -0.02em;
+}
+
+.hero .tagline {
+  text-align: justify;
+  hyphens: auto;
+}
+
+/* Starlight's card grid: let cards flow to as many columns as fit. */
+.card-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+}
+
+.btn {
+  @apply relative z-1 w-full lg:w-fit py-4 px-6 rounded-full text-base text-center font-semibold leading-[1.2];
+}
+
+.sl-markdown-content ol:not(.sl-steps) {
+  @apply list-decimal ml-5;
+}
+
+.sl-markdown-content ul:not([role="tablist"]) {
+  @apply list-disc ml-5;
+}
+
+figure > pre {
+  white-space: break-spaces;
+  word-break: break-word;
+}
+
+/* ---------------------------------------------------------------------------
+   Transaction diagrams (tx-diagram-ui)
+   The diagram ships a light theme; these tokens map it onto the site palette.
+--------------------------------------------------------------------------- */
+.tx-theme {
+  --tx-diagram-surface: #141213;
+  --tx-diagram-surface-sunken: #0c0505;
+  --tx-diagram-fg-1: rgb(255 255 255 / 95%);
+  --tx-diagram-fg-2: rgb(255 255 255 / 80%);
+  --tx-diagram-fg-3: rgb(255 255 255 / 65%);
+  --tx-diagram-fg-4: rgb(255 255 255 / 58%);
+  --tx-diagram-fg-5: rgb(255 255 255 / 45%);
+  --tx-diagram-primary: #f41f95;
+  --tx-diagram-primary-bright: #f87171;
+  --tx-diagram-primary-deep: #ff7fc6;
+  --tx-diagram-accent: #3be0fe;
+  --tx-diagram-accent-soft: #83d9ff;
+  --tx-diagram-success: #a5d6a7;
+  --tx-diagram-stroke: rgb(255 255 255 / 16%);
+  --tx-diagram-stroke-soft: rgb(255 255 255 / 10%);
+  --tx-diagram-font-sans:
+    "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --tx-diagram-font-mono: "Roboto Mono Variable", ui-monospace, monospace;
+  --tx-diagram-radius-sm: 5px;
+  --tx-diagram-radius-md: 10px;
+}
+
+/* Break out of the prose column so a horizontal diagram has room. */
+.tx-frame {
+  width: 100%;
+  margin: 1.5rem 0;
+}
+
+@media (min-width: 50rem) {
+  .tx-frame {
+    width: min(68rem, calc(100vw - var(--sl-sidebar-width, 18.75rem) - 4rem));
+  }
+
+  .tx-frame-wide {
+    width: min(84rem, calc(100vw - var(--sl-sidebar-width, 18.75rem) - 2rem));
+  }
+}
+
+/* Chrome paints the native <summary> marker and ignores attempts to hide it via
+   ::marker, so the component's own chevron renders as a second arrow. Keep the
+   native marker, drop the extra SVG. */
+.tx-theme summary .tx-chevron {
+  display: none;
+}
+
+/* The component pins an open Notes panel to the viewport bottom, which makes
+   stacked diagrams overlap. Read them inline instead. */
+.tx-theme .tx-diagram-caption:has(.tx-notes[open]) {
+  position: static !important;
+  max-height: none !important;
+}
+
+.tx-theme .tx-notes[open] {
+  max-height: none !important;
+}
+
+.tx-caption {
+  margin-top: 0.5rem;
+  font-size: var(--sl-text-sm);
+  color: var(--sl-color-gray-3);
+}

@@ -1,0 +1,37 @@
+{
+  "name": "dao-delegate",
+  "title": "Delegate Stake",
+  "inputs": [
+    {
+      "name": "Stake UTxO",
+      "address": "stake_addr",
+      "redeemer": "DelegateTo { newDelegatee }",
+      "value": {
+        "stakeNFT": "1",
+        "stakedToken": "N"
+      },
+      "datum": {
+        "owner": "",
+        "delegatee": "",
+        "lockedBy": ""
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "name": "Stake UTxO",
+      "address": "stake_addr",
+      "value": {
+        "stakeNFT": "1",
+        "stakedToken": "N"
+      },
+      "datum": {
+        "owner": "",
+        "delegatee": "newDelegatee",
+        "lockedBy": ""
+      }
+    }
+  ],
+  "signatures": ["owner"],
+  "notes": "• Sets, changes, or clears (None) the delegatee.\n• Locks and value pass through untouched."
+}

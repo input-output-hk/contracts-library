@@ -1,0 +1,33 @@
+{
+  "name": "dao-cancel-vote",
+  "title": "Cancel Vote",
+  "inputs": [
+    {
+      "name": "Vote UTxO",
+      "address": "vote_addr",
+      "redeemer": "Cancel",
+      "value": {
+        "ADA": "A",
+        "voteNFT": "1"
+      },
+      "datum": {
+        "stakeOwner": "",
+        "proposal": "",
+        "votedOption": "",
+        "stake": ""
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "name": "Owner UTxO",
+      "address": "owner_addr",
+      "value": {
+        "ADA": "A"
+      }
+    }
+  ],
+  "mint": [{ "token": "voteNFT", "amount": "-1" }],
+  "signatures": ["stakeOwner"],
+  "notes": "• The vote's recorded stakeOwner authorizes the cancel.\n• The vote NFT is burned; the position's stake is freed when its lock expires, not now.\n• Cancel has no deadline."
+}

@@ -1,0 +1,31 @@
+{
+  "name": "dao-create-position",
+  "title": "Create Stake Position",
+  "inputs": [
+    {
+      "name": "Owner UTxO",
+      "address": "owner_addr",
+      "value": {
+        "stakedToken": "N"
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "name": "Stake UTxO",
+      "address": "stake_addr",
+      "value": {
+        "stakeNFT": "1",
+        "stakedToken": "N"
+      },
+      "datum": {
+        "owner": "Credential",
+        "delegatee": "Maybe Credential",
+        "lockedBy": "[]"
+      }
+    }
+  ],
+  "mint": [{ "token": "stakeNFT", "amount": "1" }],
+  "signatures": ["owner"],
+  "notes": "• Ownership is the payment credential of the spent owner UTxO; the signature is a builder convenience.\n• The position NFT name is hash(owner UTxO reference).\n• The position holds exactly the NFT, the staked token and ada."
+}

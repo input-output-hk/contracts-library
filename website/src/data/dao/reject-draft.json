@@ -1,0 +1,30 @@
+{
+  "name": "dao-reject-draft",
+  "title": "Reject Draft",
+  "inputs": [
+    {
+      "name": "Proposal UTxO",
+      "address": "proposal_addr",
+      "redeemer": "RejectDraft",
+      "value": {
+        "proposalNFT": "1"
+      },
+      "datum": {
+        "thresholds": "",
+        "timingConfig": "",
+        "startTime": "",
+        "status": {
+          "Draft": {
+            "cosigningStake": "N"
+          }
+        },
+        "results": ""
+      }
+    }
+  ],
+  "mint": [{ "token": "proposalNFT", "amount": "-1" }],
+  "validRange": {
+    "lower": "draft_end"
+  },
+  "notes": "• Anyone can reject a draft after draft_end.\n• The proposal NFT is burned; the poll never happens."
+}

@@ -1,0 +1,19 @@
+---
+import { contracts } from "../lib/manifest";
+import ContractCard from "./ContractCard.astro";
+---
+
+<div class="contract-grid">
+  {contracts.map((contract) => (
+    <ContractCard contract={contract} />
+  ))}
+</div>
+
+<style>
+  .contract-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+    margin-block: 1.5rem 2rem;
+  }
+</style>

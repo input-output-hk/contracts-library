@@ -1,0 +1,92 @@
+---
+import Search from "@astrojs/starlight/components/Search.astro";
+import SiteTitle from "@astrojs/starlight/components/SiteTitle.astro";
+import SocialIcons from "@astrojs/starlight/components/SocialIcons.astro";
+---
+
+<div class="header">
+  <div class="title-wrapper sl-flex">
+    <SiteTitle />
+  </div>
+  <div class="search-box sl-flex print:hidden">
+    <Search />
+  </div>
+  <div class="right-group sl-flex print:hidden">
+    <a class="top-link" href="/contracts">
+      Contracts
+    </a>
+    <a class="top-link" href="/get-started/cardano">
+      Get started
+    </a>
+    <div class="social-icons sl-flex">
+      <SocialIcons />
+    </div>
+  </div>
+</div>
+
+<script is:inline>
+  // Dark only, for now: the palette is designed against a near-black canvas.
+  if (typeof localStorage !== "undefined") {
+    localStorage.setItem("starlight-theme", "dark");
+  }
+  StarlightThemeProvider.updatePickers("dark");
+  document.documentElement.dataset.theme = "dark";
+</script>
+
+<style>
+  .header {
+    display: flex;
+    gap: var(--sl-nav-gap);
+    justify-content: space-between;
+    align-items: center;
+    height: 100%;
+  }
+
+  .title-wrapper {
+    overflow: clip;
+    padding: 0.25rem;
+    margin: -0.25rem;
+    min-width: 0;
+  }
+
+  .search-box {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .right-group {
+    gap: 1.5rem;
+    align-items: center;
+    justify-content: end;
+  }
+
+  .top-link {
+    font-size: var(--sl-text-sm);
+    font-weight: 500;
+    color: var(--sl-color-gray-2);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .top-link:hover {
+    color: var(--color-primary);
+  }
+
+  .social-icons {
+    gap: 1rem;
+    align-items: center;
+  }
+
+  .social-icons::after {
+    content: "";
+    height: 2rem;
+    border-inline-end: 1px solid var(--sl-color-gray-5);
+    order: -1;
+  }
+
+  @media (max-width: 50rem) {
+    .top-link {
+      display: none;
+    }
+  }
+</style>

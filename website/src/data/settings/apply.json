@@ -1,0 +1,38 @@
+{
+  "name": "settings-apply",
+  "title": "Apply",
+  "inputs": [
+    {
+      "name": "Settings UTxO",
+      "address": "settings_addr",
+      "redeemer": "Apply",
+      "value": {
+        "settingsNFT": "1"
+      },
+      "datum": {
+        "current": "",
+        "next": "d",
+        "next_apply": "next_apply"
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "name": "Settings UTxO",
+      "address": "settings_addr",
+      "value": {
+        "settingsNFT": "1"
+      },
+      "datum": {
+        "current": "d",
+        "next": "None",
+        "next_apply": "None"
+      }
+    }
+  ],
+  "signatures": ["applier"],
+  "validRange": {
+    "lower": "next_apply"
+  },
+  "notes": "• now ≥ next_apply. The boundary is non-strict: applying exactly at the deadline is accepted.\n• The applied value must equal the pending next.\n• validate_datum(d)."
+}

@@ -1,0 +1,63 @@
+---
+title: Transactions in detail
+description: Every transaction the linear vesting contract accepts, with the UTxOs, redeemers and datums each one needs.
+tableOfContents: false
+---
+
+import TxDiagram from "../../../../components/TxDiagram.astro";
+import cancel from "../../../../data/vesting/cancel.json";
+import claim from "../../../../data/vesting/claim.json";
+import lock from "../../../../data/vesting/lock.json";
+import { docUrl } from "../../../../lib/manifest";
+
+The [overview](/contracts/vesting) shows the full lifecycle and the cancel
+alternative. Here is every transaction, drawn. The <a href={docUrl("vesting/spec.md")}>specification §4</a> owns the exact constraints.
+
+## Step by step
+
+A few conventions make the cards easier to read:
+
+- **Addresses are roles**, not real addresses: `vesting_addr`,
+  `beneficiary_addr`, `locker_addr`.
+- **Values name tokens by role**: `ADA`.
+- **The datum is immutable.** The lock shows the terms; a continuation leaves
+  every field blank because it must reproduce the datum byte-for-byte.
+- **Validity ranges are symbolic**: `now`, `recovery + 1`.
+- **Fee and collateral UTxOs are not drawn.** The validator asserts nothing
+  about them — only about its own input, the continuing outputs, the validity
+  range and the authorization.
+
+`beneficiary` claims the vested portion; `locker` locks the bundle and cancels
+the remainder. Both are pluggable credentials — see <a href={docUrl("vesting/spec.md")}>spec §2</a>. Keys are shown in the cards; a script beneficiary or locker produces the same shape with a `withdrawals` entry.
+
+## Lock
+
+Creates the vesting UTxO. No script runs; the builder is responsible for the
+schedule and the value.
+
+<TxDiagram data={lock} />
+
+## Claim
+
+Withdraws the vested portion. A partial claim leaves a continuation with the
+same datum; a full claim at or after `end_time` leaves none.
+
+<TxDiagram data={claim} />
+
+## Cancel
+
+After `recovery_time`, the locker recovers whatever remains. The timing check is
+strict: `now > recovery_time`.
+
+<TxDiagram data={cancel} />
+
+## Batching and identical instances
+
+The validator accepts any number of vesting UTxOs in one transaction. For inputs
+that share a byte-identical datum it requires at least `k` continuations, each
+holding the full remainder, where `k` is the number of such inputs. That closes
+both double satisfaction and the merge attack: one continuation cannot cover
+several inputs, and several instances cannot be collapsed into fewer UTxOs.
+
+The MeshJS reference builder currently builds one instance per transaction.
+Compose additional inputs yourself if you need to batch.

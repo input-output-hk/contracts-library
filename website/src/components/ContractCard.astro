@@ -1,0 +1,85 @@
+---
+import type { Contract } from "../lib/manifest";
+import StatusBadge from "./StatusBadge.astro";
+
+interface Props {
+  contract: Contract;
+}
+
+const { contract } = Astro.props;
+const href = `/contracts/${contract.slug}`;
+---
+
+<a class="contract-card" href={href}>
+  <div class="card-head">
+    <span class="card-title">{contract.name}</span>
+    <StatusBadge status={contract.status} />
+  </div>
+  <p class="card-summary">{contract.summary}</p>
+  <div class="card-foot">
+    <span class="card-category">{contract.category}</span>
+    <span class="card-cta">Open →</span>
+  </div>
+</a>
+
+<style>
+  .contract-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1.25rem;
+    border-radius: 0.75rem;
+    border: 1px solid var(--sl-color-hairline);
+    background: rgba(255, 255, 255, 0.02);
+    text-decoration: none;
+    transition:
+      border-color 150ms ease,
+      background 150ms ease,
+      transform 150ms ease;
+  }
+
+  .contract-card:hover {
+    border-color: color-mix(in oklab, var(--color-primary) 45%, transparent);
+    background: color-mix(in oklab, var(--color-primary) 6%, transparent);
+    transform: translateY(-2px);
+  }
+
+  .card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .card-title {
+    font-size: var(--sl-text-lg);
+    font-weight: 600;
+    color: var(--sl-color-white);
+  }
+
+  .card-summary {
+    margin: 0;
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-2);
+    line-height: 1.55;
+  }
+
+  .card-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: auto;
+    font-size: var(--sl-text-xs);
+  }
+
+  .card-category {
+    color: var(--sl-color-gray-3);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .card-cta {
+    color: var(--color-primary);
+    font-weight: 500;
+  }
+</style>

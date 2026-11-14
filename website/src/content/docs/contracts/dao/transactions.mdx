@@ -1,0 +1,143 @@
+---
+title: Transactions in detail
+description: Every transaction the DAO protocol accepts, with the UTxOs, redeemers and datums each one needs.
+tableOfContents: false
+---
+
+import TxDiagram from "../../../../components/TxDiagram.astro";
+import acceptDraft from "../../../../data/dao/accept-draft.json";
+import cancelVote from "../../../../data/dao/cancel-vote.json";
+import closePosition from "../../../../data/dao/close-position.json";
+import cosign from "../../../../data/dao/cosign.json";
+import createPosition from "../../../../data/dao/create-position.json";
+import createProposal from "../../../../data/dao/create-proposal.json";
+import delegate from "../../../../data/dao/delegate.json";
+import deposit from "../../../../data/dao/deposit.json";
+import endProposal from "../../../../data/dao/end-proposal.json";
+import endVoting from "../../../../data/dao/end-voting.json";
+import rejectDraft from "../../../../data/dao/reject-draft.json";
+import tally from "../../../../data/dao/tally.json";
+import vote from "../../../../data/dao/vote.json";
+import withdraw from "../../../../data/dao/withdraw.json";
+import { docUrl } from "../../../../lib/manifest";
+
+The [overview](/contracts/dao) shows the proposal lifecycle. Here is every
+transaction, drawn. The <a href={docUrl("dao/spec.md")}>specification §5</a> owns the exact constraints.
+
+## Step by step
+
+A few conventions make the cards easier to read:
+
+- **Addresses are roles**, not real addresses: `stake_addr`, `proposal_addr`,
+  `vote_addr`, `governor_addr` (the settings UTxO), `owner_addr`.
+- **Values name tokens by role**: `stakeNFT`, `stakedToken`, `proposalNFT`,
+  `voteNFT`, `settingsNFT`, `ADA`.
+- **The datum shows types at creation** (`Credential`, `Maybe Credential`, `[]`),
+  then leaves unchanged fields blank and shows only what the transaction
+  changes. A status shows the constructor it moves to.
+- **Validity ranges are symbolic**: `T`, `draft_end`, `voting_end`, `tally_end`.
+- **Fee and collateral UTxOs are not drawn.** The validators assert nothing
+  about them.
+
+The position **owner** signs for position actions; the **delegatee** cosigns and
+votes on its behalf; any sufficiently staked position can propose and vote. The
+DAO's parameters are changed through the Settings authority
+(`propose_auth`/`apply_auth`). All roles are pluggable credentials — see <a href={docUrl("dao/spec.md")}>spec §3.a</a>.
+
+## Stake positions
+
+### Create stake position
+
+Mints the position NFT and creates the stake UTxO. Ownership is the payment
+credential of the spent owner UTxO.
+
+<TxDiagram data={createPosition} />
+
+### Deposit
+
+Adds governance tokens to the position, or only prunes expired locks.
+
+<TxDiagram data={deposit} />
+
+### Withdraw
+
+Withdraws free stake: the total minus the largest live lock.
+
+<TxDiagram data={withdraw} />
+
+### Delegate
+
+Sets, changes, or clears the delegatee. Locks and value pass through untouched.
+
+<TxDiagram data={delegate} />
+
+### Close position
+
+Burns the position NFT once every lock has expired.
+
+<TxDiagram data={closePosition} />
+
+## Proposal lifecycle
+
+### Create proposal
+
+Spends the owner's position (recording a draft lock) and mints the proposal NFT
+with the thresholds and timings snapshotted from settings.
+
+<TxDiagram data={createProposal} />
+
+### Cosign
+
+Adds a cosigner's stake to the draft and records their own lock until
+`draft_end`.
+
+<TxDiagram data={cosign} />
+
+### Accept draft
+
+Promotes the draft to `Voting` once the cosigning stake meets the accept
+threshold. Anyone can do it.
+
+<TxDiagram data={acceptDraft} />
+
+### Reject draft
+
+Burns an unaccepted draft after `draft_end`. The poll never happens.
+
+<TxDiagram data={rejectDraft} />
+
+### End voting stage
+
+Freezes the poll into `Tally` with zeroed counters after `voting_end`.
+
+<TxDiagram data={endVoting} />
+
+### Tally
+
+Consumes vote artifacts in batches, adds their stake to the per-option totals,
+burns their NFTs and refunds their lovelace.
+
+<TxDiagram data={tally} />
+
+### End proposal
+
+Closes the poll after `tally_end`. The strict winner's effect runs as a
+withdraw-0 when it meets the execute threshold; otherwise nothing executes.
+
+<TxDiagram data={endProposal} />
+
+## Voting
+
+### Vote
+
+Mints a vote artifact weighted by the position's stake and records a lock until
+`voting_end`. The proposal is a reference input, not a spend.
+
+<TxDiagram data={vote} />
+
+### Cancel vote
+
+The recorded `stakeOwner` burns the vote NFT at any time. The position's stake
+is freed when its lock expires, not at cancel time.
+
+<TxDiagram data={cancelVote} />

@@ -1,0 +1,55 @@
+---
+title: Transactions in detail
+description: Every transaction the Settings protocol accepts, with the UTxOs, redeemers and datums each one needs.
+tableOfContents: false
+---
+
+import TxDiagram from "../../../../components/TxDiagram.astro";
+import apply from "../../../../data/settings/apply.json";
+import close from "../../../../data/settings/close.json";
+import launch from "../../../../data/settings/launch.json";
+import propose from "../../../../data/settings/propose.json";
+import { docUrl } from "../../../../lib/manifest";
+
+The [overview](/contracts/settings) shows the full lifecycle. Here is every
+transaction, drawn. The <a href={docUrl("settings/spec.md")}>specification §5</a> owns the exact constraints.
+
+## Step by step
+
+A few conventions make the cards easier to read:
+
+- **Addresses are roles**, not real addresses: `settings_addr`, `applier_addr`.
+- **Values name tokens by role**: `settingsNFT`, `ADA`.
+- **The datum shows types at creation** (`Data`, `Maybe Data`, `Maybe Int`), then
+  leaves unchanged fields blank and shows only what the transaction changes.
+- **Validity ranges are symbolic**: `now`, `next_apply`.
+- **Fee and collateral UTxOs are not drawn.** The validator asserts nothing about
+  them — only about its own input, the seed, its own mint, the `out_ix` output,
+  the validity range and the authorization (invariant I8).
+
+`apply_auth` authorizes launch, apply and close; `propose_auth` authorizes
+propose. Both are pluggable credentials — see <a href={docUrl("settings/spec.md")}>spec §3.a</a>. Keys authorize by signing; scripts are invoked as a zero-ada withdrawal, which is why no `withdrawals` appear in the cards below.
+
+## Launch
+
+Spends the one-shot seed and mints the Settings NFT into the Settings UTxO.
+
+<TxDiagram data={launch} />
+
+## Propose
+
+Stages a value behind the delay. `current` is untouched.
+
+<TxDiagram data={propose} />
+
+## Apply
+
+Promotes the pending value once the deadline has passed.
+
+<TxDiagram data={apply} />
+
+## Close
+
+Burns the NFT and releases the locked ada.
+
+<TxDiagram data={close} />

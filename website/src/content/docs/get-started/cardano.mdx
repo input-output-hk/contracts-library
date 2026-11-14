@@ -1,0 +1,175 @@
+---
+title: Cardano in 15 minutes
+description: The Cardano mental model behind validators, UTxOs, and transactions.
+---
+
+Cardano answers three questions about any smart contract: what code runs, what
+triggers it, and where the state lives. The answers follow from a ledger made of
+UTxOs: the code is a validator at a script address, a transaction triggers it,
+and the state is a UTxO carrying a datum. This primer sticks to those three
+questions, so that every other page on this site reads easily. It takes about
+fifteen minutes and needs no toolchain.
+
+## A smart contract is a validator
+
+A Cardano smart contract is a **validator**: a pure function that answers one
+question, for one transaction — _may this transaction spend this UTxO?_
+
+It takes three arguments and returns a boolean. It cannot read storage, call
+another contract, or return a value. If it fails, the transaction does not
+happen.
+
+| Argument     | What it is                                                                                        |
+| ------------ | ------------------------------------------------------------------------------------------------- |
+| **datum**    | Data attached to the UTxO being spent. This is the contract's state.                              |
+| **redeemer** | Data supplied by whoever spends it, naming the action: propose, apply, claim, cancel.             |
+| **context**  | The transaction being validated: its inputs, outputs, signatories, minted assets, validity range. |
+
+Validators are written in [Aiken](https://aiken-lang.org) and compiled to Plutus
+V3. Deploying uploads nothing: a script is identified by the hash of its
+compiled code combined with its **parameters**, and that hash _is_ the address.
+Pass different parameters, get a different contract.
+
+```aiken
+// onchain/validators/settings.ak — parameters are baked in at deployment
+validator settings(
+  seed_utxo: OutputReference,
+  propose_auth: Credential,
+  apply_auth: Credential,
+  apply_delay: Int,
+  settings_token_name: AssetName,
+) {
+  spend(
+    datum: Option<SettingsDatum>,
+    redeemer: SpendRedeemer,
+    own_ref: OutputReference,
+    self: Transaction,
+  ) {
+    // dispatch: Propose -> validate_propose, Apply -> validate_apply, ...
+    todo
+  }
+}
+```
+
+## The transaction is the unit of execution
+
+A transaction spends whole UTxOs as **inputs** and creates new UTxOs as
+**outputs**. An input is never debited partially; change comes back as a new
+output.
+
+```text
+in    40 ADA  your key address
+      10 ADA  settings script         out   25 ADA  settings script
+                                      out   24 ADA  your key address
+                                      fee    1 ADA  to the ledger
+```
+
+A transaction is atomic: if any validator for any script input fails, no part of
+it happens and it never reaches a block. And because no contract calls another,
+**composition is spatial**: two contracts interact by appearing in the same
+transaction. That is also why a validator here only asserts things about its own
+UTxOs and the action being performed — see
+[Architecture](/project/architecture).
+
+Transactions are built **off-chain** by your code, which picks the inputs and
+outputs, and checked **on-chain** by the validators. That split is why the
+transaction builders are the primary API of this library: you rarely write a
+transaction by hand.
+
+## Where the state lives
+
+Since a validator cannot write anything, mutable state is simply a UTxO sitting
+at a script address with a datum. To change it, you spend that UTxO and create a
+replacement at the same address with a new datum. States are UTxOs, transitions
+are transactions.
+
+That is what [Settings](/contracts/settings) does with a single UTxO whose datum
+holds `current`, `next`, and `next_apply`:
+
+- **launch** creates it,
+- **propose** rewrites `next`, leaving `current` untouched,
+- **apply** promotes `next` into `current`,
+- **close** removes it.
+
+A validator reads the whole transaction to enforce that, which looks like this:
+
+```aiken
+// onchain/lib/settings/spend.ak (excerpt)
+let Transaction { inputs, outputs, validity_range, .. } = self
+expect Finite(now) = validity_range.lower_bound.bound_type
+
+// ... the continuation output carries current = current and a matured next ...
+
+and {
+  is_authorized(auth, self.extra_signatories, self.withdrawals),
+  correct_datum,
+}
+```
+
+`validity_range` is the only clock a validator has — more on that below.
+
+## Addresses and credentials
+
+A Cardano address is a **payment credential** plus an optional **stake
+credential**, and each credential is either a key hash or a script hash. A
+"contract address" is just an address whose payment credential is a script hash.
+
+There are two ways to authorize an action, and neither is a caller identity:
+
+1. **A signature** — the key hash appears in the transaction's signatories
+   (`extra_signatories`).
+2. **A script** — the script approves through a zero-amount reward withdrawal
+   from its stake credential (`withdrawals`).
+
+This is why parameters like `propose_auth` and `apply_auth` accept
+`{ kind: "key" | "script" }`: a key, a multisig, a DAO, or a smart wallet can
+fill the same role. "Who may call" is not a property of the address; it is
+whatever the validator checks.
+
+## Assets are native
+
+Tokens are native to the ledger. They are identified by a policy id and an
+asset name, and a token policy is a validator of its own. Three consequences
+catch newcomers:
+
+- **Only ADA pays fees**, and only ADA can be collateral.
+- **Every output needs a minimum amount of ADA** (roughly 1 ADA, depending on
+  its size). A state UTxO therefore costs a small deposit, which you recover
+  when it is spent.
+- **A transaction that spends a script input needs a collateral UTxO** in pure
+  ADA. It is returned untouched if the transaction is valid, and up to its value
+  is taken if a validator rejects it.
+
+## Time is claimed by the builder
+
+Validators have no wall clock. They see a **validity range**: a lower and an
+upper bound chosen by whoever built the transaction. `now` in the excerpt above
+is the lower bound — a promise by the builder, not a fact.
+
+This matters as soon as a contract involves a delay. Settings' `apply_delay`
+guarantees that a proposal cannot be applied _in the same instant_ it was made,
+but it is a scheduling tool, not a guarantee about when something happened. The
+same reasoning applies to every deadline and vesting schedule you will see here.
+
+## Quick reference
+
+| You want to…                 | On Cardano                                                    |
+| ---------------------------- | ------------------------------------------------------------- |
+| Deploy a contract            | Derive a script hash from compiled code plus parameters       |
+| Hold contract state          | Put a UTxO at a script address carrying a datum               |
+| Trigger a contract           | Spend that UTxO with a redeemer                               |
+| Authorize an action          | Require a signatory, or script authorization via a withdrawal |
+| Reject a transaction         | Return false; the whole transaction is dropped                |
+| Create a token               | Mint a native asset under a policy id                         |
+| Read an address's balance    | Sum that address's UTxOs                                      |
+| Coordinate concurrent spends | One UTxO is spent once per block — plan for contention        |
+
+## Where to go next
+
+- [Install & setup](/get-started/install) — toolchain, packages, and a network
+  to try things on.
+- [Settings](/contracts/settings) — the state-machine pattern above, end to end.
+- [Architecture](/project/architecture) — the conventions that keep validators
+  composable.
+- [Cardano Developer Portal](https://developers.cardano.org) — for everything
+  this primer deliberately leaves out.

@@ -1,0 +1,52 @@
+---
+title: Settings
+description: Governed configuration for another protocol — propose, wait, apply.
+tableOfContents: false
+---
+
+import TxChain from "../../../components/TxChain.astro";
+import lifecycle from "../../../data/settings/lifecycle.json";
+import { docUrl } from "../../../lib/manifest";
+
+Every protocol has parameters: a fee, a threshold, a list of allowed assets. If
+those values are baked into a script, changing one means redeploying and
+migrating. If they live in a wallet, whoever holds the key can change them
+silently.
+
+**Settings** is the middle ground. It governs a single UTxO holding your
+protocol's configuration, and changing it takes two separate parties and a
+delay: a **proposer** stages a new value, it sits for at least `apply_delay`,
+and an **applier** commits it. The proposer can never change the settings
+directly, and the applier can never skip the review window. Your protocol reads
+the active value from the Settings UTxO as a reference input.
+
+## Full lifecycle
+
+Each step consumes the UTxO the previous one produced. Scroll horizontally to
+follow the whole cycle.
+
+<TxChain data={lifecycle} />
+
+## When to use it
+
+- Your protocol has parameters that must change without redeploying the script.
+- You want a review window and a second party between "proposed" and "live".
+- You want a key, multisig, DAO or smart wallet to hold the proposer or applier
+  role — both are pluggable credentials.
+
+**When not to:** if the parameters never change, bake them into the script. If
+changes must take effect instantly, this delay is working against you.
+
+## What this does not protect
+
+The full list is in <a href={docUrl("settings/spec.md")}>§6.a of the specification</a>. The three that change how you deploy:
+
+- `validate_datum` is a `True` stub in the reference validator: nothing checks
+  that a proposed value is _meaningful_.
+- `apply_delay` is trusted at deployment. A negative delay would admit
+  immediate applies.
+- The proposer chooses the delay anchor, so the delay is a scheduling tool, not
+  a guarantee against a malicious proposer.
+
+Next: [specification & usage](/contracts/settings/guide) ·
+[transactions in detail](/contracts/settings/transactions).

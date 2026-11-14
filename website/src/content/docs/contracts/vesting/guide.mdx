@@ -1,0 +1,102 @@
+---
+title: Specification & usage
+description: The linear vesting specification summarized, followed by the complete usage guide.
+tableOfContents: false
+---
+
+import CanonicalUsage from "../../../../components/CanonicalUsage.astro";
+import { docUrl } from "../../../../lib/manifest";
+
+This page summarizes the linear vesting specification and includes the complete
+usage guide. The canonical documents live in the repository; the full
+specification is linked below, and the usage guide is rendered here in full.
+
+## What it is
+
+A linear vesting instance locks a bundle of ada or native tokens for one
+**beneficiary** and releases it continuously between `start_time` and
+`end_time`. The beneficiary can claim whatever has vested at any point; the rest
+stays locked under the same terms. After `recovery_time` — strictly after
+vesting ends — the **locker** can recover whatever was left unclaimed.
+
+The schedule is fixed at lock time and the datum is immutable, so a claim never
+rewrites the terms. The amount that has vested is a pure function of the
+reference time.
+
+## Model
+
+A vesting instance is one UTxO at the vesting script address carrying an inline
+`VestingDatum`:
+
+| Field           | Meaning                                                               |
+| --------------- | --------------------------------------------------------------------- |
+| `beneficiary`   | Who may claim, as a pluggable credential.                             |
+| `locker`        | Who may cancel after `recovery_time`.                                 |
+| `vesting`       | The original bundle: a list of `(policy, asset_name, total)`.         |
+| `start_time`    | When vesting begins, in POSIX milliseconds.                           |
+| `end_time`      | When vesting completes, in POSIX milliseconds.                        |
+| `recovery_time` | When the locker may recover the remainder; strictly after `end_time`. |
+
+The script is **not parameterized**: every instance shares the same address and
+is identified by its UTxO and datum. There is no per-instance NFT. The datum is
+reproduced byte-for-byte by every continuation.
+
+## Schedule
+
+For an asset with original total `T`, the vested quantity at `now` is:
+
+```
+0                                      if now <= start
+T                                      if now >= end
+floor(T * (now - start) / (end - start)) otherwise
+```
+
+The floor means a claim never over-releases. `now` is the transaction's
+validity-range **lower bound**, not a wall clock.
+
+## Who does what
+
+| Role            | Credential    | Powers                                                       |
+| --------------- | ------------- | ------------------------------------------------------------ |
+| **Beneficiary** | `beneficiary` | Claim the vested portion from `start_time`.                  |
+| **Locker**      | `locker`      | Lock the bundle; cancel the remainder after `recovery_time`. |
+
+Both are pluggable credentials: a key signs, a script is invoked as a zero-ada
+withdrawal.
+
+## What each action does
+
+| Action     | Redeemer | Effect                                                                                                                                |
+| ---------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **Lock**   | —        | Sends the bundle to the script with an inline datum. No script runs.                                                                  |
+| **Claim**  | `Claim`  | Withdraws the vested portion. A partial claim leaves a continuation with the same datum; a full claim at `end_time` takes everything. |
+| **Cancel** | `Cancel` | After `recovery_time`, the locker takes the remaining bundle. No continuation.                                                        |
+
+The count-preserving continuation rule matters when several instances share a
+byte-identical datum: each `Claim` input requires at least one continuation per
+input, each holding the full remainder. That stops double satisfaction and
+prevents merging instances into fewer UTxOs.
+
+## Invariants and assumptions
+
+- A continuation reproduces the datum exactly; the schedule cannot be edited.
+- A partial claim keeps at least `total - vested(now)` of every asset.
+- At or after `end_time`, nothing needs to remain locked.
+- `Cancel` requires `now > recovery_time` strictly, and the datum must satisfy
+  `start_time < end_time < recovery_time`.
+- Locking is **not validated on-chain**: the builder checks the schedule and the
+  value. A malformed lock can strand funds, never over-release.
+- Only the assets listed in `vesting` are schedule-protected; extra ada or
+  tokens are not.
+- There is no cliff and no early revocation.
+
+## Read the full specification
+
+The <a href={docUrl("vesting/spec.md")}>canonical specification</a> has the
+schedule, count-preserving continuations, invariants and the threat model. The
+[transactions in detail](/contracts/vesting/transactions) page draws the Lock,
+Claim and Cancel shapes.
+
+## Usage
+
+<CanonicalUsage file="vesting/usage.md" />

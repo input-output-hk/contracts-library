@@ -1,0 +1,72 @@
+---
+title: Install & setup
+description: Toolchain, packages and a network to test against.
+---
+
+import { docUrl, REPO_BRANCH, REPO_URL } from "../../../lib/manifest";
+
+This page installs the off-chain packages and points a builder at a Cardano
+network. The on-chain validators are consumed through the compiled blueprint;
+you do not need Aiken to use the library.
+
+> **Pre-release.** The library is not published to a package registry yet. The
+> package names below are the intended install; until they are published,
+> install from the repository workspace or a local link.
+
+## Toolchain
+
+- **Node.js 22.12 or newer** and npm.
+- A Cardano provider or a local devnet for submitting transactions.
+- A `MeshTxBuilder` wired to your provider/wallet — the builders return unsigned
+  transactions and leave signing and submission to your wallet.
+
+## Install the packages
+
+For the MeshJS builders:
+
+```sh
+npm install @contracts-library/meshjs @meshsdk/core @meshsdk/core-cst
+```
+
+For the Tx3 client runtime:
+
+```sh
+npm install tx3-sdk
+```
+
+## Configure a contract
+
+Every contract is parameterized at deployment. The Settings example below shows
+the shape: compile the script, then derive its address.
+
+```ts
+import {
+  SETTINGS_TOKEN_NAME,
+  settingsScript,
+  settingsScriptAddress,
+} from "@contracts-library/meshjs";
+
+const script = settingsScript({
+  seedUtxo,
+  proposeAuth: { kind: "key", hash: proposerKeyHash },
+  applyAuth: { kind: "key", hash: applierKeyHash },
+  applyDelay: 3_600_000, // one hour
+  settingsTokenName: SETTINGS_TOKEN_NAME, // "73657474696e6773"
+});
+
+const address = settingsScriptAddress(script, 0); // 0 = testnet
+```
+
+Pass `1` instead of `0` for mainnet. The builder calls take a `network` name
+(`"preprod"`, `"preview"`, `"mainnet"`) or a custom slot configuration when you
+are on a local devnet. See the [Settings guide](/contracts/settings/guide) and the <a href={docUrl("settings/usage.md")}>full usage guide</a> for the launch, propose, apply and close builders.
+
+## Try it on a devnet
+
+The Tx3 reference tests boot a Dolos devnet with `trix devnet`. The <a href={`${REPO_URL}/tree/${REPO_BRANCH}/offchain/tx3`}>Tx3 devnet README</a> explains the toolchain requirements and how the test harness funds accounts.
+
+## Next
+
+- [Browse the catalog](/contracts) — pick a contract and read its guide.
+- [Architecture](/project/architecture) — how validators compose in one
+  transaction.

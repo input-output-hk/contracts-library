@@ -1,0 +1,80 @@
+{
+  "name": "dao-vote",
+  "title": "Vote",
+  "inputs": [
+    {
+      "name": "Stake UTxO",
+      "address": "stake_addr",
+      "redeemer": "VoteProposal",
+      "value": {
+        "stakeNFT": "1",
+        "stakedToken": "S"
+      },
+      "datum": {
+        "owner": "",
+        "delegatee": "",
+        "lockedBy": "L"
+      }
+    },
+    {
+      "name": "Proposal UTxO",
+      "address": "proposal_addr",
+      "reference": true,
+      "value": {
+        "proposalNFT": "1"
+      },
+      "datum": {
+        "thresholds": "",
+        "timingConfig": "",
+        "startTime": "T",
+        "status": "Voting",
+        "results": ""
+      }
+    },
+    {
+      "name": "Settings UTxO",
+      "address": "governor_addr",
+      "reference": true,
+      "value": {
+        "settingsNFT": "1"
+      },
+      "datum": {
+        "current": "DaoSettings"
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "name": "Stake UTxO",
+      "address": "stake_addr",
+      "value": {
+        "stakeNFT": "1",
+        "stakedToken": "S"
+      },
+      "datum": {
+        "owner": "",
+        "delegatee": "",
+        "lockedBy": "L + vote lock"
+      }
+    },
+    {
+      "name": "Vote UTxO",
+      "address": "vote_addr",
+      "value": {
+        "voteNFT": "1"
+      },
+      "datum": {
+        "stakeOwner": "owner",
+        "proposal": "pId",
+        "votedOption": "option",
+        "stake": "S"
+      }
+    }
+  ],
+  "mint": [{ "token": "voteNFT", "amount": "1" }],
+  "signatures": ["vote_auth"],
+  "validRange": {
+    "upper": "voting_end"
+  },
+  "notes": "• S ≥ thresholds.vote; the proposal must be Voting.\n• The position must not already have a lock for this proposal.\n• The vote lock expires at voting_end.\n• vote_auth is the delegatee if set, otherwise the owner.\n• The Settings UTxO reference input supplies the vote validator hash."
+}

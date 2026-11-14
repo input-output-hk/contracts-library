@@ -1,0 +1,57 @@
+{
+  "name": "eta-graduation",
+  "title": "Graduation",
+  "inputs": [
+    {
+      "name": "Certificate",
+      "address": "plb_addr [stake: holder]",
+      "redeemer": "BaseSpendRedeemer",
+      "value": {
+        "cipNFT (step N)": "1"
+      },
+      "datum": {
+        "start": "…",
+        "commit": "…",
+        "cnt_policy": "…"
+      }
+    },
+    {
+      "name": "Protocol params",
+      "address": "protocol_params",
+      "reference": true
+    },
+    {
+      "name": "RegistryNode",
+      "address": "registry_addr",
+      "reference": true,
+      "value": {
+        "registryNode": "1"
+      }
+    }
+  ],
+  "mint": [
+    { "token": "cipNFT (step N)", "amount": "-1" },
+    { "token": "coupon (principal)", "amount": "1" }
+  ],
+  "withdrawals": [
+    "programmable_logic_global [TransferAct]",
+    "transfer [TransferRedeemer]",
+    "transfer_logic (ours)",
+    "minting_logic (ours) [Retire]",
+    "issuance_logic (core) [names policy + RegistryNode]"
+  ],
+  "signatures": ["holder"],
+  "outputs": [
+    {
+      "name": "Principal coupon",
+      "address": "holder_payment_addr",
+      "value": {
+        "coupon (principal)": "1"
+      }
+    }
+  ],
+  "validRange": {
+    "lower": "start + N * interval"
+  },
+  "notes": "• The principal is the deployment's baked unit amount, so graduation cannot over- or under-claim.\n• The certificate is retired by burning name N at or after start + N * interval. The Retire mode validates the burn and requires the principal coupon under the certificate's cnt_policy; there is no certificate continuation.\n• The principal coupon is then redeemed at the vault like any other coupon (see Redemption)."
+}
