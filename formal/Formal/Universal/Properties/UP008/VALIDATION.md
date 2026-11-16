@@ -2,7 +2,8 @@
 
 **Layout migration (2026-11-16).** This record retains the commands, module
 names, revisions, and outcomes from its original run. Local links follow the
-current layout under `Formal/Universal`; this move does not rerun the proofs.
+current layout under `Formal/Universal`. The original outcomes remain tied to
+those revisions; [migration validation](../../../../MIGRATION.md) records the new checks separately.
 
 UP-008 reports an official FAIL for the original vesting Claim fixture: the
 fixed-junk rejection obligation is Falsified, and its applicability obligation

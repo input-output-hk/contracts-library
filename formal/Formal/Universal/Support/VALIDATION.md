@@ -2,7 +2,8 @@
 
 **Layout migration (2026-11-16).** This record retains the commands, module
 names, revisions, and outcomes from its original run. Local links follow the
-current layout under `Formal/Universal`; this move does not rerun the proofs.
+current layout under `Formal/Universal`. The original outcomes remain tied to
+those revisions; [migration validation](../../../MIGRATION.md) records the new checks separately.
 
 The relocation was validated at `40fadca9c8dc8432246970df5c3ed6c89de3210f`,
 based on foundation `7d30a34a28e69dcf89de182d4336a8a4d3b79829`.

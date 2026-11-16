@@ -2,7 +2,8 @@
 
 **Layout migration (2026-11-16).** This record retains the commands, module
 names, revisions, and outcomes from its original run. Local links follow the
-current layout under `Formal/Universal`; this move does not rerun the proofs.
+current layout under `Formal/Universal`. The original outcomes remain tied to
+those revisions; [migration validation](../../../../MIGRATION.md) records the new checks separately.
 
 This historical record describes the earlier prototype and its recorded dependency
 versions. Fresh validation of the Lean-only implementation is recorded in

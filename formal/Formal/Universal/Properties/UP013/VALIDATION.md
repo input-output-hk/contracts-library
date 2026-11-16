@@ -2,7 +2,8 @@
 
 **Layout migration (2026-11-16).** This record retains the commands, module
 names, revisions, and outcomes from its original run. Local links follow the
-current layout under `Formal/Universal`; this move does not rerun the proofs.
+current layout under `Formal/Universal`. The original outcomes remain tied to
+those revisions; [migration validation](../../../../MIGRATION.md) records the new checks separately.
 
 UP-013 passed the targeted checks below on 2026-11-11. Implementation commit
 efbfb2c709a4f7f0cd637557a10b9001381dee38 records the tested source, based on

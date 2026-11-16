@@ -1,8 +1,8 @@
 # UP-002 prototype support
 
-**Command paths (2026-11-16).** Examples use the relocated M1.1 paths and
-have not been rerun for this documentation update. Recorded outcomes retain
-their original revisions, models, and bounds. Run commands from `formal/`
+**Command paths (2026-11-16).** Examples use the relocated M1.1 paths. See the
+[migration validation](../../../../../../../MIGRATION.md) for the checks performed. Historical outcomes
+retain their original revisions, models, and bounds. Run commands from `formal/`
 unless a section says otherwise.
 
 This folder contains the retained harness, validator models, unsigned-spend

@@ -1,8 +1,8 @@
 # Blueprint type and CBOR extraction
 
-**Command paths (2026-11-16).** Examples use the relocated M1.1 paths and
-have not been rerun for this documentation update. Recorded outcomes retain
-their original revisions, models, and bounds. Run commands from `formal/`
+**Command paths (2026-11-16).** Examples use the relocated M1.1 paths. See the
+[migration validation](../../../MIGRATION.md) for the checks performed. Historical outcomes
+retain their original revisions, models, and bounds. Run commands from `formal/`
 unless a section says otherwise.
 
 For bounded candidate runs and result reporting, see [Run candidate checks](../Workflow/Docs/USER-GUIDE.md).

@@ -19,6 +19,9 @@ backend invoked via the `blaster` tactic.
 
 ## Layout
 
+The [milestone migration record](MIGRATION.md) maps previous imports and records
+validation results, including the separate installer-fixture repair run.
+
 ```text
 formal/
 ├── plutus-upv / install.sh  # public command and checkout-backed installation
