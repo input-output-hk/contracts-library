@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-upv_formal=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../../.." && pwd -P)
+upv_formal=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../../../../.." && pwd -P)
 upv_temp=$(mktemp -d)
 trap 'rm -rf -- "$upv_temp"' EXIT
 upv_bin="$upv_temp/bin with spaces"
