@@ -7,14 +7,14 @@ use aiken/collection/list
 use aiken/collection/pairs
 use aiken/crypto.{blake2b_256}
 use cardano/address.{Address}
-use cardano/assets.{AssetName, PolicyId, Value, has_any_nft, has_nft_strict}
+use cardano/assets.{AssetName, Assets, PolicyId, has_any_nft, has_nft_strict}
 use cardano/transaction.{Input, Output, OutputReference, Spend, Transaction}
 use dao/types.{DaoSettings}
 use settings/utils.{get_settings_datum}
 
 /// Get the AssetName of the only token of a value under `policy`.
 /// Fails unless there's exactly one (quantity == 1) Token for that policy.
-pub fn get_unique_token_name(value: Value, policy: PolicyId) -> AssetName {
+pub fn get_unique_token_name(value: Assets, policy: PolicyId) -> AssetName {
   expect [Pair(name, 1)] = value
     |> assets.tokens(policy)
     |> dict.to_pairs()

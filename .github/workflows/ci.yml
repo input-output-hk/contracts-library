@@ -1,39 +1,56 @@
 name: CI
 
+# PRs to any branch run the full suite, but runs not targeting main are
+# advisory: continue-on-error on every job reports a failure as
+# success-with-annotation instead of blocking the merge.
 on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+
+# New pushes cancel stale runs of the same branch (a PR run takes ~30 min,
+# dominated by the Yaci e2e suite; the ~45 min tx3 devnet suites live in
+# tx3-devnet.yml, nightly + on demand).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   format:
     name: Format & lint (biome) + aiken fmt
     runs-on: ubuntu-latest
+    continue-on-error: ${{ github.event_name == 'pull_request' && github.base_ref != 'main' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: package-lock.json
-      - name: Install
-        run: npm ci
-      - name: Biome format check
-        run: npm run format:check
-      - name: Biome lint check
-        run: npm run lint:check
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
       - uses: aiken-lang/setup-aiken@v1
         with:
           version: v1.1.24
-      - name: aiken fmt check (onchain)
-        working-directory: onchain
-        run: aiken fmt --check
+      - name: Install
+        run: just install root
+      - name: Format & lint
+        run: |
+          just fmt-check
+          just lint
   onchain:
     name: On-chain (aiken)
     runs-on: ubuntu-latest
+    continue-on-error: ${{ github.event_name == 'pull_request' && github.base_ref != 'main' }}
     steps:
       - uses: actions/checkout@v4
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
       - uses: aiken-lang/setup-aiken@v1
         with:
           version: v1.1.24
@@ -46,133 +63,62 @@ jobs:
           key: ${{ runner.os }}-aiken-${{ hashFiles('onchain/aiken.lock') }}
           restore-keys: |
             ${{ runner.os }}-aiken-
-      - name: aiken check
-        working-directory: onchain
-        run: aiken check --max-success=100
-      - name: aiken build
-        working-directory: onchain
-        run: aiken build
+      - name: On-chain checks
+        run: just onchain
 
   offchain-unit:
     name: Off-chain unit (MeshJS lib)
     runs-on: ubuntu-latest
+    continue-on-error: ${{ github.event_name == 'pull_request' && github.base_ref != 'main' }}
     steps:
       - uses: actions/checkout@v4
-      # Fails the job when the pinned blueprints drift from onchain/plutus.json
-      # (no Node dependencies needed for this step).
-      - name: Blueprint sync check
-        run: npm run blueprint:check
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: offchain/meshjs/lib/package-lock.json
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
+      # Fails the job when the pinned blueprints drift from onchain/plutus.json
+      # (plain node — no dependencies needed for this step).
+      - name: Blueprint sync check
+        run: just blueprints-check
       - name: Install
-        working-directory: offchain/meshjs/lib
-        run: npm ci
-      - name: Typecheck
-        working-directory: offchain/meshjs/lib
-        run: npm run typecheck
-      - name: Unit tests
-        working-directory: offchain/meshjs/lib
-        run: npm test
+        run: just install lib
+      - name: Typecheck & unit tests
+        run: just unit
 
   e2e:
     name: Off-chain e2e (Yaci devnet)
     runs-on: ubuntu-latest
+    # A cold runner downloads the pinned devnet components (node 11, Yano,
+    # Yaci Store, Ogmios) before the per-file devnet lifecycle.
+    timeout-minutes: 60
+    continue-on-error: ${{ github.event_name == 'pull_request' && github.base_ref != 'main' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: offchain/meshjs/*/package-lock.json
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "21"
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
 
       - name: Build library
-        working-directory: offchain/meshjs/lib
-        run: npm ci && npm run build
+        run: just build
 
       - name: Install e2e deps
-        working-directory: offchain/meshjs/e2e
-        run: npm ci
+        run: just install e2e
 
-      - name: Typecheck e2e
-        working-directory: offchain/meshjs/e2e
-        run: npm run typecheck
-
-      # Starts an ephemeral devnet, runs the suite against it, always tears down.
-      - name: Run e2e tests against an ephemeral devnet
-        working-directory: offchain/meshjs/e2e
-        env:
-          REQUIRE_DEVNET: "1"
-        run: npm run test:devnet
-
-  tx3-devnet:
-    name: Off-chain tx3 (trix devnet)
-    runs-on: ubuntu-latest
-    timeout-minutes: 80
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: |
-            offchain/meshjs/lib/package-lock.json
-            offchain/meshjs/e2e/package-lock.json
-            offchain/tx3/package-lock.json
-
-      # The suites drive an ephemeral dolos devnet booted by `trix devnet`
-      # (see offchain/tx3/README.md). tx3up installs the toolchain under
-      # ~/.tx3/<toolchain>/bin.
-      - name: Install the tx3 toolchain (trix, dolos)
-        run: |
-          curl -LsSf https://github.com/tx3-lang/tx3up/releases/latest/download/tx3up-installer.sh | sh
-          export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$PATH"
-          tx3up
-          for d in "$HOME"/.tx3/*/bin; do [ -d "$d" ] && echo "$d" >> "$GITHUB_PATH"; done
-
-      # dolos < 1.4.0 injects Plutus POSIXTime in seconds during mempool
-      # validation, so time-dependent validators fail cryptically
-      # (see offchain/tx3/README.md).
-      - name: Guard dolos >= 1.4.0
-        run: |
-          version="$(dolos --version | grep -oE '[0-9]+(\.[0-9]+)+' | head -n1)"
-          echo "dolos $version"
-          if [ "$(printf '%s\n' "1.4.0" "$version" | sort -V | head -n1)" != "1.4.0" ]; then
-            echo "::error::dolos $version < 1.4.0 — upgrade it (see offchain/tx3/README.md, dolos version requirement)"
-            exit 1
-          fi
-
-      - name: Build library
-        working-directory: offchain/meshjs/lib
-        run: npm ci && npm run build
-
-      - name: Install MeshJS e2e dependencies (vendored CIP-113 helpers)
-        working-directory: offchain/meshjs/e2e
-        run: npm ci
-
-      - name: Generate TypeScript clients (gitignored — absent on a fresh checkout)
-        run: |
-          for dir in offchain/tx3/*/; do
-            if [ -f "${dir}trix.toml" ]; then
-              (cd "$dir" && trix codegen --plugin ts-client)
-            fi
-          done
-
-      - name: Install tx3 dependencies
-        working-directory: offchain/tx3
-        run: npm ci
-
-      - name: Typecheck
-        working-directory: offchain/tx3
-        run: npm run typecheck
-
-      # One ephemeral dolos devnet per suite, booted serially (fixed ports).
-      - name: Run devnet suites
-        working-directory: offchain/tx3
-        run: npm run test:devnet
+      # The recipe sets REQUIRE_DEVNET=1 (fail instead of silently skipping),
+      # typechecks, then starts an ephemeral devnet per suite and always tears
+      # it down.
+      - name: Typecheck & run e2e against an ephemeral devnet
+        run: just e2e

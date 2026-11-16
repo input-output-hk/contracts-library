@@ -13,6 +13,10 @@
  * any variant qualifies as the pinned source; the table names one
  * deterministically. Adding a validator: hand-write its block in blueprint.ts
  * once (doc included), then add the entry to the table below.
+ *
+ * Coverage: --check/--write also fail when plutus.json contains a validator
+ * family (module.validator, purpose stripped) that is neither pinned nor
+ * listed in EXCLUDED_FAMILIES, so a new validator cannot go unnoticed.
  */
 
 import { readFileSync, writeFileSync } from "node:fs";
@@ -20,6 +24,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+/** Validator families in plutus.json deliberately left unpinned. */
+const EXCLUDED_FAMILIES = new Set([]);
 
 const PINS = [
   {
@@ -173,12 +180,35 @@ function camel(slug) {
     .join("");
 }
 
+/**
+ * Fail when a validator family in plutus.json is neither pinned nor excluded.
+ * A family is `module.validator` — the title with the trailing purpose
+ * (spend/mint/else/publish/withdraw) stripped; purpose variants share code,
+ * so pinning any one member covers the whole family.
+ */
+function checkCoverage(byTitle) {
+  const familyOf = (title) => title.slice(0, title.lastIndexOf("."));
+  const pinned = new Set(
+    PINS.flatMap((spec) => spec.entries.map((e) => familyOf(e.title))),
+  );
+  const missing = [...new Set([...byTitle.keys()].map(familyOf))].filter(
+    (family) => !pinned.has(family) && !EXCLUDED_FAMILIES.has(family),
+  );
+  if (missing.length > 0) {
+    throw new Error(
+      `onchain/plutus.json has unpinned validator families (neither in PINS nor EXCLUDED_FAMILIES):\n` +
+        missing.map((f) => `  - ${f}`).join("\n"),
+    );
+  }
+}
+
 /** {pins: [{file, title, mapKey?, code, hash?}], compilerPin} */
 function inputs() {
   const plutus = JSON.parse(
     readFileSync(join(REPO, "onchain/plutus.json"), "utf8"),
   );
   const byTitle = new Map(plutus.validators.map((v) => [v.title, v]));
+  checkCoverage(byTitle);
   const pins = [];
   for (const spec of PINS) {
     for (const e of spec.entries) {

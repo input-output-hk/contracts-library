@@ -25,7 +25,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { cst, MeshTxBuilder, serializeRewardAddress } from "@meshsdk/core";
 import { ed25519 } from "@noble/curves/ed25519";
-import { blake2b } from "@noble/hashes/blake2b";
+import { blake2b } from "@noble/hashes/blake2.js";
 import { bech32 } from "bech32";
 import { Ed25519Signer, Party, PollConfig } from "tx3-sdk";
 import { Client } from "../settings/codegen/ts-client/config-parameter-management/protocol"; // trix codegen ts-client

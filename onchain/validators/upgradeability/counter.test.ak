@@ -29,7 +29,7 @@ const token_name = "tok"
 const vkh = #"11111111111111111111111111111111111111111111111111111111"
 
 /// The input value plus one unit of a stand-in state token.
-fn with_token(value: assets.Value) -> assets.Value {
+fn with_token(value: assets.Assets) -> assets.Assets {
   assets.add(value, token_policy, token_name, 1)
 }
 
@@ -61,7 +61,7 @@ fn continuation_output_with(
   hash: ScriptHash,
   prev: OutputReference,
   count: Int,
-  value: assets.Value,
+  value: assets.Assets,
   reference_script: Option<ScriptHash>,
 ) -> Output {
   Output {
@@ -88,7 +88,7 @@ fn counter_input_with(
   hash: ScriptHash,
   index: Int,
   count: Int,
-  value: assets.Value,
+  value: assets.Assets,
 ) -> Input {
   Input {
     output_reference: ref(index),

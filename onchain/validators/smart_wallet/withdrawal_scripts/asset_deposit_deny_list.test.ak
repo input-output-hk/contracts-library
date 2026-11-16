@@ -1,6 +1,6 @@
 use aiken/crypto.{ScriptHash}
 use cardano/address.{Script, from_script}
-use cardano/assets.{AssetName, PolicyId, Value}
+use cardano/assets.{AssetName, Assets, PolicyId}
 use cardano/certificate.{Certificate, RegisterCredential}
 use cardano/transaction.{
   InlineDatum, Input, Output, OutputReference, Transaction, placeholder,
@@ -23,11 +23,11 @@ const tx_id =
 
 const wallet_token = "wallet"
 
-fn nft() -> assets.Value {
+fn nft() -> assets.Assets {
   assets.from_asset(b, wallet_token, 1)
 }
 
-fn wallet_value(value: assets.Value) -> assets.Value {
+fn wallet_value(value: assets.Assets) -> assets.Assets {
   assets.merge(value, nft())
 }
 
@@ -59,7 +59,7 @@ fn withdraw(denied: Pairs<PolicyId, List<AssetName>>, tx: Transaction) -> Bool {
   )
 }
 
-fn wallet_output(value: Value, depositors: Pairs<ScriptHash, Data>) -> Output {
+fn wallet_output(value: Assets, depositors: Pairs<ScriptHash, Data>) -> Output {
   Output {
     address: from_script(b),
     value: wallet_value(value),
@@ -68,7 +68,7 @@ fn wallet_output(value: Value, depositors: Pairs<ScriptHash, Data>) -> Output {
   }
 }
 
-fn wallet_input(value: Value, depositors: Pairs<ScriptHash, Data>) -> Input {
+fn wallet_input(value: Assets, depositors: Pairs<ScriptHash, Data>) -> Input {
   Input {
     output_reference: OutputReference { transaction_id: tx_id, output_index: 0 },
     output: wallet_output(value, depositors),
@@ -82,15 +82,15 @@ fn wallet_tx(depositors: Pairs<ScriptHash, Data>) -> Transaction {
   }
 }
 
-fn lovelace(quantity: Int) -> Value {
+fn lovelace(quantity: Int) -> Assets {
   assets.from_lovelace(quantity)
 }
 
-fn holding(policy: PolicyId, name: AssetName, quantity: Int) -> Value {
+fn holding(policy: PolicyId, name: AssetName, quantity: Int) -> Assets {
   assets.from_lovelace(2_000_000) |> assets.add(policy, name, quantity)
 }
 
-fn deposit_tx(input: Value, output: Value) -> Transaction {
+fn deposit_tx(input: Assets, output: Assets) -> Transaction {
   let data: Data = 0
   Transaction {
     ..placeholder,

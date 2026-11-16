@@ -95,7 +95,7 @@ fn cert_datum(start: Int, commit: Option<Credential>) -> CertificateDatum {
   CertificateDatum { start, commit, cnt_policy }
 }
 
-fn cert_value(k: Int) -> assets.Value {
+fn cert_value(k: Int) -> assets.Assets {
   assets.from_asset(cip_policy, schedule.step_name(k), 1)
     |> assets.merge(assets.from_lovelace(2_000_000))
 }
@@ -134,7 +134,7 @@ fn coupon_output(payment: ByteArray, amount: Int) -> Output {
   }
 }
 
-fn coupon(amount: Int) -> assets.Value {
+fn coupon(amount: Int) -> assets.Assets {
   assets.from_asset(cnt_policy, schedule.encode_amount(amount), 1)
 }
 

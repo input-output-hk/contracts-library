@@ -3,23 +3,23 @@
 
 [[requirements]]
 name = "aiken-lang/stdlib"
-version = "v3.1.0"
+version = "v4.0.0"
 source = "github"
 
 [[requirements]]
 name = "aiken-lang/fuzz"
-version = "v2"
+version = "v3.0.0"
 source = "github"
 
 [[packages]]
 name = "aiken-lang/stdlib"
-version = "v3.1.0"
+version = "v4.0.0"
 requirements = []
 source = "github"
 
 [[packages]]
 name = "aiken-lang/fuzz"
-version = "v2"
+version = "v3.0.0"
 requirements = []
 source = "github"
 

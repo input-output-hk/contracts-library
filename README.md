@@ -89,8 +89,8 @@ Formatting is enforced automatically:
 A pre-commit hook (Husky + lint-staged) formats staged files on every commit, and CI fails on unformatted code. To format everything at once:
 
 ```sh
-npm install    # once, from the repo root
-npm run format
+just install root   # once, from the repo root (installs Biome, Husky)
+just fmt
 ```
 
 ## Documentation

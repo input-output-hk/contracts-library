@@ -6,7 +6,7 @@ use aiken/collection/pairs
 use aiken/crypto.{ScriptHash, VerificationKeyHash}
 use authorization
 use cardano/address.{Address, Credential, Script}
-use cardano/assets.{AssetName, Lovelace, PolicyId, Value}
+use cardano/assets.{AssetName, Assets, Lovelace, PolicyId}
 use cardano/certificate.{RegisterCredential, UnregisterCredential}
 use cardano/transaction.{
   InlineDatum, OutputReference, Publish, Transaction, find_input,
@@ -196,7 +196,7 @@ fn published_in_tx(hash: ScriptHash, self: Transaction) -> Bool {
 /// transition.
 pub fn validate_spend_continuation(
   old_datum: WalletDatum,
-  old_value: Value,
+  old_value: Assets,
   old_address: Address,
   wallet_policy: PolicyId,
   wallet_token_name: AssetName,
@@ -353,7 +353,7 @@ fn same_keys(old: Pairs<ScriptHash, Data>, new: Pairs<ScriptHash, Data>) -> Bool
 /// Used both ways: a deposit's continuation must contain the input (`superset` =
 /// continuation), and a spend's continuation must be contained by the input
 /// (`subset` = continuation).
-fn value_contains(superset: Value, subset: Value) -> Bool {
+fn value_contains(superset: Assets, subset: Assets) -> Bool {
   list.all(
     assets.flatten(subset),
     fn(triple) {

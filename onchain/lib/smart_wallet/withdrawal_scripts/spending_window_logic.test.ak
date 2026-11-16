@@ -23,7 +23,7 @@ const window = 3_600_000
 
 const wallet_token = "wallet"
 
-fn wallet_value() -> assets.Value {
+fn wallet_value() -> assets.Assets {
   assets.from_asset(wallet_policy, wallet_token, 1)
 }
 

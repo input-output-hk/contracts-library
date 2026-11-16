@@ -122,7 +122,7 @@ fn vault_datum() -> VaultDatum {
   VaultDatum { cnt_policy }
 }
 
-fn vault_value(ada: Int) -> assets.Value {
+fn vault_value(ada: Int) -> assets.Assets {
   assets.from_lovelace(ada)
     |> assets.merge(assets.from_asset(vault_nft_cs, vault_nft_name, 1))
 }
@@ -159,7 +159,7 @@ fn cert_datum(
   CertificateDatum { start, commit, cnt_policy: cnt }
 }
 
-fn cert_value(k: Int) -> assets.Value {
+fn cert_value(k: Int) -> assets.Assets {
   assets.from_asset(cip_policy, schedule.step_name(k), 1)
     |> assets.merge(assets.from_lovelace(2_000_000))
 }
@@ -188,7 +188,7 @@ fn cert_input(
   }
 }
 
-fn coupon(amount: Int, qty: Int) -> assets.Value {
+fn coupon(amount: Int, qty: Int) -> assets.Assets {
   assets.from_asset(cnt_policy, schedule.encode_amount(amount), qty)
 }
 

@@ -50,7 +50,7 @@ fn cert_datum(start: Int) -> CertificateDatum {
   CertificateDatum { start, commit: None, cnt_policy }
 }
 
-fn cert_value(k: Int) -> assets.Value {
+fn cert_value(k: Int) -> assets.Assets {
   assets.from_asset(cip_policy, schedule.step_name(k), 1)
     |> assets.merge(assets.from_lovelace(2_000_000))
 }
@@ -74,7 +74,7 @@ fn cert_input(index: Int, k: Int, start: Int) -> Input {
   }
 }
 
-fn coupon(amount: Int) -> assets.Value {
+fn coupon(amount: Int) -> assets.Assets {
   assets.from_asset(cnt_policy, schedule.encode_amount(amount), 1)
 }
 
@@ -209,13 +209,13 @@ fn input_of(index: Int, output: Output) -> Input {
   }
 }
 
-fn foreign_coupon(amount: Int) -> assets.Value {
+fn foreign_coupon(amount: Int) -> assets.Assets {
   assets.from_asset(foreign_policy, schedule.encode_amount(amount), 1)
 }
 
 /// Advance `0 -> 1` of a certificate selecting `selects`, minting step 1's
 /// coupon under this policy plus `extra`.
-fn advance_for(selects: ByteArray, commit, extra: assets.Value) -> Transaction {
+fn advance_for(selects: ByteArray, commit, extra: assets.Assets) -> Transaction {
   Transaction {
     ..placeholder,
     inputs: [input_of(0, cert_for(0, selects, commit))],
@@ -230,7 +230,7 @@ fn advance_for(selects: ByteArray, commit, extra: assets.Value) -> Transaction {
 
 /// Retirement at the final step of a certificate selecting `selects`,
 /// minting the principal coupon under this policy plus `extra`.
-fn retire_for(selects: ByteArray, commit, extra: assets.Value) -> Transaction {
+fn retire_for(selects: ByteArray, commit, extra: assets.Assets) -> Transaction {
   Transaction {
     ..placeholder,
     inputs: [input_of(0, cert_for(4, selects, commit))],

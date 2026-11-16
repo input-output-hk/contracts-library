@@ -49,7 +49,7 @@ fn value_b() -> Data {
   constr_data(0, [i_data(7)])
 }
 
-fn value_nft() -> assets.Value {
+fn value_nft() -> assets.Assets {
   assets.from_lovelace(2_000_000) |> assets.add(policy, token, 1)
 }
 
@@ -77,7 +77,7 @@ fn settings_in(d: SettingsDatum) -> Input {
   Input { output_reference: seed_ref(), output: settings_out(d, value_nft()) }
 }
 
-fn settings_out(d: SettingsDatum, value: assets.Value) -> Output {
+fn settings_out(d: SettingsDatum, value: assets.Assets) -> Output {
   Output {
     address: from_script(policy),
     value,

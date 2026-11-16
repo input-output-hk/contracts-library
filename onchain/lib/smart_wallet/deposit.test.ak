@@ -1,6 +1,6 @@
 use aiken/crypto.{ScriptHash}
 use cardano/address.{Script, from_script}
-use cardano/assets.{Value}
+use cardano/assets.{Assets}
 use cardano/transaction.{
   InlineDatum, Input, Output, OutputReference, Transaction, placeholder,
 }
@@ -52,11 +52,11 @@ fn wallet_input_with(datum: WalletDatum) -> Input {
   }
 }
 
-fn wallet_output(value: Value) -> Output {
+fn wallet_output(value: Assets) -> Output {
   wallet_output_with(value, wallet_datum())
 }
 
-fn wallet_output_with(value: Value, datum: WalletDatum) -> Output {
+fn wallet_output_with(value: Assets, datum: WalletDatum) -> Output {
   Output {
     address: from_script(wallet_policy),
     value,

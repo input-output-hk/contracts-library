@@ -6,3 +6,6 @@ opencode.json
 .agents/
 
 node_modules/
+
+# Yaci DevKit version-isolated home (see offchain/meshjs/e2e/scripts/devnet-test.sh)
+.yaci/

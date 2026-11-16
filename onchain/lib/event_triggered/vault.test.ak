@@ -38,7 +38,7 @@ fn datum() -> VaultDatum {
   VaultDatum { cnt_policy }
 }
 
-fn vault_value(ada: Int, with_nft: Bool) -> assets.Value {
+fn vault_value(ada: Int, with_nft: Bool) -> assets.Assets {
   if with_nft {
     assets.from_lovelace(ada)
       |> assets.merge(assets.from_asset(vault_nft_cs, vault_nft_name, 1))
@@ -237,7 +237,7 @@ fn paid_to(key: ByteArray, ada: Int) -> Output {
   }
 }
 
-fn burn(amount: Int) -> assets.Value {
+fn burn(amount: Int) -> assets.Assets {
   assets.from_asset(cnt_policy, schedule.encode_amount(amount), -1)
 }
 

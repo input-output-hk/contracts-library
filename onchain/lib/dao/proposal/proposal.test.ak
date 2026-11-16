@@ -237,7 +237,7 @@ fn spend(d: ProposalDatum, r: ProposalRedeemer, self: Transaction) -> Bool {
   }
 }
 
-fn mint_stake_value(stake: Int) -> assets.Value {
+fn mint_stake_value(stake: Int) -> assets.Assets {
   assets.from_asset(stake_hash, stake_nft, 1)
     |> assets.add(gov_policy, gov_name, stake)
 }
