@@ -16,7 +16,7 @@ import { checkCatalogue, validators } from "../scripts/check-catalogue.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const readJson = (file) => JSON.parse(readFileSync(join(root, file), "utf8"));
-const sample = readJson("formal/Formal/Theory/properties.json");
+const sample = readJson("formal/Formal/Universal/Theory/properties.json");
 const propertySchema = readJson("docs/property-catalogue/property.schema.json");
 const metadataSchema = readJson(
   "docs/property-catalogue/validator-metadata.schema.json",
@@ -121,7 +121,7 @@ for (const [field, value] of [
 
 test("the shared property schema replaces the theory-local schema", () => {
   assert.equal(
-    existsSync(join(root, "formal/Formal/Theory/schema.json")),
+    existsSync(join(root, "formal/Formal/Universal/Theory/schema.json")),
     false,
   );
   const script = readFileSync(join(root, "formal/check_properties.sh"), "utf8");

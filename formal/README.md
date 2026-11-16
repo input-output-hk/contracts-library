@@ -4,13 +4,13 @@ This Lake project contains the Plutus UPV app, reusable property and transaction
 model banks, and contract-specific specification proofs.
 
 For Plutus UPV (Universal Property Verifier), use the
-[CLI quickstart](Workflow/Docs/USER-GUIDE.md). The app uses Lean for property discovery,
+[CLI quickstart](Formal/Universal/Workflow/Docs/USER-GUIDE.md). The app uses Lean for property discovery,
 model preparation, and verification with the installed Lean/Z3 tools.
 From `formal/`, `./plutus-upv test` runs the registered workflow test suites with verbose
 logs; `./plutus-upv run ...` verifies properties of a supplied compiled validator.
 The guide includes passing, failing, and inconclusive examples.
 
-Use the [documentation map](docs/README.md) to find the app, reusable banks,
+Use the [documentation map](Formal/Universal/docs/README.md) to find the app, reusable banks,
 standalone candidate guides, and contract specification proofs.
 
 Proofs are written in [Lean 4](https://lean-lang.org/) and discharged with
@@ -22,36 +22,38 @@ backend invoked via the `blaster` tactic.
 ```text
 formal/
 ├── plutus-upv / install.sh  # public command and checkout-backed installation
-├── lakefile.toml           # libraries, executable targets, and dependencies
-├── lean-toolchain          # pinned Lean version
-├── Formal/
-│   ├── Properties/         # property definitions, run instructions, metadata, tests
-│   │   └── Universal/UPxxx/Tests/Standalone/  # retained candidate checks and fixtures
-│   ├── TxModels/           # reusable transaction models and their metadata
-│   ├── Theory/             # evaluator and ledger model theorems (U-* catalogue)
-│   ├── Support/            # execution, context, and compatibility helpers
-│   ├── Vesting/            # specification proofs, milestone suites, standalone checkpoints
-│   ├── Vault/              # standalone hashed-datum checkpoint
-│   └── Settings/           # standalone minting checkpoint
-├── Workflow/
-│   ├── App/                # current CLI and orchestration
-│   ├── Input/, Generator/, Executor/, Assessor/
-│   └── Tests/              # workflow integration, component controls, legacy comparisons
-├── tests/                  # shared support and blueprint-translator tests/fixtures
-├── docs/                   # foundation and standalone-check documentation
-└── scripts/                # shared translation and proof utility scripts
+├── lakefile.toml           # one Lake workspace and pinned dependencies
+├── lean-toolchain
+└── Formal/
+    ├── Universal/          # M1.1 reusable universal-property verification
+    │   ├── Properties/UPxxx/  # definitions, metadata, run declarations, tests
+    │   ├── TxModels/       # reusable transaction models and metadata
+    │   ├── Workflow/       # CLI, engine, and their integration/component tests
+    │   ├── Support/        # M1.1 execution and context helpers
+    │   ├── Theory/         # evaluator and ledger model theorems (U-* catalogue)
+    │   ├── Standalone/     # LinearVesting, Vault, and Settings checkpoints
+    │   ├── docs/, scripts/, tests/
+    │   └── checks.example.json
+    ├── LinearVesting/      # M1.2 contract specification proofs and Tests/
+    └── Shared/             # common predicates and generic process execution
 ```
 
-Each contract gets its own `Completeness`/`Soundness`/`Robustness` under its
-folder, because the properties differ per contract. The layout follows
-`francolq/aiken-good-practices` (`order-book/verify`). Every theorem carries a
-doc comment citing the spec section it discharges (e.g. `§9 B1`).
+[Universal](Formal/Universal/README.md) owns the M1.1 workflow, reusable banks,
+and their tests. Property codes sit directly under `Properties/`; category stays
+in metadata. Its standalone vesting examples are M1.1 fixtures, not M1.2 proofs.
+[LinearVesting](Formal/LinearVesting/README.md) owns the M1.2 specification proofs
+and suite. [Shared](Formal/Shared/README.md) holds only the predicates and process
+code used across milestones; it does not own the UPV workflow.
+
+Public commands still run from `formal/`. The layout change does not alter the
+proof scope or rerun historical results. Updated command paths in the component
+guides are marked separately from their recorded validation.
 
 ## Specification-proof tooling
 
 For the contract-specific proof pipeline below, the existing optional Nix
 environment supplies its tools. The Plutus UPV command uses the prepared
-Lean/Z3 environment described in its [user guide](Workflow/Docs/USER-GUIDE.md).
+Lean/Z3 environment described in its [user guide](Formal/Universal/Workflow/Docs/USER-GUIDE.md).
 
 ```bash
 cd formal
@@ -132,17 +134,17 @@ These apply to any contract:
 
 ## Contracts
 
-- **vesting/linear**: see [`Formal/Vesting/Linear/README.md`](Formal/Vesting/Linear/README.md)
+- **vesting/linear**: see [`Formal/LinearVesting/README.md`](Formal/LinearVesting/README.md)
   for its coverage tables and open targets.
 
 ## Test ownership
 
 | What you want to test | Location and entry point |
 | --- | --- |
-| App, engine, and integration behavior | [Workflow tests](Workflow/Tests/README.md), `./plutus-upv test` |
-| A reusable property's definition, model binding, and retained examples | [Property bank](Formal/Properties/README.md), each property's `Tests.lean` and `Tests/` |
-| One validator milestone's specification proofs | [Linear vesting M1.2 suite](Formal/Vesting/Linear/Tests/README.md), `lake exe test_m12` |
-| Shared support or blueprint translation | [Shared-test index](tests/README.md) |
+| App, engine, and integration behavior | [Workflow tests](Formal/Universal/Workflow/Tests/README.md), `./plutus-upv test` |
+| A reusable property's definition, model binding, and retained examples | [Property bank](Formal/Universal/Properties/README.md), each property's `Tests.lean` and `Tests/` |
+| One validator milestone's specification proofs | [Linear vesting M1.2 suite](Formal/LinearVesting/Tests/README.md), `lake exe test_m12` |
+| M1.1 support or blueprint translation | [Utility-test index](Formal/Universal/tests/README.md) |
 
 The workflow aggregate includes selected property suites. Standalone candidate
 proof jobs and validator milestone suites run separately. A property's retained
