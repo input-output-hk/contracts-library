@@ -223,11 +223,14 @@ pub fn validate_stake_create_proposal(
         ..
       }
     = self
-  expect Finite(now) = validity_range.lower_bound.bound_type
+  // The lock anchors to the create transaction's validity upper bound (which
+  // the ledger forces to cover the inclusion slot), so it can never be
+  // pre-expired by backdating the range — mirroring `validate_create_proposal`.
+  expect Finite(upper) = validity_range.upper_bound.bound_type
   let p_id = token_name_from_ref(own_ref)
   let new_lock = Lock {
     proposal_id: p_id,
-    unlock_time: now + settings.timings.draft_length,
+    unlock_time: upper + settings.timings.draft_length,
     stake: in_stake,
   }
   let out = find_continuation_output(outputs, own_addr)

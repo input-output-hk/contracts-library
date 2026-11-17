@@ -357,9 +357,13 @@ test rejects_close_without_burn() {
 // ------------------------------------------------------------ CreateProposal
 
 test create_proposal_ok() {
-  let now = 500
+  let upper = 500
   let p_id = token_name_from_ref(pos_ref())
-  let new_lock = Lock { proposal_id: p_id, unlock_time: now + 1000, stake: 100 }
+  let new_lock = Lock {
+    proposal_id: p_id,
+    unlock_time: upper + 1000,
+    stake: 100,
+  }
   let d = stake_datum(None, [])
   let out = pos_output(100, stake_datum(None, [new_lock]))
   let tx = Transaction {
@@ -369,7 +373,51 @@ test create_proposal_ok() {
     outputs: [out],
     mint: assets.from_asset(proposal_policy, p_id, 1),
     extra_signatories: [owner_hash],
-    validity_range: interval.after(now),
+    validity_range: interval.between(0, upper),
+  }
+  spend(d, CreateProposal, tx)
+}
+
+// CONS-02 regression: the draft lock anchors to the validity upper bound. A
+// lock mirroring the (backdatable) lower bound no longer passes, so the same
+// stake cannot create proposals whose lock is pre-expired at creation.
+test rejects_create_lock_below_upper_anchor() fail {
+  let upper = 500
+  let p_id = token_name_from_ref(pos_ref())
+  // The old lower-anchored lock: lower bound (0) + draft_length (1000).
+  let backdated = Lock { proposal_id: p_id, unlock_time: 1000, stake: 100 }
+  let d = stake_datum(None, [])
+  let out = pos_output(100, stake_datum(None, [backdated]))
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [pos_input(100)],
+    reference_inputs: [settings_input()],
+    outputs: [out],
+    mint: assets.from_asset(proposal_policy, p_id, 1),
+    extra_signatories: [owner_hash],
+    validity_range: interval.between(0, upper),
+  }
+  spend(d, CreateProposal, tx)
+}
+
+test rejects_create_without_upper_bound() fail {
+  let upper = 500
+  let p_id = token_name_from_ref(pos_ref())
+  let new_lock = Lock {
+    proposal_id: p_id,
+    unlock_time: upper + 1000,
+    stake: 100,
+  }
+  let d = stake_datum(None, [])
+  let out = pos_output(100, stake_datum(None, [new_lock]))
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [pos_input(100)],
+    reference_inputs: [settings_input()],
+    outputs: [out],
+    mint: assets.from_asset(proposal_policy, p_id, 1),
+    extra_signatories: [owner_hash],
+    validity_range: interval.after(0),
   }
   spend(d, CreateProposal, tx)
 }
