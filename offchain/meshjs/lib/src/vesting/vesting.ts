@@ -52,7 +52,8 @@ function assetUnit(policyId: string, assetName: string): string {
 }
 
 /** Continuing-output assets: the required remainder, with ada floored to
- * `minLovelace` (adding an ada entry if the bundle has none). */
+ * `minLovelace` (adding an ada entry if the bundle has none). Zero-quantity
+ * entries are omitted: they cannot be represented as an output asset. */
 function remainderToAssets(
   remainder: VestedAsset[],
   minLovelace: bigint,
@@ -64,15 +65,140 @@ function remainderToAssets(
     if (unit === "lovelace") {
       hasAda = true;
       const q = a.total < minLovelace ? minLovelace : a.total;
-      assets.push({ unit, quantity: q.toString() });
-    } else {
+      if (q > 0n) assets.push({ unit, quantity: q.toString() });
+    } else if (a.total > 0n) {
       assets.push({ unit, quantity: a.total.toString() });
     }
   }
-  if (!hasAda) {
+  if (!hasAda && minLovelace > 0n) {
     assets.unshift({ unit: "lovelace", quantity: minLovelace.toString() });
   }
   return assets;
+}
+
+const ADA_KEY = ":";
+
+/** Canonical case-insensitive key for a datum asset. */
+function datumAssetKey(a: VestedAsset): string {
+  return `${a.policyId.toLowerCase()}:${a.assetName.toLowerCase()}`;
+}
+
+/** Canonical key for a MeshJS `Asset.unit` (`lovelace` or policy+name). */
+function unitAssetKey(unit: string): string {
+  if (unit === "lovelace") return ADA_KEY;
+  if (unit.length < 56) {
+    throw new Error(`Invalid asset unit: expected policy id plus asset name`);
+  }
+  return `${unit.slice(0, 56).toLowerCase()}:${unit.slice(56).toLowerCase()}`;
+}
+
+function displayUnit(unit: string): string {
+  return unit === "lovelace" ? "ada" : unit;
+}
+
+export interface LockValueOptions {
+  /** Ada floor used when building the default lock output, in lovelace. */
+  minLovelace: bigint;
+  /**
+   * Permit value beyond the scheduled totals (including unlisted assets)
+   * instead of rejecting it. Such value is not schedule-protected: the
+   * beneficiary can sweep it on the first partial claim.
+   */
+  allowUnprotectedValue?: boolean;
+  /** Warning sink for intentional unprotected value; defaults to `console`. */
+  logger?: Pick<Console, "warn">;
+}
+
+/**
+ * Validate that a lock output's value matches the datum totals (spec §4.1/I7).
+ *
+ * Rejects:
+ * - a shortfall of any asset listed in `vesting` (it blocks partial claims), and
+ * - value above the scheduled totals, unlisted tokens, or unlisted ada beyond
+ *   the min-ada floor, unless `allowUnprotectedValue` is set.
+ *
+ * The ada allowance is `max(listed ada total, minLovelace)`: the output needs
+ * min-ada to exist, and that unavoidable floor is always permitted.
+ */
+export function assertLockValue(
+  datum: VestingDatum,
+  assets: Asset[],
+  options: LockValueOptions,
+): void {
+  if (options.minLovelace < 0n) {
+    throw new Error("Invalid minUtxoLovelace: must be non-negative");
+  }
+
+  const actual = new Map<string, { unit: string; quantity: bigint }>();
+  for (const asset of assets) {
+    if (!/^\d+$/.test(asset.quantity)) {
+      throw new Error(
+        `Invalid lock value: ${displayUnit(asset.unit)} quantity '${asset.quantity}' is not a non-negative integer`,
+      );
+    }
+    const quantity = BigInt(asset.quantity);
+    if (quantity === 0n) continue;
+    const key = unitAssetKey(asset.unit);
+    const previous = actual.get(key);
+    actual.set(key, {
+      unit: asset.unit,
+      quantity: (previous?.quantity ?? 0n) + quantity,
+    });
+  }
+
+  const shortfalls: string[] = [];
+  for (const required of datum.vesting) {
+    const have = actual.get(datumAssetKey(required))?.quantity ?? 0n;
+    if (have < required.total) {
+      shortfalls.push(
+        `${required.total - have} of ${displayUnit(assetUnit(required.policyId, required.assetName))}`,
+      );
+    }
+  }
+  if (shortfalls.length > 0) {
+    throw new Error(
+      `Invalid lock value: output is short of the datum totals (${shortfalls.join(", ")}); a shortfall blocks every partial claim until endTime`,
+    );
+  }
+
+  const actualAda = actual.get(ADA_KEY)?.quantity ?? 0n;
+  if (actualAda < options.minLovelace) {
+    throw new Error(
+      `Invalid lock value: output holds ${actualAda} lovelace but the min-ada floor is ${options.minLovelace}`,
+    );
+  }
+
+  // Every listed asset may be present up to its scheduled total. Ada gets the
+  // extra min-ada allowance because an output cannot exist without it.
+  const allowed = new Map<string, bigint>();
+  for (const listed of datum.vesting) {
+    allowed.set(datumAssetKey(listed), listed.total);
+  }
+  const listedAda = allowed.get(ADA_KEY) ?? 0n;
+  if (options.minLovelace > listedAda) {
+    allowed.set(ADA_KEY, options.minLovelace);
+  }
+
+  const excesses: string[] = [];
+  for (const [key, asset] of actual) {
+    const excess = asset.quantity - (allowed.get(key) ?? 0n);
+    if (excess > 0n) {
+      excesses.push(`${excess} of ${displayUnit(asset.unit)}`);
+    }
+  }
+  if (excesses.length === 0) return;
+
+  const detail = excesses.join(", ");
+  const consequence =
+    "value beyond the scheduled totals is not schedule-protected and can be swept by the beneficiary on the first partial claim";
+  if (!options.allowUnprotectedValue) {
+    throw new Error(
+      `Invalid lock value: ${detail} exceeds the datum totals; ${consequence}. Pass allowUnprotectedValue: true only if intentional`,
+    );
+  }
+  (options.logger ?? console).warn(
+    `Vesting lock includes unprotected value: ${detail}; ${consequence}.`,
+  );
 }
 
 export interface LockParams {
@@ -85,9 +211,19 @@ export interface LockParams {
   changeAddress: string;
   /**
    * Exact assets to lock. Defaults to the datum's `vesting` bundle with ada
-   * floored to `minUtxoLovelace`. Override to lock extra ada/tokens.
+   * floored to `minUtxoLovelace`.
+   *
+   * The value must cover every datum total. Unlisted value and quantities
+   * above the scheduled totals are rejected because they are not
+   * schedule-protected (the beneficiary can sweep them immediately).
    */
   lockAssets?: Asset[];
+  /**
+   * Opt in to locking value beyond the datum totals (including unlisted
+   * assets). This emits a warning: that value is not schedule-protected and
+   * can be swept by the beneficiary on the first partial claim.
+   */
+  allowUnprotectedValue?: boolean;
   networkId?: number;
   minUtxoLovelace?: bigint;
 }
@@ -105,6 +241,10 @@ export async function buildLockTx(p: LockParams): Promise<string> {
   const scriptAddr = vestingScriptAddress(p.networkId ?? 0);
   const assets =
     p.lockAssets ?? remainderToAssets(p.datum.vesting, minLovelace); // full bundle, ada floored
+  assertLockValue(p.datum, assets, {
+    minLovelace,
+    allowUnprotectedValue: p.allowUnprotectedValue,
+  });
 
   return await p.txBuilder
     .txOut(scriptAddr, assets)

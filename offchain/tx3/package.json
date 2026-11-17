@@ -8,6 +8,7 @@
     "test:smart-wallet": "vitest run smart_wallet/tests/devnet.test.ts",
     "test:upgradeability": "vitest run upgradeability/tests/devnet.test.ts",
     "test:vesting": "vitest run vesting/tests/devnet.test.ts",
+    "test:vesting-unit": "vitest run vesting/tests/lock.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

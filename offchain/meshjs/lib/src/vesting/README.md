@@ -20,6 +20,7 @@ A vesting UTxO locks a bundle of assets for a `beneficiary` and releases it line
 | `vestingScript()` / `vestingScriptAddress(networkId)` | The pinned Plutus V3 script and its address. |
 | `vestedQuantity(total, start, end, now)` | Schedule math (mirrors on-chain). |
 | `requiredRemainder(datum, now)` | Per-asset amount that must stay locked. |
+| `assertLockValue(datum, assets, options)` | Validate a lock output against the datum totals. |
 | `vestingDatumToData` / `claimRedeemer` | CBOR encoders matching the blueprint. |
 
 ### Datum shape
@@ -41,7 +42,27 @@ const datum: VestingDatum = {
 };
 ```
 
-`policyId: ""` / `assetName: ""` is ada. Quantities are `bigint`. The `vesting` list must be strictly ascending by `(policyId, assetName)` with no duplicates and no negative totals, or the instance can never be claimed (only recovered by the locker). `buildLockTx` checks this; use `sortVestingBundle` to put entries in order. The `locker` can recover anything still locked after `recoveryTime`.
+`policyId: ""` / `assetName: ""` is ada. Quantities are `bigint`. The `vesting` list must be strictly ascending by `(policyId, assetName)` with no duplicates and no negative totals, or the instance can never be claimed (it can only be recovered by the locker when the schedule itself is valid). `buildLockTx` checks this; use `sortVestingBundle` to put entries in order. The `locker` can recover anything still locked after `recoveryTime`.
+
+### Lock value coverage
+
+`buildLockTx` also validates the output value against the datum (spec §4.1/I7):
+
+- The schedule must satisfy `startTime < endTime < recoveryTime`. A datum
+  with `startTime >= endTime` can be neither claimed nor cancelled; one with
+  `endTime >= recoveryTime` can never be cancelled.
+- Every listed `total` must be covered. A shortfall blocks all partial claims
+  until `endTime`.
+- Quantities above the listed totals and unlisted tokens are rejected. They
+  are not schedule-protected: the beneficiary can sweep them on the first
+  partial claim.
+- Ada required for min-UTxO is allowed even if ada is not listed (the default
+  lock value floors ada to `minUtxoLovelace`). That floor remains unprotected;
+  list the expected ada in `vesting` when it should vest.
+
+Pass `allowUnprotectedValue: true` only when the surplus is intentional. The
+builder then logs a warning instead of rejecting it. `assertLockValue` exposes
+the same check for custom transaction construction.
 
 ## Full example
 

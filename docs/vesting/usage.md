@@ -75,10 +75,24 @@ const datum: VestingDatum = {
 };
 ```
 
-The lock output must carry at least each `total` plus min-ada, with an inline
-datum at the vesting script address. The builder enforces
-`startTime < endTime < recoveryTime`; the on-chain code does **not** validate
-the lock (spec §4.1), so a malformed lock can strand funds.
+The lock output must cover each listed `total` and satisfy min-UTxO (the same
+ada counts toward both), with an inline datum at the vesting script address.
+The builder
+enforces `startTime < endTime < recoveryTime`; the on-chain code does **not**
+validate the lock (spec §4.1), so a malformed lock can strand funds.
+
+The builder also checks datum/value consistency:
+
+- A listed asset below its `total` is rejected: even a one-unit shortfall
+  blocks every partial claim until `endTime`.
+- A listed asset above its `total`, an unlisted token, or unlisted ada above
+  the min-ada floor is rejected by default. That value is **not**
+  schedule-protected and the beneficiary can sweep it on the first partial
+  claim. If the surplus is intentional, pass `allowUnprotectedValue: true`;
+  the builder then emits a warning.
+- Ada needed for min-UTxO is always allowed, even when ada is absent from
+  `vesting`. It is still unprotected, so include the expected ada in the
+  datum when it should follow the schedule.
 
 ## Claiming
 
@@ -135,7 +149,8 @@ exposes four transaction templates against the pinned blueprint; generate a
 TypeScript client with `trix codegen --plugin ts-client`:
 
 ```ts
-await client.lock({ ada_total, vesting_datum });                    // lock an instance
+// `buildLockTx` is exported by offchain/tx3/vesting/lock.ts
+await buildLockTx(client, { ada_total, vesting_datum });             // validated lock
 await client.claim({ vesting_ref, vesting_datum, required_ada, since_slot });
 await client.claimFull({ vesting_ref, since_slot });                // now >= end_time
 await client.cancel({ vesting_ref, since_slot });                   // now > recovery_time
@@ -144,7 +159,10 @@ await client.cancel({ vesting_ref, since_slot });                   // now > rec
 Bind `Locker`/`Beneficiary` to the wallets owning the datum's key credentials
 and `Vesting` to the script address. `since_slot` sets the validity lower
 bound — the on-chain `now`; compute `required_ada` from the *start time of
-that slot* with the MeshJS `vestedQuantity` helper. The Tx3 reference covers
+that slot* with the MeshJS `vestedQuantity` helper. The Tx3 lock wrapper
+rejects invalid schedules, non-ada bundles, underfunding, and (by default)
+ada above the datum total; use the generated `client.lock` directly only if
+you have validated those preconditions yourself. The Tx3 reference covers
 the key-authorized, ada-only, single-input paths (see the
 [protocol README](../../offchain/tx3/vesting/README.md) for scope notes);
 script credentials, multi-asset bundles, and batched claims go through the
@@ -152,8 +170,12 @@ MeshJS builders.
 
 ## Gotchas and safety notes
 
-- **The lock is not validated on-chain.** The builder is responsible for a
-  well-formed datum and a value covering every `total`.
+- **The lock is not validated on-chain.** The reference builders enforce a
+  well-formed schedule, a well-formed bundle, full coverage of every `total`,
+  and no unprotected surplus (unless explicitly opted in).
+- **Only listed assets are protected.** Ada required for min-UTxO is always
+  allowed, and any value above the listed totals or absent from `vesting` is
+  swept by the beneficiary on the first partial claim.
 - **The datum is immutable.** Every continuation must reproduce it byte-for-byte.
 - **`recovery_time` must be strictly after `end_time`.** The validator rejects
   malformed schedules.

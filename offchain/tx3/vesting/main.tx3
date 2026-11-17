@@ -14,7 +14,8 @@
 //               `start_time < end_time < recovery_time` and the output value
 //               must cover every `vesting` entry (the on-chain code does not
 //               validate the lock, so this is the builder's responsibility,
-//               spec §4.1 / I7)
+//               spec §4.1 / I7). Tx3 cannot express those checks, so production
+//               callers use the validated `buildLockTx` wrapper in `lock.ts`
 //   claim       the beneficiary withdraws the vested portion; before
 //               `end_time` a continuation at the script address reproduces
 //               the datum byte-for-byte and keeps `required_ada` lovelace —
@@ -117,11 +118,13 @@ type VestingRedeemer {
 // Lock an instance (§4.1): send the bundle to the script with the inline
 // `VestingDatum`. No script runs; the locker signs and funds.
 tx lock(
-    /// Lovelace locked into the instance. Must cover the datum's ada entry
-    /// (plus min-UTxO headroom; extra ada is schedule-unprotected surplus).
+    /// Lovelace locked into the instance. Must cover the datum's ada entry and
+    /// satisfy min-UTxO; any extra ada is schedule-unprotected surplus. Use the
+    /// `lock.ts` wrapper to enforce this and the schedule.
     ada_total: Int,
     /// The vesting terms. The caller is responsible for the well-formed
-    /// schedule and a `vesting` list covered by the output value.
+    /// schedule and a `vesting` list covered by the output value; the `lock.ts`
+    /// wrapper enforces both before building.
     vesting_datum: VestingDatum,
 ) {
     input funding {
