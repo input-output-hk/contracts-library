@@ -1,0 +1,46 @@
+{
+  "preamble": {
+    "title": "no-witness-labs/up014-datum-control",
+    "description": "UP-014 synthetic continuation credential gate that ignores datums",
+    "version": "0.0.0",
+    "plutusVersion": "v3",
+    "compiler": {
+      "name": "Aiken",
+      "version": "v1.1.21+42babe5"
+    },
+    "license": "Apache-2.0"
+  },
+  "validators": [
+    {
+      "title": "continuation_gate.continuation_gate.spend",
+      "datum": {
+        "title": "_datum",
+        "schema": {
+          "$ref": "#/definitions/Data"
+        }
+      },
+      "redeemer": {
+        "title": "_redeemer",
+        "schema": {
+          "$ref": "#/definitions/Data"
+        }
+      },
+      "compiledCode": "59011801010029800aba2aba1aba0aab9faab9eaab9dab9a488888896600264653001300800198041804800cc0200092225980099b8748008c01cdd500144c8c8cc896600266e1d2000300b3754005133225980099b8748008c034dd5180898071baa3011300e37546002601c6ea800a266ebcc044c038dd5180898071baa30113758602260246024601c6ea801cc044c038dd5180898071baa3001300e3754005164030601e60186ea80088c040c0440062c8050c8cc004004dd6180718059baa0042259800800c530103d87a80008992cc004cdd7980818069baa001004899ba548000cc03c0052f5c11330030033011002402c601e0028068c034c038008c030004c020dd50014590060c020004c00cdd5004452689b2b20021",
+      "hash": "4acb3c5a1cc296397cc47d74bd21269e2fa7c64264851de8bc89306b"
+    },
+    {
+      "title": "continuation_gate.continuation_gate.else",
+      "redeemer": {
+        "schema": {}
+      },
+      "compiledCode": "59011801010029800aba2aba1aba0aab9faab9eaab9dab9a488888896600264653001300800198041804800cc0200092225980099b8748008c01cdd500144c8c8cc896600266e1d2000300b3754005133225980099b8748008c034dd5180898071baa3011300e37546002601c6ea800a266ebcc044c038dd5180898071baa30113758602260246024601c6ea801cc044c038dd5180898071baa3001300e3754005164030601e60186ea80088c040c0440062c8050c8cc004004dd6180718059baa0042259800800c530103d87a80008992cc004cdd7980818069baa001004899ba548000cc03c0052f5c11330030033011002402c601e0028068c034c038008c030004c020dd50014590060c020004c00cdd5004452689b2b20021",
+      "hash": "4acb3c5a1cc296397cc47d74bd21269e2fa7c64264851de8bc89306b"
+    }
+  ],
+  "definitions": {
+    "Data": {
+      "title": "Data",
+      "description": "Any Plutus data."
+    }
+  }
+}

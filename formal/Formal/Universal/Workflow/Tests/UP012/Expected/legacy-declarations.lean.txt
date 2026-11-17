@@ -1,0 +1,29 @@
+theorem dropSigner_claim :
+∀ p,
+      validScriptContext (claim p) = true →
+      accepts ledgerFuel (claim p) →
+      (signatoriesOf (claim p)) ≠ [] →
+      validScriptContext (withSignatories (claim p) (signatoriesOf (claim p)).tail) = true →
+      rejects ledgerFuel (withSignatories (claim p) (signatoriesOf (claim p)).tail) := by blaster
+
+theorem dropSigner_claim_applies :
+∃ p,
+      validScriptContext (claim p) = true ∧
+      accepts ledgerFuel (claim p) ∧
+      (signatoriesOf (claim p)) ≠ [] ∧
+      validScriptContext (withSignatories (claim p) (signatoriesOf (claim p)).tail) = true := by blaster
+
+theorem dropSigner_cancel :
+∀ p,
+      validScriptContext (cancel p) = true →
+      accepts ledgerFuel (cancel p) →
+      (signatoriesOf (cancel p)) ≠ [] →
+      validScriptContext (withSignatories (cancel p) (signatoriesOf (cancel p)).tail) = true →
+      rejects ledgerFuel (withSignatories (cancel p) (signatoriesOf (cancel p)).tail) := by blaster
+
+theorem dropSigner_cancel_applies :
+∃ p,
+      validScriptContext (cancel p) = true ∧
+      accepts ledgerFuel (cancel p) ∧
+      (signatoriesOf (cancel p)) ≠ [] ∧
+      validScriptContext (withSignatories (cancel p) (signatoriesOf (cancel p)).tail) = true := by blaster

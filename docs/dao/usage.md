@@ -27,9 +27,9 @@ reference input.
 
 | Part | Where |
 |---|---|
-| On-chain validators | [`onchain/validators/dao/`](../../onchain/validators/dao/) (+ composable predicates in [`onchain/lib/dao/`](../../onchain/lib/dao/)) |
-| MeshJS builders | [`offchain/meshjs/lib/src/dao/`](../../offchain/meshjs/lib/src/dao/) |
-| Tx3 protocol + client | [`offchain/tx3/dao/`](../../offchain/tx3/dao/) |
+| On-chain validators | [`onchain/validators/dao/`](../../onchain/validators/dao) (+ composable predicates in [`onchain/lib/dao/`](../../onchain/lib/dao)) |
+| MeshJS builders | [`offchain/meshjs/lib/src/dao/`](../../offchain/meshjs/lib/src/dao) |
+| Tx3 protocol + client | [`offchain/tx3/dao/`](../../offchain/tx3/dao) |
 | Compiled blueprint | [`onchain/plutus.json`](../../onchain/plutus.json) |
 
 ## Contents
@@ -412,7 +412,7 @@ against an illegitimate victory claim is each effect script's own job
 ## Off-chain usage: Tx3 client
 
 The Tx3 implementation lives in
-[`offchain/tx3/dao/`](../../offchain/tx3/dao/) with a generated client in
+[`offchain/tx3/dao/`](../../offchain/tx3/dao) with a generated client in
 `codegen/ts-client/dao-governance` (regenerate it from
 [`main.tx3`](../../offchain/tx3/dao/main.tx3) with `trix codegen`; do not edit
 by hand). Unlike the MeshJS
@@ -593,8 +593,8 @@ Notes:
 
 - [Spec](spec.md) — full transaction tables (§5),
   threat model, invariants, and assumptions (§6).
-- [On-chain code](../../onchain/validators/dao/) — the four validators;
-  composable predicates and tests in [`onchain/lib/dao/`](../../onchain/lib/dao/).
+- [On-chain code](../../onchain/validators/dao) — the four validators;
+  composable predicates and tests in [`onchain/lib/dao/`](../../onchain/lib/dao).
 - [MeshJS e2e tests](../../offchain/meshjs/e2e/test/dao.e2e.test.ts) —
   the complete happy path against a Yaci devnet.
 - [Tx3 devnet test](../../offchain/tx3/dao/tests/devnet.test.ts) — the

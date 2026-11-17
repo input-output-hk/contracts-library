@@ -1,0 +1,14 @@
+{
+  "preamble": {
+    "plutusVersion": "v3"
+  },
+  "validators": [
+    {
+      "title": "invalid.invalid.spend",
+      "compiledCode": "zz",
+      "redeemer": {
+        "schema": {}
+      }
+    }
+  ]
+}

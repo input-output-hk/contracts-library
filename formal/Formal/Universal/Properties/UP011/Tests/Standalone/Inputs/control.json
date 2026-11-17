@@ -1,0 +1,46 @@
+{
+  "preamble": {
+    "title": "no-witness-labs/up011-negative-control",
+    "description": "UP-011 control that requires a continuation datum but ignores its address",
+    "version": "0.0.0",
+    "plutusVersion": "v3",
+    "compiler": {
+      "name": "Aiken",
+      "version": "v1.1.21+42babe5"
+    },
+    "license": "Apache-2.0"
+  },
+  "validators": [
+    {
+      "title": "ignore_address.ignore_address.spend",
+      "datum": {
+        "title": "_datum",
+        "schema": {
+          "$ref": "#/definitions/Data"
+        }
+      },
+      "redeemer": {
+        "title": "_redeemer",
+        "schema": {
+          "$ref": "#/definitions/Data"
+        }
+      },
+      "compiledCode": "588201010029800aba2aba1aab9eaab9dab9a4888896600264646644b30013370e900118031baa0018994c004c024006601260140032300a300b300b00148896600266e1d2004300a3754600260166ea8c030dd6180098059baa300c0088a518b201218039baa0018b200a30060013006300700130060013003375400d149a26cac80081",
+      "hash": "7d046e6d518c52d03749ee90e7284e38833ac98631f453d997b4a3d8"
+    },
+    {
+      "title": "ignore_address.ignore_address.else",
+      "redeemer": {
+        "schema": {}
+      },
+      "compiledCode": "588201010029800aba2aba1aab9eaab9dab9a4888896600264646644b30013370e900118031baa0018994c004c024006601260140032300a300b300b00148896600266e1d2004300a3754600260166ea8c030dd6180098059baa300c0088a518b201218039baa0018b200a30060013006300700130060013003375400d149a26cac80081",
+      "hash": "7d046e6d518c52d03749ee90e7284e38833ac98631f453d997b4a3d8"
+    }
+  ],
+  "definitions": {
+    "Data": {
+      "title": "Data",
+      "description": "Any Plutus data."
+    }
+  }
+}

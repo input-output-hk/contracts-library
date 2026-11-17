@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:plutus-upv:workflow:combined-checks",
+  "$comment": "Workflow-scoped shape contract. Required/optional and cardinality policies remain open. Reference resolution, compatibility, and generated-job binding are separate checks.",
+  "title": "Plutus UPV workflow combined checks",
+  "type": "array",
+  "items": {
+    "$ref": "#/$defs/combinedCheck"
+  },
+  "$defs": {
+    "combinedCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "property": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "definition_version": {
+              "type": "integer"
+            }
+          }
+        },
+        "tx_model": {
+          "type": "string",
+          "description": "The selected transaction-model ID, such as TxM-001."
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Coverage or interpretation limits arising from using this model with the selected property definition."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Properties file",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["id", "title", "category", "summary", "theorems"],
+    "additionalProperties": false,
+    "properties": {
+      "id": { "type": "string" },
+      "title": { "type": "string" },
+      "category": {
+        "type": "string",
+        "minLength": 1
+      },
+      "summary": { "type": "string" },
+      "theorems": { "type": "array", "items": { "type": "string" } }
+    }
+  }
+}

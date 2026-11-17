@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:plutus-upv:workflow:transaction-models",
+  "$comment": "Workflow-scoped shape contract. Required/optional and cardinality policies remain open. Model registration, compatibility, and execution binding are separate checks.",
+  "title": "Plutus UPV workflow transaction models",
+  "type": "array",
+  "items": {
+    "$ref": "#/$defs/transactionModel"
+  },
+  "$defs": {
+    "transactionModel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Sequential model identifier, such as TxM-001. A changed model receives a new ID; existing IDs retain their meaning."
+        },
+        "title": {
+          "type": "string"
+        },
+        "plutus_version": {
+          "type": "string",
+          "description": "Plutus ledger-language context format, such as v3. This does not specify the complete execution environment."
+        },
+        "description": {
+          "type": "string",
+          "description": "The family of script contexts represented by the model, including relevant fixed features, variable values, and constructed relationships."
+        }
+      }
+    }
+  }
+}

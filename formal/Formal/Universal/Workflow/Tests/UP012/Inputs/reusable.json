@@ -1,0 +1,99 @@
+{
+  "preamble": {
+    "title": "no-witness-labs/preparation-demo",
+    "description": "Authored fixtures for the reusable TxM009 preparation pilot",
+    "version": "0.0.0",
+    "plutusVersion": "v3",
+    "compiler": {
+      "name": "Aiken",
+      "version": "v1.1.21+42babe5"
+    },
+    "license": "Apache-2.0"
+  },
+  "validators": [
+    {
+      "title": "controller_gate.controller_gate.spend",
+      "datum": {
+        "title": "datum",
+        "schema": {
+          "$ref": "#/definitions/preparation_types~1KeyDatum"
+        }
+      },
+      "redeemer": {
+        "title": "redeemer",
+        "schema": {
+          "$ref": "#/definitions/preparation_types~1Action"
+        }
+      },
+      "compiledCode": "59010c01010029800aba2aba1aab9faab9eaab9dab9a48888896600264653001300700198039804000cc01c0092225980099b8748008c01cdd500144c8cc896600266e1d2000300a375400d15980098059baa0068acc004cdc3a400060146ea80062b3001323322330020020012259800800c528456600266e3cdd71808000801c528c4cc008008c04400500c201e3758601c601e601e601e601e601e601e601e601e60186ea8014dd7180698059baa300d300b375400313370e64660020026eb0c038c030dd5002912cc0040062900044cdc024004660040046020002807120028a50402516402516403116402460160026016601800260106ea800a2c8030600e00260066ea801e29344d9590011",
+      "hash": "29f04fa6e54c2c0cb02b8ce6bc044dd22f7dae9e3196f1cb7b7c1b0f"
+    },
+    {
+      "title": "missing_signature.missing_signature.spend",
+      "datum": {
+        "title": "datum",
+        "schema": {
+          "$ref": "#/definitions/preparation_types~1KeyDatum"
+        }
+      },
+      "redeemer": {
+        "title": "redeemer",
+        "schema": {
+          "$ref": "#/definitions/preparation_types~1Action"
+        }
+      },
+      "compiledCode": "58b701010029800aba2aba1aab9faab9eaab9dab9a48888896600264646644b30013370e900118031baa00189919912cc004cdc3a400060126ea80162b3001300a375400b15980099b8748000c024dd5000c4c8cdc399198008009bac300e300c3754601c01244b30010018a40011337009001198010011808000a01c48008c030c028dd5000c5900845900b45900818050009805180580098039baa0018b200a30070013007300800130070013003375400f149a26cac8009",
+      "hash": "835a85204b6fb6abf0f409583fa5b5753f270937a7ce53d2fd8f56c9"
+    },
+    {
+      "title": "never_accept.never_accept.spend",
+      "datum": {
+        "title": "datum",
+        "schema": {
+          "$ref": "#/definitions/preparation_types~1KeyDatum"
+        }
+      },
+      "redeemer": {
+        "title": "redeemer",
+        "schema": {
+          "$ref": "#/definitions/preparation_types~1Action"
+        }
+      },
+      "compiledCode": "589301010029800aba2aba1aab9faab9eaab9dab9a48888896600264653001300700198039804000cc01c0092225980099b8748008c01cdd500144c8cc896600266e1d2000300a375400d15980098059baa0068acc004cdc3a400060146ea8006264940c034c02cdd5000c5900945900c45900918058009805980600098041baa0028b200c180380098019baa0078a4d1365640041",
+      "hash": "eaef4b02e2a6b394858ca3d4c69e47123e9e1ecb0ea69a050069aacf"
+    }
+  ],
+  "definitions": {
+    "aiken/crypto/VerificationKeyHash": {
+      "title": "VerificationKeyHash",
+      "dataType": "bytes"
+    },
+    "preparation_types/Action": {
+      "title": "Action",
+      "anyOf": [
+        {
+          "title": "Withdraw",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": []
+        }
+      ]
+    },
+    "preparation_types/KeyDatum": {
+      "title": "KeyDatum",
+      "anyOf": [
+        {
+          "title": "KeyDatum",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "controller",
+              "$ref": "#/definitions/aiken~1crypto~1VerificationKeyHash"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

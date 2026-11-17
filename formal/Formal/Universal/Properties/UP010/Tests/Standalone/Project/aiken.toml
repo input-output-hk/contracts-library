@@ -1,0 +1,11 @@
+name = "no-witness-labs/up010-output-control"
+version = "0.0.0"
+compiler = "v1.1.21"
+plutus = "v3"
+license = "Apache-2.0"
+description = "UP-010 negative control accepting exactly spending contexts with a script output"
+
+[[dependencies]]
+name = "aiken-lang/stdlib"
+version = "v3.1.0"
+source = "github"

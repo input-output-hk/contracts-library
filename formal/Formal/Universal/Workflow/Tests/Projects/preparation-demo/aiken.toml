@@ -1,0 +1,11 @@
+name = "no-witness-labs/preparation-demo"
+version = "0.0.0"
+compiler = "v1.1.21"
+plutus = "v3"
+license = "Apache-2.0"
+description = "Authored fixtures for the reusable TxM009 preparation pilot"
+
+[[dependencies]]
+name = "aiken-lang/stdlib"
+version = "v3.0.0"
+source = "github"

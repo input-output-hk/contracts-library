@@ -1,10 +1,17 @@
-# Formal proofs
+# Formal verification
 
-Machine-checked proofs of the contract **specifications** under [`docs/<contract>/spec.md`](../docs).
-This is a fourth artifact alongside `onchain/`, `offchain/`, and the spec
-(`docs/<contract>/spec.md`): the
-proofs are *about the spec* (the source of truth), not about any one
-implementation. See [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md) §2.
+This Lake project contains the Plutus UPV app, reusable property and transaction
+model banks, and contract-specific specification proofs.
+
+For Plutus UPV (Universal Property Verifier), use the
+[CLI quickstart](Formal/Universal/Workflow/Docs/USER-GUIDE.md). The app uses Lean for property discovery,
+model preparation, and verification with the installed Lean/Z3 tools.
+From `formal/`, `./plutus-upv test` runs the registered workflow test suites with verbose
+logs; `./plutus-upv run ...` verifies properties of a supplied compiled validator.
+The guide includes passing, failing, and inconclusive examples.
+
+Use the [documentation map](Formal/Universal/docs/README.md) to find the app, reusable banks,
+standalone candidate guides, and contract specification proofs.
 
 Proofs are written in [Lean 4](https://lean-lang.org/) and discharged with
 [Lean-Blaster](https://github.com/input-output-hk/Lean-blaster), an SMT (Z3)
@@ -12,34 +19,44 @@ backend invoked via the `blaster` tactic.
 
 ## Layout
 
-```
+The [milestone migration record](MIGRATION.md) maps previous imports and records
+validation results, including the separate installer-fixture repair run.
+
+```text
 formal/
-├── lakefile.toml            # depends on Blaster + PlutusCore + CardanoLedgerApi
-├── lean-toolchain           # pinned Lean version
-├── flake.nix                # elan + Z3 4.15.2 + gawk
-├── justfile                 # build -> flats -> verify pipeline
-├── scripts/
-│   └── annotate-blaster-logs.awk
-├── Formal.lean              # root; imports every contract aggregator
+├── plutus-upv / install.sh  # public command and checkout-backed installation
+├── lakefile.toml           # one Lake workspace and pinned dependencies
+├── lean-toolchain
 └── Formal/
-    ├── Common.lean          # shared `validatorAccepts` / `validatorRejects`
-    └── Vesting/
-        ├── Linear.lean      # aggregator for the vesting/linear contract
-        └── Linear/
-            ├── Spec.lean          # pure model: `vested`, datum encoding (no UPLC)
-            ├── Completeness.lean  # spec ⇒ accepts (§8); `#import_uplc`s the flat
-            ├── Soundness.lean     # accepts ⇒ spec (§9) + shared context scaffold
-            └── Robustness.lean    # rejection theorems incl. no-double-satisfaction
+    ├── Universal/          # M1.1 reusable universal-property verification
+    │   ├── Properties/UPxxx/  # definitions, metadata, run declarations, tests
+    │   ├── TxModels/       # reusable transaction models and metadata
+    │   ├── Workflow/       # CLI, engine, and their integration/component tests
+    │   ├── Support/        # M1.1 execution and context helpers
+    │   ├── Theory/         # evaluator and ledger model theorems (U-* catalogue)
+    │   ├── Standalone/     # LinearVesting, Vault, and Settings checkpoints
+    │   ├── docs/, scripts/, tests/
+    │   └── checks.example.json
+    ├── LinearVesting/      # M1.2 contract specification proofs and Tests/
+    └── Shared/             # common predicates and generic process execution
 ```
 
-Each contract gets its own `Completeness`/`Soundness`/`Robustness` under its
-folder, because the properties differ per contract. The layout follows
-`francolq/aiken-good-practices` (`order-book/verify`). Every theorem carries a
-doc comment citing the spec section it discharges (e.g. `§9 B1`).
+[Universal](Formal/Universal/README.md) owns the M1.1 workflow, reusable banks,
+and their tests. Property codes sit directly under `Properties/`; category stays
+in metadata. Its standalone vesting examples are M1.1 fixtures, not M1.2 proofs.
+[LinearVesting](Formal/LinearVesting/README.md) owns the M1.2 specification proofs
+and suite. [Shared](Formal/Shared/README.md) holds only the predicates and process
+code used across milestones; it does not own the UPV workflow.
 
-## Prerequisites
+Public commands still run from `formal/`. The layout change does not alter the
+proof scope or rerun historical results. Updated command paths in the component
+guides are marked separately from their recorded validation.
 
-The easiest path is **Nix** — `flake.nix` provides the whole toolchain:
+## Specification-proof tooling
+
+For the contract-specific proof pipeline below, the existing optional Nix
+environment supplies its tools. The Plutus UPV command uses the prepared
+Lean/Z3 environment described in its [user guide](Formal/Universal/Workflow/Docs/USER-GUIDE.md).
 
 ```bash
 cd formal
@@ -59,7 +76,7 @@ Without Nix, install manually:
   [Blaster README](https://github.com/input-output-hk/Lean-blaster);
   `z3 --version` should report `Z3 version 4.15.2`.
 
-## Build
+## Specification-proof pipeline
 
 The `justfile` in this directory drives the whole pipeline (compile Aiken →
 dump UPLC → encode to flat → check proofs):
@@ -76,11 +93,16 @@ Or directly, inside the dev shell:
 cd formal
 # (in `nix develop`, or with elan + z3 on PATH)
 lake update      # fetch Blaster + PlutusCore + CardanoLedgerApi
-lake build       # type-check all modules and run every `blaster` proof
+lake build       # build the Formal specification-proof target
 ```
 
 A failing `blaster` goal can be debugged with its options, e.g.
 `blaster (verbose: 1)` or `blaster (gen-cex: 1)` to print a counterexample.
+
+## Contract specification proofs
+
+These proofs accompany `onchain/`, `offchain/`, and the contract specifications
+under `docs/<contract>/spec.md`. See [the architecture](../docs/ARCHITECTURE.md) §2.
 
 ## How each contract is verified
 
@@ -115,5 +137,20 @@ These apply to any contract:
 
 ## Contracts
 
-- **vesting/linear** — see [`Formal/Vesting/Linear/README.md`](Formal/Vesting/Linear/README.md)
+- **vesting/linear**: see [`Formal/LinearVesting/README.md`](Formal/LinearVesting/README.md)
   for its coverage tables and open targets.
+
+## Test ownership
+
+| What you want to test | Location and entry point |
+| --- | --- |
+| App, engine, and integration behavior | [Workflow tests](Formal/Universal/Workflow/Tests/README.md), `./plutus-upv test` |
+| A reusable property's definition, model binding, and retained examples | [Property bank](Formal/Universal/Properties/README.md), each property's `Tests.lean` and `Tests/` |
+| One validator milestone's specification proofs | [Linear vesting M1.2 suite](Formal/LinearVesting/Tests/README.md), `lake exe test_m12` |
+| M1.1 support or blueprint translation | [Utility-test index](Formal/Universal/tests/README.md) |
+
+The workflow aggregate includes selected property suites. Standalone candidate
+proof jobs and validator milestone suites run separately. A property's retained
+`Tests/Standalone/` folder does not mean its native definition, metadata, or app
+registration is complete. Historical proof outcomes keep their original model,
+artifact, dependency, and execution limits; moving files does not rerun them.

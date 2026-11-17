@@ -16,9 +16,9 @@ one-shot **Settings NFT**, whose inline datum holds the active configuration
 
 | Part | Where |
 |---|---|
-| On-chain validator | [`onchain/validators/settings.ak`](../../onchain/validators/settings.ak) (+ composable predicates in [`onchain/lib/settings/`](../../onchain/lib/settings/)) |
-| MeshJS builders | [`offchain/meshjs/lib/src/settings/`](../../offchain/meshjs/lib/src/settings/) |
-| Tx3 protocol + client | [`offchain/tx3/settings/`](../../offchain/tx3/settings/) |
+| On-chain validator | [`onchain/validators/settings.ak`](../../onchain/validators/settings.ak) (+ composable predicates in [`onchain/lib/settings/`](../../onchain/lib/settings)) |
+| MeshJS builders | [`offchain/meshjs/lib/src/settings/`](../../offchain/meshjs/lib/src/settings) |
+| Tx3 protocol + client | [`offchain/tx3/settings/`](../../offchain/tx3/settings) |
 | Compiled blueprint | [`onchain/plutus.json`](../../onchain/plutus.json) |
 
 ## Contents
@@ -246,7 +246,7 @@ authorizer: { scriptCbor: daoScriptCbor },            // redeemer defaults to un
 ## Off-chain usage: Tx3 client
 
 The Tx3 implementation lives in
-[`offchain/tx3/settings/`](../../offchain/tx3/settings/) with a generated
+[`offchain/tx3/settings/`](../../offchain/tx3/settings) with a generated
 TypeScript client in
 `codegen/ts-client/config-parameter-management`
 (regenerate it from [`main.tx3`](../../offchain/tx3/settings/main.tx3) with
@@ -374,7 +374,7 @@ and invoked via a withdraw-0 keyed by its reward address
   threat model (§6), invariants, and the formal must-accept/must-reject
   characterization.
 - [On-chain code](../../onchain/validators/settings.ak) — reference
-  validator; composable predicates in [`onchain/lib/settings/`](../../onchain/lib/settings/).
+  validator; composable predicates in [`onchain/lib/settings/`](../../onchain/lib/settings).
 - [Devnet e2e test](../../offchain/tx3/settings/tests/devnet.test.ts) —
   end-to-end usage of both key- and script-authorized paths, including the
   negative (must-reject) cases.

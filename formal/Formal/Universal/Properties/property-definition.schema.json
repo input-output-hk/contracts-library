@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:plutus-upv:property-definition:v2",
+  "$comment": "Shared property record shape. Required/optional and cardinality policy remain open. Runtime association is separate from shape validation.",
+  "title": "Plutus UPV property definition",
+  "$ref": "#/$defs/propertyDefinition",
+  "$defs": {
+    "propertyDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "type": "integer",
+          "description": "Metadata format version, distinct from the property definition version."
+        },
+        "identity": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "definition_version": {
+              "type": "integer"
+            },
+            "title": {
+              "type": "string"
+            },
+            "category": {
+              "type": "string"
+            }
+          }
+        },
+        "explanation": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "summary": {
+              "type": "string"
+            },
+            "claim": {
+              "type": "string"
+            },
+            "purpose": {
+              "type": "string"
+            }
+          }
+        },
+        "scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "relevance_conditions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "preconditions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "limitations": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "formalization": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "primary": {
+              "type": "string",
+              "description": "Qualified name of the maintained declaration or reviewed template expressing the complete claim."
+            },
+            "theorems": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Qualified names of maintained theorem/lemma references. These are not generated target-specific results."
+            }
+          }
+        },
+        "references": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "target": {
+                "type": "string",
+                "description": "Informational code/document reference, normally HTTPS or repository-relative; never automatically fetched or executed."
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

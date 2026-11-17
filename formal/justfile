@@ -83,7 +83,7 @@ flats: build
 
 # Re-check every Lean proof against the current flats (annotated lake output).
 verify: flats
-    nix develop --command bash -c 'set -o pipefail; lake build 2>&1 | awk -f scripts/annotate-blaster-logs.awk'
+    nix develop --command bash -c 'set -o pipefail; lake build 2>&1 | awk -f Formal/LinearVesting/scripts/annotate-blaster-logs.awk'
 
 clean:
     rm -rf {{artifacts}} {{scripts}}

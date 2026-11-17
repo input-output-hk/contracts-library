@@ -1,0 +1,11 @@
+name = "no-witness-labs/vault-demo"
+version = "0.0.0"
+compiler = "v1.1.21"
+plutus = "v3"
+license = "Apache-2.0"
+description = "Vault and vesting validators for inspecting Plutus UPV generated Lean files"
+
+[[dependencies]]
+name = "aiken-lang/stdlib"
+version = "v3.0.0"
+source = "github"

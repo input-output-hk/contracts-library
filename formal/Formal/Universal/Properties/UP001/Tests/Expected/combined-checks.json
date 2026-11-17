@@ -1,0 +1,50 @@
+[
+  {
+    "property": { "id": "UP-001", "definition_version": 1 },
+    "tx_model": "TxM-001",
+    "limitations": [
+      "Covers minting invocations; other script purposes require separate checks.",
+      "A counterexample may not correspond to a ledger-valid transaction."
+    ]
+  },
+  {
+    "property": { "id": "UP-001", "definition_version": 1 },
+    "tx_model": "TxM-002",
+    "limitations": [
+      "Covers reward withdrawal invocations; other script purposes require separate checks.",
+      "A counterexample may not correspond to a ledger-valid transaction."
+    ]
+  },
+  {
+    "property": { "id": "UP-001", "definition_version": 1 },
+    "tx_model": "TxM-003",
+    "limitations": [
+      "Covers certifying invocations; other script purposes require separate checks.",
+      "A counterexample may not correspond to a ledger-valid transaction."
+    ]
+  },
+  {
+    "property": { "id": "UP-001", "definition_version": 1 },
+    "tx_model": "TxM-004",
+    "limitations": [
+      "Covers voting invocations; other script purposes require separate checks.",
+      "A counterexample may not correspond to a ledger-valid transaction."
+    ]
+  },
+  {
+    "property": { "id": "UP-001", "definition_version": 1 },
+    "tx_model": "TxM-005",
+    "limitations": [
+      "Covers proposing invocations; other script purposes require separate checks.",
+      "A counterexample may not correspond to a ledger-valid transaction."
+    ]
+  },
+  {
+    "property": { "id": "UP-001", "definition_version": 1 },
+    "tx_model": "TxM-006",
+    "limitations": [
+      "Covers spending invocations; other script purposes require separate checks.",
+      "A counterexample may not correspond to a ledger-valid transaction."
+    ]
+  }
+]
