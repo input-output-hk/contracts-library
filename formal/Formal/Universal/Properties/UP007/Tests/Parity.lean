@@ -1,39 +1,15 @@
 import Formal.Universal.Properties.UP007.Definition
-import Formal.Universal.Properties.UP014.Tests.Parity
+import Formal.Universal.Properties.Tests.ParitySupport
 import Formal.Universal.Standalone.LinearVesting.ContinuationStake
 
 /-! Kernel equivalences with the original helpers and standalone propositions.
-The UP-014 helper proofs are reused only by tests; historical solver observations are not imported. -/
+Shared support preserves independent native and legacy helper comparisons. -/
 
 namespace Formal.Universal.Properties.UP007.Tests.Parity
 
+open Formal.Universal.Properties.Tests.ParitySupport
 open CardanoLedgerApi.V3 (ScriptContext StakingCredential TxOut validScriptContext)
 open Formal.Universal.Support.Continuations
-open UP000.Tests.Parity (claimToLegacy claimFromLegacy preparedAccepts)
-open UP004.Tests.Parity (preparedRejects)
-
-theorem withOutputsParity : withOutputs = Formal.Universal.Support.withOutputs :=
-  UP014.Tests.Parity.withOutputsParity
-
-theorem keyAddrParity : keyAddr = Formal.Universal.Support.keyAddr := UP014.Tests.Parity.keyAddrParity
-
-theorem ownInputParity : ownInput? = Formal.Universal.Support.ownInput? := UP014.Tests.Parity.ownInputParity
-
-theorem attackerKeyParity : attackerKey = Formal.Universal.Support.attackerKey := UP014.Tests.Parity.attackerKeyParity
-
-theorem redirectParity : redirectContinuations = Formal.Universal.Support.redirectContinuations :=
-  UP014.Tests.Parity.redirectParity
-
-theorem isContinuationParity : isContinuation = Formal.Universal.Support.isContinuation :=
-  UP014.Tests.Parity.isContinuationParity
-
-theorem changeFirstParity : changeFirst = Formal.Universal.Support.changeFirst := UP014.Tests.Parity.changeFirstParity
-
-theorem changeContinuationParity : changeContinuation = Formal.Universal.Support.changeContinuation :=
-  UP014.Tests.Parity.changeContinuationParity
-
-theorem firstContinuationParity : firstContinuation? = Formal.Universal.Support.firstContinuation? :=
-  UP014.Tests.Parity.firstContinuationParity
 
 theorem changedOutputPreservesFields (o : TxOut) (sc : Option StakingCredential) :
     let changed : TxOut :=

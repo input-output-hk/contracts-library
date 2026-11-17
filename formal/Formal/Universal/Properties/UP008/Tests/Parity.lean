@@ -1,30 +1,16 @@
 import Formal.Universal.Properties.UP008.Definition
-import Formal.Universal.Properties.UP014.Tests.Parity
+import Formal.Universal.Properties.Tests.ParitySupport
 import Formal.Universal.Standalone.LinearVesting.JunkToken
 
 /-! Kernel equivalences with the original helpers and standalone propositions.
-The helper proofs come from UP-014 tests; historical solver observations are not imported. -/
+Shared support preserves independent native and legacy helper comparisons. -/
 
 namespace Formal.Universal.Properties.UP008.Tests.Parity
 
+open Formal.Universal.Properties.Tests.ParitySupport
 open PlutusCore.Data (Data)
 open CardanoLedgerApi.V3 (ScriptContext TxOut TxOutRef validScriptContext)
 open Formal.Universal.Support.Continuations
-open UP000.Tests.Parity (claimToLegacy claimFromLegacy preparedAccepts)
-open UP004.Tests.Parity (preparedRejects)
-
-theorem withOutputsParity : withOutputs = Formal.Universal.Support.withOutputs :=
-  UP014.Tests.Parity.withOutputsParity
-
-theorem keyAddrParity : keyAddr = Formal.Universal.Support.keyAddr := UP014.Tests.Parity.keyAddrParity
-
-theorem ownInputParity : ownInput? = Formal.Universal.Support.ownInput? := UP014.Tests.Parity.ownInputParity
-
-theorem redirectParity : redirectContinuations = Formal.Universal.Support.redirectContinuations :=
-  UP014.Tests.Parity.redirectParity
-
-theorem changeContinuationParity : changeContinuation = Formal.Universal.Support.changeContinuation :=
-  UP014.Tests.Parity.changeContinuationParity
 
 theorem unrelatedKeyParity : unrelatedKey = Formal.Universal.Support.unrelatedKey := rfl
 

@@ -1,5 +1,5 @@
 import Formal.Universal.Properties.UP013.Definition
-import Formal.Universal.Properties.UP004.Tests.Parity
+import Formal.Universal.Properties.Tests.ParitySupport
 import Formal.Universal.Support.CandidateHelpers
 
 /-! Kernel equivalences with the expanded standalone formulas.
@@ -7,9 +7,8 @@ The shared test mappings preserve the contexts and evaluators without importing 
 
 namespace Formal.Universal.Properties.UP013.Tests.Parity
 
+open Formal.Universal.Properties.Tests.ParitySupport (claimToLegacy claimFromLegacy cancelToLegacy cancelFromLegacy preparedAccepts preparedRejects)
 open CardanoLedgerApi.V3 (ScriptContext validScriptContext)
-open UP000.Tests.Parity (claimToLegacy claimFromLegacy cancelToLegacy cancelFromLegacy preparedAccepts)
-open UP004.Tests.Parity (preparedRejects)
 
 theorem rangeParity : rangeAlways = Formal.Universal.Support.rangeAlways := rfl
 
