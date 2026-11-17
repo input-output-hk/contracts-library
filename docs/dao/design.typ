@@ -313,7 +313,7 @@ Mints a proposal NFT and starts a new governance proposal in draft phase.
       datum: (
         "thresholds": [proposalThresholds],
         "timingConfig": [proposalTimingConfig],
-        "startingTime": [*T*],
+        "startingTime": [*T + maxWidth*],
         "status": [Draft { cosigningStake: S }],
         "results": "",
       ),
@@ -328,8 +328,9 @@ Mints a proposal NFT and starts a new governance proposal in draft phase.
   ),
   notes: [
     - `pId = proposalNFT.tokenName = hash(stakeUtxo.outputReference)`
-    - `L' = [..L, (pId, T + timingConfig.draftlength, S)]`
+    - `L' = [..L, (pId, T + maxWidth + timingConfig.draftlength, S)]`
     - `S >= thresholds.create`
+    - `startingTime = T + maxWidth`: `start_time` is pinned to the create transaction's validity upper bound, which the ledger forces to cover the inclusion slot (the reference builders set a bounded window upward from `T`). The draft deadline and the creator's lock derive from it, so the timeline cannot be backdated
   ],
 )
 ]

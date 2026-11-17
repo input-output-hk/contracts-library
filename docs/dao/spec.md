@@ -217,7 +217,7 @@ Datum (inline, on the proposal address):
 | --- | --- | --- |
 | `thresholds` | `ProposalThresholds` | Copied from settings at creation; immutable thereafter. |
 | `timing_config` | `ProposalTimingConfig` | Copied from settings at creation; immutable. |
-| `start_time` | `Int` | POSIX ms of creation (the create transaction's validity lower bound). |
+| `start_time` | `Int` | POSIX ms of creation (the create transaction's validity upper bound, §5.f). |
 | `status` | `ProposalStatus` | Proposal's current status. The only mutable field. |
 | `results` | `List<ScriptHash>` | Per-option effect script hash; index = option id. |
 
@@ -265,7 +265,7 @@ All possible protocol transactions. Each section below describes one complete, a
 
 Only actions that read governance parameters resolve the settings UTxO — the reference input holding the settings NFT (§4.a) — to read thresholds, timings, and sibling hashes: **Create Proposal (5.f), Cosign (5.g), Vote (5.j), Tally (5.m)**. The remaining transactions (position lifecycle 5.a–5.e, Accept Draft 5.h, Reject Draft 5.i, Cancel Vote 5.k, End Voting Stage 5.l, End Proposal 5.n) require no settings UTxO; this reference input is omitted from the tables for brevity. "The own input" is the contract UTxO being spent; cross-references to sibling inputs/outputs are checked locally and each sibling's own validator re-checks its detailed constraints.
 
-Scripts read the transaction's validity range. The **lower bound** is read as `now` where an action anchors *itself* in time or requires time to have *passed* (creating, pruning locks, "after deadline" checks); the **upper bound** is used where an action must occur *before* a deadline. Both bounds are required to be finite wherever they are read; each transaction's **Validity range** row below states which bound it reads.
+Scripts read the transaction's validity range. The **lower bound** is read as `now` where an action anchors *itself* in time or requires time to have *passed* (pruning locks, "after deadline" checks); the **upper bound** is used where an action must occur *before* a deadline, and anchors **Create Proposal**: `start_time` is pinned to it (§5.f), so — since the ledger only includes a transaction within its range — the timeline origin covers the inclusion slot and cannot be backdated. Both bounds are required to be finite wherever they are read; each transaction's **Validity range** row below states which bound it reads.
 
 ### 5.a Create Position
 
@@ -371,8 +371,8 @@ The owner commits the position's stake to a new proposal: a lock freezes the sta
 | --- | --- |
 | **Inputs** | The position UTxO. |
 | **Mint** | Exactly one proposal NFT under `proposal_validator`, name = hash of this position's reference, quantity `1`. |
-| **Outputs** | 1. One position continuation at the same address: owner/delegatee unchanged, `locks = push(locks, Lock { proposal_id, now + draft_length, in_stake })`. 2. One proposal at `out_idx`: address `Script(proposal_policy)`, value holds the NFT and nothing extra, inline datum `ProposalDatum { thresholds: settings.thresholds, timing_config: settings.timings, start_time: now, status: Draft { cosigning_stake: staked_amount }, results }`, no reference script. |
-| **Validity range** | Lower bound finite (`now` = proposal `start_time`). |
+| **Outputs** | 1. One position continuation at the same address: owner/delegatee unchanged, `locks = push(locks, Lock { proposal_id, start_time + draft_length, in_stake })` (the lock anchors to `start_time`). 2. One proposal at `out_idx`: address `Script(proposal_policy)`, value holds the NFT and nothing extra, inline datum `ProposalDatum { thresholds: settings.thresholds, timing_config: settings.timings, start_time: <the validity upper bound>, status: Draft { cosigning_stake: staked_amount }, results }`, no reference script. |
+| **Validity range** | Upper bound finite; `start_time` is pinned to it (the lower bound is not read). |
 | **Authorization** | The position `owner` on the stake spend; the proposal mint has none directly — it requires the stake input to be consumed with `CreateProposal`. |
 | **Constraints** | `in_stake = staked_amount >= settings.thresholds.create` (checked by the proposal mint). |
 
@@ -566,6 +566,7 @@ The effect script runs as a reward withdrawal (`withdraw-0`). The reference cand
 - **Unauthorized stake actions.** Deposit/withdraw/delegate/close/create are gated by the position `owner`; cosign/vote by `vote_auth`. (I1)
 - **Double-voting / double-cosigning.** Locks freeze stake and `has_proposal` blocks a second cosign/vote on the same proposal. (I3)
 - **Premature phase transitions.** Every transition is gated by its deadline via the validity range (lower for "after", upper for "before"); a proposal cannot be accepted/tallied/ended early. (I4)
+- **Backdated creation.** `start_time` is pinned to the create transaction's validity **upper** bound (I4), which the ledger forces to cover the inclusion slot: the draft/cosign window cannot be shortened, and the creator's stake lock — anchored to `start_time + draft_length` — cannot be pre-expired by backdating the validity range.
 - **Proposal tampering.** The proposal body is immutable across transitions; a continuation must reproduce it exactly. (I4)
 - **Tally manipulation.** Votes are bound to a proposal and counted once each, and only when the vote input is spent with `TallyVote`; the number of burned vote NFTs must match the votes counted; refunds go to the vote's recorded owner (tagged output checked by the vote validator). The declared winner is checked against the tally, and the effect script self-guards via `am_i_the_winner`. (I5, I6)
 - **NFT detachment / forgery.** NFT names hash a consumed reference (unique), and continuations must keep the NFT at the script address. (I2)
@@ -585,7 +586,7 @@ The effect script runs as a reward withdrawal (`withdraw-0`). The reference cand
 - **I1 — Action authorization.** Deposit/withdraw/delegate/close/create-proposal require the position `owner`; cosign/vote require `vote_auth` (delegatee if set, else owner); vote `Cancel` requires the vote's recorded `stake_owner`; proposal transitions require the corresponding sibling input consumed with the matching redeemer (which the sibling's own validator gates by authorization).
 - **I2 — NFT uniqueness & custody.** Every position/proposal/vote NFT is named by the hash of a consumed output reference, so it is globally unique and unforgeable. Continuations keep the NFT at the exact script address; closing/burning is irreversible.
 - **I3 — Lock enforcement.** Stake committed to a proposal is frozen (`free_stake` excludes the max live lock) until the lock expires; a vote's fresh lock is recorded even at the voting deadline, and the same position cannot cosign/vote the same proposal twice while the lock is live.
-- **I4 — Lifecycle integrity.** A proposal advances only in the order Draft → Voting → Tally → End, each transition gated by its deadline and threshold; the proposal body (`thresholds`, `timing_config`, `start_time`, `results`) is immutable across every transition.
+- **I4 — Lifecycle integrity.** A proposal advances only in the order Draft → Voting → Tally → End, each transition gated by its deadline and threshold; the proposal body (`thresholds`, `timing_config`, `start_time`, `results`) is immutable across every transition, and `start_time` is anchored to the create transaction's validity upper bound (§5.f — no backdating).
 - **I5 — Execution integrity.** `EndProposal`'s declared winner must equal the strict winner of the recorded tally, and executes only if the `execute` threshold is met; a declared effect must run as its withdrawal.
 - **I6 — Vote fidelity.** A vote artifact records the exact staked amount and option at vote time, and is destroyed (NFT burned) exactly once, at tally or cancel; a proposal's tally counts only votes bound to it and spent with `TallyVote`.
 - **I7 — Composability.** Each validator asserts only about its own input, the sibling inputs/outputs it cross-references, the mint under its own policy, the single continuation it recognizes (by address or `out_idx`), the validity range, and the required authorization. It never asserts total input/output counts or unrelated value.

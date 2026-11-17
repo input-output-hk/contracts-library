@@ -61,7 +61,7 @@ stateDiagram-v2
 ```
 
 All deadlines derive from the proposal's immutable `start_time` (the create
-transaction's validity lower bound) and `timing_config`:
+transaction's validity upper bound) and `timing_config`:
 
 ```
 draft_end   = start_time + draft_length
@@ -248,6 +248,12 @@ mints the proposal NFT. Requires the settings UTxO as a reference input
 const now = Date.now();
 const proposalTokenName = nftNameFromRef(position.input); // NFT name = hash of the position's ref
 
+// The builder pins `start_time` to the create transaction's validity upper
+// bound and the draft lock to `start_time + draft_length`;
+// `createProposalTiming` predicts both (same window) so the datums below
+// match what gets submitted.
+const timing = createProposalTiming({ now, slotConfig });
+
 await buildCreateProposalTx({
   txBuilder,
   proposalScript: proposal,
@@ -256,14 +262,15 @@ await buildCreateProposalTx({
   stakeDatum: {
     ...positionDatum,
     locks: [...positionDatum.locks,
-      { proposalId: proposalTokenName, unlockTime: now + settings.timings.draftLength,
+      { proposalId: proposalTokenName,
+        unlockTime: timing.startTime + settings.timings.draftLength,
         stake: positionStake }],
   },
   settingsUtxo,
   proposalDatum: {
     thresholds: settings.thresholds,   // snapshotted — immutable hereafter
     timingConfig: settings.timings,
-    startTime: now,
+    startTime: timing.startTime,
     status: { kind: "Draft", cosigningStake: positionStake },
     results: [effectHash],             // one effect hash per vote option
   },
@@ -273,7 +280,10 @@ await buildCreateProposalTx({
 ```
 
 The creator's staked amount must meet the `create` threshold at creation
-time.
+time. The create transaction must be included before its validity upper
+bound — the builder sets a bounded window upward from `now` (30 slots by
+default; override with `validityWindowSlots`) and pins `start_time` to that
+upper bound, so the timeline cannot be backdated.
 
 ### Draft phase: cosign, accept, reject
 
@@ -553,6 +563,11 @@ Notes:
   other thresholds, the timings, and the sibling hashes are copied into the
   proposal and frozen. Settings updates only affect proposals created
   afterwards.
+- **`start_time` anchors to the validity upper bound.** The create
+  transaction must be included before that upper bound (the builders set a
+  bounded window upward from `now`; rebuild the tx if the window lapses), and
+  the draft window and the creator's lock derive from it — the timeline
+  cannot be backdated.
 - **Settings authority is trusted.** Whoever can change the settings UTxO's
   `current` can change the DAO's thresholds, timings, and sibling script
   hashes; a malformed `current` halts Create Proposal, Cosign, Vote, and
