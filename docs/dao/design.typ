@@ -445,7 +445,7 @@ Advances a proposal from draft to voting phase once co-signing thresholds are me
       datum: (
         "thresholds": "",
         "timingConfig": "",
-        "startTime": "",
+        "startingTime": "",
         "status": [Draft { cosignStake: N }],
         "results": "",
       ),
@@ -461,7 +461,7 @@ Advances a proposal from draft to voting phase once co-signing thresholds are me
       datum: (
         "thresholds": "",
         "timingConfig": "",
-        "startTime": "",
+        "startingTime": "",
         "status": [Voting],
         "results": "",
       ),
@@ -497,7 +497,7 @@ Destroys a proposal that fails to meet co-signing thresholds before the draft de
       datum: (
         "thresholds": "",
         "timingConfig": "",
-        "startTime": "",
+        "startingTime": "",
         "status": [Draft { cosignStake: N }],
         "results": "",
       ),
@@ -550,7 +550,7 @@ Casts a vote on a proposal by minting a vote NFT locked to the voter's choice.
       datum: (
         "thresholds": "",
         "timingConfig": "",
-        "startTime": [T],
+        "startingTime": "",
         "status": [Voting],
         "results": "",
       ),
@@ -593,10 +593,10 @@ Casts a vote on a proposal by minting a vote NFT locked to the voter's choice.
   notes: [
     - `pId = proposalNFT.tokenName`
     - `pId not in L`
-    - `L' = [..L, (pId, T, S)]`
+    - `L' = [..L, (pId, T', S)]`
     - `S >= thresholds.vote`
 
-    - `T' = T + timingConfig.draftLength + timingConfig.votingLength`
+    - `T' = startingTime + timingConfig.draftLength + timingConfig.votingLength`
     ```
     auth = when delegatee is
       Some d = d
@@ -701,7 +701,7 @@ Closes the voting period and transitions the proposal to the tally stage.
     "lower": [*T'*],
   ),
   notes: [
-    - `T' = T + timingConfig.draftLength + timingConfig.votingLength`
+    - `T' = startingTime + timingConfig.draftLength + timingConfig.votingLength`
     - votes = {}
   ],
 )
@@ -732,7 +732,7 @@ Counts all votes submitted for a proposal and updates the results.
       datum: (
         "thresholds": "",
         "timingConfig": "",
-        "startingTime": [T],
+        "startingTime": "",
         "status": [Tally { votes }],
         "results": "",
       ),
@@ -808,7 +808,7 @@ Counts all votes submitted for a proposal and updates the results.
   ),
   notes: [
     - `pId = proposalNFT.tokenName`
-    - `T' = T + timingConfig.draftLength + timingConfig.votingLength + timingConfig.tallyLength`
+    - `T' = startingTime + timingConfig.draftLength + timingConfig.votingLength + timingConfig.tallyLength`
     - `votes` map get each $"rt"_i$ incremented by $S_i$
   ],
 )
@@ -834,7 +834,7 @@ Executes the winning outcome or destroys a failed proposal after the tally perio
       datum: (
         "thresholds": "",
         "timingConfig": "",
-        "startingTime": [*T*],
+        "startingTime": "",
         "status": [Tally { votes }],
         "results": ""
       ),
@@ -846,7 +846,7 @@ Executes the winning outcome or destroys a failed proposal after the tally perio
   ),
   withdrawals: ([$"e"_w$],),
   notes: [
-    - T' = T + timingConfig.draftLength + timingConfig.votingLength + timingConfig.tallyLength
+    - T' = startingTime + timingConfig.draftLength + timingConfig.votingLength + timingConfig.tallyLength
     - votes = ${"rt"_1: v_i, ..., "rt"_n: v_n}$
     - mostVoted = $"rt"_i "where" v_i > v_j forall j != i$
     - `v_i >= thresholds.execute`
