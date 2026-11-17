@@ -22,14 +22,14 @@ formal/
 │   └── annotate-blaster-logs.awk
 ├── Formal.lean              # root; imports every contract aggregator
 └── Formal/
-    ├── Common.lean          # shared `validatorAccepts` / `validatorRejects`
-    └── Vesting/
-        ├── Linear.lean      # aggregator for the vesting/linear contract
-        └── Linear/
-            ├── Spec.lean          # pure model: `vested`, datum encoding (no UPLC)
-            ├── Completeness.lean  # spec ⇒ accepts (§8); `#import_uplc`s the flat
-            ├── Soundness.lean     # accepts ⇒ spec (§9) + shared context scaffold
-            └── Robustness.lean    # rejection theorems incl. no-double-satisfaction
+    ├── Shared/
+    │   └── Common.lean      # shared `validatorAccepts` / `validatorRejects`
+    ├── LinearVesting.lean   # aggregator for the vesting/linear contract
+    └── LinearVesting/
+        ├── Spec.lean          # pure model: `vested`, datum encoding (no UPLC)
+        ├── Completeness.lean  # spec ⇒ accepts (§8); `#import_uplc`s the flat
+        ├── Soundness.lean     # accepts ⇒ spec (§9) + shared context scaffold
+        └── Robustness.lean    # rejection theorems incl. no-double-satisfaction
 ```
 
 Each contract gets its own `Completeness`/`Soundness`/`Robustness` under its
@@ -115,5 +115,5 @@ These apply to any contract:
 
 ## Contracts
 
-- **vesting/linear** — see [`Formal/Vesting/Linear/README.md`](Formal/Vesting/Linear/README.md)
+- **vesting/linear** — see [`Formal/LinearVesting/README.md`](Formal/LinearVesting/README.md)
   for its coverage tables and open targets.

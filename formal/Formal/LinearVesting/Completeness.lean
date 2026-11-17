@@ -9,21 +9,21 @@ negatives* — honest spends getting stuck (frozen funds).
 import Blaster
 import PlutusCore.UPLC
 import CardanoLedgerApi.V3
-import Formal.Common
-import Formal.Vesting.Linear.Spec
-import Formal.Vesting.Linear.Script
-import Formal.Vesting.Linear.Soundness
+import Formal.Shared.Common
+import Formal.LinearVesting.Spec
+import Formal.LinearVesting.Script
+import Formal.LinearVesting.Soundness
 
-namespace Formal.Vesting.Linear.Completeness
+namespace Formal.LinearVesting.Completeness
 
 open PlutusCore.UPLC.Term (Program)
 open PlutusCore.ByteString (ByteString)
 open PlutusCore.Data (Data)
 open CardanoLedgerApi.V3 (Address Redeemer)
-open Formal.Common (validatorAccepts)
-open Formal.Vesting.Linear.Spec
-open Formal.Vesting.Linear.Soundness (mkClaimCtx mkClaimCtxW mkClaimCtxDouble withAsset scriptAddress)
-open Formal.Vesting.Linear.Script (spendValidator)
+open Formal.Shared.Common (validatorAccepts)
+open Formal.LinearVesting.Spec
+open Formal.LinearVesting.Soundness (mkClaimCtx mkClaimCtxW mkClaimCtxDouble withAsset scriptAddress)
+open Formal.LinearVesting.Script (spendValidator)
 
 /-- **Partial-claim completeness (spec ⇒ accepts).** Single-asset instance.
 
@@ -203,4 +203,4 @@ theorem cancel_complete (now : Int) (hgt : 3000 < now) :
       spendValidator := by
   blaster
 
-end Formal.Vesting.Linear.Completeness
+end Formal.LinearVesting.Completeness

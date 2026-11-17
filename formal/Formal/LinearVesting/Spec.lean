@@ -15,7 +15,7 @@ import Blaster
 import PlutusCore.UPLC
 import CardanoLedgerApi.V3
 
-namespace Formal.Vesting.Linear.Spec
+namespace Formal.LinearVesting.Spec
 
 open PlutusCore.Data (Data)
 open PlutusCore.ByteString (ByteString)
@@ -157,4 +157,4 @@ def dScript (bhash : ByteString) : VestingDatum :=
     vesting := [{ policy := "policyA", name := "assetA", total := 100 }],
     startTime := 1000, endTime := 2000, recoveryTime := 3000 }
 
-end Formal.Vesting.Linear.Spec
+end Formal.LinearVesting.Spec

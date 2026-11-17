@@ -11,22 +11,22 @@ rule forces `k × required`.
 import Blaster
 import PlutusCore.UPLC
 import CardanoLedgerApi.V3
-import Formal.Common
-import Formal.Vesting.Linear.Spec
-import Formal.Vesting.Linear.Script
-import Formal.Vesting.Linear.Soundness
-import Formal.Vesting.Linear.Completeness
+import Formal.Shared.Common
+import Formal.LinearVesting.Spec
+import Formal.LinearVesting.Script
+import Formal.LinearVesting.Soundness
+import Formal.LinearVesting.Completeness
 
-namespace Formal.Vesting.Linear.Robustness
+namespace Formal.LinearVesting.Robustness
 
 open PlutusCore.UPLC.Term (Program)
 open PlutusCore.ByteString (ByteString)
 open PlutusCore.Data (Data)
 open CardanoLedgerApi.V3 (Address Redeemer)
-open Formal.Common (validatorRejects)
-open Formal.Vesting.Linear.Spec
-open Formal.Vesting.Linear.Soundness (mkClaimCtx mkClaimCtxW mkClaimCtxHashInput mkClaimCtxDouble withAsset scriptAddress)
-open Formal.Vesting.Linear.Script (spendValidator)
+open Formal.Shared.Common (validatorRejects)
+open Formal.LinearVesting.Spec
+open Formal.LinearVesting.Soundness (mkClaimCtx mkClaimCtxW mkClaimCtxHashInput mkClaimCtxDouble withAsset scriptAddress)
+open Formal.LinearVesting.Script (spendValidator)
 -- `dConcrete`/`dScript` come from `Spec` (opened above).
 
 /-- **R1 — unauthorized claim is rejected.** No signatory satisfies the
@@ -249,4 +249,4 @@ theorem no_double_satisfaction :
       spendValidator := by
   blaster
 
-end Formal.Vesting.Linear.Robustness
+end Formal.LinearVesting.Robustness
