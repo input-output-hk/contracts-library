@@ -17,6 +17,10 @@ import { fileURLToPath } from "node:url";
 import { axiomAuditSource } from "../scripts/check-property-axioms.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
+const leanToolchain = readFileSync(
+  join(root, "formal/lean-toolchain"),
+  "utf8",
+).trim();
 const entry = {
   id: "test",
   title: "Synthetic property",
@@ -42,9 +46,9 @@ function fixture(t, properties = [entry]) {
     join(directory, "node_modules"),
     "dir",
   );
-  mkdirSync(join(directory, "formal/Formal/Theory"), { recursive: true });
+  mkdirSync(join(directory, "formal/Formal/Universal/Theory"), { recursive: true });
   writeFileSync(
-    join(directory, "formal/Formal/Theory/properties.json"),
+    join(directory, "formal/Formal/Universal/Theory/properties.json"),
     JSON.stringify(properties),
   );
   const bin = join(directory, "bin");
@@ -67,7 +71,7 @@ process.exit(Number(args[0] === "build" ? process.env.AXIOM_BUILD_STATUS || 0 : 
       existsSync(log)
         ? readFileSync(log, "utf8").trim().split("\n").map(JSON.parse)
         : [],
-    run(args = ["Theory"], env = {}) {
+    run(args = ["Universal.Theory"], env = {}) {
       const result = spawnSync(
         process.execPath,
         [join(directory, "scripts/check-property-axioms.mjs"), ...args],
@@ -93,10 +97,10 @@ test("axiom checker builds one module, deduplicates names, and cleans up", (t) =
   const result = check.run();
   assert.equal(result.status, 0, result.stdout + result.stderr);
   const calls = check.calls();
-  assert.deepEqual(calls[0].args, ["build", "+Formal.Theory"]);
+  assert.deepEqual(calls[0].args, ["build", "+Formal.Universal.Theory"]);
   assert.equal(
     calls[1].source,
-    axiomAuditSource("Theory", ["Formal.Sample.first"]),
+    axiomAuditSource("Universal.Theory", ["Formal.Sample.first"]),
   );
   assert.equal(existsSync(calls[1].args[2]), false);
   assert.match(result.stdout, /1 theorem references/);
@@ -199,6 +203,8 @@ for (const [label, declaration, status, message] of [
     const result = spawnSync("lean", [file], {
       cwd: directory,
       encoding: "utf8",
+      env: { ...process.env, ELAN_TOOLCHAIN: leanToolchain },
+      timeout: 30_000,
     });
     assert.ifError(result.error);
     assert.equal(result.status, status, result.stdout + result.stderr);
