@@ -1,5 +1,5 @@
 import Formal.Universal.Properties.UP011.Definition
-import Formal.Universal.Properties.UP004.Tests.Parity
+import Formal.Universal.Properties.Tests.ParitySupport
 import Formal.Universal.Standalone.LinearVesting.ContinuationElsewhere
 
 /-! Kernel equivalences with the original helpers and standalone propositions.
@@ -7,35 +7,8 @@ The standalone solver observations are not imported. -/
 
 namespace Formal.Universal.Properties.UP011.Tests.Parity
 
+open Formal.Universal.Properties.Tests.ParitySupport
 open CardanoLedgerApi.V3 (Credential ScriptContext TxOut validScriptContext)
-open UP000.Tests.Parity (claimToLegacy claimFromLegacy preparedAccepts)
-open UP004.Tests.Parity (preparedRejects)
-
-theorem withOutputsParity : withOutputs = Formal.Universal.Support.withOutputs := rfl
-
-theorem keyAddrParity : keyAddr = Formal.Universal.Support.keyAddr := rfl
-
-theorem ownInputParity : ownInput? = Formal.Universal.Support.ownInput? := rfl
-
-theorem attackerKeyParity : attackerKey = Formal.Universal.Support.attackerKey := rfl
-
-theorem redirectParity : redirectContinuations = Formal.Universal.Support.redirectContinuations := rfl
-
-theorem isContinuationParity : isContinuation = Formal.Universal.Support.isContinuation := rfl
-
-theorem changeFirstParity : changeFirst = Formal.Universal.Support.changeFirst := by
-  funext predicate transform outputs
-  induction outputs with
-  | nil => rfl
-  | cons output rest ih =>
-      simp only [changeFirst, Formal.Universal.Support.Continuations.changeFirst, Formal.Universal.Support.changeFirst, ih]
-
-theorem changeContinuationParity : changeContinuation = Formal.Universal.Support.changeContinuation := by
-  funext ctx transform
-  simp only [changeContinuation, Formal.Universal.Support.Continuations.changeContinuation, Formal.Universal.Support.changeContinuation,
-    withOutputsParity, isContinuationParity, changeFirstParity]
-
-theorem firstContinuationParity : firstContinuation? = Formal.Universal.Support.firstContinuation? := rfl
 
 theorem changedOutputPreservesFields (o : TxOut) (c : Credential) :
     let changed : TxOut := { o with

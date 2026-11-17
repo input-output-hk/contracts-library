@@ -49,8 +49,7 @@ the first key. The original bound is 1,000,000 steps, and `rejectedWithin` requi
 an error or non-unit halt within the bound. Exhaustion does not establish rejection.
 Both vesting applicability statements remain separate required jobs.
 
-[Profiles/Vault.lean](../Profiles/Vault.lean) is a compatibility shim for
-[reusable TxM-009 preparation](../../Preparation/TxM009.lean). It uses the same
+[Reusable TxM-009 preparation](../../Preparation/TxM009.lean) uses the same
 shared property, validity predicate, 1,000,000-step bound, and native constructor.
 The datum is `Constr 0 [B owner]`, the redeemer is `Constr 0 []`, and owner,
 signer, and recipient vary independently. Selected TxM-009 checks use the reusable

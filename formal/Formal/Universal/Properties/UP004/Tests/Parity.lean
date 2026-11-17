@@ -1,24 +1,16 @@
 import Formal.Universal.Properties.UP004.Definition
-import Formal.Universal.Properties.UP000.Tests.Parity
+import Formal.Universal.Properties.Tests.ParitySupport
 
 /-! Kernel equivalences with the frozen standalone context and evaluator definitions.
-The context mappings come from UP-000 tests; no historical solver theorem is imported. -/
+Shared test support provides context mappings and evaluators; no solver theorem is imported. -/
 
 namespace Formal.Universal.Properties.UP004.Tests.Parity
 
+open Formal.Universal.Properties.Tests.ParitySupport (claimToLegacy claimFromLegacy cancelToLegacy cancelFromLegacy preparedRejects)
 open CardanoLedgerApi.V3 (ScriptContext validScriptContext)
 open CardanoLedgerApi.IsData.Class (toTerm)
 open PlutusCore.UPLC.Term (Program Term)
 open PlutusCore.UPLC.CekMachine (initialState applyParams)
-open UP000.Tests.Parity (claimToLegacy claimFromLegacy cancelToLegacy cancelFromLegacy)
-
--- Tests.lean checks that generated support and the frozen Types embed the same bytes.
-def preparedRejects (program : Program) (fuel : Nat) (ctx : ScriptContext) : Prop :=
-  Formal.Universal.Support.rejectedWithin program [toTerm ctx] fuel
-
-theorem evaluatorParity (fuel : Nat) (ctx : ScriptContext) :
-    preparedRejects Formal.Universal.Standalone.LinearVesting.program fuel ctx ↔
-      Formal.Universal.Standalone.LinearVesting.rejects fuel ctx := Iff.rfl
 
 theorem claimStatement :
     statement validScriptContext

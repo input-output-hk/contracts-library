@@ -45,6 +45,10 @@ definition modules, model assumptions, and proof limits.
 
 ## Test ownership
 
+Shared context/evaluator mappings and continuation-helper equivalences live in
+[Tests/ParitySupport.lean](Tests/ParitySupport.lean). Each property keeps its
+own statement and mutation proofs; shared support imports no property definition.
+
 Each property's tests belong with that property. `Tests.lean` exercises formula,
 model-list, binding, and admission behavior. `Tests/` holds controls and expected
 records; `Tests/Standalone/` preserves earlier direct candidate checks and artifact
