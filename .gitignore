@@ -1,9 +1,10 @@
 # Keep the repository documentation tracked
 !docs/*
-.claude
-opencode.json
-.vscode
 .agents/
+.claude
+.opencode/
+.vscode
+opencode.json
 
 node_modules/
 
