@@ -9,7 +9,7 @@ nothing to execute and makes proofs hang.
 -/
 import PlutusCore.UPLC
 
-namespace Formal.Vesting.Linear.Script
+namespace Formal.LinearVesting.Script
 
 open PlutusCore.UPLC.Term (Program)
 
@@ -18,4 +18,4 @@ open PlutusCore.UPLC.Term (Program)
 /-- The compiled `spend` handler of `validators/linear_vesting.ak`. -/
 def spendValidator : Program := linearVestingSpendScript.script
 
-end Formal.Vesting.Linear.Script
+end Formal.LinearVesting.Script

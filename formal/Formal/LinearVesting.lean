@@ -5,8 +5,8 @@ Linear vesting — aggregator. Importing this pulls the whole proof set for the
 
 See `docs/vesting/spec.md`.
 -/
-import Formal.Vesting.Linear.Spec
-import Formal.Vesting.Linear.Script
-import Formal.Vesting.Linear.Completeness
-import Formal.Vesting.Linear.Soundness
-import Formal.Vesting.Linear.Robustness
+import Formal.LinearVesting.Spec
+import Formal.LinearVesting.Script
+import Formal.LinearVesting.Completeness
+import Formal.LinearVesting.Soundness
+import Formal.LinearVesting.Robustness

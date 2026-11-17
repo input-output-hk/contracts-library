@@ -1,11 +1,11 @@
 # vesting/linear — formal proofs
 
 Machine-checked proofs for the **linear vesting** contract, against the compiled
-validator. See the spec [`spec.md`](../../../../docs/vesting/spec.md)
+validator. See the spec [`spec.md`](../../../docs/vesting/spec.md)
 (the source of truth, with §8 completeness / §9 soundness clauses) and the
-on-chain types [`types.ak`](../../../../onchain/lib/vesting/types.ak). For the
+on-chain types [`types.ak`](../../../onchain/lib/vesting/types.ak). For the
 toolchain, build, and general `blaster` notes, see the
-[`formal/` README](../../../README.md).
+[`formal/` README](../../README.md).
 
 For the milestone 1.2 review scope and checklist, see
 [issue #12](https://github.com/no-witness-labs/contracts-library/issues/12).

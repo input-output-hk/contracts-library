@@ -5,7 +5,7 @@ Reusable across all contracts.
 import PlutusCore.UPLC
 import CardanoLedgerApi
 
-namespace Formal.Common
+namespace Formal.Shared.Common
 
 open CardanoLedgerApi.IsData.Class (toTerm)
 open CardanoLedgerApi.V3 (ScriptContext)
@@ -23,4 +23,4 @@ halt with unit within budget). -/
 def validatorRejects (ctx : ScriptContext) (validator : Program) : Prop :=
   ¬ validatorAccepts ctx validator
 
-end Formal.Common
+end Formal.Shared.Common
