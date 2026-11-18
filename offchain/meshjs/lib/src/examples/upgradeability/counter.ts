@@ -240,7 +240,8 @@ export interface ForwardTxParams {
  * The forced forwarder spend: requires the script currently registered for the
  * forwarder's own hash to run as a withdraw-0, and carries the state's
  * continuation (`count + 1`, tagged with the spent UTxO as `prevInput`) at the
- * forwarder address. Funds never move.
+ * forwarder address. The counter logic requires the input redeemer to be
+ * `Tick`; funds never move.
  *
  * Throws early if the forwarder is unregistered or the provided logic script
  * does not match the registry entry — a mistake surfaces as a clear error
@@ -276,7 +277,7 @@ export async function buildForwardTx(p: ForwardTxParams): Promise<string> {
       p.forwarderUtxo.output.address,
     )
     .txInInlineDatumPresent()
-    .txInRedeemerValue(opaqueRedeemer())
+    .txInRedeemerValue(tickRedeemer())
     .txInScript(p.forwarderScript.code)
     .txOut(p.forwarderUtxo.output.address, p.forwarderUtxo.output.amount)
     .txOutInlineDatumValue(continuation)

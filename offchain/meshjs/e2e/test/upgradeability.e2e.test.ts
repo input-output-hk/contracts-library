@@ -483,7 +483,7 @@ describe.skipIf(!reachable)("upgradeability e2e (Yaci devnet)", () => {
           utxo.output.address,
         )
         .txInInlineDatumPresent()
-        .txInRedeemerValue(opaqueRedeemer())
+        .txInRedeemerValue(tickRedeemer())
         .txInScript(forwarderScript.code);
     }
     const rewardAddress = serializeRewardAddress(
