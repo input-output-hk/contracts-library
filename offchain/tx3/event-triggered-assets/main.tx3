@@ -1134,7 +1134,8 @@ tx claim_issuer(
     new_name: Bytes,
     /// The coupon asset name (decimal lovelace bytes of the step amount).
     coupon_name: Bytes,
-    /// The committed payout address (its payment credential is `commit`).
+    /// The committed payout address: enterprise address (payment credential
+    /// is `commit`, no stake credential).
     pay_address: Address,
     /// The PLB input's `params_idx` (locates the protocol-params reference).
     params_idx: Int,
@@ -1532,7 +1533,8 @@ tx graduate_issuer(
     final_name: Bytes,
     /// The principal coupon asset name (decimal lovelace bytes of `principal`).
     principal_coupon_name: Bytes,
-    /// The committed payout address (its payment credential is `commit`).
+    /// The committed payout address: enterprise address (payment credential
+    /// is `commit`, no stake credential).
     pay_address: Address,
     /// The PLB input's `params_idx` (locates the protocol-params reference).
     params_idx: Int,

@@ -355,8 +355,11 @@ coupon), so no step can be claimed twice._
 
 = Tokenized bond — issuer claim (step k, third party)
 _When the certificate commits a payment credential, the issuer claims the
-step's coupon on the owner's behalf through the third-party path. The paired
-output is the next certificate itself — no ghost shell._
+step's coupon on the owner's behalf through the third-party path. The honest
+builder makes the paired output the next certificate itself; on-chain, the
+core pairs each PLB input with a same-address/same-datum output and preserves
+its value. The coupon is a plain enterprise output (no stake credential, datum
+or reference script)._
 
 #let bond_issuer_claim_tx = vanilla_transaction(
   "Issuer claim (k)",
@@ -411,14 +414,14 @@ output is the next certificate itself — no ghost shell._
     ),
     (
       name: "Coupon",
-      address: "pay_addr [payment: pay]",
+      address: "pay_enterprise_addr [payment: pay; no stake]",
       value: ("cNt_policy": "1 × {name: amount_k}"),
     ),
   ),
   validRange: (lower: "start + k * interval"),
   notes: [
     - The third-party path pins the paired output's address and `datum` byte-for-byte, but *not the subject policy's asset name*: the pair can carry the name `k` certificate in place, so an issuer-claimed coupon leaves no certificate-less shell.
-    - The minting logic's `Advance` mode burns exactly the spent name `k - 1` and mints exactly the name `k` (quantity `1` each), *and requires the coupon mint under the certificate's `cnt_policy`* (so the trigger cannot skip it). `third_party_logic` requires the issuer's signature and `commit = Some(pay)`, validates the exact `k - 1 → k` transition and binds the coupon to `pay`. No owner signature is needed.
+    - The minting logic's `Advance` mode burns exactly the spent name `k - 1` and mints exactly the name `k` (quantity `1` each), *and requires the coupon mint under the certificate's `cnt_policy`* (so the trigger cannot skip it). `third_party_logic` requires the issuer's signature and `commit = Some(pay)`, validates the exact `k - 1 → k` transition and binds the coupon to `pay` as a plain enterprise output: no stake credential (no issuer-chosen staking/delegation), no datum (no datum-hash lock) and no reference script. No owner signature is needed.
     - The gate is unchanged — `now ≥ start + k * interval`, and the coupon policy still binds the mint to the name advance — so the issuer can trigger but never claim early or redirect.
   ],
 )
@@ -549,7 +552,9 @@ deployment's baked unit amount._
 
 = Tokenized bond — issuer graduation (T4, third party)
 _When committed, the issuer retires the certificate on the owner's behalf: the
-certificate is burned and the principal coupon is minted to the commitment._
+certificate is burned, the principal coupon is minted to the commitment as a
+plain enterprise output (no stake credential, datum or reference script), and
+the core leaves the certificate-less paired shell._
 
 #let bond_issuer_graduation_tx = vanilla_transaction(
   "Issuer graduation",
@@ -604,14 +609,14 @@ certificate is burned and the principal coupon is minted to the commitment._
     ),
     (
       name: "Principal coupon",
-      address: "pay_addr [payment: pay]",
+      address: "pay_enterprise_addr [payment: pay; no stake]",
       value: ("cNt_policy": "1 × {name: principal}"),
     ),
   ),
   validRange: (lower: "start + N * interval"),
   notes: [
     - The burn rides the issuance chain (`minting_logic [Retire]` + core `issuance_mint`); the core `issuance_logic` delegates the burn's custody to the third-party path, whose aggregate rail accounts for the negative mint. No owner signature is needed.
-    - `third_party_logic` requires the issuer's signature and `commit = Some(pay)`, validates name `N`, and binds the principal coupon minted under the certificate's `cnt_policy` to `pay`; our minting logic's `Retire` requires that coupon, so the trigger cannot retire without paying it. Because the certificate disappears here, the paired continuation stays as a certificate-less ghost shell — the design's only shell.
+    - `third_party_logic` requires the issuer's signature and `commit = Some(pay)`, validates name `N`, and binds the principal coupon minted under the certificate's `cnt_policy` to `pay` as a plain enterprise output (no stake credential, datum or reference script); our minting logic's `Retire` requires that coupon, so the trigger cannot retire without paying it. Because the certificate disappears here, the paired continuation stays as a certificate-less ghost shell — the design's only shell.
     - Timing is unchanged (`now ≥ start + N * interval`), so the issuer can only retire at maturity; the owner keeps the self-service graduation of the previous page. The shell is inert and the owner can sweep it later with an owner-signed transfer-path spend.
   ],
 )
