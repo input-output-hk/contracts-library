@@ -164,6 +164,12 @@ fn continue_counter(
   settled_by(self, target_address, continuation, input.output)
 }
 
+/// Whether the input referenced by `ref` was spent with the `Tick` action.
+pub fn spent_with_tick(self: Transaction, ref: OutputReference) -> Bool {
+  let tick: Data = Tick
+  spend_redeemer(self, ref) == Some(tick)
+}
+
 /// Whether the input referenced by `ref` was spent with the `Upgrade` action.
 ///
 /// A migration script uses this to bind a forwarded V1 input to the upgrade

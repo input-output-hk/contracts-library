@@ -506,8 +506,8 @@ tx tick_forwarder(
         from: Forwarder,
         ref: forwarder_ref,
         datum_is: CounterDatum,
-        // The forwarder does not inspect its redeemer; any Data is accepted.
-        redeemer: (),
+        // The forwarder ignores it, but the registered counter logic requires Tick.
+        redeemer: CounterRedeemer::Tick {},
     }
 
     input gas {

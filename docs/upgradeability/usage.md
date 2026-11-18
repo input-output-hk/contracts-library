@@ -245,6 +245,11 @@ The action is whatever the transaction builder put in the redeemer: treat it
 as a claim and validate the transition it names, as any validator does with
 its own redeemer.
 
+The counter demo's forced logic supports only `CounterRedeemer.Tick` for a
+forwarded counter spend. The forwarder does not inspect the redeemer, but both
+counter logic versions check each input's redeemer and reject `Upgrade` or any
+other action.
+
 ## Off-chain usage (MeshJS)
 
 The package root exports the reusable part: the registry codec and builders,

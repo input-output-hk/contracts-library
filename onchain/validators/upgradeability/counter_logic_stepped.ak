@@ -3,7 +3,7 @@ use cardano/address.{Credential}
 use cardano/assets.{AssetName, PolicyId}
 use cardano/certificate.{Certificate}
 use cardano/transaction.{Transaction}
-use upgradeability/counter.{carries_state_token}
+use upgradeability/counter.{carries_state_token, spent_with_tick}
 use upgradeability/delegate.{Delegated, delegated_to}
 use upgradeability/stepped_counter.{
   validate_stepped_genesis, validate_stepped_tick,
@@ -28,10 +28,10 @@ validator counter_logic_stepped(
       list.all(
         inputs,
         fn(input) {
-          carries_state_token(input) && validate_stepped_tick(
+          carries_state_token(input) && spent_with_tick(
             self,
             input.output_reference,
-          )
+          ) && validate_stepped_tick(self, input.output_reference)
         },
       ),
       list.all(mints, fn(policy) { validate_stepped_genesis(self, policy) }),
