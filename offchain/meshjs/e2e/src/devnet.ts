@@ -13,7 +13,9 @@ import {
   MeshTxBuilder,
   MeshWallet,
   type PlutusScript,
+  pubKeyAddress,
   type SlotConfig,
+  serializeAddressObj,
   serializeRewardAddress,
   type UTxO,
   YaciProvider,
@@ -384,6 +386,12 @@ export interface Account {
   address: string;
   /** Payment key hash, for use as a `key` credential in a datum. */
   keyHash: string;
+  /**
+   * The enterprise (no-stake) address for the same payment key. The
+   * issuer-triggered coupon/principal outputs must be plain enterprise
+   * outputs, so they land here rather than on the wallet's base address.
+   */
+  enterpriseAddress: string;
 }
 
 /** Create a fresh wallet, fund it with the given ada topups, and wait for funds. */
@@ -418,7 +426,11 @@ export async function fundedAccount(
   }
   await waitForUtxoCount(provider, address, adaTopups.length);
   const { pubKeyHash } = deserializeAddress(address);
-  return { wallet, address, keyHash: pubKeyHash };
+  const enterpriseAddress = serializeAddressObj(
+    pubKeyAddress(pubKeyHash),
+    NETWORK_ID,
+  );
+  return { wallet, address, keyHash: pubKeyHash, enterpriseAddress };
 }
 
 async function waitForUtxoCount(
