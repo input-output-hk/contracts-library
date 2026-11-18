@@ -29,6 +29,7 @@ import type {
   PlutusScript,
   UTxO,
 } from "@meshsdk/core";
+import { deserializeAddress } from "@meshsdk/core";
 
 import {
   applyAuthorization,
@@ -200,6 +201,25 @@ function validateBondConfig(config: BondConfig): void {
     throw new Error(
       `Vault NFT name must be a non-empty hex string of at most ` +
         `${MAX_ASSET_NAME_BYTES} bytes, got "${config.vaultNftName}".`,
+    );
+  }
+}
+
+/**
+ * The issuer-triggered coupon/principal output is a plain enterprise output:
+ * the committed payment credential and no stake credential. Reject a base
+ * address at build time rather than produce a transaction the on-chain
+ * third-party logic rejects.
+ */
+function assertEnterpriseAddress(address: string): void {
+  const parsed = deserializeAddress(address);
+  if (
+    parsed.stakeCredentialHash !== "" ||
+    parsed.stakeScriptCredentialHash !== ""
+  ) {
+    throw new Error(
+      "The issuer payout address must be an enterprise address " +
+        "(no stake credential).",
     );
   }
 }
@@ -784,7 +804,11 @@ export interface ClaimIssuerParams extends TxBase {
   certificate: UTxO;
   step: number;
   datum: CertificateDatum;
-  /** The committed payout address (payment credential = `commit`). */
+  /**
+   * The committed payout address: an enterprise address whose payment
+   * credential is `commit` (no stake credential, no datum, no reference
+   * script on the coupon output).
+   */
   payoutAddress: string;
   authorizer?: ScriptAuthorizer;
   validFromSlot: number;
@@ -817,6 +841,7 @@ async function buildClaimTx(
 ): Promise<string> {
   const { deployment: d, bond: b } = p;
   const tb = p.txBuilder;
+  if (p.kind === "thirdParty") assertEnterpriseAddress(p.couponAddress);
 
   const credential =
     p.kind === "transfer"
@@ -1007,6 +1032,11 @@ export interface GraduateIssuerParams extends TxBase {
   step: number;
   /** The certificate datum (the shell preserves it byte-for-byte). */
   datum: CertificateDatum;
+  /**
+   * The committed payout address: an enterprise address whose payment
+   * credential is `commit` (no stake credential, no datum, no reference
+   * script on the principal-coupon output).
+   */
   payoutAddress: string;
   authorizer?: ScriptAuthorizer;
   validFromSlot: number;
@@ -1036,6 +1066,7 @@ async function buildGraduateTx(
 ): Promise<string> {
   const { deployment: d, bond: b } = p;
   const tb = p.txBuilder;
+  if (p.kind === "thirdParty") assertEnterpriseAddress(p.couponAddress);
 
   const credential =
     p.kind === "transfer"

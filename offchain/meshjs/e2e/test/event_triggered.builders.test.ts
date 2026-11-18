@@ -437,6 +437,43 @@ describe("issuer-triggered continuations preserve the certificate value", () => 
   });
 });
 
+// ------------------------------------- issuer payout address (I9, third-party)
+
+describe("issuer-triggered payouts must be plain enterprise addresses", () => {
+  const STAKE_KEY = "a4".repeat(28);
+  const staked = serializeAddressObj(
+    pubKeyAddress(PAYER_KEY, STAKE_KEY),
+    NETWORK,
+  );
+  const datum: CertificateDatum = {
+    start: 0,
+    commit: { kind: "key", hash: PAYER_KEY },
+    cntPolicy: bond.cntPolicy,
+  };
+  const cert = certificate(0, datum, HOLDER_KEY, false);
+  const params = {
+    ...base([cert]),
+    bond,
+    node,
+    certificate: cert,
+    datum,
+    payoutAddress: staked,
+    validFromSlot: 0,
+  };
+
+  it("issuer claim rejects a staked payout address", async () => {
+    await expect(buildClaimIssuerTx({ ...params, step: 1 })).rejects.toThrow(
+      /enterprise address/,
+    );
+  });
+
+  it("issuer graduation rejects a staked payout address", async () => {
+    await expect(
+      buildGraduateIssuerTx({ ...params, step: config.amounts.length }),
+    ).rejects.toThrow(/enterprise address/);
+  });
+});
+
 // ------------------------------------------- vault top-up (escrow funding)
 
 describe("vault top-up", () => {
