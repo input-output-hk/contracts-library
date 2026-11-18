@@ -315,7 +315,7 @@ await buildRegistryApplyTx(settingsApplyArgs);
 
 ```ts
 // Genesis: one state token under the forwarder's policy, into a fresh
-// count-0 counter at the forwarder address.
+// count-0 counter at the forwarder address with no stake credential.
 await buildForwardMintTx({
   txBuilder,
   forwarderScript: forwarder,

@@ -1,7 +1,7 @@
 use aiken/collection/dict
 use aiken/collection/list
 use cardano/address.{
-  Script, VerificationKey, from_script, from_verification_key,
+  Address, Inline, Script, VerificationKey, from_script, from_verification_key,
 }
 use cardano/assets
 use cardano/certificate.{
@@ -249,6 +249,19 @@ test logic_accepts_a_genesis_mint() {
   genesis(
     assets.from_asset(forwarder_hash, state_name, 1),
     counter_output(state_token(), 0, None),
+  )
+}
+
+test logic_rejects_a_genesis_with_a_stake_credential() fail {
+  genesis(
+    assets.from_asset(forwarder_hash, state_name, 1),
+    Output {
+      ..counter_output(state_token(), 0, None),
+      address: Address {
+        payment_credential: Script(forwarder_hash),
+        stake_credential: Some(Inline(VerificationKey(vkh))),
+      },
+    },
   )
 }
 
@@ -597,6 +610,24 @@ test stepped_logic_accepts_a_stepped_genesis() {
     Transaction {
       ..placeholder,
       outputs: [stepped_output(0, None, 2)],
+      mint: assets.from_asset(forwarder_hash, state_name, 1),
+    },
+  )
+}
+
+test stepped_logic_rejects_a_genesis_with_a_stake_credential() fail {
+  run_stepped(
+    Transaction {
+      ..placeholder,
+      outputs: [
+        Output {
+          ..stepped_output(0, None, 2),
+          address: Address {
+            payment_credential: Script(forwarder_hash),
+            stake_credential: Some(Inline(VerificationKey(vkh))),
+          },
+        },
+      ],
       mint: assets.from_asset(forwarder_hash, state_name, 1),
     },
   )
