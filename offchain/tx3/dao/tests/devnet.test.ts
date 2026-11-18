@@ -41,6 +41,8 @@ const THRESHOLDS = { create: 10, cosign: 5, accept: 30, vote: 5, execute: 10 };
 const DRAFT_LENGTH = 20_000;
 const VOTING_LENGTH = 20_000;
 const TALLY_LENGTH = 20_000;
+/** Slots of validity window for create txs; `start_time` anchors to its upper bound. */
+const CREATE_WINDOW = 10;
 const TIMINGS = {
   draft_length: DRAFT_LENGTH,
   voting_length: VOTING_LENGTH,
@@ -443,6 +445,15 @@ interface ProposalState {
   startTime: number;
 }
 
+/**
+ * The validity upper-bound slot and the `start_time` a create tx submitted at
+ * `tip` pins: the validator anchors `start_time` to the validity upper bound.
+ */
+function createTiming(tip: ChainTip): { untilSlot: number; startTime: number } {
+  const untilSlot = devnet.slotAtTimeMs(tip.timeMs) + CREATE_WINDOW;
+  return { untilSlot, startTime: devnet.slotTimeMs(untilSlot) };
+}
+
 /** Build and submit the create-proposal transaction (no confirmation wait). */
 async function createProposalTx(
   inst: Instance,
@@ -455,6 +466,7 @@ async function createProposalTx(
     txHash: stakeUtxo.txHash,
     outputIndex: stakeUtxo.outputIndex,
   });
+  const { untilSlot, startTime } = createTiming(tip);
   return submit(
     inst
       .client(signer)
@@ -464,14 +476,15 @@ async function createProposalTx(
         proposal_token_name: toBytes(tokenName),
         results: inst.results,
         new_stake_datum: stakeDatum(signer.keyHash, noneOpt(), [
-          lock(tokenName, tip.timeMs + DRAFT_LENGTH, stakeAmount),
+          lock(tokenName, startTime + DRAFT_LENGTH, stakeAmount),
         ]),
         new_proposal_datum: proposalDatum(
-          tip.timeMs,
+          startTime,
           draftStatus(stakeAmount),
           inst.results,
         ),
         since_slot: tip.slot,
+        until_slot: untilSlot,
         out_ix: 1,
       } as unknown as Parameters<Client["createProposal"]>[0])
       .env(inst.env),
@@ -488,6 +501,7 @@ async function createProposal(
   const before = await snapshot(inst.proposalAddr);
   const beforeStake = await snapshot(inst.stakeAddr);
   const tip = await devnet.tip();
+  const { startTime } = createTiming(tip);
   const submitted = await createProposalTx(
     inst,
     signer,
@@ -505,7 +519,7 @@ async function createProposal(
       txHash: stakeUtxo.txHash,
       outputIndex: stakeUtxo.outputIndex,
     }),
-    startTime: tip.timeMs,
+    startTime,
   };
 }
 

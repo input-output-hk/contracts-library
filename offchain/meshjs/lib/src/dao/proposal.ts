@@ -16,6 +16,7 @@ import {
   type MeshTxBuilder,
   type PlutusScript,
   resolveScriptHash,
+  SLOT_CONFIG_NETWORK,
   type SlotConfig,
   serializePlutusScript,
   serializeRewardAddress,
@@ -23,6 +24,7 @@ import {
 } from "@meshsdk/core";
 
 import {
+  enclosingSlotBound,
   finalizeTx,
   type Network,
   networkIdOf,
@@ -81,6 +83,43 @@ export function proposalScriptAddress(
   return serializePlutusScript(script, undefined, networkId).address;
 }
 
+/**
+ * The create transaction's bounded validity window, in slots past the
+ * enclosing slot of `now` (spec §5.f): the proposal's `start_time` anchors to
+ * the window's upper bound, which the ledger forces to cover the inclusion
+ * slot.
+ */
+export const CREATE_WINDOW_SLOTS = 30;
+
+/** Timing of a create-proposal transaction (see `createProposalTiming`). */
+export interface CreateProposalTiming {
+  sinceSlot: number;
+  untilSlot: number;
+  /** The validity upper bound, which the proposal's `startTime` must equal. */
+  startTime: number;
+}
+
+/**
+ * Timing of a create-proposal transaction submitted at `now`. The validator
+ * pins `startTime` to the validity range's upper bound (spec §5.f), because a
+ * transaction cannot land after it: the window is `validityWindowSlots` past
+ * the slot enclosing `now`, and `invalidHereafter(untilSlot)` makes
+ * `untilSlot`'s start time the exclusive upper bound the validator sees.
+ */
+export function createProposalTiming(p: {
+  now: number;
+  slotConfig: SlotConfig;
+  /** Create window in slots past `now` (default `CREATE_WINDOW_SLOTS`). */
+  validityWindowSlots?: number;
+}): CreateProposalTiming {
+  const { slot: sinceSlot } = enclosingSlotBound(p.now, p.slotConfig);
+  const untilSlot = sinceSlot + (p.validityWindowSlots ?? CREATE_WINDOW_SLOTS);
+  const startTime =
+    p.slotConfig.zeroTime +
+    (untilSlot - p.slotConfig.zeroSlot) * p.slotConfig.slotLength;
+  return { sinceSlot, untilSlot, startTime };
+}
+
 /** Value of a proposal UTxO: ada + proposal NFT. */
 // ---------------------------------------------------- CreateProposal
 
@@ -94,36 +133,75 @@ export interface CreateProposalParams {
   stakeDatum: StakePositionDatum;
   settingsUtxo: UTxO;
   proposalDatum: ProposalDatum;
-  /** Wall-clock used to set `start_time` and the validity lower bound (POSIX ms). */
+  /** Wall-clock the validity window is derived from (POSIX ms). */
   now: number;
   utxos: UTxO[];
   changeAddress: string;
   collateralUtxo: UTxO;
   network?: Network;
   customSlotConfig?: SlotConfig;
+  /** Create validity window in slots past `now` (default `CREATE_WINDOW_SLOTS`). */
+  validityWindowSlots?: number;
 }
 
-/** Spend the creating stake position and mint the proposal NFT. */
+/**
+ * Spend the creating stake position and mint the proposal NFT. Sets a bounded
+ * validity window and derives `startTime` (and the draft lock) from its upper
+ * bound; the values passed in the datums are overwritten (spec §5.f).
+ */
 export async function buildCreateProposalTx(
   p: CreateProposalParams,
 ): Promise<string> {
   const network = p.network ?? "preprod";
   const networkId = networkIdOf(network);
+  const slotConfig = p.customSlotConfig ?? SLOT_CONFIG_NETWORK[network];
   const proposalPolicy = resolveScriptHash(
     p.proposalScript.code,
     p.proposalScript.version,
   );
-  const bound = slotBound(network, p.now, p.customSlotConfig);
+  const timing = createProposalTiming({
+    now: p.now,
+    slotConfig,
+    validityWindowSlots: p.validityWindowSlots,
+  });
   const proposalTokenName = nftNameFromRef(p.stakeUtxo.input);
 
-  if (p.stakeDatum.owner.kind === "key") {
-    p.txBuilder.requiredSignerHash(p.stakeDatum.owner.hash);
+  // The validator pins `startTime` to the validity upper bound and the draft
+  // lock to `startTime + draft_length` (spec §5.f), so the builder overwrites
+  // both fields in the submitted datums; use `createProposalTiming` to
+  // predict them.
+  const proposalDatum: ProposalDatum = {
+    ...p.proposalDatum,
+    startTime: timing.startTime,
+  };
+  if (
+    !p.stakeDatum.locks.some((lock) => lock.proposalId === proposalTokenName)
+  ) {
+    throw new Error(
+      `stakeDatum must include the draft lock for the new proposal ${proposalTokenName}`,
+    );
+  }
+  const stakeDatum: StakePositionDatum = {
+    ...p.stakeDatum,
+    locks: p.stakeDatum.locks.map((lock) =>
+      lock.proposalId === proposalTokenName
+        ? {
+            ...lock,
+            unlockTime:
+              timing.startTime + proposalDatum.timingConfig.draftLength,
+          }
+        : lock,
+    ),
+  };
+
+  if (stakeDatum.owner.kind === "key") {
+    p.txBuilder.requiredSignerHash(stakeDatum.owner.hash);
   }
 
   p.txBuilder
     .mintPlutusScriptV3()
     .mint("1", proposalPolicy, proposalTokenName)
-    .mintRedeemerValue(mintProposalRedeemer(p.proposalDatum.results, 0))
+    .mintRedeemerValue(mintProposalRedeemer(proposalDatum.results, 0))
     .mintingScript(p.proposalScript.code)
     .spendingPlutusScriptV3()
     .txIn(
@@ -145,14 +223,16 @@ export async function buildCreateProposalTx(
       proposalScriptAddress(p.proposalScript, networkId),
       nftValue(p.proposalScript, proposalTokenName),
     )
-    .txOutInlineDatumValue(proposalDatumToData(p.proposalDatum))
+    .txOutInlineDatumValue(proposalDatumToData(proposalDatum))
     .txOut(
       stakeScriptAddress(p.stakeScript, networkId),
       p.stakeUtxo.output.amount,
     )
-    .txOutInlineDatumValue(stakePositionDatumToData(p.stakeDatum));
+    .txOutInlineDatumValue(stakePositionDatumToData(stakeDatum));
 
-  p.txBuilder.invalidBefore(bound.slot);
+  p.txBuilder
+    .invalidBefore(timing.sinceSlot)
+    .invalidHereafter(timing.untilSlot);
   return finalizeTx(p.txBuilder, {
     collateral: p.collateralUtxo,
     changeAddress: p.changeAddress,

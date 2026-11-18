@@ -22,7 +22,8 @@ use dao/utils.{get_unique_token_name, spend_redeemer, token_name_from_ref}
 ///   (`staked_token_policy` / `staked_token_name`) worth at least
 ///   `settings.thresholds.create`;
 /// - a proposal output at this script's address carrying the NFT and a valid
-///   initial `ProposalDatum` (Draft status, empty results, start_time = now).
+///   initial `ProposalDatum` (Draft status, empty results, `start_time` = the
+///   transaction's validity upper bound).
 pub fn validate_create_proposal(
   settings: DaoSettings,
   staked_token_policy: assets.PolicyId,
@@ -34,7 +35,9 @@ pub fn validate_create_proposal(
 ) {
   let Transaction { inputs, outputs, mint, validity_range, .. } = self
 
-  expect Finite(now) = validity_range.lower_bound.bound_type
+  // `start_time` anchors to the upper bound, which the ledger forces to cover
+  // the inclusion slot, so the proposal timeline cannot be backdated.
+  expect Finite(upper) = validity_range.upper_bound.bound_type
 
   // The stake position is matched loosely (any NFT under the stake policy);
   // its own spend validator re-checks the detailed constraints on that input.
@@ -62,7 +65,7 @@ pub fn validate_create_proposal(
 
   // The stake must be consumed with `CreateProposal`, so the stake validator
   // enforces the matching lock
-  // `(token_name, now + settings.timings.draft_length, stake_amount)`.
+  // `(token_name, upper + settings.timings.draft_length, stake_amount)`.
   let stake_creating = {
     expect action: StakeRedeemer = spend_redeemer(
       self,
@@ -87,7 +90,7 @@ pub fn validate_create_proposal(
     let expected_datum: Data = ProposalDatum {
       thresholds: settings.thresholds,
       timing_config: settings.timings,
-      start_time: now,
+      start_time: upper,
       status: ProposalStatus.Draft { cosigning_stake: staked_amount },
       results,
     }

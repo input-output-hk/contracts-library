@@ -16,10 +16,10 @@ import {
   buildTallyTx,
   buildVoteTx,
   buildWithdrawTx,
+  createProposalTiming,
   type DaoSettings,
   daoSettingsToData,
   type EndProposalParams,
-  enclosingSlotBound,
   mintRedeemer,
   nftNameFromRef,
   type ProposalDatum,
@@ -83,6 +83,12 @@ const TIMINGS: ProposalTimingConfig = {
 
 /** Number of milliseconds of slack added past a phase boundary before waiting. */
 const PHASE_SLACK = 2_000;
+
+/**
+ * Create validity window used by this suite, in slots: `start_time` anchors to
+ * the window's upper bound, so a short window keeps the phase waits tight.
+ */
+const CREATE_WINDOW = 10;
 
 describe.skipIf(!REACHABLE)("dao e2e (Yaci devnet)", () => {
   let provider: ReturnType<typeof makeProvider>;
@@ -309,7 +315,13 @@ describe.skipIf(!REACHABLE)("dao e2e (Yaci devnet)", () => {
     resultScripts: string[] = results(),
   ): Promise<ProposalState> {
     const now = await chainNowMs();
-    const startTime = enclosingSlotBound(now, slotConfig).startMs;
+    // `start_time` pins to the create transaction's validity upper bound,
+    // which the builder derives from the same window.
+    const startTime = createProposalTiming({
+      now,
+      slotConfig,
+      validityWindowSlots: CREATE_WINDOW,
+    }).startTime;
     const tokenName = nftNameFromRef(stakeUtxo.input);
     const inStake = stakeBalance(stakeUtxo);
 
@@ -346,6 +358,7 @@ describe.skipIf(!REACHABLE)("dao e2e (Yaci devnet)", () => {
       changeAddress: owner.address,
       collateralUtxo: await collateralOf(owner),
       customSlotConfig: slotConfig,
+      validityWindowSlots: CREATE_WINDOW,
     });
     const hash = await signAndSubmit(owner, tx);
     await waitForTx(provider, hash);

@@ -257,11 +257,15 @@ fn mint_stake_input(index: Int, stake: Int) -> Input {
   }
 }
 
-fn mint_proposal_datum(create: Int, stake: Int, now: Int) -> ProposalDatum {
+fn mint_proposal_datum(
+  create: Int,
+  stake: Int,
+  start_time: Int,
+) -> ProposalDatum {
   ProposalDatum {
     thresholds: thresholds_with_create(create),
     timing_config: timings(),
-    start_time: now,
+    start_time,
     status: ProposalStatus.Draft { cosigning_stake: stake },
     results: [],
   }
@@ -277,8 +281,9 @@ fn proposal_output_named(token_name: ByteArray, d: ProposalDatum) -> Output {
 }
 
 // A well-formed CreateProposal transaction. `stake` is the staked-token amount
-// held by the creating stake UTxO.
-fn create_tx(create: Int, stake: Int, now: Int) -> Transaction {
+// held by the creating stake UTxO; `upper` is the transaction's validity upper
+// bound, which the datum's `start_time` must equal.
+fn create_tx(create: Int, stake: Int, upper: Int) -> Transaction {
   let stake_in = mint_stake_input(0, stake)
   let token_name = token_name_from_ref(stake_in.output_reference)
   let create_r: Data = CreateProposal
@@ -287,11 +292,14 @@ fn create_tx(create: Int, stake: Int, now: Int) -> Transaction {
     inputs: [stake_in],
     reference_inputs: [settings_input_create(create)],
     outputs: [
-      proposal_output_named(token_name, mint_proposal_datum(create, stake, now)),
+      proposal_output_named(
+        token_name,
+        mint_proposal_datum(create, stake, upper),
+      ),
     ],
     mint: assets.from_asset(proposal_policy, token_name, 1),
     redeemers: [Pair(Spend(stake_in.output_reference), create_r)],
-    validity_range: interval.after(now),
+    validity_range: interval.between(0, upper),
   }
 }
 
@@ -809,6 +817,30 @@ test rejects_unbounded_validity_range() fail {
   validate_mint(Transaction { ..tx, validity_range: interval.everything })
 }
 
+// CONS-02 regression: `start_time` anchors to the upper bound, so a backdated
+// lower bound no longer backdates the proposal timeline. The old attack — a
+// far-past lower bound with `start_time` mirroring it — is rejected.
+test rejects_backdated_start_time() fail {
+  let tx = create_tx(100, 100, 5000)
+  let token_name = token_name_from_ref(
+    OutputReference { transaction_id: tx_id, output_index: 0 },
+  )
+  validate_mint(
+    Transaction {
+      ..tx,
+      outputs: [
+        proposal_output_named(token_name, mint_proposal_datum(100, 100, 0)),
+      ],
+      validity_range: interval.between(0, 5000),
+    },
+  )
+}
+
+test rejects_create_without_upper_bound() fail {
+  let tx = create_tx(100, 100, 5000)
+  validate_mint(Transaction { ..tx, validity_range: interval.after(0) })
+}
+
 // ------------------------------------------------------------------- mint fuzz
 
 fn scenario() -> Fuzzer<(Int, Int)> {
@@ -826,10 +858,10 @@ test prop_accepts_when_stake_meets_threshold((create, stake) via scenario()) {
 }
 
 test prop_start_time_reflected_in_datum((create, stake) via scenario()) {
-  // The datum's start_time must equal the validity lower bound; verify the
-  // validator accepts any `now` as long as the datum mirrors it.
-  let now = stake + create
-  validate_mint(create_tx(create, stake, now))
+  // The datum's start_time must equal the validity upper bound; the validator
+  // accepts any `upper` as long as the datum mirrors it.
+  let upper = stake + create
+  validate_mint(create_tx(create, stake, upper))
 }
 
 // ------------------------------------------------------------ stage-3 props
