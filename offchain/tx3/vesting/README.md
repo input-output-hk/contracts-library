@@ -19,7 +19,7 @@ every claim/cancel carries the slot to use as the reference instant.
 
 | Template | Purpose |
 | --- | --- |
-| `lock` | The locker sends the bundle to the script with the inline `VestingDatum`. Pure off-chain construction — no script runs. |
+| `lock` | The locker sends the bundle to the script with the inline `VestingDatum`. Pure off-chain construction — no script runs. Use the validated wrapper in [`lock.ts`](./lock.ts). |
 | `claim` | The beneficiary withdraws the vested portion; a continuation at the script address reproduces the datum verbatim and keeps the required remainder. |
 | `claim_full` | The beneficiary takes the whole bundle once `now >= end_time`; no continuation (I4). |
 | `cancel` | The locker recovers the remainder after `recovery_time` (strictly); no continuation. |
@@ -65,7 +65,33 @@ permissive than this reference:
   (spec §7).
 - **Lock is the builder's responsibility** (spec §4.1 / I7): a well-formed
   schedule and a value covering every `vesting` entry are never checked
-  on-chain.
+  on-chain. The generated `client.lock` forwards parameters without
+  validation; the wrapper below enforces these preconditions.
+
+## Validated lock wrapper
+
+Tx3 has no conditional comparisons, so the lock checks live in a maintained
+TypeScript wrapper rather than in `main.tx3`:
+
+```ts
+import { buildLockTx } from "./lock";
+
+const tx = buildLockTx(client, { ada_total, vesting_datum });
+```
+
+The wrapper rejects:
+
+- schedules without `start_time < end_time < recovery_time`;
+- non-safe-integer times or amounts;
+- empty, multi-asset, or non-ada bundles (this reference is ada-only);
+- `ada_total` below the datum's ada total (which would block partial claims);
+- `ada_total` above the datum total, by default.
+
+Ada above the scheduled total is not schedule-protected and can be swept on the
+first partial claim. For intentional surplus, pass
+`{ allowUnprotectedValue: true }`; the wrapper then emits a warning. The
+wrapper accepts both the wire-form fields (`ada_total`, `vesting_datum`) and
+their camel-case aliases from generated TypeScript clients.
 
 ## Devnet tests
 
@@ -77,4 +103,5 @@ must-reject shapes — over-claim, tampered continuation datum, missing
 beneficiary signature, a cancel whose lower bound sits exactly at
 `recovery_time` (strict boundary), and a cancel by a non-locker — each
 asserted to fail for the right reason and leave the vesting UTxO untouched.
-Run it from [`offchain/tx3`](../) with `npm run test:vesting`.
+Run it from [`offchain/tx3`](../) with `npm run test:vesting`. The fast,
+devnet-free lock-guard tests run with `npm run test:vesting-unit`.

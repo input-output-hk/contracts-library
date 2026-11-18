@@ -14,6 +14,7 @@ import {
   unwrapCborBytes,
 } from "../../devnet/utils";
 import { Client } from "../codegen/ts-client/linear-vesting/protocol";
+import { buildLockTx } from "../lock";
 
 const ADA = 1_000_000n;
 
@@ -210,12 +211,10 @@ async function lock(p: {
   );
   const before = await snapshot(vestingAddr);
   await confirm(
-    client(p.locker, p.beneficiary)
-      .lock({
-        ada_total: Number(totalAda),
-        vesting_datum: datum,
-      } as unknown as Parameters<Client["lock"]>[0])
-      .env(env),
+    buildLockTx(client(p.locker, p.beneficiary), {
+      ada_total: Number(totalAda),
+      vesting_datum: datum,
+    }).env(env),
   );
   const [utxo] = await addedSince(vestingAddr, before);
   return {

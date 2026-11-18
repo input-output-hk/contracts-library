@@ -42,8 +42,11 @@ pub fn validate_claim(
   expect datum.start_time < datum.end_time
 
   // The bundle must be well-formed: keys strictly ascending (so no asset is
-  // listed twice) and every total non-negative. Checked on `Claim` only, so a
-  // malformed instance can be recovered by the locker via `Cancel`.
+  // listed twice) and every total non-negative. Checked on `Claim` only. A
+  // malformed BUNDLE can still be recovered by the locker via `Cancel` when the
+  // schedule is valid, but a malformed SCHEDULE (start_time >= end_time, or
+  // end_time >= recovery_time) can be neither claimed nor cancelled. Lock
+  // builders must reject both cases.
   expect bundle_well_formed(datum.vesting)
 
   // §5.2 — read `now` as the finite lower bound of the validity range.
