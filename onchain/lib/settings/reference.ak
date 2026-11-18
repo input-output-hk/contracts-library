@@ -16,7 +16,6 @@ pub fn reference_spend(
   propose_auth: Credential,
   apply_auth: Credential,
   apply_delay: Int,
-  settings_token_name: AssetName,
   datum: Option<SettingsDatum>,
   redeemer: SpendRedeemer,
   own_ref: OutputReference,
@@ -32,19 +31,10 @@ pub fn reference_spend(
         out_ix,
         own_ref,
         self,
-        settings_token_name,
         validate_datum,
       )
     Apply { out_ix } ->
-      validate_apply(
-        apply_auth,
-        datum,
-        out_ix,
-        own_ref,
-        self,
-        settings_token_name,
-        validate_datum,
-      )
+      validate_apply(apply_auth, datum, out_ix, own_ref, self, validate_datum)
     Close -> validate_close(apply_auth, own_ref, self)
   }
 }
