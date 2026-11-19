@@ -4,7 +4,7 @@ The Milestone 1.2 proofs target the linear-vesting spending validator from
 commit `d629dce7`, with script hash
 `95da21788eb1f59f51aad9669eb8c8b7081ab618c1f29b871925894a`.
 The [validator metadata](validator-metadata.json) records the source revision
-and compiled bytes. [Vesting specification](../../../docs/vesting/spec.md)
+and compiled bytes. [M1.2 vesting specification](https://github.com/no-witness-labs/contracts-library/blob/28bfe6087d7313617c34b4fc977db10b681c85c4/docs/vesting/spec.md)
 
 ## Approach
 
@@ -61,7 +61,7 @@ The frozen validator groups continuations by payment credential and datum.
 `MultiTx.chain_address_fixed` therefore states equality of payment credentials
 along a linked chain of claims accepted by the model. IO later changed the
 validator to require the full address and datum. The hash above identifies the
-artifact covered by this proof suite. [Frozen code](../../../onchain/lib/vesting/linear.ak#L124-L132) · [Chain theorem](MultiTx.lean#L163-L166) · [Upstream fix](https://github.com/input-output-hk/contracts-library/pull/72)
+artifact covered by this proof suite. [Frozen code](https://github.com/input-output-hk/contracts-library/blob/d629dce7ef1a6af883215c076adc964bd37152a1/onchain/lib/vesting/linear.ak#L124-L132) · [Chain theorem](MultiTx.lean#L163-L166) · [Upstream fix](https://github.com/input-output-hk/contracts-library/pull/72)
 
 ## Properties
 
@@ -127,16 +127,15 @@ Follow the [toolchain setup](../../README.md#build), including Aiken
    Both tests should pass. The second passes when the validator rejects the
    premature cancellation. [Aiken test fixtures](../../../onchain/lib/vesting/linear.test.ak#L378-L388)
 
-2. Generate the fixture and build the Lean examples from `formal/`.
+2. Prepare the frozen fixture and build the Lean examples from `formal/`.
 
    ```sh
-   just flats
+   just vesting-snapshot
    lake build +Formal.LinearVesting.Tests
    ```
 
-   `just flats` writes `Scripts/linear_vesting_spend.flat`. Lake should report
-   a successful build. The Build guide explains which checkout supplies the
-   Aiken source.
+   The recipe verifies the script hash above and writes
+   `Scripts/linear_vesting_spend.flat`. Lake should report a successful build.
 
 3. Inspect the compiled-validator results from `formal/`.
 

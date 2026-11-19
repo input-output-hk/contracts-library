@@ -39,8 +39,9 @@ transaction shape and the command to run the earlier proof target.
 
 ## Prerequisites
 
-The Nix shell supplies elan, Z3, and gawk. Install `just` and Aiken
-`v1.1.22+39d6b04` and put them on `PATH` for the M1.2 snapshot.
+The Nix shell supplies elan, Z3, Python 3 and gawk. Install `just`.
+For an Aiken build, also install the compiler from `onchain/aiken.toml`
+and put it on `PATH`.
 
 ```bash
 cd formal
@@ -62,31 +63,30 @@ Without Nix, install manually:
 
 ## Build
 
-The `justfile` builds the checked-out Aiken sources and encodes the resulting
-UPLC to Flat for Lean. For the frozen vesting proofs, use a checkout of the
-M1.2 revision with the validator identified in the
-[vesting metadata](Formal/LinearVesting/validator-metadata.json).
+For the frozen M1.2 vesting proofs, prepare the Flat fixture from the
+recorded CBOR and verify its script hash.
+[Vesting metadata](Formal/LinearVesting/validator-metadata.json)
 
 ```bash
 cd formal
-just verify      # build -> flats -> lake build (annotated)
+just vesting-snapshot
+lake build
 ```
 
-For the manual sequence, put `just` and Aiken **v1.1.22** on `PATH`, alongside
-Lean 4.24.0 and Z3 4.15.2 (provided by the dev shell).
+The recipe uses Python 3. For a full run with an Aiken build, use the
+compiler selected by the checked-out on-chain project.
 
 ```bash
 cd formal
-# (in `nix develop`, or with elan + z3 on PATH)
-just flats       # compile Aiken and generate Scripts/*.flat
-lake build       # check the active proof suite
+just verify      # build Aiken, generate the fixtures, then run Lake in Nix
 ```
 
 Lake uses the dependency revisions in `lake-manifest.json`. The `just deps`
 recipe runs `lake update` when you intend to refresh those revisions.
 
-Git ignores the generated files under `Scripts/`. Run `just flats` before
-the first Lean build and after changing the on-chain source.
+Git ignores the generated files under `Scripts/`. `just flats` builds the
+checked-out Aiken validators and encodes the other spending and minting
+fixtures. The vesting fixture comes from the recorded snapshot.
 
 A failing `blaster` goal can be debugged with its options, e.g.
 `blaster (verbose: 1)` or `blaster (gen-cex: 1)` to print a counterexample.
