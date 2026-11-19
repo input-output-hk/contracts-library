@@ -4,17 +4,11 @@
  * bond transaction produces live in the library (`@contracts-library/meshjs`).
  */
 
-import { mConStr, mConStr0, mConStr1, type Data } from "@meshsdk/core";
+import { type Credential, credentialToData } from "@contracts-library/meshjs";
+import { type Data, mConStr, mConStr0, mConStr1 } from "@meshsdk/core";
 
-import {
-  credentialToData,
-  registryNodeToData,
-  type Credential,
-  type RegistryNode,
-} from "@contracts-library/meshjs";
-
-export { credentialToData, registryNodeToData };
-export type { Credential, RegistryNode };
+export type { Credential };
+export { credentialToData };
 
 export interface ProtocolParams {
   programmableLogicGlobalCred: Credential;

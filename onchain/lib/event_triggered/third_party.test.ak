@@ -6,7 +6,8 @@ use cardano/address.{
 }
 use cardano/assets
 use cardano/transaction.{
-  InlineDatum, Input, NoDatum, Output, OutputReference, Transaction, placeholder,
+  DatumHash, InlineDatum, Input, NoDatum, Output, OutputReference, Transaction,
+  placeholder,
 }
 use event_triggered/schedule
 use event_triggered/third_party
@@ -95,7 +96,7 @@ fn cert_datum(start: Int, commit: Option<Credential>) -> CertificateDatum {
   CertificateDatum { start, commit, cnt_policy }
 }
 
-fn cert_value(k: Int) -> assets.Value {
+fn cert_value(k: Int) -> assets.Assets {
   assets.from_asset(cip_policy, schedule.step_name(k), 1)
     |> assets.merge(assets.from_lovelace(2_000_000))
 }
@@ -134,7 +135,7 @@ fn coupon_output(payment: ByteArray, amount: Int) -> Output {
   }
 }
 
-fn coupon(amount: Int) -> assets.Value {
+fn coupon(amount: Int) -> assets.Assets {
   assets.from_asset(cnt_policy, schedule.encode_amount(amount), 1)
 }
 
@@ -172,6 +173,68 @@ test claim_rejects_without_commit() {
 
 test claim_rejects_redirect() {
   !check(claim_tx(Some(VerificationKey(pay_key)), [issuer_key], holder_key))
+}
+
+test claim_rejects_foreign_stake() {
+  !check(
+    Transaction {
+      ..claim_tx(Some(VerificationKey(pay_key)), [issuer_key], pay_key),
+      outputs: [
+        cert_output(
+          holder_key,
+          1,
+          cert_datum(2000, Some(VerificationKey(pay_key))),
+        ),
+        Output {
+          ..coupon_output(pay_key, 1040),
+          address: from_verification_key(pay_key)
+            |> with_delegation_key(issuer_key),
+        },
+      ],
+    },
+  )
+}
+
+test claim_rejects_datum_hash() {
+  !check(
+    Transaction {
+      ..claim_tx(Some(VerificationKey(pay_key)), [issuer_key], pay_key),
+      outputs: [
+        cert_output(
+          holder_key,
+          1,
+          cert_datum(2000, Some(VerificationKey(pay_key))),
+        ),
+        Output {
+          ..coupon_output(pay_key, 1040),
+          datum: DatumHash(
+            #"0000000000000000000000000000000000000000000000000000000000000000",
+          ),
+        },
+      ],
+    },
+  )
+}
+
+test claim_rejects_reference_script() {
+  !check(
+    Transaction {
+      ..claim_tx(Some(VerificationKey(pay_key)), [issuer_key], pay_key),
+      outputs: [
+        cert_output(
+          holder_key,
+          1,
+          cert_datum(2000, Some(VerificationKey(pay_key))),
+        ),
+        Output {
+          ..coupon_output(pay_key, 1040),
+          reference_script: Some(
+            #"99999999999999999999999999999999999999999999999999999999",
+          ),
+        },
+      ],
+    },
+  )
 }
 
 test claim_rejects_missing_coupon() {
@@ -223,6 +286,21 @@ test graduation_ok() {
 
 test graduation_rejects_redirect() {
   !check(graduation_tx([issuer_key], holder_key))
+}
+
+test graduation_rejects_foreign_stake() {
+  !check(
+    Transaction {
+      ..graduation_tx([issuer_key], pay_key),
+      outputs: [
+        Output {
+          ..coupon_output(pay_key, principal),
+          address: from_verification_key(pay_key)
+            |> with_delegation_key(issuer_key),
+        },
+      ],
+    },
+  )
 }
 
 test graduation_rejects_without_issuer() {

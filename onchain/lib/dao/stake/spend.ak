@@ -1,8 +1,12 @@
+//// Stake-position spend rules: deposit, delegate, withdraw, close, and the
+//// proposal actions (create, cosign, vote). See `docs/dao/spec.md` §3.d and
+//// §5.b–§5.j.
+
 use aiken/collection/list
 use aiken/interval.{Finite}
 use authorization.{is_authorized}
 use cardano/address.{Address, Credential, Script}
-use cardano/assets.{AssetName, PolicyId, Value, has_nft, quantity_of}
+use cardano/assets.{AssetName, Assets, PolicyId, has_nft, quantity_of}
 use cardano/transaction.{
   InlineDatum, Input, Output, OutputReference, Transaction, resolve_input,
 }
@@ -28,7 +32,7 @@ fn position(
   staked_token_name: AssetName,
   own_ref: OutputReference,
   self: Transaction,
-) -> (Address, Value, PolicyId, AssetName, Int) {
+) -> (Address, Assets, PolicyId, AssetName, Int) {
   let Transaction { inputs, .. } = self
   let own_input = resolve_input(inputs, own_ref)
   let Output { address: own_addr, value: own_value, .. } = own_input
@@ -62,15 +66,25 @@ pub fn validate_stake_deposit(
     = self
   expect Finite(now) = validity_range.lower_bound.bound_type
   let out = find_continuation_output(outputs, own_addr)
-  let cont = out_datum(out)
+  expect  
+      Output {
+        value: out_value,
+        datum: InlineDatum(cont),
+        reference_script: None,
+        ..
+      }
+    = out
+  let expected: Data = StakePositionDatum {
+    owner: datum.owner,
+    delegatee: datum.delegatee,
+    locks: prune_expired(datum.locks, now),
+  }
   and {
     is_authorized(datum.owner, extra_signatories, withdrawals),
-    cont.owner == datum.owner,
-    cont.delegatee == datum.delegatee,
-    cont.locks == prune_expired(datum.locks, now),
-    quantity_of(out.value, staked_token_policy, staked_token_name) >= in_stake,
-    quantity_of(out.value, own_hash, nft) == 1,
-    list.length(assets.flatten(out.value)) == 3,
+    cont == expected,
+    quantity_of(out_value, staked_token_policy, staked_token_name) >= in_stake,
+    quantity_of(out_value, own_hash, nft) == 1,
+    list.length(assets.flatten(out_value)) == 3,
   }
 }
 
@@ -90,13 +104,23 @@ pub fn validate_stake_delegate(
   )
   let Transaction { outputs, extra_signatories, withdrawals, .. } = self
   let out = find_continuation_output(outputs, own_addr)
-  let cont = out_datum(out)
+  expect  
+      Output {
+        value: out_value,
+        datum: InlineDatum(cont),
+        reference_script: None,
+        ..
+      }
+    = out
+  let expected: Data = StakePositionDatum {
+    owner: datum.owner,
+    delegatee,
+    locks: datum.locks,
+  }
   and {
     is_authorized(datum.owner, extra_signatories, withdrawals),
-    cont.owner == datum.owner,
-    cont.delegatee == delegatee,
-    cont.locks == datum.locks,
-    assets.match(out.value, own_value, >=),
+    cont == expected,
+    assets.match(out_value, own_value, >=),
   }
 }
 
@@ -127,17 +151,27 @@ pub fn validate_stake_withdraw(
   let pruned = prune_expired(datum.locks, now)
   let free = free_stake(in_stake, pruned)
   let out = find_continuation_output(outputs, own_addr)
-  let cont = out_datum(out)
+  expect  
+      Output {
+        value: out_value,
+        datum: InlineDatum(cont),
+        reference_script: None,
+        ..
+      }
+    = out
+  let expected: Data = StakePositionDatum {
+    owner: datum.owner,
+    delegatee: datum.delegatee,
+    locks: pruned,
+  }
   and {
     amount >= 0,
     amount <= free,
     is_authorized(datum.owner, extra_signatories, withdrawals),
-    cont.owner == datum.owner,
-    cont.delegatee == datum.delegatee,
-    cont.locks == pruned,
-    quantity_of(out.value, staked_token_policy, staked_token_name) == in_stake - amount,
-    quantity_of(out.value, own_hash, nft) == 1,
-    list.length(assets.flatten(out.value)) == 3,
+    cont == expected,
+    quantity_of(out_value, staked_token_policy, staked_token_name) == in_stake - amount,
+    quantity_of(out_value, own_hash, nft) == 1,
+    list.length(assets.flatten(out_value)) == 3,
   }
 }
 
@@ -189,22 +223,35 @@ pub fn validate_stake_create_proposal(
         ..
       }
     = self
-  expect Finite(now) = validity_range.lower_bound.bound_type
+  // The lock anchors to the create transaction's validity upper bound (which
+  // the ledger forces to cover the inclusion slot), so it can never be
+  // pre-expired by backdating the range — mirroring `validate_create_proposal`.
+  expect Finite(upper) = validity_range.upper_bound.bound_type
   let p_id = token_name_from_ref(own_ref)
   let new_lock = Lock {
     proposal_id: p_id,
-    unlock_time: now + settings.timings.draft_length,
+    unlock_time: upper + settings.timings.draft_length,
     stake: in_stake,
   }
   let out = find_continuation_output(outputs, own_addr)
-  let cont = out_datum(out)
+  expect  
+      Output {
+        value: out_value,
+        datum: InlineDatum(cont),
+        reference_script: None,
+        ..
+      }
+    = out
+  let expected: Data = StakePositionDatum {
+    owner: datum.owner,
+    delegatee: datum.delegatee,
+    locks: list.push(datum.locks, new_lock),
+  }
   and {
     is_authorized(datum.owner, extra_signatories, withdrawals),
     quantity_of(mint, settings.proposal_validator, p_id) == 1,
-    cont.owner == datum.owner,
-    cont.delegatee == datum.delegatee,
-    cont.locks == list.push(datum.locks, new_lock),
-    assets.match(out.value, own_value, >=),
+    cont == expected,
+    assets.match(out_value, own_value, >=),
   }
 }
 
@@ -235,14 +282,24 @@ pub fn validate_stake_cosign(
     stake: in_stake,
   }
   let out = find_continuation_output(outputs, own_addr)
-  let cont = out_datum(out)
+  expect  
+      Output {
+        value: out_value,
+        datum: InlineDatum(cont),
+        reference_script: None,
+        ..
+      }
+    = out
+  let expected: Data = StakePositionDatum {
+    owner: datum.owner,
+    delegatee: datum.delegatee,
+    locks: list.concat(datum.locks, [new_lock]),
+  }
   and {
     is_authorized(vote_auth(datum), extra_signatories, withdrawals),
     !has_proposal(datum.locks, proposal_id),
-    cont.owner == datum.owner,
-    cont.delegatee == datum.delegatee,
-    cont.locks == list.concat(datum.locks, [new_lock]),
-    assets.match(out.value, own_value, >=),
+    cont == expected,
+    assets.match(out_value, own_value, >=),
   }
 }
 
@@ -282,17 +339,27 @@ pub fn validate_stake_vote(
   let unlock = proposal.start_time + proposal.timing_config.draft_length + proposal.timing_config.voting_length
   let new_lock = Lock { proposal_id, unlock_time: unlock, stake: in_stake }
   let out = find_continuation_output(outputs, own_addr)
-  let cont = out_datum(out)
+  expect  
+      Output {
+        value: out_value,
+        datum: InlineDatum(cont),
+        reference_script: None,
+        ..
+      }
+    = out
+  let expected: Data = StakePositionDatum {
+    owner: datum.owner,
+    delegatee: datum.delegatee,
+    locks: list.concat(prune_expired(datum.locks, now), [new_lock]),
+  }
   and {
     is_authorized(vote_auth(datum), extra_signatories, withdrawals),
     proposal.status == ProposalStatus.Voting,
     in_stake >= proposal.thresholds.vote,
     !has_proposal(datum.locks, proposal_id),
     upper <= unlock,
-    cont.owner == datum.owner,
-    cont.delegatee == datum.delegatee,
-    cont.locks == prune_expired(list.concat(datum.locks, [new_lock]), now),
-    assets.match(out.value, own_value, >=),
+    cont == expected,
+    assets.match(out_value, own_value, >=),
     quantity_of(mint, settings.vote_validator, token_name_from_ref(own_ref)) == 1,
   }
 }
@@ -303,12 +370,6 @@ fn vote_auth(datum: StakePositionDatum) -> Credential {
     Some(d) -> d
     None -> datum.owner
   }
-}
-
-fn out_datum(out: Output) -> StakePositionDatum {
-  expect InlineDatum(d) = out.datum
-  expect sd: StakePositionDatum = d
-  sd
 }
 
 fn proposal_datum(

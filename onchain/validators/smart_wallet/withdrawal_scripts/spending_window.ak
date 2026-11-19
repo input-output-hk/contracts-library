@@ -5,7 +5,7 @@
 
 use cardano/address.{Credential, Script}
 use cardano/assets.{AssetName}
-use cardano/certificate.{Certificate, RegisterCredential, UnregisterCredential}
+use cardano/certificate.{Certificate}
 use cardano/transaction.{Transaction}
 use smart_wallet/withdrawal
 use smart_wallet/withdrawal_scripts/spending_window_logic.{
@@ -18,25 +18,14 @@ validator spending_window(
   window: Int,
 ) {
   publish(_redeemer: Data, certificate: Certificate, self: Transaction) {
-    when certificate is {
-      RegisterCredential { credential: Script(own_hash), .. } ->
-        initial_state_valid(
-          withdrawal.own_withdrawal_data(
-            self,
-            wallet,
-            wallet_token_name,
-            own_hash,
-          ),
-        )
-      UnregisterCredential { credential: Script(own_hash), .. } ->
-        withdrawal.own_withdrawal_removed(
-          self,
-          wallet,
-          wallet_token_name,
-          own_hash,
-        )
-      _ -> fail
-    }
+    withdrawal.reference_publish(
+      certificate,
+      self,
+      wallet,
+      wallet_token_name,
+      withdrawal.Spender,
+      initial_state_valid,
+    )
   }
 
   withdraw(_redeemer: Data, account: Credential, self: Transaction) {

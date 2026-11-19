@@ -1,3 +1,6 @@
+//// Settings datum and redeemer types. See `docs/settings/spec.md` §3.d
+//// and §4.a.
+
 /// A configurable governance setting with a delayed-apply pattern.
 ///
 /// `current` is the active value. `next` is a proposed new value

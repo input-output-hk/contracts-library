@@ -10,28 +10,28 @@
  */
 
 import {
+  type Asset,
   applyParamsToScript,
-  Network,
+  type MeshTxBuilder,
+  type Network,
+  type PlutusScript,
   resolveScriptHash,
   serializePlutusScript,
-  type Asset,
-  type MeshTxBuilder,
-  type PlutusScript,
   type UTxO,
 } from "@meshsdk/core";
 
 import { applyAuthorization, type ScriptAuthorizer } from "../authorization";
-import type { Credential } from "../common";
-import { smartWalletCode, plutusVersion } from "./blueprint";
+import { type Credential, finalizeTx, networkIdOf } from "../common";
+import { plutusVersion, smartWalletCode } from "./blueprint";
 import {
   walletBurnRedeemer,
   walletCloseRedeemer,
+  walletDatumToData,
   walletDepositRedeemer,
   walletMintRedeemer,
+  walletParamsToData,
   walletSpendRedeemer,
   walletUpdatePermissionsRedeemer,
-  walletDatumToData,
-  walletParamsToData,
 } from "./datum";
 import type { DelegatedScript, WalletDatum, WalletParams } from "./types";
 import {
@@ -39,10 +39,6 @@ import {
   invokeWithdrawalScript,
   registerWithdrawalScript,
 } from "./withdrawal_scripts";
-
-function networkIdOf(network: Network): 0 | 1 {
-  return network === "mainnet" ? 1 : 0;
-}
 
 const DEFAULT_MIN_UTXO_LOVELACE = 1_500_000n;
 
@@ -143,7 +139,7 @@ export async function buildWalletMintTx(p: WalletMintParams): Promise<string> {
     registerWithdrawalScript(p.txBuilder, script, networkId);
   }
 
-  return await p.txBuilder
+  p.txBuilder
     .mintPlutusScriptV3()
     .mint("1", policyId, p.walletTokenName)
     .mintRedeemerValue(walletMintRedeemer(p.outputIndex))
@@ -158,16 +154,12 @@ export async function buildWalletMintTx(p: WalletMintParams): Promise<string> {
       { unit: "lovelace", quantity: DEFAULT_MIN_UTXO_LOVELACE.toString() },
       nft(policyId, p.walletTokenName),
     ])
-    .txOutInlineDatumValue(walletDatumToData(p.datum))
-    .txInCollateral(
-      p.collateralUtxo.input.txHash,
-      p.collateralUtxo.input.outputIndex,
-      p.collateralUtxo.output.amount,
-      p.collateralUtxo.output.address,
-    )
-    .changeAddress(p.changeAddress)
-    .selectUtxosFrom(p.utxos)
-    .complete();
+    .txOutInlineDatumValue(walletDatumToData(p.datum));
+  return finalizeTx(p.txBuilder, {
+    collateral: p.collateralUtxo,
+    changeAddress: p.changeAddress,
+    utxos: p.utxos,
+  });
 }
 
 // ---------------------------------------------------- Deposit
@@ -203,7 +195,7 @@ export async function buildWalletDepositTx(
 
   const contValue = addAssets(p.walletUtxo.output.amount, p.deposit);
 
-  return await p.txBuilder
+  p.txBuilder
     .spendingPlutusScriptV3()
     .txIn(
       p.walletUtxo.input.txHash,
@@ -215,16 +207,12 @@ export async function buildWalletDepositTx(
     .txInRedeemerValue(walletDepositRedeemer(p.outputIndex))
     .txInScript(p.script.code)
     .txOut(p.walletUtxo.output.address, contValue)
-    .txOutInlineDatumValue(walletDatumToData(p.datum))
-    .txInCollateral(
-      p.collateralUtxo.input.txHash,
-      p.collateralUtxo.input.outputIndex,
-      p.collateralUtxo.output.amount,
-      p.collateralUtxo.output.address,
-    )
-    .changeAddress(p.changeAddress)
-    .selectUtxosFrom(p.utxos)
-    .complete();
+    .txOutInlineDatumValue(walletDatumToData(p.datum));
+  return finalizeTx(p.txBuilder, {
+    collateral: p.collateralUtxo,
+    changeAddress: p.changeAddress,
+    utxos: p.utxos,
+  });
 }
 
 // ---------------------------------------------------- Spend
@@ -305,16 +293,11 @@ export async function buildWalletSpendTx(
     .txOut(scriptAddr, p.changeAmount)
     .txOutInlineDatumValue(walletDatumToData(p.datum));
 
-  return await p.txBuilder
-    .txInCollateral(
-      p.collateralUtxo.input.txHash,
-      p.collateralUtxo.input.outputIndex,
-      p.collateralUtxo.output.amount,
-      p.collateralUtxo.output.address,
-    )
-    .changeAddress(p.changeAddress)
-    .selectUtxosFrom(p.utxos)
-    .complete();
+  return finalizeTx(p.txBuilder, {
+    collateral: p.collateralUtxo,
+    changeAddress: p.changeAddress,
+    utxos: p.utxos,
+  });
 }
 
 // ---------------------------------------------------- UpdatePermissions
@@ -365,7 +348,7 @@ export async function buildWalletUpdatePermissionsTx(
     deregisterWithdrawalScript(p.txBuilder, script, networkId);
   }
 
-  return await p.txBuilder
+  p.txBuilder
     .spendingPlutusScriptV3()
     .txIn(
       p.walletUtxo.input.txHash,
@@ -377,16 +360,12 @@ export async function buildWalletUpdatePermissionsTx(
     .txInRedeemerValue(walletUpdatePermissionsRedeemer(p.outputIndex))
     .txInScript(p.script.code)
     .txOut(p.walletUtxo.output.address, continuationValue)
-    .txOutInlineDatumValue(walletDatumToData(p.newDatum))
-    .txInCollateral(
-      p.collateralUtxo.input.txHash,
-      p.collateralUtxo.input.outputIndex,
-      p.collateralUtxo.output.amount,
-      p.collateralUtxo.output.address,
-    )
-    .changeAddress(p.changeAddress)
-    .selectUtxosFrom(p.utxos)
-    .complete();
+    .txOutInlineDatumValue(walletDatumToData(p.newDatum));
+  return finalizeTx(p.txBuilder, {
+    collateral: p.collateralUtxo,
+    changeAddress: p.changeAddress,
+    utxos: p.utxos,
+  });
 }
 
 // ---------------------------------------------------- Close
@@ -417,7 +396,7 @@ export async function buildWalletCloseTx(
     deregisterWithdrawalScript(p.txBuilder, script, networkId);
   }
 
-  return await p.txBuilder
+  p.txBuilder
     .spendingPlutusScriptV3()
     .txIn(
       p.walletUtxo.input.txHash,
@@ -431,14 +410,10 @@ export async function buildWalletCloseTx(
     .mintPlutusScriptV3()
     .mint("-1", policyId, p.walletTokenName)
     .mintRedeemerValue(walletBurnRedeemer())
-    .mintingScript(p.script.code)
-    .txInCollateral(
-      p.collateralUtxo.input.txHash,
-      p.collateralUtxo.input.outputIndex,
-      p.collateralUtxo.output.amount,
-      p.collateralUtxo.output.address,
-    )
-    .changeAddress(p.changeAddress)
-    .selectUtxosFrom(p.utxos)
-    .complete();
+    .mintingScript(p.script.code);
+  return finalizeTx(p.txBuilder, {
+    collateral: p.collateralUtxo,
+    changeAddress: p.changeAddress,
+    utxos: p.utxos,
+  });
 }

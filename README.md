@@ -60,8 +60,12 @@ The full, status-tracked catalog lives in the [PRD](docs/PRD.md#7-contract-catal
 | Contract | Category | Status | Spec |
 |---|---|---|---|
 | Linear vesting | DeFi | In progress | [spec](docs/vesting/spec.md) |
+| DAO | Governance | In progress | [spec](docs/dao/spec.md) |
+| Settings (config management) | Building block | In progress | [spec](docs/settings/spec.md) |
+| Smart wallet | Building block | In progress | [spec](docs/smart-wallet/spec.md) |
+| Event-triggered assets (CIP-113) | Token standard | In progress | [spec](docs/event-triggered-assets/spec.md) |
 
-More candidates (escrow, AMM, CIP-68, programmable tokens, multisig, DAO, …) are explored and triaged in the PRD.
+More candidates (escrow, AMM, CIP-68, programmable tokens, …) are explored and triaged in the PRD.
 
 ## Getting started
 
@@ -85,8 +89,8 @@ Formatting is enforced automatically:
 A pre-commit hook (Husky + lint-staged) formats staged files on every commit, and CI fails on unformatted code. To format everything at once:
 
 ```sh
-npm install    # once, from the repo root
-npm run format
+just install root   # once, from the repo root (installs Biome, Husky)
+just fmt
 ```
 
 ## Documentation

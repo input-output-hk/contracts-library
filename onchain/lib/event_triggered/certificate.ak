@@ -68,8 +68,3 @@ pub fn cert_outputs(
     },
   )
 }
-
-/// Does this output carry any positive quantity under `policy` (any name)?
-pub fn has_policy(output: Output, policy: PolicyId) -> Bool {
-  !dict.is_empty(tokens(output.value, policy))
-}

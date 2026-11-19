@@ -14,28 +14,19 @@
 import {
   applyCborEncoding,
   applyParamsToScript,
-  deserializeAddress,
-  mConStr0,
-  mConStr1,
-  resolveScriptHash,
-  serializePlutusScript,
-  type Data,
   type MeshTxBuilder,
   type Network,
   type PlutusScript,
+  resolveScriptHash,
+  serializePlutusScript,
   type UTxO,
 } from "@meshsdk/core";
 
 import type { ScriptAuthorizer } from "../../authorization";
+import { addressToData, networkIdOf } from "../../common";
 import { opaqueRedeemer } from "../../upgradeability/datum";
 import type { SettingsRefParams } from "../../upgradeability/types";
 import { addDelegateInvocation } from "../../upgradeability/upgradeability";
-import {
-  counterDatumFromUtxo,
-  counterDatumToData,
-  tickRedeemer,
-  upgradeRedeemer,
-} from "./datum";
 import {
   forwarderCompiledCode,
   logicCompiledCode,
@@ -45,7 +36,13 @@ import {
   v1CompiledCode,
   v2CompiledCode,
 } from "./blueprint";
-import type { Credential, CounterDatum, MigrationParams } from "./types";
+import {
+  counterDatumFromUtxo,
+  counterDatumToData,
+  tickRedeemer,
+  upgradeRedeemer,
+} from "./datum";
+import type { CounterDatum, Credential, MigrationParams } from "./types";
 
 /**
  * Asset name (hex) of the counter's state token, `"counter"`. It is minted
@@ -53,10 +50,6 @@ import type { Credential, CounterDatum, MigrationParams } from "./types";
  * genuine only if it carries exactly one unit of `(forwarder hash, name)`.
  */
 export const STATE_TOKEN_NAME = Buffer.from("counter").toString("hex");
-
-function networkIdOf(network: Network): 0 | 1 {
-  return network === "mainnet" ? 1 : 0;
-}
 
 // ------------------------------------------------------------- script helpers
 
@@ -74,31 +67,10 @@ export function counterScriptAddress(
 }
 
 /**
- * Encode a bech32 address as the Aiken `Address` record a validator parameter
- * expects: `Constr 0 [payment_credential, stake_credential: Option]`, where a
- * credential is `Constr 0 [key_hash]` or `Constr 1 [script_hash]` and the
- * stake part is `Some(Inline(credential))` or `None`.
+ * Encode a bech32 address as the Aiken `Address` record. Shared with the
+ * library so the demo and the contracts cannot drift.
  */
-export function addressToData(bech32: string): Data {
-  const {
-    pubKeyHash,
-    scriptHash,
-    stakeCredentialHash,
-    stakeScriptCredentialHash,
-  } = deserializeAddress(bech32);
-  if (!pubKeyHash && !scriptHash) {
-    throw new Error(`Cannot decode the payment credential of ${bech32}.`);
-  }
-  const payment: Data = scriptHash
-    ? mConStr1([scriptHash])
-    : mConStr0([pubKeyHash]);
-  const stake: Data = stakeScriptCredentialHash
-    ? mConStr0([mConStr1([stakeScriptCredentialHash])])
-    : stakeCredentialHash
-      ? mConStr0([mConStr0([stakeCredentialHash])])
-      : mConStr1([]); // None
-  return mConStr0([payment, stake]);
-}
+export { addressToData };
 
 // ------------------------------------------------------------ script factories
 
@@ -240,7 +212,8 @@ export interface ForwardTxParams {
  * The forced forwarder spend: requires the script currently registered for the
  * forwarder's own hash to run as a withdraw-0, and carries the state's
  * continuation (`count + 1`, tagged with the spent UTxO as `prevInput`) at the
- * forwarder address. Funds never move.
+ * forwarder address. The counter logic requires the input redeemer to be
+ * `Tick`; funds never move.
  *
  * Throws early if the forwarder is unregistered or the provided logic script
  * does not match the registry entry — a mistake surfaces as a clear error
@@ -276,7 +249,7 @@ export async function buildForwardTx(p: ForwardTxParams): Promise<string> {
       p.forwarderUtxo.output.address,
     )
     .txInInlineDatumPresent()
-    .txInRedeemerValue(opaqueRedeemer())
+    .txInRedeemerValue(tickRedeemer())
     .txInScript(p.forwarderScript.code)
     .txOut(p.forwarderUtxo.output.address, p.forwarderUtxo.output.amount)
     .txOutInlineDatumValue(continuation)

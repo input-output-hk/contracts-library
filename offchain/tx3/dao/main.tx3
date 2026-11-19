@@ -682,6 +682,8 @@ tx create_proposal(
     new_proposal_datum: ProposalDatum,
     /// Slot of the validity lower bound.
     since_slot: Int,
+    /// Slot of the validity upper bound (= the proposal's `start_time`).
+    until_slot: Int,
     /// Index of the proposal output within the transaction outputs.
     out_ix: Int,
 ) {
@@ -727,6 +729,7 @@ tx create_proposal(
 
     validity {
         since_slot: since_slot,
+        until_slot: until_slot,
     }
 
     collateral {

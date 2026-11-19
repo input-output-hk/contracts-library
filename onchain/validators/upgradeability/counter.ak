@@ -58,7 +58,8 @@ pub fn validate_counter_genesis(self: Transaction, policy: PolicyId) -> Bool {
 }
 
 /// A mint under `policy` is exactly one state token, paid with no reference
-/// script to the forwarder's address under an inline datum `is_fresh` accepts.
+/// script or stake credential to the forwarder's address under an inline datum
+/// `is_fresh` accepts.
 pub fn validate_genesis(
   self: Transaction,
   policy: PolicyId,
@@ -72,6 +73,7 @@ pub fn validate_genesis(
       fn(out) {
         and {
           out.address.payment_credential == Script(policy),
+          out.address.stake_credential == None,
           assets.quantity_of(out.value, policy, state_token_name) == 1,
           out.reference_script == None,
           when out.datum is {
@@ -162,6 +164,12 @@ fn continue_counter(
   }
 
   settled_by(self, target_address, continuation, input.output)
+}
+
+/// Whether the input referenced by `ref` was spent with the `Tick` action.
+pub fn spent_with_tick(self: Transaction, ref: OutputReference) -> Bool {
+  let tick: Data = Tick
+  spend_redeemer(self, ref) == Some(tick)
 }
 
 /// Whether the input referenced by `ref` was spent with the `Upgrade` action.

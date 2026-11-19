@@ -9,72 +9,59 @@ import {
   buildCosignProposalTx,
   buildCreateProposalTx,
   buildCreateStakePositionTx,
-  buildDepositTx,
   buildDelegateTx,
+  buildDepositTx,
   buildEndProposalTx,
   buildEndVotingStageTx,
   buildTallyTx,
   buildVoteTx,
   buildWithdrawTx,
+  createProposalTiming,
+  type DaoSettings,
   daoSettingsToData,
-  enclosingSlotBound,
+  type EndProposalParams,
   mintRedeemer,
   nftNameFromRef,
+  type ProposalDatum,
+  type ProposalThresholds,
+  type ProposalTimingConfig,
   pollEffectScript,
   proposalScript,
   proposalScriptAddress,
   SETTINGS_TOKEN_NAME,
+  type SettingsDatum,
+  type StakePositionDatum,
   settingsDatumToData,
   settingsScript,
   settingsScriptAddress,
   stakeScript,
   stakeScriptAddress,
+  type VoteDatum,
   voteScript,
   voteScriptAddress,
-  type DaoSettings,
-  type EndProposalParams,
-  type ProposalDatum,
-  type ProposalThresholds,
-  type ProposalTimingConfig,
-  type SettingsDatum,
-  type StakePositionDatum,
-  type VoteDatum,
   type WinnerEffect,
 } from "@contracts-library/meshjs";
-import {
-  mConStr0,
-  resolveScriptHash,
-  type SlotConfig,
-  type UTxO,
-} from "@meshsdk/core";
+import { resolveScriptHash, type SlotConfig, type UTxO } from "@meshsdk/core";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
+  type Account,
   chainNowMs,
   collateralOf,
-  devnetReachable,
   devnetSlotConfig,
+  finishRawTx,
   fundedAccount,
   lovelaceOf,
   makeProvider,
   NETWORK_ID,
   newTxBuilder,
+  REACHABLE,
   registerStakeCredential,
   scriptOutputOf,
   signAndSubmit,
-  STORE_URL,
   waitForTx,
   waitUntilChainTimeMs,
-  type Account,
 } from "../src/devnet";
-import { ALWAYS_TRUE } from "../src/fixtures";
-
-const reachable = await devnetReachable();
-if (!reachable) {
-  console.warn(
-    `[e2e] Skipping all e2e tests: no Yaci devnet at ${STORE_URL}. ` +
-      `Run \`npm run test:devnet\` (or start one and set INDEXER_URL / YACI_STORE_URL).`,
-  );
-}
+import { ALWAYS_TRUE, mintTestToken } from "../src/fixtures";
 
 // hex("stake") — the DAO's staked token name (minted by the test harness).
 const STAKE_TOKEN_NAME = "7374616b65";
@@ -97,7 +84,13 @@ const TIMINGS: ProposalTimingConfig = {
 /** Number of milliseconds of slack added past a phase boundary before waiting. */
 const PHASE_SLACK = 2_000;
 
-describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
+/**
+ * Create validity window used by this suite, in slots: `start_time` anchors to
+ * the window's upper bound, so a short window keeps the phase waits tight.
+ */
+const CREATE_WINDOW = 10;
+
+describe.skipIf(!REACHABLE)("dao e2e (Yaci devnet)", () => {
   let provider: ReturnType<typeof makeProvider>;
   let slotConfig: SlotConfig;
 
@@ -131,26 +124,21 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
     // 1. Mint the DAO's staked token (always-true policy) to the accounts that
     //    will hold positions.
     const policy = stakeTokenPolicy();
-    const mintStakeTokens = async (account: Account): Promise<void> => {
-      const col = (await account.wallet.getCollateral())[0];
-      const mintTx = await newTxBuilder(provider)
-        .mintPlutusScriptV3()
-        .mint(STAKE_TOKEN_QUANTITY.toString(), policy, STAKE_TOKEN_NAME)
-        .mintRedeemerValue(mConStr0([]))
-        .mintingScript(ALWAYS_TRUE.cbor)
-        .txInCollateral(
-          col.input.txHash,
-          col.input.outputIndex,
-          col.output.amount,
-          col.output.address,
-        )
-        .changeAddress(account.address)
-        .selectUtxosFrom(await account.wallet.getUtxos())
-        .complete();
-      await waitForTx(provider, await signAndSubmit(account, mintTx));
-    };
-    await mintStakeTokens(owner);
-    await mintStakeTokens(cosigner);
+
+    await mintTestToken(
+      provider,
+      owner,
+      STAKE_TOKEN_QUANTITY,
+      policy,
+      STAKE_TOKEN_NAME,
+    );
+    await mintTestToken(
+      provider,
+      cosigner,
+      STAKE_TOKEN_QUANTITY,
+      policy,
+      STAKE_TOKEN_NAME,
+    );
 
     // 2. Build the settings script and derive its hash (the settings NFT
     //    policy), which parameterizes the DAO validators independently of the
@@ -327,7 +315,13 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
     resultScripts: string[] = results(),
   ): Promise<ProposalState> {
     const now = await chainNowMs();
-    const startTime = enclosingSlotBound(now, slotConfig).startMs;
+    // `start_time` pins to the create transaction's validity upper bound,
+    // which the builder derives from the same window.
+    const startTime = createProposalTiming({
+      now,
+      slotConfig,
+      validityWindowSlots: CREATE_WINDOW,
+    }).startTime;
     const tokenName = nftNameFromRef(stakeUtxo.input);
     const inStake = stakeBalance(stakeUtxo);
 
@@ -364,6 +358,7 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
       changeAddress: owner.address,
       collateralUtxo: await collateralOf(owner),
       customSlotConfig: slotConfig,
+      validityWindowSlots: CREATE_WINDOW,
     });
     const hash = await signAndSubmit(owner, tx);
     await waitForTx(provider, hash);
@@ -944,19 +939,7 @@ describe.skipIf(!reachable)("dao e2e (Yaci devnet)", () => {
           .txInRedeemerValue({ alternative: 9, fields: [] })
           .txInScript(ctx.stake.script.code);
 
-        const col = await collateralOf(ctx.owner);
-        const unsigned = await tb
-          .txInCollateral(
-            col.input.txHash,
-            col.input.outputIndex,
-            col.output.amount,
-            col.output.address,
-          )
-          .changeAddress(ctx.owner.address)
-          .selectUtxosFrom(await ctx.owner.wallet.getUtxos())
-          .complete();
-
-        return provider.submitTx(await ctx.owner.wallet.signTx(unsigned, true));
+        return finishRawTx(provider, tb, ctx.owner);
       })(),
     ).rejects.toThrow();
   });

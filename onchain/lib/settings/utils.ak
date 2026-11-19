@@ -1,6 +1,9 @@
+//// Settings read helpers: resolve the datum from a reference input and check
+//// continuation outputs. See `docs/settings/spec.md` §4.a and §5.b–§5.c.
+
 use aiken/collection/list
 use cardano/address.{Script}
-use cardano/assets.{AssetName, PolicyId, has_nft_strict}
+use cardano/assets.{AssetName, PolicyId, has_nft_strict, match}
 use cardano/transaction.{
   InlineDatum, Input, Output, OutputReference, Transaction, find_input,
 }
@@ -27,20 +30,19 @@ pub fn get_settings_datum(
 
 /// Validate a continuation output for propose/apply operations.
 ///
-/// Finds the own input, gets the script hash, locates the
-/// continuation output at `out_ix`, and checks that it has the
-/// correct address, the settings NFT, an inline datum, and no
-/// reference script. Returns the raw datum for the caller to cast.
+/// Finds the own input and continuation output at `out_ix`, then checks the
+/// address, preserves the non-ADA value exactly, does not reduce lovelace, and
+/// requires an inline datum with no reference script. Returns the raw datum
+/// for the caller to cast.
 pub fn expect_continuation(
   inputs: List<Input>,
   outputs: List<Output>,
   own_ref: OutputReference,
   out_ix: Int,
-  settings_token_name: AssetName,
 ) -> Data {
   expect Some(cont_output) = list.at(outputs, out_ix)
   expect Some(own_input) = find_input(inputs, own_ref)
-  expect Script(own_hash) = own_input.output.address.payment_credential
+  expect Script(_) = own_input.output.address.payment_credential
 
   expect  
       Output {
@@ -52,7 +54,7 @@ pub fn expect_continuation(
     = cont_output
 
   expect cont_addr == own_input.output.address
-  expect has_nft_strict(value, own_hash, settings_token_name)
+  expect match(value, own_input.output.value, >=)
 
   cont_datum
 }

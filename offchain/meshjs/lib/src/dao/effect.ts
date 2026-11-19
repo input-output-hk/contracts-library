@@ -10,7 +10,7 @@
 
 import { applyParamsToScript, type PlutusScript } from "@meshsdk/core";
 
-import { pollEffectCompiledCode, plutusVersion } from "./blueprint";
+import { plutusVersion, pollEffectCompiledCode } from "./blueprint";
 import { pollEffectParamsToData } from "./datum";
 import type { PollEffectParams } from "./types";
 

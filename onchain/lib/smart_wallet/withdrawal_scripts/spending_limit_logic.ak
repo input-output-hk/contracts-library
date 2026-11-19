@@ -2,9 +2,10 @@
 //// wallet's net lovelace outflow to a fixed `bound`.
 
 use aiken/collection/list
-use cardano/address.{Credential, Script}
-use cardano/assets.{AssetName, Lovelace, Value, has_nft}
-use cardano/transaction.{Output, Transaction}
+use cardano/address.{Credential}
+use cardano/assets.{AssetName, Assets, Lovelace}
+use cardano/transaction.{Transaction}
+use smart_wallet/checks.{sum_at_credential}
 
 /// Spending-limit check: the net lovelace outflow `input - output` stays
 /// strictly below `bound`.
@@ -13,8 +14,8 @@ use cardano/transaction.{Output, Transaction}
 /// wallet's inputs and outputs; the delegated withdrawal script passes those in
 /// and asserts the outflow is bounded.
 pub fn value_delta_below_bound(
-  input: Value,
-  output: Value,
+  input: Assets,
+  output: Assets,
   bound: Lovelace,
 ) -> Bool {
   assets.lovelace_of(input) - assets.lovelace_of(output) < bound
@@ -37,29 +38,4 @@ pub fn within_spending_limit(
   )
   let output = sum_at_credential(self.outputs, wallet, wallet_token_name)
   value_delta_below_bound(input, output, bound)
-}
-
-/// Aggregate value across `outputs` that sit at `credential` and carry the
-/// wallet's NFT.
-fn sum_at_credential(
-  outputs: List<Output>,
-  credential: Credential,
-  wallet_token_name: AssetName,
-) -> Value {
-  expect Script(wallet_hash) = credential
-  list.foldl(
-    outputs,
-    assets.zero,
-    fn(output, acc) {
-      if output.address.payment_credential == credential && has_nft(
-        output.value,
-        wallet_hash,
-        wallet_token_name,
-      ) {
-        assets.merge(acc, output.value)
-      } else {
-        acc
-      }
-    },
-  )
 }

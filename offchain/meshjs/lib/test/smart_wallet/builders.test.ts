@@ -50,6 +50,11 @@ function mockBuilder() {
     txInCollateral: () => builder,
     changeAddress: () => builder,
     selectUtxosFrom: () => builder,
+    readOnlyTxInReference: () => builder,
+    withdrawalPlutusScriptV3: () => builder,
+    mintPlutusScriptV3: () => builder,
+    invalidBefore: () => builder,
+    invalidHereafter: () => builder,
     complete: async () => "tx-hex",
   };
   return { builder: builder as unknown as MeshTxBuilder, captured };

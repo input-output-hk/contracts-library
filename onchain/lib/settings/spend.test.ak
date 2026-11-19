@@ -73,7 +73,6 @@ fn propose(validity_range: Interval, next_apply: Int) -> Bool {
     0,
     own_ref,
     tx,
-    token_name,
     fn(_) { True },
   )
 }

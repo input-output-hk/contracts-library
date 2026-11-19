@@ -1,12 +1,13 @@
+use aiken/fuzz
 use aiken/interval
 use cardano/address.{
   Credential, VerificationKey, from_script, from_verification_key,
 }
-use cardano/assets.{Value}
+use cardano/assets.{Assets}
 use cardano/transaction.{
   InlineDatum, Input, NoDatum, Output, OutputReference, Transaction, placeholder,
 }
-use dao/locks.{Lock}
+use dao/locks.{Lock, free_stake, prune_expired}
 use dao/stake/mint.{validate_close_position, validate_create_position}
 use dao/stake/spend.{
   validate_stake_close_position, validate_stake_cosign,
@@ -110,7 +111,7 @@ fn pos_ref() -> OutputReference {
   OutputReference { transaction_id: tx_id, output_index: 0 }
 }
 
-fn pos_value(stake: Int) -> Value {
+fn pos_value(stake: Int) -> Assets {
   assets.from_asset(stake_hash, pos_nft, 1)
     |> assets.add(gov_policy, gov_name, stake)
     |> assets.merge(assets.from_lovelace(2_000_000))
@@ -219,19 +220,6 @@ fn spend(d: StakePositionDatum, r: StakeRedeemer, self: Transaction) -> Bool {
 
 // ------------------------------------------------------------------- Deposit
 
-test deposit_ok() {
-  let d = stake_datum(None, [])
-  let out = pos_output(20, stake_datum(None, []))
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [pos_input(10)],
-    outputs: [out],
-    extra_signatories: [owner_hash],
-    validity_range: interval.after(500),
-  }
-  spend(d, Deposit, tx)
-}
-
 test rejects_deposit_unsigned() {
   let d = stake_datum(None, [])
   let out = pos_output(20, stake_datum(None, []))
@@ -244,18 +232,17 @@ test rejects_deposit_unsigned() {
   !spend(d, Deposit, tx)
 }
 
-test rejects_deposit_that_removes_stake() {
+test rejects_deposit_continuation_reference_script() fail {
   let d = stake_datum(None, [])
-  // continuation carries less stake than the input — disallowed for a deposit
-  let out = pos_output(5, stake_datum(None, []))
+  let out = Output { ..pos_output(20, d), reference_script: Some(stake_hash) }
   let tx = Transaction {
     ..placeholder,
-    inputs: [pos_input(10)],
+    inputs: [pos_input(20)],
     outputs: [out],
     extra_signatories: [owner_hash],
     validity_range: interval.after(500),
   }
-  !spend(d, Deposit, tx)
+  spend(d, Deposit, tx)
 }
 
 // ------------------------------------------------------------------ Delegate
@@ -291,19 +278,6 @@ test rejects_delegate_that_changes_stake() {
 }
 
 // ------------------------------------------------------------------ Withdraw
-
-test withdraw_free_ok() {
-  let d = stake_datum(None, [])
-  let out = pos_output(6, stake_datum(None, []))
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [pos_input(10)],
-    outputs: [out],
-    extra_signatories: [owner_hash],
-    validity_range: interval.after(500),
-  }
-  spend(d, Withdraw { amount: 4 }, tx)
-}
 
 test rejects_withdraw_of_locked_stake() {
   // a live lock freezes 8 tokens; only 2 of 10 are free
@@ -383,9 +357,13 @@ test rejects_close_without_burn() {
 // ------------------------------------------------------------ CreateProposal
 
 test create_proposal_ok() {
-  let now = 500
+  let upper = 500
   let p_id = token_name_from_ref(pos_ref())
-  let new_lock = Lock { proposal_id: p_id, unlock_time: now + 1000, stake: 100 }
+  let new_lock = Lock {
+    proposal_id: p_id,
+    unlock_time: upper + 1000,
+    stake: 100,
+  }
   let d = stake_datum(None, [])
   let out = pos_output(100, stake_datum(None, [new_lock]))
   let tx = Transaction {
@@ -395,7 +373,51 @@ test create_proposal_ok() {
     outputs: [out],
     mint: assets.from_asset(proposal_policy, p_id, 1),
     extra_signatories: [owner_hash],
-    validity_range: interval.after(now),
+    validity_range: interval.between(0, upper),
+  }
+  spend(d, CreateProposal, tx)
+}
+
+// CONS-02 regression: the draft lock anchors to the validity upper bound. A
+// lock mirroring the (backdatable) lower bound no longer passes, so the same
+// stake cannot create proposals whose lock is pre-expired at creation.
+test rejects_create_lock_below_upper_anchor() fail {
+  let upper = 500
+  let p_id = token_name_from_ref(pos_ref())
+  // The old lower-anchored lock: lower bound (0) + draft_length (1000).
+  let backdated = Lock { proposal_id: p_id, unlock_time: 1000, stake: 100 }
+  let d = stake_datum(None, [])
+  let out = pos_output(100, stake_datum(None, [backdated]))
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [pos_input(100)],
+    reference_inputs: [settings_input()],
+    outputs: [out],
+    mint: assets.from_asset(proposal_policy, p_id, 1),
+    extra_signatories: [owner_hash],
+    validity_range: interval.between(0, upper),
+  }
+  spend(d, CreateProposal, tx)
+}
+
+test rejects_create_without_upper_bound() fail {
+  let upper = 500
+  let p_id = token_name_from_ref(pos_ref())
+  let new_lock = Lock {
+    proposal_id: p_id,
+    unlock_time: upper + 1000,
+    stake: 100,
+  }
+  let d = stake_datum(None, [])
+  let out = pos_output(100, stake_datum(None, [new_lock]))
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [pos_input(100)],
+    reference_inputs: [settings_input()],
+    outputs: [out],
+    mint: assets.from_asset(proposal_policy, p_id, 1),
+    extra_signatories: [owner_hash],
+    validity_range: interval.after(0),
   }
   spend(d, CreateProposal, tx)
 }
@@ -484,6 +506,43 @@ test rejects_vote_when_not_voting_stage() {
   !spend(d, VoteProposal { proposal_id: prop_nft, voted_option: 1 }, tx)
 }
 
+test vote_at_deadline_keeps_lock() {
+  let start = 500
+  let unlock = start + 1000 + 2000
+  let new_lock = Lock { proposal_id: prop_nft, unlock_time: unlock, stake: 20 }
+  let d = stake_datum(None, [])
+  let out = pos_output(20, stake_datum(None, [new_lock]))
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [pos_input(20)],
+    reference_inputs: [settings_input(), proposal_ref_voting(start)],
+    outputs: [out],
+    mint: assets.from_asset(vote_policy, token_name_from_ref(pos_ref()), 1),
+    extra_signatories: [owner_hash],
+    validity_range: interval.between(unlock, unlock),
+  }
+  spend(d, VoteProposal { proposal_id: prop_nft, voted_option: 1 }, tx)
+}
+
+test rejects_second_vote_with_live_lock() {
+  let start = 500
+  let unlock = start + 1000 + 2000
+  let existing = Lock { proposal_id: prop_nft, unlock_time: unlock, stake: 20 }
+  let new_lock = Lock { proposal_id: prop_nft, unlock_time: unlock, stake: 20 }
+  let d = stake_datum(None, [existing])
+  let out = pos_output(20, stake_datum(None, [existing, new_lock]))
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [pos_input(20)],
+    reference_inputs: [settings_input(), proposal_ref_voting(start)],
+    outputs: [out],
+    mint: assets.from_asset(vote_policy, token_name_from_ref(pos_ref()), 1),
+    extra_signatories: [owner_hash],
+    validity_range: interval.between(start, start + 500),
+  }
+  !spend(d, VoteProposal { proposal_id: prop_nft, voted_option: 1 }, tx)
+}
+
 // ------------------------------------------------------ position NFT minting
 
 test create_position_ok() {
@@ -555,4 +614,105 @@ test close_position_mint_ok() {
     mint: assets.from_asset(stake_hash, pos_nft, -1),
   }
   validate_close_position(stake_hash, tx)
+}
+
+// --------------------------------------------------------------- properties
+
+fn stake_lock_fuzzer() -> Fuzzer<Lock> {
+  fuzz.map3(
+    fuzz.bytearray(),
+    fuzz.int_between(0, 2_000_000),
+    fuzz.int_between(0, 1_000),
+    fn(proposal_id, unlock_time, stake) {
+      Lock { proposal_id, unlock_time, stake }
+    },
+  )
+}
+
+fn withdraw_scenario() -> Fuzzer<(Int, Int, Int, List<Lock>)> {
+  fuzz.and_then(
+    fuzz.int_between(1, 1_000),
+    fn(in_stake) {
+      fuzz.and_then(
+        fuzz.int_between(0, in_stake - 1),
+        fn(amount) {
+          fuzz.and_then(
+            fuzz.int_between(0, 2_000_000),
+            fn(now) {
+              fuzz.map(
+                fuzz.list(stake_lock_fuzzer()),
+                fn(locks) { (in_stake, amount, now, locks) },
+              )
+            },
+          )
+        },
+      )
+    },
+  )
+}
+
+test prop_withdraw_bound((in_stake, amount, now, locks) via withdraw_scenario()) {
+  let d = stake_datum(None, locks)
+  let pruned = prune_expired(locks, now)
+  let out = pos_output(in_stake - amount, stake_datum(None, pruned))
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [pos_input(in_stake)],
+    outputs: [out],
+    extra_signatories: [owner_hash],
+    validity_range: interval.after(now),
+  }
+  let expected = amount <= free_stake(in_stake, pruned)
+  fuzz.label_if(@"within-free", expected)
+  fuzz.label_if(@"over-free", !expected)
+  spend(d, Withdraw { amount }, tx) == expected
+}
+
+fn deposit_scenario() -> Fuzzer<(Int, Int, Int, List<Lock>)> {
+  fuzz.tuple4(
+    fuzz.int_between(1, 1_000),
+    fuzz.int_between(0, 2_000),
+    fuzz.int_between(0, 2_000_000),
+    fuzz.list(stake_lock_fuzzer()),
+  )
+}
+
+test prop_deposit_non_decreasing(
+  (in_stake, out_stake, now, locks) via deposit_scenario(),
+) {
+  let d = stake_datum(None, locks)
+  let pruned = prune_expired(locks, now)
+  let out = pos_output(out_stake, stake_datum(None, pruned))
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [pos_input(in_stake)],
+    outputs: [out],
+    extra_signatories: [owner_hash],
+    validity_range: interval.after(now),
+  }
+  let expected = out_stake >= in_stake
+  fuzz.label_if(@"keeps-or-grows", expected)
+  fuzz.label_if(@"shrinks", !expected)
+  spend(d, Deposit, tx) == expected
+}
+
+test prop_close_requires_expired_locks(
+  (locks, now) via fuzz.tuple(
+    fuzz.list(stake_lock_fuzzer()),
+    fuzz.int_between(0, 2_000_000),
+  ),
+) {
+  let d = stake_datum(None, locks)
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [pos_input(10)],
+    outputs: [],
+    mint: assets.from_asset(stake_hash, pos_nft, -1),
+    extra_signatories: [owner_hash],
+    validity_range: interval.after(now),
+  }
+  let expected = prune_expired(locks, now) == []
+  fuzz.label_if(@"all-expired", expected)
+  fuzz.label_if(@"live-lock", !expected)
+  spend(d, ClosePosition, tx) == expected
 }

@@ -16,15 +16,14 @@
  */
 
 import {
-  deserializeAddress,
+  type Data,
   mConStr0,
   mConStr1,
   mConStr2,
   mConStr3,
-  type Data,
 } from "@meshsdk/core";
 
-import { credentialToData, type Credential } from "../common";
+import { addressToData, credentialToData } from "../common";
 import type {
   CertificateDatum,
   CouponParams,
@@ -83,26 +82,7 @@ export function payoutToData(p: Payout): Data {
   return mConStr0([addressToData(p.address), p.amount]);
 }
 
-/** Encode a bech32 address as Aiken's `Address` (`payment` + `Option<Inline<stake>>`). */
-export function addressToData(address: string): Data {
-  const a = deserializeAddress(address);
-  const payment: Credential =
-    a.pubKeyHash !== ""
-      ? { kind: "key", hash: a.pubKeyHash }
-      : { kind: "script", hash: a.scriptHash };
-  const stake: Credential | null =
-    a.stakeCredentialHash !== ""
-      ? { kind: "key", hash: a.stakeCredentialHash }
-      : a.stakeScriptCredentialHash !== ""
-        ? { kind: "script", hash: a.stakeScriptCredentialHash }
-        : null;
-  return mConStr0([
-    credentialToData(payment),
-    stake === null
-      ? mConStr1([])
-      : mConStr0([mConStr0([credentialToData(stake)])]),
-  ]);
-}
+export { addressToData };
 
 // --------------------------------------------------------------- datums
 

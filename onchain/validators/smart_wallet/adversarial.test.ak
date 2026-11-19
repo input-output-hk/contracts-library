@@ -10,9 +10,9 @@
 use aiken/crypto.{ScriptHash, VerificationKeyHash}
 use aiken/interval
 use cardano/address.{
-  Script, VerificationKey, from_script, from_verification_key,
+  Address, Inline, Script, VerificationKey, from_script, from_verification_key,
 }
-use cardano/assets.{Value}
+use cardano/assets.{Assets}
 use cardano/certificate.{Certificate, RegisterCredential, UnregisterCredential}
 use cardano/transaction.{
   InlineDatum, Input, NoDatum, Output, OutputReference, Publish, Transaction,
@@ -85,14 +85,14 @@ fn wallet_ref() -> OutputReference {
   OutputReference { transaction_id: tx_id, output_index: 0 }
 }
 
-fn nft_value(lovelace: Int) -> Value {
+fn nft_value(lovelace: Int) -> Assets {
   assets.from_lovelace(lovelace) |> assets.add(wallet_hash, wallet_token, 1)
 }
 
 /// An output at the wallet's script address. With an NFT-less `value` it is a
 /// decoy / stray output sitting at the wallet credential.
 fn wallet_out(
-  value: Value,
+  value: Assets,
   spenders: Pairs<ScriptHash, Data>,
   depositors: Pairs<ScriptHash, Data>,
 ) -> Output {
@@ -411,7 +411,7 @@ test unprivileged_deposit_cannot_unregister_spender() fail {
 // cannot backdate its lower bound into the same instant.
 test spending_window_rejects_backdated_burst() fail {
   let s0 = [Pair(sw, window_state(hour))]
-  let upper = 3 * hour + 1_000
+  let upper = 3 * hour
   let s1 = [Pair(sw, window_state(upper))]
   let s2 = [Pair(sw, window_state(upper))]
   let tx1 = Transaction {
@@ -425,9 +425,25 @@ test spending_window_rejects_backdated_burst() fail {
     ..tx1,
     inputs: [wallet_in(wallet_out(nft_value(99 * ada), s1, []))],
     outputs: [wallet_out(nft_value(98 * ada), s2, [])],
-    validity_range: interval.between(3 * hour, upper),
+    validity_range: interval.between(upper, upper),
   }
   sw_withdraw(tx1) && sw_withdraw(tx2)
+}
+
+// Fixed: the recorded upper bound is capped at one window past the lower bound,
+// so a far-future upper bound cannot lock the Spend path for years.
+test spending_window_rejects_far_future_upper() fail {
+  let s0 = [Pair(sw, window_state(0))]
+  let upper = 100 * 365 * 24 * hour
+  let s1 = [Pair(sw, window_state(upper))]
+  let tx = Transaction {
+    ..member_tx(),
+    inputs: [wallet_in(wallet_out(nft_value(100 * ada), s0, []))],
+    outputs: [wallet_out(nft_value(99 * ada), s1, [])],
+    withdrawals: [Pair(Script(sw), 0)],
+    validity_range: interval.between(2 * hour, upper),
+  }
+  sw_withdraw(tx)
 }
 
 // ------------------------------------ 3. spending_period_limit: time bounds
@@ -584,6 +600,39 @@ test update_permissions_rejects_stray_wallet_output() fail {
     outputs: [
       wallet_out(nft_value(12 * ada), [], []),
       wallet_out(assets.from_lovelace(2 * ada), [], []),
+    ],
+  }
+  core_spend(datum, UpdatePermissions { out_ix: 0 }, tx)
+}
+
+test spend_rejects_stake_credential_change() fail {
+  let datum = WalletDatum { spenders: [], depositors: [] }
+  let tx = Transaction {
+    ..member_tx(),
+    inputs: [wallet_in(wallet_out(nft_value(100 * ada), [], []))],
+    outputs: [
+      Output {
+        ..wallet_out(nft_value(100 * ada), [], []),
+        address: Address {
+          payment_credential: Script(wallet_hash),
+          stake_credential: Some(Inline(VerificationKey(member))),
+        },
+      },
+    ],
+  }
+  core_spend(datum, Spend, tx)
+}
+
+test update_permissions_rejects_reference_script() fail {
+  let datum = WalletDatum { spenders: [], depositors: [] }
+  let tx = Transaction {
+    ..admin_tx(),
+    inputs: [wallet_in(wallet_out(nft_value(10 * ada), [], []))],
+    outputs: [
+      Output {
+        ..wallet_out(nft_value(10 * ada), [], []),
+        reference_script: Some(token_policy),
+      },
     ],
   }
   core_spend(datum, UpdatePermissions { out_ix: 0 }, tx)

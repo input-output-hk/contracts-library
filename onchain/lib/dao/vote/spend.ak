@@ -1,3 +1,6 @@
+//// Vote spend rules: tally a vote into its proposal and cancel before tally.
+//// See `docs/dao/spec.md` §3.d, §5.k and §5.m.
+
 use aiken/collection/list
 use authorization.{is_authorized}
 use cardano/address.{Script}

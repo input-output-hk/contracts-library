@@ -17,21 +17,19 @@
  * point `TRIX_BIN` at a specific binary.
  */
 
-import { spawn, type ChildProcess } from "node:child_process";
-import { connect } from "node:net";
-import { existsSync, readFileSync, rmSync } from "node:fs";
+import { type ChildProcess, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
+import { existsSync, readFileSync, rmSync } from "node:fs";
+import { connect } from "node:net";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-
-import { ed25519 } from "@noble/curves/ed25519";
-import { blake2b } from "@noble/hashes/blake2b";
-import { bech32 } from "bech32";
 import { cst, MeshTxBuilder, serializeRewardAddress } from "@meshsdk/core";
+import { ed25519 } from "@noble/curves/ed25519";
+import { blake2b } from "@noble/hashes/blake2.js";
+import { bech32 } from "bech32";
 import { Ed25519Signer, Party, PollConfig } from "tx3-sdk";
-
-import { FAUCET } from "./faucet";
 import { Client } from "../settings/codegen/ts-client/config-parameter-management/protocol"; // trix codegen ts-client
+import { FAUCET } from "./faucet";
 
 /**
  * Validity window for settings propose transactions: comfortably more than a
@@ -154,17 +152,7 @@ function shelleySlotConfig(stateDir: string): {
 
 const toHex = (bytes: Uint8Array): string => Buffer.from(bytes).toString("hex");
 
-/**
- * Strip a single CBOR byte-string wrapper from a hex-encoded script.
- * Some tooling emits a double-CBOR ("cbor") wrapper; the on-chain witness
- * often needs the inner single-CBOR flat script.
- */
-export function unwrapCborBytes(hex: string): string {
-  const tag = Number.parseInt(hex.slice(0, 2), 16);
-  const headerHexLen =
-    tag === 0x58 ? 4 : tag === 0x59 ? 6 : tag === 0x5a ? 10 : 0;
-  return hex.slice(headerHexLen);
-}
+export { unwrapCborBytes } from "@contracts-library/meshjs";
 
 /** Enterprise-address network id: 0 = testnet (`addr_test`), 1 = mainnet. */
 const NETWORK_ID: number = 0;
@@ -289,8 +277,9 @@ export class TrixDevnet {
     });
 
     const fail = (message: string): Error => {
+      const pid = proc.pid;
       try {
-        process.kill(-proc.pid!, "SIGKILL");
+        if (pid !== undefined) process.kill(-pid, "SIGKILL");
       } catch {
         // already gone
       }
@@ -517,7 +506,9 @@ export class TrixDevnet {
     scriptHash: string,
   ): Promise<void> {
     const utxos = await this.utxosOf(payer.address);
-    const input = utxos[0];
+    // The largest UTxO: fragmented change from prior deploys must not starve
+    // registration when the wallet's total balance is fine.
+    const input = utxos.reduce((a, b) => (b.lovelace > a.lovelace ? b : a));
     if (!input)
       throw new Error(`wallet ${payer.name} has no UTxO to fund registration`);
     const change = input.lovelace - STAKE_REGISTRATION_FEE;
@@ -681,8 +672,9 @@ export class TrixDevnet {
 
   /** Stop the node (and its whole process tree) and remove trix's state. */
   stop(): void {
+    const pid = this.proc.pid;
     try {
-      process.kill(-this.proc.pid!, "SIGTERM");
+      if (pid !== undefined) process.kill(-pid, "SIGTERM");
     } catch {
       // already gone
     }

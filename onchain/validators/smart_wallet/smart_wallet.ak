@@ -53,6 +53,7 @@ validator smart_wallet(
         ) && checks.validate_spend_continuation(
           wallet_datum,
           own_input.output.value,
+          own_input.output.address,
           own_hash,
           wallet_token_name,
           self,
@@ -122,6 +123,7 @@ fn validate_config_update(
   )
   and {
     continuation.address == own_input.output.address,
+    continuation.reference_script == None,
     !list.is_empty(continuations) && list.length(wallet_outputs) == list.length(
       continuations,
     ),

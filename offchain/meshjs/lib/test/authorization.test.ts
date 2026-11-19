@@ -1,8 +1,8 @@
 import {
   applyCborEncoding,
+  type MeshTxBuilder,
   resolveScriptHash,
   serializeRewardAddress,
-  type MeshTxBuilder,
 } from "@meshsdk/core";
 import { describe, expect, it } from "vitest";
 import { applyAuthorization } from "../src/authorization";

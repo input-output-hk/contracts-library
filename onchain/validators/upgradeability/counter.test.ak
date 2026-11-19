@@ -5,8 +5,8 @@ use cardano/transaction.{
   InlineDatum, Input, Output, OutputReference, Spend, Transaction, placeholder,
 }
 use upgradeability/counter.{
-  CounterDatum, Tick, Upgrade, spent_with_upgrade, validate_counter_migrate,
-  validate_counter_tick,
+  CounterDatum, Tick, Upgrade, spent_with_tick, spent_with_upgrade,
+  validate_counter_migrate, validate_counter_tick,
 }
 
 // ------------------------------------------------------------------- fixtures
@@ -29,7 +29,7 @@ const token_name = "tok"
 const vkh = #"11111111111111111111111111111111111111111111111111111111"
 
 /// The input value plus one unit of a stand-in state token.
-fn with_token(value: assets.Value) -> assets.Value {
+fn with_token(value: assets.Assets) -> assets.Assets {
   assets.add(value, token_policy, token_name, 1)
 }
 
@@ -61,7 +61,7 @@ fn continuation_output_with(
   hash: ScriptHash,
   prev: OutputReference,
   count: Int,
-  value: assets.Value,
+  value: assets.Assets,
   reference_script: Option<ScriptHash>,
 ) -> Output {
   Output {
@@ -88,7 +88,7 @@ fn counter_input_with(
   hash: ScriptHash,
   index: Int,
   count: Int,
-  value: assets.Value,
+  value: assets.Assets,
 ) -> Input {
   Input {
     output_reference: ref(index),
@@ -411,6 +411,25 @@ test migrate_rejects_collapsed_shared_continuation() fail {
 }
 
 // --------------------------------------------------------- redeemer binding
+
+test spent_with_tick_detects_action() {
+  let tick: Data = Tick
+  let tx = Transaction { ..placeholder, redeemers: [Pair(Spend(ref(0)), tick)] }
+  spent_with_tick(tx, ref(0))
+}
+
+test spent_with_tick_rejects_upgrade() fail {
+  let upgrade: Data = Upgrade
+  let tx = Transaction {
+    ..placeholder,
+    redeemers: [Pair(Spend(ref(0)), upgrade)],
+  }
+  spent_with_tick(tx, ref(0))
+}
+
+test spent_with_tick_rejects_missing_action() fail {
+  spent_with_tick(placeholder, ref(0))
+}
 
 test spent_with_upgrade_detects_action() {
   let upgrade: Data = Upgrade

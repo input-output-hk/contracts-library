@@ -1,18 +1,8 @@
-import { afterAll, beforeAll, expect, test } from "vitest";
-import {
-  TrixDevnet,
-  DEVNET_POLL,
-  PROPOSE_TTL_MS,
-  unwrapCborBytes,
-  type DevnetKitFactory,
-  type DevnetUtxo,
-  type DevnetWallet,
-} from "../../devnet/utils";
 import {
   SETTINGS_TOKEN_NAME,
+  type SettingsParams,
   settingsScript,
   settingsScriptAddress,
-  type SettingsParams,
 } from "@contracts-library/meshjs";
 import {
   counterForwarderScript,
@@ -25,6 +15,16 @@ import {
 } from "@contracts-library/meshjs/examples/upgradeability";
 import { resolveScriptHash } from "@meshsdk/core";
 import { Party, type SubmittedTx, type TxBuilder } from "tx3-sdk";
+import { afterAll, beforeAll, expect, test } from "vitest";
+import {
+  DEVNET_POLL,
+  type DevnetKitFactory,
+  type DevnetUtxo,
+  type DevnetWallet,
+  PROPOSE_TTL_MS,
+  TrixDevnet,
+  unwrapCborBytes,
+} from "../../devnet/utils";
 import { Client } from "../codegen/ts-client/upgradeability/protocol";
 
 const ADA = 1_000_000n;

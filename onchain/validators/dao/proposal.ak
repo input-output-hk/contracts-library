@@ -1,3 +1,6 @@
+//// Reference proposal validator: dispatches the mint/spend redeemers to
+//// `dao/proposal/{mint,spend}`. See `docs/dao/spec.md` §3.d.
+
 use cardano/assets.{AssetName, PolicyId}
 use cardano/transaction.{OutputReference, Transaction}
 use dao/proposal/mint.{validate_create_proposal, validate_finish_proposal}

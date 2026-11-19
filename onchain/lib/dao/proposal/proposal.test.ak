@@ -13,10 +13,10 @@ use dao/proposal/spend.{
   validate_end_voting_stage, validate_reject_draft, validate_tally_votes,
 }
 use dao/types.{
-  AcceptDraft, Cosign, CosignProposal, CreateProposal, DaoSettings, EndProposal,
-  EndVotingStage, ProposalDatum, ProposalRedeemer, ProposalStatus,
-  ProposalThresholds, ProposalTimingConfig, RejectDraft, TallyVotes, VoteDatum,
-  Voting,
+  AcceptDraft, Cancel, Cosign, CosignProposal, CreateProposal, DaoSettings,
+  EndProposal, EndVotingStage, ProposalDatum, ProposalRedeemer, ProposalStatus,
+  ProposalThresholds, ProposalTimingConfig, RejectDraft, TallyVote, TallyVotes,
+  VoteDatum, Voting,
 }
 use dao/utils.{get_dao_settings, token_name_from_ref}
 use settings/types as settings_types
@@ -215,6 +215,16 @@ fn refund(lovelace: Int) -> Output {
   }
 }
 
+fn tally_r() -> Data {
+  let r: Data = TallyVote { out_idx: 1 }
+  r
+}
+
+fn cancel_r() -> Data {
+  let r: Data = Cancel
+  r
+}
+
 fn spend(d: ProposalDatum, r: ProposalRedeemer, self: Transaction) -> Bool {
   when r is {
     Cosign ->
@@ -227,7 +237,7 @@ fn spend(d: ProposalDatum, r: ProposalRedeemer, self: Transaction) -> Bool {
   }
 }
 
-fn mint_stake_value(stake: Int) -> assets.Value {
+fn mint_stake_value(stake: Int) -> assets.Assets {
   assets.from_asset(stake_hash, stake_nft, 1)
     |> assets.add(gov_policy, gov_name, stake)
 }
@@ -247,11 +257,15 @@ fn mint_stake_input(index: Int, stake: Int) -> Input {
   }
 }
 
-fn mint_proposal_datum(create: Int, stake: Int, now: Int) -> ProposalDatum {
+fn mint_proposal_datum(
+  create: Int,
+  stake: Int,
+  start_time: Int,
+) -> ProposalDatum {
   ProposalDatum {
     thresholds: thresholds_with_create(create),
     timing_config: timings(),
-    start_time: now,
+    start_time,
     status: ProposalStatus.Draft { cosigning_stake: stake },
     results: [],
   }
@@ -267,8 +281,9 @@ fn proposal_output_named(token_name: ByteArray, d: ProposalDatum) -> Output {
 }
 
 // A well-formed CreateProposal transaction. `stake` is the staked-token amount
-// held by the creating stake UTxO.
-fn create_tx(create: Int, stake: Int, now: Int) -> Transaction {
+// held by the creating stake UTxO; `upper` is the transaction's validity upper
+// bound, which the datum's `start_time` must equal.
+fn create_tx(create: Int, stake: Int, upper: Int) -> Transaction {
   let stake_in = mint_stake_input(0, stake)
   let token_name = token_name_from_ref(stake_in.output_reference)
   let create_r: Data = CreateProposal
@@ -277,11 +292,14 @@ fn create_tx(create: Int, stake: Int, now: Int) -> Transaction {
     inputs: [stake_in],
     reference_inputs: [settings_input_create(create)],
     outputs: [
-      proposal_output_named(token_name, mint_proposal_datum(create, stake, now)),
+      proposal_output_named(
+        token_name,
+        mint_proposal_datum(create, stake, upper),
+      ),
     ],
     mint: assets.from_asset(proposal_policy, token_name, 1),
     redeemers: [Pair(Spend(stake_in.output_reference), create_r)],
-    validity_range: interval.after(now),
+    validity_range: interval.between(0, upper),
   }
 }
 
@@ -380,30 +398,6 @@ test accept_draft_ok() {
   spend(d, AcceptDraft, tx)
 }
 
-test rejects_accept_below_threshold() {
-  let d = datum(ProposalStatus.Draft { cosigning_stake: 80 }, [])
-  let cont = prop_output(datum(ProposalStatus.Voting, []))
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [prop_input(d)],
-    outputs: [cont],
-    validity_range: interval.before(start + 1000),
-  }
-  !spend(d, AcceptDraft, tx)
-}
-
-test rejects_accept_after_draft_window() {
-  let d = datum(ProposalStatus.Draft { cosigning_stake: 120 }, [])
-  let cont = prop_output(datum(ProposalStatus.Voting, []))
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [prop_input(d)],
-    outputs: [cont],
-    validity_range: interval.before(start + 2000),
-  }
-  !spend(d, AcceptDraft, tx)
-}
-
 // ---------------------------------------------------------------- RejectDraft
 
 test reject_draft_ok() {
@@ -415,17 +409,6 @@ test reject_draft_ok() {
     validity_range: interval.after(start + 1000),
   }
   spend(d, RejectDraft, tx)
-}
-
-test rejects_reject_before_draft_window() {
-  let d = datum(ProposalStatus.Draft { cosigning_stake: 10 }, [])
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [prop_input(d)],
-    mint: assets.from_asset(proposal_policy, prop_nft, -1),
-    validity_range: interval.after(start + 500),
-  }
-  !spend(d, RejectDraft, tx)
 }
 
 // -------------------------------------------------------------- EndVotingStage
@@ -456,18 +439,6 @@ test end_voting_initializes_zero_tally() {
   spend(d, EndVotingStage, tx)
 }
 
-test rejects_end_voting_too_early() {
-  let d = datum(ProposalStatus.Voting, [])
-  let cont = prop_output(datum(ProposalStatus.Tally { votes: [] }, []))
-  let tx = Transaction {
-    ..placeholder,
-    inputs: [prop_input(d)],
-    outputs: [cont],
-    validity_range: interval.after(start + 2000),
-  }
-  !spend(d, EndVotingStage, tx)
-}
-
 // ----------------------------------------------------------------- TallyVotes
 
 test tally_votes_ok() {
@@ -484,6 +455,7 @@ test tally_votes_ok() {
     reference_inputs: [settings_input()],
     outputs: [cont, refund(2_000_000)],
     mint: assets.from_asset(vote_policy, "V", -1),
+    redeemers: [Pair(Spend(vote_ref(2)), tally_r())],
     validity_range: interval.before(start + 6000),
   }
   spend(d, TallyVotes, tx)
@@ -502,9 +474,49 @@ test rejects_tally_without_burn() {
     inputs: [prop_input(d), vote_input(2, 1, 5, 2_000_000)],
     reference_inputs: [settings_input()],
     outputs: [cont, refund(2_000_000)],
+    redeemers: [Pair(Spend(vote_ref(2)), tally_r())],
     validity_range: interval.before(start + 6000),
   }
   !spend(d, TallyVotes, tx)
+}
+
+test rejects_tally_with_cancel_spent_vote() fail {
+  let d = datum(
+    ProposalStatus.Tally { votes: [0, 0] },
+    [effect_hash, effect_hash],
+  )
+  let cont = prop_output(
+    datum(ProposalStatus.Tally { votes: [0, 5] }, [effect_hash, effect_hash]),
+  )
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d), vote_input(2, 1, 5, 2_000_000)],
+    reference_inputs: [settings_input()],
+    outputs: [cont, refund(2_000_000)],
+    mint: assets.from_asset(vote_policy, "V", -1),
+    redeemers: [Pair(Spend(vote_ref(2)), cancel_r())],
+    validity_range: interval.before(start + 6000),
+  }
+  spend(d, TallyVotes, tx)
+}
+
+test rejects_tally_without_vote_redeemer() fail {
+  let d = datum(
+    ProposalStatus.Tally { votes: [0, 0] },
+    [effect_hash, effect_hash],
+  )
+  let cont = prop_output(
+    datum(ProposalStatus.Tally { votes: [0, 5] }, [effect_hash, effect_hash]),
+  )
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d), vote_input(2, 1, 5, 2_000_000)],
+    reference_inputs: [settings_input()],
+    outputs: [cont, refund(2_000_000)],
+    mint: assets.from_asset(vote_policy, "V", -1),
+    validity_range: interval.before(start + 6000),
+  }
+  spend(d, TallyVotes, tx)
 }
 
 // ---------------------------------------------------------------- EndProposal
@@ -805,6 +817,30 @@ test rejects_unbounded_validity_range() fail {
   validate_mint(Transaction { ..tx, validity_range: interval.everything })
 }
 
+// CONS-02 regression: `start_time` anchors to the upper bound, so a backdated
+// lower bound no longer backdates the proposal timeline. The old attack — a
+// far-past lower bound with `start_time` mirroring it — is rejected.
+test rejects_backdated_start_time() fail {
+  let tx = create_tx(100, 100, 5000)
+  let token_name = token_name_from_ref(
+    OutputReference { transaction_id: tx_id, output_index: 0 },
+  )
+  validate_mint(
+    Transaction {
+      ..tx,
+      outputs: [
+        proposal_output_named(token_name, mint_proposal_datum(100, 100, 0)),
+      ],
+      validity_range: interval.between(0, 5000),
+    },
+  )
+}
+
+test rejects_create_without_upper_bound() fail {
+  let tx = create_tx(100, 100, 5000)
+  validate_mint(Transaction { ..tx, validity_range: interval.after(0) })
+}
+
 // ------------------------------------------------------------------- mint fuzz
 
 fn scenario() -> Fuzzer<(Int, Int)> {
@@ -822,8 +858,59 @@ test prop_accepts_when_stake_meets_threshold((create, stake) via scenario()) {
 }
 
 test prop_start_time_reflected_in_datum((create, stake) via scenario()) {
-  // The datum's start_time must equal the validity lower bound; verify the
-  // validator accepts any `now` as long as the datum mirrors it.
-  let now = stake + create
-  validate_mint(create_tx(create, stake, now))
+  // The datum's start_time must equal the validity upper bound; the validator
+  // accepts any `upper` as long as the datum mirrors it.
+  let upper = stake + create
+  validate_mint(create_tx(create, stake, upper))
+}
+
+// ------------------------------------------------------------ stage-3 props
+
+fn accept_scenario() -> Fuzzer<(Int, Int)> {
+  fuzz.tuple(fuzz.int_between(0, 200), fuzz.int_between(0, 2_000))
+}
+
+test prop_accept_draft_threshold((cosigning_stake, upper) via accept_scenario()) {
+  let d = datum(ProposalStatus.Draft { cosigning_stake }, [])
+  let out = prop_output(datum(ProposalStatus.Voting, []))
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d)],
+    outputs: [out],
+    validity_range: interval.before(upper),
+  }
+  let expected = cosigning_stake >= 100 && upper <= start + 1000
+  fuzz.label_if(@"accepted", expected)
+  fuzz.label_if(@"rejected", !expected)
+  spend(d, AcceptDraft, tx) == expected
+}
+
+test prop_end_voting_timing(lower via fuzz.int_between(0, 5_000)) {
+  let d = datum(ProposalStatus.Voting, [])
+  let out = prop_output(datum(ProposalStatus.Tally { votes: [] }, []))
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d)],
+    outputs: [out],
+    validity_range: interval.after(lower),
+  }
+  let expected = lower >= start + 1000 + 2000
+  fuzz.label_if(@"voting-ended", expected)
+  fuzz.label_if(@"too-early", !expected)
+  spend(d, EndVotingStage, tx) == expected
+}
+
+test prop_reject_draft_timing(lower via fuzz.int_between(0, 3_000)) {
+  let d = datum(ProposalStatus.Draft { cosigning_stake: 0 }, [])
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [prop_input(d)],
+    outputs: [],
+    mint: assets.from_asset(proposal_policy, prop_nft, -1),
+    validity_range: interval.after(lower),
+  }
+  let expected = lower >= start + 1000
+  fuzz.label_if(@"draft-ended", expected)
+  fuzz.label_if(@"too-early", !expected)
+  spend(d, RejectDraft, tx) == expected
 }

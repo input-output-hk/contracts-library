@@ -1,6 +1,6 @@
 use aiken/crypto.{ScriptHash}
 use cardano/address.{Script, from_script}
-use cardano/assets.{Value}
+use cardano/assets.{Assets}
 use cardano/transaction.{
   InlineDatum, Input, Output, OutputReference, Transaction, placeholder,
 }
@@ -52,11 +52,11 @@ fn wallet_input_with(datum: WalletDatum) -> Input {
   }
 }
 
-fn wallet_output(value: Value) -> Output {
+fn wallet_output(value: Assets) -> Output {
   wallet_output_with(value, wallet_datum())
 }
 
-fn wallet_output_with(value: Value, datum: WalletDatum) -> Output {
+fn wallet_output_with(value: Assets, datum: WalletDatum) -> Output {
   Output {
     address: from_script(wallet_policy),
     value,
@@ -80,6 +80,23 @@ test deposit_ok_open_depositors() {
       ..placeholder,
       inputs: [wallet_input()],
       outputs: [wallet_output(cont_value)],
+    },
+  )
+}
+
+test rejects_deposit_reference_script() {
+  let cont_value = assets.from_lovelace(1_500_000)
+    |> assets.add(wallet_policy, wallet_token, 1)
+  !deposit(
+    Transaction {
+      ..placeholder,
+      inputs: [wallet_input()],
+      outputs: [
+        Output {
+          ..wallet_output(cont_value),
+          reference_script: Some(other_policy),
+        },
+      ],
     },
   )
 }

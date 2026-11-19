@@ -11,27 +11,21 @@
  */
 
 import {
+  type Data,
   mConStr0,
   mConStr1,
   mConStr2,
-  TxInput,
-  type Data,
+  type TxInput,
 } from "@meshsdk/core";
 
-import { credentialToData } from "../common";
+import { credentialToData, option } from "../common";
 import type { SettingsDatum, SettingsParams } from "./types";
-
-export { credentialToData };
-
-function optional<T>(value: T | null, wrap: (v: T) => Data): Data {
-  return value === null ? mConStr1([]) : mConStr0([wrap(value)]);
-}
 
 export function settingsDatumToData(d: SettingsDatum): Data {
   return mConStr0([
     d.current,
-    optional(d.next, (v) => v),
-    optional(d.nextApply, (v) => v),
+    option(d.next, (v) => v),
+    option(d.nextApply, (v) => v),
   ]);
 }
 

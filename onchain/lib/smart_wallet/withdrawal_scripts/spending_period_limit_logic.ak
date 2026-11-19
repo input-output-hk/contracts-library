@@ -13,9 +13,10 @@
 use aiken/collection/list
 use aiken/crypto.{ScriptHash}
 use aiken/interval.{Finite}
-use cardano/address.{Credential, Script}
-use cardano/assets.{AssetName, Lovelace, Value, has_nft}
-use cardano/transaction.{Output, Transaction}
+use cardano/address.{Credential}
+use cardano/assets.{AssetName, Lovelace}
+use cardano/transaction.{Transaction}
+use smart_wallet/checks.{sum_at_credential}
 use smart_wallet/withdrawal
 
 /// Mutable state: `period` is the end (POSIX ms) of the charged period, a fixed
@@ -127,29 +128,4 @@ fn net_outflow(
   )
   let output = sum_at_credential(self.outputs, wallet, wallet_token_name)
   assets.lovelace_of(input) - assets.lovelace_of(output)
-}
-
-/// Aggregate value across `outputs` that sit at `credential` and carry the
-/// wallet's NFT.
-fn sum_at_credential(
-  outputs: List<Output>,
-  credential: Credential,
-  wallet_token_name: AssetName,
-) -> Value {
-  expect Script(wallet_hash) = credential
-  list.foldl(
-    outputs,
-    assets.zero,
-    fn(output, acc) {
-      if output.address.payment_credential == credential && has_nft(
-        output.value,
-        wallet_hash,
-        wallet_token_name,
-      ) {
-        assets.merge(acc, output.value)
-      } else {
-        acc
-      }
-    },
-  )
 }

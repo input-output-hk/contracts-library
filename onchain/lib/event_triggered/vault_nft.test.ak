@@ -17,7 +17,7 @@ fn params() -> VaultNftParams {
   VaultNftParams { authority: VerificationKey(authority_key) }
 }
 
-fn check(mint: assets.Value, signers: List<ByteArray>) -> Bool {
+fn check(mint: assets.Assets, signers: List<ByteArray>) -> Bool {
   vault_nft.validate(
     Transaction { ..placeholder, mint, extra_signatories: signers },
     vault_nft_cs,
@@ -25,7 +25,7 @@ fn check(mint: assets.Value, signers: List<ByteArray>) -> Bool {
   )
 }
 
-fn unit(qty: Int) -> assets.Value {
+fn unit(qty: Int) -> assets.Assets {
   assets.from_asset(vault_nft_cs, vault_nft_name, qty)
 }
 

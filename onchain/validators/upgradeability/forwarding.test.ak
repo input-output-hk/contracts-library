@@ -1,6 +1,7 @@
 use aiken/collection/dict
+use aiken/collection/list
 use cardano/address.{
-  Script, VerificationKey, from_script, from_verification_key,
+  Address, Inline, Script, VerificationKey, from_script, from_verification_key,
 }
 use cardano/assets
 use cardano/certificate.{
@@ -13,11 +14,11 @@ use cardano/script_context.{
   Minting, Proposing, Publishing, ScriptContext, ScriptInfo, Voting, Withdrawing,
 }
 use cardano/transaction.{
-  DatumHash, InlineDatum, Input, NoDatum, Output, OutputReference, Transaction,
-  placeholder,
+  DatumHash, InlineDatum, Input, NoDatum, Output, OutputReference, Spend,
+  Transaction, placeholder,
 }
 use settings/types.{SettingsDatum}
-use upgradeability/counter.{CounterDatum, state_token_name}
+use upgradeability/counter.{CounterDatum, Tick, Upgrade, state_token_name}
 use upgradeability/counter_forwarder
 use upgradeability/counter_logic
 use upgradeability/counter_logic_stepped
@@ -63,7 +64,7 @@ fn settings_ref() -> Input {
 }
 
 fn counter_output(
-  value: assets.Value,
+  value: assets.Assets,
   count: Int,
   prev_input: Option<OutputReference>,
 ) -> Output {
@@ -94,15 +95,30 @@ fn forward(info: ScriptInfo, tx: Transaction) -> Bool {
   )
 }
 
-fn run_logic(tx: Transaction) -> Bool {
-  let redeemer: Data = 0
+fn with_spend_redeemer(tx: Transaction, action: Data) -> Transaction {
+  Transaction {
+    ..tx,
+    redeemers: list.map(
+      tx.inputs,
+      fn(input) { Pair(Spend(input.output_reference), action) },
+    ),
+  }
+}
+
+fn run_logic_with_spend_redeemer(tx: Transaction, action: Data) -> Bool {
+  let withdrawal_redeemer: Data = 0
   counter_logic.counter_logic.withdraw(
     settings_policy,
     settings_name,
-    redeemer,
+    withdrawal_redeemer,
     Script(logic_hash),
-    tx,
+    with_spend_redeemer(tx, action),
   )
+}
+
+fn run_logic(tx: Transaction) -> Bool {
+  let tick: Data = Tick
+  run_logic_with_spend_redeemer(tx, tick)
 }
 
 // -------------------------------------------- the forwarder, beyond spending
@@ -170,7 +186,7 @@ test forwarder_rejects_withdraw_from_another_credential() fail {
 
 const state_name = state_token_name
 
-fn state_token() -> assets.Value {
+fn state_token() -> assets.Assets {
   assets.from_lovelace(2_000_000)
     |> assets.add(forwarder_hash, state_name, 1)
 }
@@ -209,7 +225,21 @@ test logic_ticks_a_genuine_counter() {
   )
 }
 
-fn genesis(minted: assets.Value, output: Output) -> Bool {
+test logic_rejects_upgrade_redeemer_for_forced_tick() fail {
+  let upgrade: Data = Upgrade
+  run_logic_with_spend_redeemer(
+    with_logic(
+      Transaction {
+        ..placeholder,
+        inputs: [genuine_counter(0, 5)],
+        outputs: [counter_output(state_token(), 6, Some(ref(0)))],
+      },
+    ),
+    upgrade,
+  )
+}
+
+fn genesis(minted: assets.Assets, output: Output) -> Bool {
   run_logic(
     with_logic(Transaction { ..placeholder, outputs: [output], mint: minted }),
   )
@@ -219,6 +249,19 @@ test logic_accepts_a_genesis_mint() {
   genesis(
     assets.from_asset(forwarder_hash, state_name, 1),
     counter_output(state_token(), 0, None),
+  )
+}
+
+test logic_rejects_a_genesis_with_a_stake_credential() fail {
+  genesis(
+    assets.from_asset(forwarder_hash, state_name, 1),
+    Output {
+      ..counter_output(state_token(), 0, None),
+      address: Address {
+        payment_credential: Script(forwarder_hash),
+        stake_credential: Some(Inline(VerificationKey(vkh))),
+      },
+    },
   )
 }
 
@@ -456,15 +499,20 @@ fn stepped_counter(index: Int, count: Int, step: Int) -> Input {
   }
 }
 
-fn run_stepped(tx: Transaction) -> Bool {
-  let redeemer: Data = 0
+fn run_stepped_with_spend_redeemer(tx: Transaction, action: Data) -> Bool {
+  let withdrawal_redeemer: Data = 0
   counter_logic_stepped.counter_logic_stepped.withdraw(
     settings_policy,
     settings_name,
-    redeemer,
+    withdrawal_redeemer,
     Script(logic_hash),
-    with_logic(tx),
+    with_logic(with_spend_redeemer(tx, action)),
   )
+}
+
+fn run_stepped(tx: Transaction) -> Bool {
+  let tick: Data = Tick
+  run_stepped_with_spend_redeemer(tx, tick)
 }
 
 /// Counters written under the first logic must decode as `Unstepped`.
@@ -489,6 +537,18 @@ test stepped_logic_converts_an_original_counter_on_touch() {
       inputs: [genuine_counter(0, 5)],
       outputs: [stepped_output(6, Some(ref(0)), 1)],
     },
+  )
+}
+
+test stepped_logic_rejects_upgrade_redeemer_for_forced_tick() fail {
+  let upgrade: Data = Upgrade
+  run_stepped_with_spend_redeemer(
+    Transaction {
+      ..placeholder,
+      inputs: [genuine_counter(0, 5)],
+      outputs: [stepped_output(6, Some(ref(0)), 1)],
+    },
+    upgrade,
   )
 }
 
@@ -550,6 +610,24 @@ test stepped_logic_accepts_a_stepped_genesis() {
     Transaction {
       ..placeholder,
       outputs: [stepped_output(0, None, 2)],
+      mint: assets.from_asset(forwarder_hash, state_name, 1),
+    },
+  )
+}
+
+test stepped_logic_rejects_a_genesis_with_a_stake_credential() fail {
+  run_stepped(
+    Transaction {
+      ..placeholder,
+      outputs: [
+        Output {
+          ..stepped_output(0, None, 2),
+          address: Address {
+            payment_credential: Script(forwarder_hash),
+            stake_credential: Some(Inline(VerificationKey(vkh))),
+          },
+        },
+      ],
       mint: assets.from_asset(forwarder_hash, state_name, 1),
     },
   )

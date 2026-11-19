@@ -13,23 +13,35 @@
 
 import {
   applyParamsToScript,
-  resolveScriptHash,
-  serializeRewardAddress,
-  serializePlutusScript,
-  SLOT_CONFIG_NETWORK,
-  type Asset,
   type MeshTxBuilder,
   type PlutusScript,
+  resolveScriptHash,
+  SLOT_CONFIG_NETWORK,
   type SlotConfig,
+  serializePlutusScript,
+  serializeRewardAddress,
   type UTxO,
 } from "@meshsdk/core";
 
-import { enclosingSlotBound, nftNameFromRef } from "../common";
+import {
+  enclosingSlotBound,
+  finalizeTx,
+  type Network,
+  networkIdOf,
+  nftNameFromRef,
+  nftNameOf,
+  slotBound,
+} from "../common";
+import { outputRefToData } from "../settings/datum";
+import {
+  plutusVersion,
+  proposalCompiledCode as proposalCode,
+} from "./blueprint";
 import {
   burnProposalRedeemer,
   burnVotesRedeemer,
   mintProposalRedeemer,
-  outputRefToData,
+  nftValue,
   pollEffectWithdrawalRedeemer,
   proposalDatumToData,
   proposalParamsToData,
@@ -38,35 +50,13 @@ import {
   stakeRedeemerToData,
   tallyVoteRedeemer,
 } from "./datum";
+import { stakeScriptAddress } from "./stake";
 import type {
   ProposalDatum,
   ProposalParams,
   ProposalRedeemer,
   StakePositionDatum,
 } from "./types";
-import {
-  proposalCompiledCode as proposalCode,
-  plutusVersion,
-} from "./blueprint";
-import { stakeScriptAddress } from "./stake";
-
-type Network = "mainnet" | "preprod" | "preview";
-
-function networkIdOf(network: Network): 0 | 1 {
-  return network === "mainnet" ? 1 : 0;
-}
-
-/** The enclosing slot + start time for `now` on the given network/devnet. */
-function slotBound(
-  network: Network,
-  now: number,
-  customSlotConfig?: SlotConfig,
-) {
-  return enclosingSlotBound(
-    now,
-    customSlotConfig ?? SLOT_CONFIG_NETWORK[network],
-  );
-}
 
 /** Phase end times (POSIX ms) derived from a proposal's immutable fields. */
 function phaseBounds(datum: ProposalDatum) {
@@ -75,8 +65,6 @@ function phaseBounds(datum: ProposalDatum) {
   const tallyEnd = votingEnd + datum.timingConfig.tallyLength;
   return { draftEnd, votingEnd, tallyEnd };
 }
-
-const DEFAULT_MIN_UTXO_LOVELACE = 2_000_000n;
 
 /** The Plutus V3 script in the form MeshJS expects (parameterized). */
 export function proposalScript(params: ProposalParams): PlutusScript {
@@ -95,25 +83,44 @@ export function proposalScriptAddress(
   return serializePlutusScript(script, undefined, networkId).address;
 }
 
+/**
+ * The create transaction's bounded validity window, in slots past the
+ * enclosing slot of `now` (spec §5.f): the proposal's `start_time` anchors to
+ * the window's upper bound, which the ledger forces to cover the inclusion
+ * slot.
+ */
+export const CREATE_WINDOW_SLOTS = 30;
+
+/** Timing of a create-proposal transaction (see `createProposalTiming`). */
+export interface CreateProposalTiming {
+  sinceSlot: number;
+  untilSlot: number;
+  /** The validity upper bound, which the proposal's `startTime` must equal. */
+  startTime: number;
+}
+
+/**
+ * Timing of a create-proposal transaction submitted at `now`. The validator
+ * pins `startTime` to the validity range's upper bound (spec §5.f), because a
+ * transaction cannot land after it: the window is `validityWindowSlots` past
+ * the slot enclosing `now`, and `invalidHereafter(untilSlot)` makes
+ * `untilSlot`'s start time the exclusive upper bound the validator sees.
+ */
+export function createProposalTiming(p: {
+  now: number;
+  slotConfig: SlotConfig;
+  /** Create window in slots past `now` (default `CREATE_WINDOW_SLOTS`). */
+  validityWindowSlots?: number;
+}): CreateProposalTiming {
+  const { slot: sinceSlot } = enclosingSlotBound(p.now, p.slotConfig);
+  const untilSlot = sinceSlot + (p.validityWindowSlots ?? CREATE_WINDOW_SLOTS);
+  const startTime =
+    p.slotConfig.zeroTime +
+    (untilSlot - p.slotConfig.zeroSlot) * p.slotConfig.slotLength;
+  return { sinceSlot, untilSlot, startTime };
+}
+
 /** Value of a proposal UTxO: ada + proposal NFT. */
-function proposalValue(script: PlutusScript, tokenName: string): Asset[] {
-  return [
-    { unit: "lovelace", quantity: DEFAULT_MIN_UTXO_LOVELACE.toString() },
-    {
-      unit: resolveScriptHash(script.code, script.version) + tokenName,
-      quantity: "1",
-    },
-  ];
-}
-
-/** The proposal NFT token name held by `utxo`, or "" if none. */
-function nftNameOf(utxo: UTxO, policyId: string): string {
-  const unit = utxo.output.amount
-    .map((a) => a.unit)
-    .find((u) => u !== "lovelace" && u.startsWith(policyId));
-  return unit ? unit.slice(policyId.length) : "";
-}
-
 // ---------------------------------------------------- CreateProposal
 
 export interface CreateProposalParams {
@@ -126,36 +133,75 @@ export interface CreateProposalParams {
   stakeDatum: StakePositionDatum;
   settingsUtxo: UTxO;
   proposalDatum: ProposalDatum;
-  /** Wall-clock used to set `start_time` and the validity lower bound (POSIX ms). */
+  /** Wall-clock the validity window is derived from (POSIX ms). */
   now: number;
   utxos: UTxO[];
   changeAddress: string;
   collateralUtxo: UTxO;
   network?: Network;
   customSlotConfig?: SlotConfig;
+  /** Create validity window in slots past `now` (default `CREATE_WINDOW_SLOTS`). */
+  validityWindowSlots?: number;
 }
 
-/** Spend the creating stake position and mint the proposal NFT. */
+/**
+ * Spend the creating stake position and mint the proposal NFT. Sets a bounded
+ * validity window and derives `startTime` (and the draft lock) from its upper
+ * bound; the values passed in the datums are overwritten (spec §5.f).
+ */
 export async function buildCreateProposalTx(
   p: CreateProposalParams,
 ): Promise<string> {
   const network = p.network ?? "preprod";
   const networkId = networkIdOf(network);
+  const slotConfig = p.customSlotConfig ?? SLOT_CONFIG_NETWORK[network];
   const proposalPolicy = resolveScriptHash(
     p.proposalScript.code,
     p.proposalScript.version,
   );
-  const bound = slotBound(network, p.now, p.customSlotConfig);
+  const timing = createProposalTiming({
+    now: p.now,
+    slotConfig,
+    validityWindowSlots: p.validityWindowSlots,
+  });
   const proposalTokenName = nftNameFromRef(p.stakeUtxo.input);
 
-  if (p.stakeDatum.owner.kind === "key") {
-    p.txBuilder.requiredSignerHash(p.stakeDatum.owner.hash);
+  // The validator pins `startTime` to the validity upper bound and the draft
+  // lock to `startTime + draft_length` (spec §5.f), so the builder overwrites
+  // both fields in the submitted datums; use `createProposalTiming` to
+  // predict them.
+  const proposalDatum: ProposalDatum = {
+    ...p.proposalDatum,
+    startTime: timing.startTime,
+  };
+  if (
+    !p.stakeDatum.locks.some((lock) => lock.proposalId === proposalTokenName)
+  ) {
+    throw new Error(
+      `stakeDatum must include the draft lock for the new proposal ${proposalTokenName}`,
+    );
+  }
+  const stakeDatum: StakePositionDatum = {
+    ...p.stakeDatum,
+    locks: p.stakeDatum.locks.map((lock) =>
+      lock.proposalId === proposalTokenName
+        ? {
+            ...lock,
+            unlockTime:
+              timing.startTime + proposalDatum.timingConfig.draftLength,
+          }
+        : lock,
+    ),
+  };
+
+  if (stakeDatum.owner.kind === "key") {
+    p.txBuilder.requiredSignerHash(stakeDatum.owner.hash);
   }
 
   p.txBuilder
     .mintPlutusScriptV3()
     .mint("1", proposalPolicy, proposalTokenName)
-    .mintRedeemerValue(mintProposalRedeemer(p.proposalDatum.results, 0))
+    .mintRedeemerValue(mintProposalRedeemer(proposalDatum.results, 0))
     .mintingScript(p.proposalScript.code)
     .spendingPlutusScriptV3()
     .txIn(
@@ -175,26 +221,23 @@ export async function buildCreateProposalTx(
   p.txBuilder
     .txOut(
       proposalScriptAddress(p.proposalScript, networkId),
-      proposalValue(p.proposalScript, proposalTokenName),
+      nftValue(p.proposalScript, proposalTokenName),
     )
-    .txOutInlineDatumValue(proposalDatumToData(p.proposalDatum))
+    .txOutInlineDatumValue(proposalDatumToData(proposalDatum))
     .txOut(
       stakeScriptAddress(p.stakeScript, networkId),
       p.stakeUtxo.output.amount,
     )
-    .txOutInlineDatumValue(stakePositionDatumToData(p.stakeDatum));
+    .txOutInlineDatumValue(stakePositionDatumToData(stakeDatum));
 
-  return await p.txBuilder
-    .invalidBefore(bound.slot)
-    .txInCollateral(
-      p.collateralUtxo.input.txHash,
-      p.collateralUtxo.input.outputIndex,
-      p.collateralUtxo.output.amount,
-      p.collateralUtxo.output.address,
-    )
-    .changeAddress(p.changeAddress)
-    .selectUtxosFrom(p.utxos)
-    .complete();
+  p.txBuilder
+    .invalidBefore(timing.sinceSlot)
+    .invalidHereafter(timing.untilSlot);
+  return finalizeTx(p.txBuilder, {
+    collateral: p.collateralUtxo,
+    changeAddress: p.changeAddress,
+    utxos: p.utxos,
+  });
 }
 
 // ---------------------------------------------------- proposal spends
@@ -259,7 +302,7 @@ async function buildProposalSpend(
     p.txBuilder
       .txOut(
         proposalScriptAddress(p.script, networkId),
-        proposalValue(p.script, tokenName),
+        nftValue(p.script, tokenName),
       )
       .txOutInlineDatumValue(proposalDatumToData(continuationDatum));
   } else {
@@ -301,16 +344,11 @@ async function buildProposalSpend(
       .withdrawalRedeemerValue(pollEffectWithdrawalRedeemer());
   }
 
-  return await p.txBuilder
-    .txInCollateral(
-      p.collateralUtxo.input.txHash,
-      p.collateralUtxo.input.outputIndex,
-      p.collateralUtxo.output.amount,
-      p.collateralUtxo.output.address,
-    )
-    .changeAddress(p.changeAddress)
-    .selectUtxosFrom(p.utxos)
-    .complete();
+  return finalizeTx(p.txBuilder, {
+    collateral: p.collateralUtxo,
+    changeAddress: p.changeAddress,
+    utxos: p.utxos,
+  });
 }
 
 // ---------------------------------------------------- Cosign
@@ -356,7 +394,7 @@ export async function buildCosignProposalTx(
     )
     .txOut(
       proposalScriptAddress(p.script, networkId),
-      proposalValue(p.script, tokenName),
+      nftValue(p.script, tokenName),
     )
     .txOutInlineDatumValue(proposalDatumToData(p.proposalDatum))
     .spendingPlutusScriptV3()
@@ -515,7 +553,7 @@ export async function buildTallyTx(p: TallyParams): Promise<string> {
     }
   }
 
-  for (const [i, { voteUtxo, ownerAddress }] of p.votes.entries()) {
+  for (const { voteUtxo, ownerAddress } of p.votes) {
     // Refund the vote artifact's ada (minus the NFT, which this tx burns):
     // pure lovelace, tagged with the vote's own output reference.
     const refund = voteUtxo.output.amount.filter(
@@ -543,7 +581,7 @@ export async function buildTallyTx(p: TallyParams): Promise<string> {
     )
     .txOut(
       proposalScriptAddress(p.script, networkId),
-      proposalValue(p.script, tokenName),
+      nftValue(p.script, tokenName),
     )
     .txOutInlineDatumValue(proposalDatumToData(p.continuationDatum));
 

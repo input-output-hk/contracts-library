@@ -1,3 +1,6 @@
+//// Vote-artifact NFT mint/burn rules. See `docs/dao/spec.md` §3.d, §5.j,
+//// §5.k and §5.m.
+
 use aiken/collection/dict
 use aiken/collection/list
 use cardano/address.{Script}

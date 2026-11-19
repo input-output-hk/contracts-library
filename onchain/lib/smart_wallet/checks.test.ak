@@ -1,6 +1,6 @@
 use aiken/crypto.{ScriptHash}
-use cardano/address.{Script, from_script}
-use cardano/assets.{Value}
+use cardano/address.{Address, Inline, Script, VerificationKey, from_script}
+use cardano/assets.{Assets}
 use cardano/certificate.{RegisterCredential, UnregisterCredential}
 use cardano/transaction.{
   DatumHash, InlineDatum, NoDatum, Output, Publish, Transaction, placeholder,
@@ -228,7 +228,7 @@ fn wallet_datum(
   WalletDatum { spenders, depositors }
 }
 
-fn wallet_value() -> Value {
+fn wallet_value() -> Assets {
   assets.from_lovelace(1_000_000) |> assets.add(wallet_policy, wallet_token, 1)
 }
 
@@ -240,7 +240,7 @@ fn wallet_output(
 }
 
 fn wallet_output_with(
-  value: Value,
+  value: Assets,
   spenders: Pairs<ScriptHash, Data>,
   depositors: Pairs<ScriptHash, Data>,
 ) -> Output {
@@ -254,12 +254,13 @@ fn wallet_output_with(
 
 fn spend_continuation(
   old_datum: WalletDatum,
-  old_value: Value,
+  old_value: Assets,
   outputs: List<Output>,
 ) -> Bool {
   validate_spend_continuation(
     old_datum,
     old_value,
+    from_script(wallet_policy),
     wallet_policy,
     wallet_token,
     Transaction { ..placeholder, outputs },
@@ -335,6 +336,35 @@ test spend_rejects_non_nft_outputs_at_wallet_address() fail {
     wallet_datum([], [Pair(a, data)]),
     wallet_value(),
     [wallet_output([], [Pair(a, data)]), extra],
+  )
+}
+
+test spend_rejects_stake_credential_change() fail {
+  let data: Data = 0
+  let changed = Output {
+    ..wallet_output([], [Pair(a, data)]),
+    address: Address {
+      payment_credential: Script(wallet_policy),
+      stake_credential: Some(Inline(VerificationKey(a))),
+    },
+  }
+  spend_continuation(
+    wallet_datum([], [Pair(a, data)]),
+    wallet_value(),
+    [changed],
+  )
+}
+
+test spend_rejects_continuation_reference_script() fail {
+  let data: Data = 0
+  let with_script = Output {
+    ..wallet_output([], [Pair(a, data)]),
+    reference_script: Some(other_policy),
+  }
+  spend_continuation(
+    wallet_datum([], [Pair(a, data)]),
+    wallet_value(),
+    [with_script],
   )
 }
 

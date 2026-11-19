@@ -4,7 +4,8 @@ use cardano/assets.{AssetName, PolicyId}
 use cardano/certificate.{Certificate}
 use cardano/transaction.{Transaction}
 use upgradeability/counter.{
-  carries_state_token, validate_counter_genesis, validate_counter_tick,
+  carries_state_token, spent_with_tick, validate_counter_genesis,
+  validate_counter_tick,
 }
 use upgradeability/delegate.{Delegated, delegated_to}
 use withdraw_zero.{accept_registration}
@@ -27,10 +28,10 @@ validator counter_logic(
       list.all(
         inputs,
         fn(input) {
-          carries_state_token(input) && validate_counter_tick(
+          carries_state_token(input) && spent_with_tick(
             self,
             input.output_reference,
-          )
+          ) && validate_counter_tick(self, input.output_reference)
         },
       ),
       list.all(mints, fn(policy) { validate_counter_genesis(self, policy) }),
