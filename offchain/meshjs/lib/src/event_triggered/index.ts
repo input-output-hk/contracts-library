@@ -1,32 +1,11 @@
 /**
- * Event-triggered assets (CIP-113 substandard scaffold) — MeshJS off-chain
- * submodule. See docs/explorations/event-triggered-assets.md.
+ * Event-triggered assets (tokenized bond) — MeshJS off-chain submodule.
+ * See docs/event-triggered-assets/spec.md.
+ *
+ * The builders compose with a deployed CIP-113 core; see `../cip113` for the
+ * deployment types and helpers they take.
  */
 
 export * from "./types";
-export {
-  instrumentStateToData,
-  eventAssetDatumToData,
-  instrumentDatumToData,
-  applyEventRedeemer,
-  graduateRedeemer,
-  retireRedeemer,
-} from "./datum";
-export {
-  eventTriggeredScript,
-  eventTriggeredScriptAddress,
-  eventTriggeredPolicyId,
-  buildIssueTx,
-  buildApplyEventTx,
-  buildGraduateTx,
-  buildRetireTx,
-  type IssueParams,
-  type ApplyEventParams,
-  type GraduateParams,
-  type RetireParams,
-} from "./event_triggered";
-export {
-  compiledCode as eventTriggeredCode,
-  validatorHash as eventTriggeredValidatorHash,
-  plutusVersion as eventTriggeredPlutusVersion,
-} from "./blueprint";
+export * from "./datum";
+export * from "./event_triggered";

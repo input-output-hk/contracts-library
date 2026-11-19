@@ -1,0 +1,66 @@
+//// Reference validator for the delegated `payment_staking_allow_list`
+//// withdrawal script (see `docs/smart-wallet/design.typ`): a payout must
+//// carry a payment credential listed in `allowed_payments` and an inline
+//// staking credential listed in `allowed_stakings`; either list left empty
+//// leaves its dimension unrestricted. Consumers may use it as-is or embed
+//// `only_allowed_recipients` in their own validators.
+
+use cardano/address.{Credential, Script}
+use cardano/assets.{AssetName}
+use cardano/certificate.{Certificate, RegisterCredential, UnregisterCredential}
+use cardano/transaction.{Transaction}
+use smart_wallet/withdrawal
+use smart_wallet/withdrawal_scripts/payment_staking_list_logic.{
+  only_allowed_recipients,
+}
+
+/// Delegated payment/staking allow-list script (withdraw-0). Requires every
+/// payout output — every output not at the wallet's payment credential — to
+/// carry a listed payment credential and a listed inline staking credential.
+validator payment_staking_allow_list(
+  wallet: Credential,
+  wallet_token_name: AssetName,
+  allowed_payments: List<Credential>,
+  allowed_stakings: List<Credential>,
+) {
+  publish(_redeemer: Data, certificate: Certificate, self: Transaction) {
+    when certificate is {
+      RegisterCredential { credential: Script(own_hash), .. } ->
+        withdrawal.stateless_data_valid(
+          withdrawal.own_withdrawal_data(
+            self,
+            wallet,
+            wallet_token_name,
+            own_hash,
+          ),
+        )
+      UnregisterCredential { credential: Script(own_hash), .. } ->
+        // only allow unregistration when this script is leaving a wallet, so it
+        // cannot be unregistered out of band (which would brick the wallet).
+        withdrawal.own_withdrawal_removed(
+          self,
+          wallet,
+          wallet_token_name,
+          own_hash,
+        )
+      _ -> fail
+    }
+  }
+
+  withdraw(_redeemer: Data, account: Credential, self: Transaction) {
+    expect Script(own_hash) = account
+    and {
+      withdrawal.own_withdrawal_stateless_unchanged(
+        self,
+        wallet,
+        wallet_token_name,
+        own_hash,
+      ),
+      only_allowed_recipients(self, wallet, allowed_payments, allowed_stakings),
+    }
+  }
+
+  else(_) {
+    fail
+  }
+}

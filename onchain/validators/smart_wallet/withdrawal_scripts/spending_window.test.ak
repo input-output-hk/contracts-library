@@ -1,0 +1,143 @@
+use aiken/crypto.{ScriptHash}
+use aiken/interval
+use cardano/address.{Credential, Script, from_script}
+use cardano/assets
+use cardano/certificate.{Certificate, RegisterCredential, UnregisterCredential}
+use cardano/transaction.{
+  InlineDatum, Input, Output, OutputReference, Transaction, placeholder,
+}
+use smart_wallet/types.{WalletDatum}
+use smart_wallet/withdrawal_scripts/spending_window
+use smart_wallet/withdrawal_scripts/spending_window_logic.{SpendingWindowState}
+
+const a = #"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+const wallet_policy =
+  #"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+
+const tx_id =
+  #"0000000000000000000000000000000000000000000000000000000000000000"
+
+const wallet_token = "wallet"
+
+fn nft() -> assets.Value {
+  assets.from_asset(wallet_policy, wallet_token, 1)
+}
+
+const window = 3_600_000
+
+fn wallet_output(spenders: Pairs<ScriptHash, Data>) -> Output {
+  Output {
+    address: from_script(wallet_policy),
+    value: nft(),
+    datum: InlineDatum(WalletDatum { spenders, depositors: [] }),
+    reference_script: None,
+  }
+}
+
+fn wallet_input(spenders: Pairs<ScriptHash, Data>) -> Input {
+  Input {
+    output_reference: OutputReference { transaction_id: tx_id, output_index: 0 },
+    output: wallet_output(spenders),
+  }
+}
+
+fn publish(redeemer: Data, certificate: Certificate, tx: Transaction) -> Bool {
+  spending_window.spending_window.publish(
+    Script(wallet_policy),
+    wallet_token,
+    window,
+    redeemer,
+    certificate,
+    tx,
+  )
+}
+
+fn withdraw(account: Credential, tx: Transaction) -> Bool {
+  spending_window.spending_window.withdraw(
+    Script(wallet_policy),
+    wallet_token,
+    window,
+    0,
+    account,
+    tx,
+  )
+}
+
+// ---------------------------------------------------------------- publish
+
+test publish_register_valid_initial_state() {
+  let data: Data = SpendingWindowState { last_upper: 0 }
+  publish(
+    0,
+    RegisterCredential { credential: Script(a), deposit: Never },
+    Transaction { ..placeholder, outputs: [wallet_output([Pair(a, data)])] },
+  )
+}
+
+test publish_register_rejects_bad_initial() fail {
+  let data: Data = SpendingWindowState { last_upper: 500 }
+  publish(
+    0,
+    RegisterCredential { credential: Script(a), deposit: Never },
+    Transaction { ..placeholder, outputs: [wallet_output([Pair(a, data)])] },
+  )
+}
+
+test publish_unregister_on_removal() {
+  let data: Data = SpendingWindowState { last_upper: 500 }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [wallet_input([Pair(a, data)])],
+    outputs: [wallet_output([])],
+  }
+  publish(0, UnregisterCredential { credential: Script(a), refund: Never }, tx)
+}
+
+test publish_unregister_rejects_when_kept() fail {
+  let data: Data = SpendingWindowState { last_upper: 500 }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [wallet_input([Pair(a, data)])],
+    outputs: [wallet_output([Pair(a, data)])],
+  }
+  publish(0, UnregisterCredential { credential: Script(a), refund: Never }, tx)
+}
+
+// ---------------------------------------------------------------- withdraw
+
+test withdraw_first_spend() {
+  let current: Data = SpendingWindowState { last_upper: 0 }
+  let next: Data = SpendingWindowState { last_upper: 2000 }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [wallet_input([Pair(a, current)])],
+    outputs: [wallet_output([Pair(a, next)])],
+    validity_range: interval.between(1000, 2000),
+  }
+  withdraw(Script(a), tx)
+}
+
+test withdraw_accepts_after_cooldown() {
+  let current: Data = SpendingWindowState { last_upper: 500 }
+  let next: Data = SpendingWindowState { last_upper: 3_700_000 }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [wallet_input([Pair(a, current)])],
+    outputs: [wallet_output([Pair(a, next)])],
+    validity_range: interval.between(3_600_500, 3_700_000),
+  }
+  withdraw(Script(a), tx)
+}
+
+test withdraw_rejects_cooldown() fail {
+  let current: Data = SpendingWindowState { last_upper: 500 }
+  let next: Data = SpendingWindowState { last_upper: 3_000_100 }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [wallet_input([Pair(a, current)])],
+    outputs: [wallet_output([Pair(a, next)])],
+    validity_range: interval.between(3_000_000, 3_000_100),
+  }
+  withdraw(Script(a), tx)
+}

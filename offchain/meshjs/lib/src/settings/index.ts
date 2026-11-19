@@ -20,10 +20,13 @@ export {
   settingsScriptAddress,
   buildLaunchTx,
   buildProposeTx,
+  proposalTiming,
+  DEFAULT_PROPOSE_TTL_MS,
   buildApplyTx,
   buildCloseTx,
   type MintParams,
   type ProposeParams,
+  type ProposalTiming,
   type ApplyParams,
   type CloseParams,
 } from "./settings";

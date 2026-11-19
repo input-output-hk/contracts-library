@@ -40,7 +40,7 @@ Every instance goes through the same cycle:
 stateDiagram-v2
     direction LR
     [*] --> Active: launch (applier)<br/>mints the Settings NFT
-    Active --> Proposed: propose (proposer)<br/>next = v, next_apply = now + delay
+    Active --> Proposed: propose (proposer)<br/>next = v, next_apply = upper + delay
     Proposed --> Proposed: propose (proposer)<br/>supersedes the pending pair
     Proposed --> Active: apply (applier)<br/>current = next, pair cleared
     Active --> [*]: close (applier)<br/>burns the NFT
@@ -52,7 +52,9 @@ stateDiagram-v2
   Minting requires spending the parameterized `seed_utxo`, which makes the
   instance one-shot: at most one Settings UTxO can ever exist per script.
 - **propose** — the proposer writes a pending pair
-  `(next, next_apply = now + apply_delay)` into the datum. It cannot touch
+  `(next, next_apply)` into the datum, with `next_apply >= upper + apply_delay`
+  (`upper` being the transaction's validity upper bound: it cannot land later,
+  so the delay can't be shortened by backdating). It cannot touch
   `current`, and a new proposal **supersedes** any pending one.
 - **apply** — once `now >= next_apply` (`now` being the transaction's validity
   lower bound), the applier promotes `next` to `current` and clears the pair.
@@ -162,9 +164,12 @@ await buildLaunchTx({
 
 ### 3. Propose
 
-The builder converts `now` (unix ms) to the enclosing slot for the validity
-lower bound and computes `nextApply = slotStart + applyDelay` with the same
-slot-start conversion the validator uses.
+The transaction is valid until `now + ttlMs` (default 10 minutes,
+`DEFAULT_PROPOSE_TTL_MS`). The builder converts that instant to the enclosing
+slot for the validity upper bound and computes `nextApply = slotStart +
+applyDelay` with the same slot-start conversion the validator uses
+(`proposalTiming` returns both). The delay counts from the end of the window,
+so a longer `ttlMs` also delays the apply.
 
 ```ts
 const settingsUtxo = /* fetch the NFT-bearing UTxO at scriptAddr */;
@@ -176,6 +181,7 @@ await buildProposeTx({
   datum: spentDatum,            // the Settings UTxO's current datum
   newValue,                     // proposed value (Data) — must differ from `current`
   now: Date.now(),
+  ttlMs: 10 * 60 * 1000,        // optional; the default
   outputIndex: 0,
   utxos: proposerUtxos,
   changeAddress: proposerAddress,
@@ -187,7 +193,7 @@ await buildProposeTx({
 ```
 
 Proposing always writes a **fresh** pending pair: it overwrites any pending
-proposal and resets the deadline to `now + apply_delay`.
+proposal and resets the deadline to `upper + apply_delay`.
 
 ### 4. Apply
 
@@ -295,10 +301,11 @@ await client
   .then((r) => r.sign())
   .then((s) => s.submit());
 
-// Propose: `now_ms` is the validity lower bound in unix ms and `since_slot`
-// the slot denoting the same instant; next_apply = now_ms + apply_delay
+// Propose: `until_slot` is the validity upper bound (the tx is invalid from it
+// on) and `until_ms` its start time in unix ms; next_apply = until_ms +
+// apply_delay
 await client
-  .propose({ new_value: value, now_ms: now, since_slot: slot, out_ix: 0 })
+  .propose({ new_value: value, until_ms: untilMs, until_slot: untilSlot, out_ix: 0 })
   .env(env)
   .resolve()
   .then((r) => r.sign())
@@ -344,10 +351,11 @@ and invoked via a withdraw-0 keyed by its reward address
 
 - **Proposals supersede each other.** A new `propose` overwrites the pending
   pair and resets the deadline — there is no proposal queue.
-- **The delay anchor is proposer-chosen.** `next_apply = now + apply_delay`
-  uses the propose transaction's validity lower bound, which the proposer
-  picks. The delay is a scheduling tool, not a hard real-time guarantee
-  against a malicious proposer (§6.a of the spec).
+- **The delay counts from the propose's upper bound.** The validator requires
+  `next_apply >= upper + apply_delay`, so a propose must set a validity upper
+  bound, and at least `apply_delay` always separates the proposal landing from
+  the apply. A proposer can only push the apply later, never sooner (§6.a of
+  the spec).
 - **The apply boundary is non-strict.** `now == next_apply` is accepted.
 - **Closing is irreversible.** The seed nonce is spent and the NFT burned —
   the same script hash can never host a second instance. Re-deploy with a new
