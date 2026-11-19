@@ -22,7 +22,7 @@ they can change without redeploying the wallet.
 > This guide only covers day-to-day usage.
 
 | Part | Where |
-|---|---|
+| --- | --- |
 | On-chain validator | [`onchain/validators/smart_wallet/`](../../onchain/validators/smart_wallet/) (+ composable predicates in [`onchain/lib/smart_wallet/`](../../onchain/lib/smart_wallet/)) |
 | MeshJS builders | [`offchain/meshjs/lib/src/smart_wallet/`](../../offchain/meshjs/lib/src/smart_wallet/) |
 | Tx3 protocol + client | [`offchain/tx3/smart_wallet/`](../../offchain/tx3/smart_wallet/) |
@@ -84,7 +84,7 @@ stateDiagram-v2
 ## Roles
 
 | Role | Credential | Powers |
-|---|---|---|
+| --- | --- | --- |
 | **Admin** | `admin` (script parameter) | Mint, `UpdatePermissions`, `Close` |
 | **Deposit scripts** | keys of `depositors` (datum field) | Validate and approve every `Deposit` |
 | **Members** | `members`/`threshold` (settings UTxO) | Sign a `Spend` |
@@ -157,7 +157,7 @@ the script hash, which is both the wallet NFT's policy id and the payment
 credential of the wallet address (the address has **no staking credential**):
 
 | Parameter | Meaning |
-|---|---|
+| --- | --- |
 | `seedUtxo` | One-shot mint nonce: the mint transaction must spend it |
 | `settingsPolicy` | Settings script hash (= settings NFT policy id) |
 | `settingsTokenName` | Settings NFT asset name (hex) |
@@ -263,6 +263,12 @@ await buildWalletDepositTx({
   network: "preprod",
 });
 ```
+
+With an empty `depositors` map, anyone can submit a deposit, including a no-op
+one or one that adds junk assets. A deposit consumes the wallet UTxO, so it can
+invalidate concurrent `Spend`, `UpdatePermissions` or `Close` transactions, and
+owners can remove unwanted assets in a later `Spend`. This is an accepted
+denial-of-service surface.
 
 ### 3. Spend
 
