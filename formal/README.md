@@ -21,15 +21,19 @@ formal/
 │   └── annotate-blaster-logs.awk
 ├── Formal.lean              # root; imports every contract aggregator
 └── Formal/
-    ├── Common.lean          # shared `validatorAccepts` / `validatorRejects`
-    └── Vesting/
-        ├── Linear.lean      # aggregator for the vesting/linear contract
-        └── Linear/
-            ├── Spec.lean          # pure model: `vested`, datum encoding (no UPLC)
-            ├── Script.lean        # imports the compiled spend validator
-            ├── Completeness.lean  # spec ⇒ accepts (§8)
-            ├── Soundness.lean     # accepts ⇒ spec (§9) + shared context scaffold
-            └── Robustness.lean    # rejection theorems incl. no-double-satisfaction
+    ├── Shared/
+    │   └── Common.lean      # shared `validatorAccepts` / `validatorRejects`
+    ├── LinearVesting.lean   # imports both linear-vesting proof suites
+    └── LinearVesting/
+        ├── Spec.lean          # vesting arithmetic and datum encoding
+        ├── Script.lean        # loads the compiled spending validator
+        ├── Completeness.lean  # spec ⇒ accepts (§8)
+        ├── Soundness.lean     # accepts ⇒ spec (§9) and shared context builders
+        ├── Robustness.lean    # rejection theorems
+        ├── SpecNew.lean       # specification for Claim and Cancel
+        ├── Cancel.lean        # bounded agreement for Cancel
+        ├── Claim.lean         # bounded agreement for Claim
+        └── Corollaries.lean   # consequences of the agreement theorems
 ```
 
 Each contract gets its own `Completeness`/`Soundness`/`Robustness` under its
@@ -66,7 +70,6 @@ dump UPLC → encode to flat → check proofs):
 
 ```bash
 cd formal
-just deps        # once: fetch Blaster + PlutusCore + CardanoLedgerApi (lake update)
 just verify      # build -> flats -> lake build (annotated)
 ```
 
@@ -76,10 +79,12 @@ Lean 4.24.0 and Z3 4.15.2 (provided by the dev shell).
 ```bash
 cd formal
 # (in `nix develop`, or with elan + z3 on PATH)
-lake update      # fetch Blaster + PlutusCore + CardanoLedgerApi
 just flats       # compile Aiken and generate Scripts/*.flat
 lake build       # type-check all modules and run every `blaster` proof
 ```
+
+Lake uses the dependency revisions in `lake-manifest.json`. The `just deps`
+recipe runs `lake update` when you intend to refresh those revisions.
 
 Git ignores the generated files under `Scripts/`. `lake build` requires them;
 run `just flats` before the first build and after changing the on-chain source.
@@ -119,5 +124,5 @@ These apply to any contract:
 
 ## Contracts
 
-- **vesting/linear** — see [`Formal/Vesting/Linear/README.md`](Formal/Vesting/Linear/README.md)
-  for its coverage tables and proof status.
+- The [linear-vesting README](Formal/LinearVesting/README.md) describes the
+  catalogue, proof coverage, and bounds of the Claim and Cancel theorems.
