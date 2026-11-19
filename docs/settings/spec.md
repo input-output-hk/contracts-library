@@ -137,7 +137,7 @@ Apply            (d, Some(d′), Some(t)), now ≥ t ────► (d′, None
 Close + Burn     (·, ·, ·) ──────────────────────────► ⊥
 ```
 
-**Value.** The Settings UTxO's value must contain **the NFT and nothing else but ADA**: exactly `1` of `(policy_id, settings_token_name)` and no other non-ADA asset. This is enforced on the launch output and on every continuation.
+**Value.** The Settings UTxO carries exactly `1` of `(policy_id, settings_token_name)` and no other non-ADA asset. Launch may fund it with any ADA amount. On every Propose or Apply continuation, the non-ADA assets must match the spent input exactly and the lovelace must be at least the input's amount; a continuation may add ADA but cannot remove it.
 
 ## 5. Transactions
 
@@ -177,7 +177,7 @@ This transaction deploys the **Settings UTxO**, which holds the main protocol pa
 |                    |                                                                                                                                                                                                                                                                                                                        |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Inputs**         | The settings UTxO.                                                                                                                                                                                                                                                                                                     |
-| **Outputs**        | One **continuation** at `out_ix`: address **equal to the spent input's address** (payment and staking part), value = ada + exactly the NFT, **inline datum**, no reference script. Datum = `SettingsDatum { current, next: Some(d), next_apply: Some(t) }` with `t ≥ upper + apply_delay`, `validate_datum(d)` and `d ≠ current`. |
+| **Outputs**        | One **continuation** at `out_ix`: address **equal to the spent input's address** (payment and staking part); value preserves the spent input's non-ADA assets exactly and has at least its lovelace (so it contains exactly the NFT and no other token); **inline datum**, no reference script. Datum = `SettingsDatum { current, next: Some(d), next_apply: Some(t) }` with `t ≥ upper + apply_delay`, `validate_datum(d)` and `d ≠ current`. |
 | **Redeemer**       | spend `Propose { out_ix }`.                                                                                                                                                                                                                                                                                            |
 | **Validity range** | Upper bound **finite**; `upper` = upper bound anchors the delay (§5).                                                                                                                                                                                                                                                  |
 | **Authorization**  | `propose_auth` satisfied.                                                                                                                                                                                                                                                                                              |
@@ -192,7 +192,7 @@ earliest apply time to `upper + apply_delay`; the proposer may choose a later
 |                    |                                                                                                                                                     |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Inputs**         | The settings UTxO, whose datum has `next = Some(d)` and `next_apply = Some(t)`.                                                                     |
-| **Outputs**        | One **continuation** at `out_ix`, same form as §5.b. Datum = `SettingsDatum { current: d, next: None, next_apply: None }` with `validate_datum(d)`. |
+| **Outputs**        | One **continuation** at `out_ix`, same form as §5.b, including preservation of the input's non-ADA assets and at least its lovelace. Datum = `SettingsDatum { current: d, next: None, next_apply: None }` with `validate_datum(d)`. |
 | **Redeemer**       | spend `Apply { out_ix }`.                                                                                                                           |
 | **Validity range** | Lower bound **finite** and `now >= t` (§5).                                                                                                         |
 | **Authorization**  | `apply_auth` satisfied.                                                                                                                             |
@@ -231,6 +231,10 @@ Attacks the protocol defends against, each backed by the invariants of §6.b:
 - **NFT detachment / state theft.** Continuations must keep the NFT at the exact
   settings address; an attacker cannot spend the settings UTxO and route the NFT
   elsewhere, nor park a "state" UTxO without it. (I3)
+- **Continuation value reduction.** Propose and Apply must preserve the input's
+  lovelace (or add to it) while retaining exactly its non-ADA assets, so neither
+  authorized role can siphon ADA from the Settings UTxO during a state change.
+  (I3, I9)
 - **Continuation tampering.** The continuation datum must equal the expected
   `SettingsDatum` exactly: a proponent cannot rewrite `current`, and an applier
   cannot apply a different `next` than the one pending. (I7)
@@ -306,6 +310,9 @@ Attacks the protocol defends against, each backed by the invariants of §6.b:
   seed input (at launch), the mint under its own policy, the single output named
   by `out_ix`, the validity range, and the required authorization. It never
   asserts total input/output counts or unrelated value.
+- **I9 — Continuation value preservation.** Propose and Apply continuations
+  preserve the spent input's non-ADA assets exactly and carry at least its
+  lovelace. They may add lovelace, but cannot remove it.
 
 ### 6.c Completeness — when the validator returns `True` (must-accept)
 
@@ -345,8 +352,9 @@ Returns `True` if **all** of:
 - **P2 (input datum).** The spent input carries a resolvable
   `SettingsDatum { current, .. }` (its `next`/`next_apply` are unconstrained).
 - **P3 (continuation form).** The output at `out_ix` exists; its address equals
-  the spent input's address exactly; its value contains exactly the NFT and no
-  other multi-asset; its datum is **inline**; no reference script.
+  the spent input's address exactly; its non-ADA assets match the spent input
+  exactly and its lovelace is at least the input's (therefore it contains exactly
+  the NFT and no other multi-asset); its datum is **inline**; no reference script.
 - **P4 (continuation datum).** That datum is
   `SettingsDatum { current, next: Some(d), next_apply: Some(t) }` with
   `t ≥ upper + apply_delay`, `validate_datum(d)` and `d ≠ current`.
@@ -360,7 +368,8 @@ Returns `True` if **all** of:
 - **A2 (pending pair).** The spent datum is
   `SettingsDatum { next: Some(d), next_apply: Some(t), .. }`.
 - **A3 (delay).** `now >= t`.
-- **A4 (continuation form).** As P3.
+- **A4 (continuation form).** As P3, including preservation of the spent input's
+  lovelace and exact non-ADA assets.
 - **A5 (continuation datum).** That datum is
   `SettingsDatum { current: d, next: None, next_apply: None }` with
   `validate_datum(d)`.
@@ -412,11 +421,13 @@ the following holds:
 - **R7 (invalid setting value).** Redeemer is `Mint`, `Propose`, or `Apply` and
   `validate_datum` is false for the `current` (launch) or proposed `next`.
   _(¬M4, ¬P4, ¬A5)_
-- **R8 (NFT detachment, duplication, or stuffing).** The launch or continuation
-  output's value does not contain exactly the NFT and no other multi-asset; or
-  the mint is not exactly `(settings_token_name, 1)` at launch / `-1` at close;
-  or the continuation address does not match the spent input's address (launch:
-  payment credential not `Script(policy)`). _(¬M1, ¬M3, ¬P3, ¬A4, ¬C2, I2, I3)_
+- **R8 (NFT detachment, duplication, stuffing, or value reduction).** The launch
+  or continuation output's non-ADA value does not contain exactly the NFT and no
+  other multi-asset; or a Propose/Apply continuation has less lovelace than its
+  spent input; or the mint is not exactly `(settings_token_name, 1)` at launch /
+  `-1` at close; or the continuation address does not match the spent input's
+  address (launch: payment credential not `Script(policy)`).
+  _(¬M1, ¬M3, ¬P3, ¬A4, ¬C2, I2, I3, I9)_
 - **R9 (non-inline datum or reference script on the output).** The launch or
   continuation output's datum is not inline, or the output carries a reference
   script. _(¬M3, ¬P3, ¬A4, §6)_

@@ -49,8 +49,12 @@ fn value_b() -> Data {
   constr_data(0, [i_data(7)])
 }
 
+fn value_nft_with_lovelace(lovelace: Int) -> assets.Assets {
+  assets.from_lovelace(lovelace) |> assets.add(policy, token, 1)
+}
+
 fn value_nft() -> assets.Assets {
-  assets.from_lovelace(2_000_000) |> assets.add(policy, token, 1)
+  value_nft_with_lovelace(2_000_000)
 }
 
 fn datum(current: Data) -> SettingsDatum {
@@ -110,7 +114,6 @@ fn spend_on_tx(
     VerificationKey(proposer),
     VerificationKey(applier),
     delay,
-    token,
     Some(input_datum),
     redeemer,
     seed_ref(),
@@ -126,12 +129,30 @@ fn spend(
   at: Int,
   signers: List<ByteArray>,
 ) -> Bool {
+  spend_with_value(
+    redeemer,
+    input_datum,
+    output_datum,
+    value_nft(),
+    at,
+    signers,
+  )
+}
+
+fn spend_with_value(
+  redeemer: SpendRedeemer,
+  input_datum: SettingsDatum,
+  output_datum: SettingsDatum,
+  output_value: assets.Assets,
+  at: Int,
+  signers: List<ByteArray>,
+) -> Bool {
   spend_on_tx(
     redeemer,
     input_datum,
     spend_tx(
       [settings_in(input_datum)],
-      [settings_out(output_datum, value_nft())],
+      [settings_out(output_datum, output_value)],
       at,
       signers,
     ),
@@ -346,6 +367,39 @@ test rejects_propose_tampering() {
   )
 }
 
+test rejects_propose_skimmed_lovelace() fail {
+  spend_with_value(
+    Propose { out_ix: 0 },
+    datum(value_a()),
+    proposed(),
+    value_nft_with_lovelace(1_500_000),
+    now,
+    [proposer],
+  )
+}
+
+test propose_ok_with_extra_lovelace() {
+  spend_with_value(
+    Propose { out_ix: 0 },
+    datum(value_a()),
+    proposed(),
+    value_nft_with_lovelace(3_000_000),
+    now,
+    [proposer],
+  )
+}
+
+test rejects_propose_foreign_token_stuffing() fail {
+  spend_with_value(
+    Propose { out_ix: 0 },
+    datum(value_a()),
+    proposed(),
+    value_nft() |> assets.add(other_policy, "foreign", 1),
+    now,
+    [proposer],
+  )
+}
+
 test rejects_propose_unbounded_upper() fail {
   let d = datum(value_a())
   spend_on_tx(
@@ -440,6 +494,28 @@ test rejects_apply_premature_or_tampered() {
   )
 }
 
+test rejects_apply_skimmed_lovelace() fail {
+  spend_with_value(
+    Apply { out_ix: 0 },
+    pending(),
+    datum(value_b()),
+    value_nft_with_lovelace(1_500_000),
+    now,
+    [applier],
+  )
+}
+
+test apply_ok_with_extra_lovelace() {
+  spend_with_value(
+    Apply { out_ix: 0 },
+    pending(),
+    datum(value_b()),
+    value_nft_with_lovelace(3_000_000),
+    now,
+    [applier],
+  )
+}
+
 test rejects_apply_without_pending() fail {
   spend(Apply { out_ix: 0 }, datum(value_a()), datum(value_a()), now, [applier])
 }
@@ -523,7 +599,6 @@ test prop_propose_requires_minimum_delay(
     VerificationKey(proposer),
     VerificationKey(applier),
     delay_ms,
-    token,
     Some(input_datum),
     Propose { out_ix: 0 },
     seed_ref(),

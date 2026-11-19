@@ -5,7 +5,7 @@ use aiken/collection/dict
 use aiken/interval.{Finite}
 use authorization.{is_authorized}
 use cardano/address.{Credential, Script}
-use cardano/assets.{AssetName}
+use cardano/assets
 use cardano/transaction.{OutputReference, Transaction, find_input}
 use settings/types.{SettingsDatum}
 use settings/utils.{expect_continuation}
@@ -23,7 +23,6 @@ pub fn validate_propose(
   out_ix: Int,
   own_ref: OutputReference,
   self: Transaction,
-  settings_token_name: AssetName,
   validate_datum: fn(Data) -> Bool,
 ) {
   let Transaction { inputs, outputs, validity_range, .. } = self
@@ -33,13 +32,7 @@ pub fn validate_propose(
   expect Some(input_datum) = datum
   let SettingsDatum { current, .. } = input_datum
 
-  let cont_datum = expect_continuation(
-    inputs,
-    outputs,
-    own_ref,
-    out_ix,
-    settings_token_name,
-  )
+  let cont_datum = expect_continuation(inputs, outputs, own_ref, out_ix)
 
   let correct_datum = {
     expect cont_datum: SettingsDatum = cont_datum
@@ -64,7 +57,6 @@ pub fn validate_apply(
   out_ix: Int,
   own_ref: OutputReference,
   self: Transaction,
-  settings_token_name: AssetName,
   validate_datum: fn(Data) -> Bool,
 ) {
   let Transaction { inputs, outputs, validity_range, .. } = self
@@ -78,13 +70,7 @@ pub fn validate_apply(
   expect Some(next_apply_time) = next_apply
   let correct_apply_time = now >= next_apply_time
 
-  let cont_datum = expect_continuation(
-    inputs,
-    outputs,
-    own_ref,
-    out_ix,
-    settings_token_name,
-  )
+  let cont_datum = expect_continuation(inputs, outputs, own_ref, out_ix)
 
   let correct_datum = {
     let expected_datum: Data = SettingsDatum {

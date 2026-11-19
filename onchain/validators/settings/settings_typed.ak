@@ -30,7 +30,6 @@ validator settings_typed(
       propose_auth,
       apply_auth,
       apply_delay,
-      settings_token_name,
       datum,
       redeemer,
       own_ref,
