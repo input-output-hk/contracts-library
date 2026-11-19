@@ -1,160 +1,144 @@
-/-
-Linear vesting — pure-Lean specification model. No UPLC here.
-
-Two layers:
-  1. The schedule arithmetic (`vested`/`required`) and its properties — spec
-     §3.3 and the §9 boundary lemmas B1-B3. These are self-contained and
-     proved by `blaster`.
-  2. The datum/redeemer encoding and the "valid instance / valid transition"
-     relations the Completeness/Soundness/Robustness proofs are stated against.
-     The encodings mirror `onchain/lib/vesting/types.ak` exactly.
-
-See `docs/vesting/spec.md`.
--/
 import Blaster
 import PlutusCore.UPLC
 import CardanoLedgerApi.V3
 
 namespace Formal.LinearVesting.Spec
 
-open PlutusCore.Data (Data)
-open PlutusCore.ByteString (ByteString)
+open PlutusCore.Data
+open CardanoLedgerApi.IsData.Class
+open CardanoLedgerApi.V1.Credential
+open CardanoLedgerApi.V1.Value
+open CardanoLedgerApi.V1.Time
+open CardanoLedgerApi.V3
+open CardanoLedgerApi.V3.Contexts
 
-/-! ## 1. Schedule arithmetic (spec §3.3) -/
-
-/-- Quantity of a single asset vested by `now`, given original total `T` and
-schedule `[start, finish]`. Mirrors spec §3.3. Floored (Int division is floor
-on the non-negative domain this is used in). -/
 def vested (T start finish now : Int) : Int :=
   if now ≤ start then 0
   else if finish ≤ now then T
   else T * (now - start) / (finish - start)
 
-/-- Remainder of one asset that must stay locked after a claim at `now`. -/
 def required (T start finish now : Int) : Int :=
   T - vested T start finish now
 
-/-- **B3 (pre-start floor).** Spec §9 B3, §5.2. -/
 theorem vested_preStart (T start finish now : Int) (h : now ≤ start) :
     vested T start finish now = 0 := by
   unfold vested
   blaster
 
-/-- **Full vesting ⇒ free.** Spec §8.2, I4. -/
 theorem vested_full (T start finish now : Int)
     (hs : start < finish) (h : finish ≤ now) :
     vested T start finish now = T := by
   unfold vested
   blaster
 
-/-- **B1 (floor / no over-release).** Spec §9 B1. -/
 theorem vested_le_total (T start finish now : Int)
     (hT : 0 ≤ T) (hs : start < finish) :
     vested T start finish now ≤ T := by
   unfold vested
   blaster
 
-/-- Required remainder is non-negative — the dual of B1. -/
 theorem required_nonneg (T start finish now : Int)
     (hT : 0 ≤ T) (hs : start < finish) :
     0 ≤ required T start finish now := by
   unfold required vested
   blaster
 
-/-- A claim never releases a negative amount. -/
 theorem vested_nonneg (T start finish now : Int)
     (hT : 0 ≤ T) (hs : start < finish) :
     0 ≤ vested T start finish now := by
   unfold vested
   blaster
 
-/-- **B2 (monotonicity).** Spec §9 B2, §5.2. -/
 theorem vested_mono (T start finish n₁ n₂ : Int)
     (hT : 0 ≤ T) (hs : start < finish) (h : n₁ ≤ n₂) :
     vested T start finish n₁ ≤ vested T start finish n₂ := by
   unfold vested
   blaster
 
-/-! ## 2. Datum / redeemer encoding (spec §3.1-§3.2)
-
-Encodings mirror `onchain/lib/vesting/types.ak`:
-- `Credential`     : `VerificationKey h → Constr 0 [B h]`, `Script h → Constr 1 [B h]`
-- `VestedAsset`    : `Constr 0 [B policy, B name, I total]`
-- `VestingDatum`   : `Constr 0 [beneficiary, locker, vesting, start, end, recovery]`
-- `VestingRedeemer`: `Claim = Constr 0 []`, `Cancel = Constr 1 []`
--/
-
-/-- A pluggable authorization credential (spec §2, `authorization.ak`). -/
-inductive Cred where
-  | key (hash : ByteString)
-  | script (hash : ByteString)
-
-def credData : Cred → Data
-  | .key h    => Data.Constr 0 [Data.B h]
-  | .script h => Data.Constr 1 [Data.B h]
-
 structure VestedAsset where
-  policy : ByteString
-  name   : ByteString
+  policy : CurrencySymbol
+  name   : TokenName
   total  : Int
 
 def assetData (a : VestedAsset) : Data :=
-  Data.Constr 0 [Data.B a.policy, Data.B a.name, Data.I a.total]
+  Data.Constr 0 [IsData.toData a.policy, IsData.toData a.name, Data.I a.total]
 
 structure VestingDatum where
-  beneficiary  : Cred
-  locker       : Cred
+  beneficiary  : Credential
+  locker       : Credential
   vesting      : List VestedAsset
-  startTime    : Int
-  endTime      : Int
-  recoveryTime : Int
+  startTime    : POSIXTime
+  endTime      : POSIXTime
+  recoveryTime : POSIXTime
 
 def datumData (d : VestingDatum) : Data :=
   Data.Constr 0
-    [ credData d.beneficiary,
-      credData d.locker,
+    [ IsData.toData d.beneficiary,
+      IsData.toData d.locker,
       Data.List (d.vesting.map assetData),
       Data.I d.startTime,
       Data.I d.endTime,
       Data.I d.recoveryTime ]
 
-def claimRedeemer : Data := Data.Constr 0 []
-def cancelRedeemer : Data := Data.Constr 1 []
+inductive VestingRedeemer where
+  | claim
+  | cancel
 
-/-! ## 3. Spec relations the property proofs are stated against -/
+def redeemerData : VestingRedeemer → Data
+  | .claim  => Data.Constr 0 []
+  | .cancel => Data.Constr 1 []
 
-/-- Well-formed schedule (spec I7 / C0): `start < end < recovery`. -/
-def validSchedule (d : VestingDatum) : Prop :=
-  d.startTime < d.endTime ∧ d.endTime < d.recoveryTime
+def validityLowerBound (range : Data) : Option LowerBound :=
+  match (IsData.fromData range : Option POSIXTimeRange) with
+  | some r => some r.ivFrom
+  | none => none
 
-/-! ## 4. Concrete datum fixtures (shared by the proof modules) -/
+def authorized (c : Credential) (info : TxInfo) : Bool :=
+  match c with
+  | .PubKeyCredential h => txSignedBy h info
+  | .ScriptCredential _ => credentialInWithdrawals c info.txInfoWdrl
 
-/-- Fully general single-asset datum: symbolic identities, total, AND schedule
-bounds (key-auth locker). -/
-def dSched (bene policy name : ByteString)
-    (total start finish recovery : Int) : VestingDatum :=
-  { beneficiary := .key bene,
-    locker := .key "locker_key_hash",
-    vesting := [{ policy := policy, name := name, total := total }],
-    startTime := start, endTime := finish, recoveryTime := recovery }
+def claimOk (d : VestingDatum) (own : TxOut) (info : TxInfo) (now : POSIXTime) : Bool :=
+  let ownCred := own.txOutAddress.addressCredential
+  let inline : OutputDatum := .OutputDatum (datumData d)
+  let atScriptWithDatum (o : TxOut) : Bool :=
+    o.txOutAddress.addressCredential == ownCred && o.txOutDatum == inline
+  let k := (info.txInfoInputs.filter (fun i => atScriptWithDatum i.txInInfoResolved)).length
+  let conts := info.txInfoOutputs.filter atScriptWithDatum
+  let holdsRequired (o : TxOut) : Bool :=
+    d.vesting.all (fun a =>
+      valueOf a.policy a.name o.txOutValue ≥ required a.total d.startTime d.endTime now)
+  d.startTime < d.endTime &&
+  authorized d.beneficiary info &&
+  own.txOutDatum == inline &&
+  (now ≥ d.endTime || (k ≤ conts.length && conts.all holdsRequired))
 
-/-- Symbolic identities and total; fixed schedule, key-auth locker. -/
-def dGen (bene policy name : ByteString) (total : Int) : VestingDatum :=
-  dSched bene policy name total 1000 2000 3000
+def cancelOk (d : VestingDatum) (info : TxInfo) (low : LowerBound) : Bool :=
+  let afterRecovery : Bool :=
+    match low with
+    | .FiniteLowerBound t true  => d.recoveryTime < t
+    | .FiniteLowerBound t false => d.recoveryTime ≤ t
+    | .InfiniteLowerBound .NegInf => false
+    | .InfiniteLowerBound .PosInf => true
+  d.startTime < d.endTime && d.endTime < d.recoveryTime &&
+  authorized d.locker info &&
+  afterRecovery
 
-/-- Concrete identities, symbolic total. -/
-def dWithTotal (total : Int) : VestingDatum :=
-  dGen "beneficiary_key_hash" "policyA" "assetA" total
+def specAccepts (d : VestingDatum) (r : VestingRedeemer) (ctx : ScriptContext) : Bool :=
+  let info := ctx.scriptContextTxInfo
+  match ctx.scriptContextScriptInfo, validityLowerBound info.txInfoValidRange with
+  | .SpendingScript ref _, some low =>
+      match r with
+      | .claim =>
+          match low, resolveInput ref info.txInfoInputs with
+          | .FiniteLowerBound now _, some own => claimOk d own.txInInfoResolved info now
+          | _, _ => false
+      | .cancel => cancelOk d info low
+  | _, _ => false
 
-/-- The fully fixed datum (total 100), used by the concrete-instance theorems. -/
-def dConcrete : VestingDatum := dWithTotal 100
-
-/-- Like `dConcrete` but the beneficiary is a **script** credential `bhash`
-(authorized via a withdrawal, not a signature). -/
-def dScript (bhash : ByteString) : VestingDatum :=
-  { beneficiary := .script bhash,
-    locker := .key "locker_key_hash",
-    vesting := [{ policy := "policyA", name := "assetA", total := 100 }],
-    startTime := 1000, endTime := 2000, recoveryTime := 3000 }
+def TxSane (d : VestingDatum) (r : VestingRedeemer) (ctx : ScriptContext) : Prop :=
+  validScriptContext ctx = true ∧
+  ctx.scriptContextRedeemer = redeemerData r ∧
+  ∃ ref, ctx.scriptContextScriptInfo = .SpendingScript ref (some (datumData d))
 
 end Formal.LinearVesting.Spec

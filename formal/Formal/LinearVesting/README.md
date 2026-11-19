@@ -1,101 +1,156 @@
-# vesting/linear — formal proofs
+# Linear vesting proofs
 
-Machine-checked proofs for the **linear vesting** contract, against the compiled
-validator. See the spec [`spec.md`](../../../docs/vesting/spec.md)
-(the source of truth, with §8 completeness / §9 soundness clauses) and the
-on-chain types [`types.ak`](../../../onchain/lib/vesting/types.ak). For the
-toolchain, build, and general `blaster` notes, see the
-[`formal/` README](../../README.md).
+The Milestone 1.2 proofs target the linear-vesting spending validator from
+commit `d629dce7`, with script hash
+`95da21788eb1f59f51aad9669eb8c8b7081ab618c1f29b871925894a`.
+The [validator metadata](validator-metadata.json) records the source revision
+and compiled bytes. [M1.2 vesting specification](https://github.com/no-witness-labs/contracts-library/blob/28bfe6087d7313617c34b4fc977db10b681c85c4/docs/vesting/spec.md)
 
-For the milestone 1.2 review scope and checklist, see
-[issue #12](https://github.com/no-witness-labs/contracts-library/issues/12).
+## Approach
 
-## Validator snapshot
+`Spec.lean` defines `specAccepts d r ctx` to decide whether the model accepts a
+transaction.
+The proofs have three parts.
 
-[`validator-metadata.json`](validator-metadata.json) records the upstream source
-snapshot. The CBOR and compiler details come from `onchain/plutus.json` at the
-recorded commit. This record does not establish a reproduced build or a match
-with the Lean `.flat` proof artifact.
+1. **Agreement** (Blaster, bounded): the compiled validator accepts exactly what the spec accepts, on the transaction shapes in `TxBuilder.lean`.
+   Each direction is separate: `Sound` (validator accepts ⇒ spec accepts) and `Complete` (spec accepts ⇒ validator accepts).
+2. **Spec properties** (plain Lean, unbounded): safety, acceptance, and chains of claims, proved about `specAccepts` for every transaction.
+3. **Corollaries and tests**: spec properties carried to the validator through agreement, and fixed transactions run through both.
+
+To carry a rejection result to an updated validator, prove `Sound` for its
+compiled bytes under the corresponding hypotheses. Acceptance results require
+the corresponding completeness proof.
 
 ## Modules
 
-- `Spec.lean` — the pure model (`vested`/`required`, datum/redeemer encoding,
-  shared datum fixtures); no UPLC.
-- `Script.lean` — loads the compiled `spend` validator (`spendValidator`).
-- `Completeness.lean` — `spec ⇒ accepts` (§8).
-- `Soundness.lean` — `accepts ⇒ spec` (§9), plus the shared context builders.
-- `Robustness.lean` — rejection theorems (§9 R-clauses, §5.1).
+| Module | Contents | Checked by |
+| --- | --- | --- |
+| `Spec` | `vested`, `required`, the datum and redeemer encodings, `specAccepts` | Blaster (arithmetic lemmas) |
+| `Script` | the compiled validator, `spendValidator` | |
+| `TxBuilder` | the transaction shapes, and `Sound`, `Complete`, `Agrees` | |
+| `CancelSound`, `CancelComplete` | agreement on cancels | Blaster |
+| `ClaimSound`, `ClaimComplete` | agreement on claims, one theorem per shape | Blaster |
+| `Robustness` | exact conditions (`claim_iff`, `cancel_iff`), `*_requires_*`, `reject_*` | Lean kernel |
+| `Functionality` | `accept_*` | Lean kernel |
+| `MultiTx` | chains of claims, `chain_*` | Lean kernel |
+| `Corollaries` | spec properties carried to `spendValidator` | Lean and Blaster |
+| `Tests` | transaction examples for the spec and validator | Blaster |
 
-## Standard instance
+## Transaction shapes
 
-Where a theorem fixes values, the standard instance is: schedule
-`start/end/recovery = 1000/2000/3000`, asset total 100, `now` in the open window
-`(1000, 2000)`, beneficiary/locker as key credentials. The encodings mirror
-`types.ak` and `cardano/address` exactly. Coverage for this single-asset
-instance is comprehensive across all three directions.
+Each row identifies a pair of soundness and completeness theorems.
+All five Claim shapes vest exactly one asset. The theorem statements and
+constructors specify the validity range and the remaining context fields.
 
-### Spec arithmetic (`Spec.lean`, no UPLC)
+| Theorem pair | Inputs and outputs | List bounds |
+| --- | --- | --- |
+| `cancel_sound`, `cancel_complete` | Vesting input followed by arbitrary inputs, with arbitrary outputs | At most two signatories for a key locker, or at most two withdrawals for a script locker |
+| `claim_sound`, `claim_complete` | Key beneficiary, one vesting input and up to two continuations | At most two signatories |
+| `claim_sound_script`, `claim_complete_script` | Script beneficiary, one vesting input and up to two continuations | At most one withdrawal |
+| `claim_sound_batch`, `claim_complete_batch` | Key beneficiary, two vesting inputs sharing a datum and up to three continuations | At most two signatories |
+| `claim_sound_typical`, `claim_complete_typical` | Key beneficiary, one vesting input, one wallet input, a key payout and up to two continuations | At most two signatories |
+| `claim_sound_any_out`, `claim_complete_any_out` | Key beneficiary, one vesting input and one output at an arbitrary address | At most two signatories |
 
-| Theorem | Spec clause |
-|---|---|
-| `vested_preStart` | B3 (nothing vests before `start`) |
-| `vested_full` | I4 (all vested at/after `end`) |
-| `vested_le_total` | B1 (no over-release) |
-| `vested_nonneg`, `required_nonneg` | `vested ∈ [0, total]` |
-| `vested_mono` | B2 (`vested` non-decreasing in `now`) |
+See [Claim soundness](ClaimSound.lean), [Claim completeness](ClaimComplete.lean),
+[Cancel soundness](CancelSound.lean), [Cancel completeness](CancelComplete.lean),
+and [the transaction constructors](TxBuilder.lean).
 
-### Completeness — `spec ⇒ accepts` (§8)
+## Address matching in the frozen snapshot
 
-| Theorem | Spec clause |
-|---|---|
-| `claim_accept_generic_schedule` | C0–C4, I3 (general single-asset partial claim: symbolic identities, total, **schedule**, `now`, amount) |
-| `claim_accept_anytime` | C0–C4 across all `now`, symbolic ada (full-retention) |
-| `claim_complete_full` | §8.2, I4 (full claim once `now ≥ end`) |
-| `claim_accept_script_auth` | C1 (script beneficiary via withdraw-0) |
-| `claim_accept_two_inputs` | §5.1 (correctly funded batch accepted) |
-| `cancel_complete` | C6–C8 (authorized cancel after recovery) |
+The frozen validator groups continuations by payment credential and datum.
+`MultiTx.chain_address_fixed` therefore states equality of payment credentials
+along a linked chain of claims accepted by the model. IO later changed the
+validator to require the full address and datum. The hash above identifies the
+artifact covered by this proof suite. [Frozen code](https://github.com/input-output-hk/contracts-library/blob/d629dce7ef1a6af883215c076adc964bd37152a1/onchain/lib/vesting/linear.ak#L124-L132) · [Chain theorem](MultiTx.lean#L163-L166) · [Upstream fix](https://github.com/input-output-hk/contracts-library/pull/72)
 
-### Robustness — rejection (§9 R-clauses, §5.1)
+## Properties
 
-| Theorem | Spec clause |
-|---|---|
-| `reject_unauthorized_claim_no_sig`, `reject_wrong_signer` | R1 (unauthorized claim) |
-| `reject_over_release_concrete` | R2 (over-release) |
-| `reject_datum_tamper_concrete` | R3 (schedule/datum tampering) |
-| `reject_datum_hash_input` | R4 (datum-hash input) |
-| `reject_premature_cancel` | R6 (cancel before recovery, strict) |
-| `reject_unauthorized_cancel` | I5 (unauthorized cancel) |
-| `reject_script_no_withdrawal` | R1 (script beneficiary, no withdrawal) |
-| `no_double_satisfaction` | §5.1, I2 (`k`-scaling: one continuation cannot satisfy two inputs) |
+[`properties.json`](properties.json) lists the active properties and their
+theorem references. The model theorems describe `specAccepts`. The bridge to
+compiled-validator behavior is the applicable agreement theorem with its
+transaction-shape hypotheses. Concrete checks in `Tests.lean` exercise the
+specified inputs.
 
-### Soundness — `accepts ⇒ spec` (§9)
+The Blaster proofs trust Z3 through `Blaster.Tactic.blasterProven`.
+The `Robustness`, `Functionality` and `MultiTx` modules use standard Lean axioms.
+The chain results assume each step spends a continuation from the previous
+step and that the model accepts each step. [Chain definition](MultiTx.lean#L105-L123)
 
-| Theorem | Spec clause |
-|---|---|
-| `claim_sound_partial_concrete` | I2 + I3 (acceptance forces datum reproduction and `≥ required`) |
-| `cancel_sound` | I5 / C7 (acceptance forces `now > recovery_time`) |
+### Earlier proof target and property IDs
 
-## Not proved (documented `∀`-targets, left as `sorry`)
+The four earlier modules live under `Formal.LinearVesting.Old`. After
+generating the same vesting fixture, run this command from `formal/` to check
+all four through the dependencies of the final module.
 
-These surface as build warnings (`warn.sorry` is enabled). Each is the fully
-`∀`-quantified version of a proved concrete theorem
-(`claim_complete_partial`, `claim_sound_partial`, `reject_unauthorized_claim`,
-`reject_over_release`, `reject_datum_tamper`), kept to document the intended
-general statement.
+```sh
+lake build +Formal.LinearVesting.Old.Robustness
+```
 
-**Why they are not proved:** the `∀` over an unconstrained
-datum/schedule/amounts/addresses makes `blaster` symbolically execute the CEK
-machine over an unbounded `ScriptContext`, which does not terminate. The concrete
-instances discharge the same properties for the standard instance; the spec's
-§8/§9 carry the general statements in prose.
+A successful run ends with `Build completed successfully`. The table maps the
+earlier draft’s IDs to related entries in the current catalogue. Apply the
+statement and hypotheses of each cited theorem when comparing coverage.
+[Earlier property list at `2fbe7ac`](https://github.com/no-witness-labs/contracts-library/blob/2fbe7ac4c4ed8821aa4a03966ac0a949bc25ecf1/formal/Formal/LinearVesting/properties.json)
 
-The continuation datum is kept **arbitrary** in the soundness and robustness
-theorems, so the proofs *derive* datum-reproduction rather than assume it.
+| Earlier ID | Earlier property | Related current IDs |
+| --- | --- | --- |
+| LV-001 to LV-004 | Arithmetic | LV-001 to LV-004 |
+| LV-005 | Key-authorized partial claim | LV-006, LV-018 |
+| LV-006 | Script-authorized partial claim | LV-006, LV-018 |
+| LV-007 | Two funded continuations | LV-006, LV-013, LV-018 |
+| LV-008 | Full claim | LV-019 |
+| LV-009 | Authorized cancellation | LV-020 |
+| LV-010 | Partial claims preserve datum and remainder | LV-010, LV-011 |
+| LV-011 | Accepted cancellation occurs after recovery | LV-016 |
+| LV-012 | Unauthorized key claim rejected | LV-009 |
+| LV-013 | Underfunded continuation rejected | LV-010 |
+| LV-014 | Changed datum rejected | LV-011 |
+| LV-015 | Hashed input datum rejected | LV-012 |
+| LV-016 | Script claim without a withdrawal rejected | LV-009 |
+| LV-017 | Premature cancellation rejected | LV-016 |
+| LV-018 | Unauthorized cancellation rejected | LV-015 |
+| LV-019 | One continuation for two inputs rejected | LV-013 |
+| LV-020 | Merged continuation rejected | LV-013 |
+| LV-021 | Underfunded batch rejected | LV-013 |
 
-## Remaining work
+## Reproduce the cancellation boundary
 
-- **Multi-asset bundles** (`vesting` of length > 1): structural/unbounded, so
-  likely only feasible at fixed small lengths.
-- **Unified `∀` statements**: the `sorry` targets above; would need a proof
-  strategy beyond direct symbolic execution (e.g. lemmas about the validator's
-  structure).
+Use a checkout of the M1.2 branch that contains the frozen validator above.
+Follow the [toolchain setup](../../README.md#build), including Aiken
+`v1.1.22+39d6b04`, Lean 4.24.0 and Z3 4.15.2.
+
+1. Run the positive and expected-rejection Aiken tests from `onchain/`.
+
+   ```sh
+   aiken check --seed 20261119 --match-tests 'vesting/linear.{cancel_after_recovery_ok,rejects_cancel_before_recovery}'
+   ```
+
+   Both tests should pass. The second passes when the validator rejects the
+   premature cancellation. [Aiken test fixtures](../../../onchain/lib/vesting/linear.test.ak#L378-L388)
+
+2. Prepare the frozen fixture and build the Lean examples from `formal/`.
+
+   ```sh
+   just vesting-snapshot
+   lake build +Formal.LinearVesting.Tests
+   ```
+
+   The recipe verifies the script hash above and writes
+   `Scripts/linear_vesting_spend.flat`. Lake should report a successful build.
+
+3. Inspect the compiled-validator results from `formal/`.
+
+   ```sh
+   lake env lean --stdin <<'LEAN'
+   import Formal.LinearVesting.Tests
+   #check Formal.LinearVesting.Tests.validator_accept_cancel
+   #check Formal.LinearVesting.Tests.validator_reject_cancel_at_recovery
+   #print axioms Formal.LinearVesting.Tests.validator_accept_cancel
+   #print axioms Formal.LinearVesting.Tests.validator_reject_cancel_at_recovery
+   LEAN
+   ```
+
+   Lean reports `validatorAccepts` for the authorized cancellation at 3001 ms
+   and `validatorRejects` for the same locker at the inclusive boundary of
+   3000 ms. Both results list `Blaster.Tactic.blasterProven` among their
+   axioms. The test suite also checks an exclusive lower endpoint at the same
+   recovery time. [Lean test fixtures](Tests.lean#L329-L355)

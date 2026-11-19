@@ -414,6 +414,31 @@
       "hash": "95da21788eb1f59f51aad9669eb8c8b7081ab618c1f29b871925894a"
     },
     {
+      "title": "membership.membership.spend",
+      "datum": {
+        "title": "datum",
+        "schema": {
+          "$ref": "#/definitions/ByteArray"
+        }
+      },
+      "redeemer": {
+        "title": "redeemer",
+        "schema": {
+          "$ref": "#/definitions/List<ByteArray>"
+        }
+      },
+      "compiledCode": "58bd01010029800aba2aba1aab9faab9eaab9dab9a48888896600264646644b30013370e900118031baa0028991991199119801001001912cc0040062b30013370e900018059baa0048991919800800802912cc00400629422b30013371e6eb8c04400400e2946266004004602400280690101bae300e300c3754009164029132330030033010002375c601c0028068c03000cc028c02c004dd6180500218039baa0028b200a30073008001300700230070013003375400f149a26cac80081",
+      "hash": "d7771c3607932b4465f4964594ab827b6cdcd1a00a5d63e669bc255e"
+    },
+    {
+      "title": "membership.membership.else",
+      "redeemer": {
+        "schema": {}
+      },
+      "compiledCode": "58bd01010029800aba2aba1aab9faab9eaab9dab9a48888896600264646644b30013370e900118031baa0028991991199119801001001912cc0040062b30013370e900018059baa0048991919800800802912cc00400629422b30013371e6eb8c04400400e2946266004004602400280690101bae300e300c3754009164029132330030033010002375c601c0028068c03000cc028c02c004dd6180500218039baa0028b200a30073008001300700230070013003375400f149a26cac80081",
+      "hash": "d7771c3607932b4465f4964594ab827b6cdcd1a00a5d63e669bc255e"
+    },
+    {
       "title": "settings.settings.spend",
       "datum": {
         "title": "datum",
@@ -689,6 +714,12 @@
     },
     "Int": {
       "dataType": "integer"
+    },
+    "List<ByteArray>": {
+      "dataType": "list",
+      "items": {
+        "$ref": "#/definitions/ByteArray"
+      }
     },
     "List<Int>": {
       "dataType": "list",

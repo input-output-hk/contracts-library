@@ -116,7 +116,7 @@ Locker recovers the remaining bundle after the recovery time.
 | **Inputs** | One or more contract inputs. Locker's own UTxOs for fees. |
 | **Outputs** | No continuing output; the remainder flows to the locker. |
 | **Redeemer** | `Cancel`. |
-| **Validity range** | Lower bound finite and **strictly** after `recovery_time` (`now > recovery_time`). A lower bound exactly at `recovery_time` is rejected; set it to `recovery_time + 1` ms or later. |
+| **Validity range** | The interval lies entirely after `recovery_time`. A builder using a finite inclusive lower bound can set it to `recovery_time + 1` ms or later. |
 | **Authorization** | The `locker` credential is satisfied (key signature, or script invoked), exactly as for the beneficiary in §4.2. |
 
 
@@ -133,7 +133,7 @@ Both are closed by one rule. A continuation is recognized only if its inline dat
 
 ### 5.2 Reading "now" from the validity range
 
-Scripts cannot read a clock; they read the transaction's validity range. The contract uses the **lower bound** as `now`. Because the ledger guarantees the real slot is `>= lower bound`, and `vested` is non-decreasing, using the lower bound guarantees the beneficiary can never withdraw more than has *actually* vested at inclusion time, and the locker can never `Cancel` until `recovery_time` has truly passed (the `Cancel` check requires the range to be *strictly* after `recovery_time`; see §4.3). The lower bound MUST be finite for a non-trivial claim; an unbounded-below range yields `now <= start` ⇒ zero vested.
+Scripts cannot read a clock; they read the transaction's validity range. The contract uses the **lower bound** as `now`. Because the ledger guarantees the real slot is `>= lower bound`, and `vested` is non-decreasing, using the lower bound guarantees the beneficiary can never withdraw more than has *actually* vested at inclusion time, and the locker can never `Cancel` until `recovery_time` has truly passed (the `Cancel` check requires the range to be *strictly* after `recovery_time`; see §4.3). The lower bound MUST be finite for every `Claim`; an unbounded-below range is rejected, even if no tokens are withdrawn.
 
 ## 6. Invariants
 
@@ -143,7 +143,7 @@ These hold for every valid action (`I1`–`I6`) and describe a well-formed insta
 - **I2 — No over-release.** After a `Claim` at reference time `now`, for every asset `(p, n, T)` in the datum, there are at least `k` continuations carrying that datum and **each** holds at least `T - vested(T, start, end, now)`, where `k` is the number of contract inputs sharing that datum. Preserving the count (not just the aggregate) stops `k` instances from being merged into fewer UTxOs, so no instance's cumulative removed amount can exceed `vested(...)`, even across transactions.
 - **I3 — Schedule integrity.** A continuation reproduces the datum exactly (same beneficiary, locker, `vesting` list, `start`/`end`/`recovery`). The schedule cannot be edited mid-flight.
 - **I4 — Full vesting ⇒ free.** When `now >= end_time`, the required remainder is zero, so the bundle may be fully withdrawn with no continuing output.
-- **I5 — Cancel authorization & timing.** A `Cancel` is valid only if the `locker` credential is satisfied and `now > recovery_time` (strictly; the validity range must be *entirely after* `recovery_time`), with `start_time < end_time < recovery_time`. So the locker can recover only *after* full vesting plus the grace period, never *unvested* funds.
+- **I5 (Cancel authorization and timing).** A valid `Cancel` requires locker authorization, `start_time < end_time < recovery_time`, and a validity range entirely after `recovery_time`.
 - **I6 — Composability.** The validator asserts only about its own inputs and continuing outputs (matched by credential and datum), the validity range, and the presence of the required authorization. It never asserts total transaction input/output counts or unrelated value.
 - **I7 — Well-formed instance.** A correctly locked instance has an inline datum with `start_time < end_time < recovery_time` and a value covering each `(p, n, T)` with quantity `>= T`. (Off-chain responsibility; the on-chain code defends the *spending* rules regardless.)
 
@@ -154,7 +154,7 @@ These hold for every valid action (`I1`–`I6`) and describe a well-formed insta
 - **Early / excessive withdrawal.** Bounded by `vested(now)` using the validity range lower bound (§5.2) and the floored vesting function, so a beneficiary cannot pull funds ahead of schedule. (I2)
 - **Schedule tampering.** A continuation must reproduce the datum verbatim, so a claimer cannot shrink totals or move dates to accelerate vesting. (I3)
 - **Unauthorized claim or cancel.** Pluggable credential checks: only the beneficiary can `Claim`, only the locker can `Cancel`. (I1, I5)
-- **Premature recovery.** `Cancel` requires `now > recovery_time` (strictly) and the datum is checked for `end_time < recovery_time`, so a locker cannot reclaim unvested funds, even with a malformed datum. (I5)
+- **Premature recovery.** `Cancel` checks `end_time < recovery_time` and requires the validity range to lie entirely after `recovery_time`. (I5)
 - **Double satisfaction and instance merging.** Continuations are matched by exact datum, and each `Claim` input requires at least `k` continuations that each hold the full remainder. So one output cannot satisfy several inputs, and several instances cannot be collapsed into fewer UTxOs (which would later let one instance's remainder be swept as another's surplus). This holds even against deliberately crafted duplicate-datum instances, and without restricting input counts. (I2, §5.1)
 - **Datum-hash substitution.** Only inline datums are accepted; a claim whose contract input or continuing output uses a datum hash is rejected.
 
@@ -191,12 +191,14 @@ Returns `True` if **C0, C1, C2, C5** hold. **C3/C4 are vacuous**: `required(p, n
 Returns `True` if **all** of:
 
 - **C6 (auth).** The `locker` credential is satisfied (key signature or script invocation, exactly as C1).
-- **C7 (timing).** `now > recovery_time` (**strictly**; the validity range is entirely after `recovery_time`, so an unbounded-below range is rejected). The datum must also satisfy `start_time < end_time < recovery_time`; the schedule ordering is a precondition of the action, not assumed from I7. *(I5)*
+- **C7 (timing).** The validity range lies entirely after `recovery_time`. The validator also checks `start_time < end_time < recovery_time` in the datum. *(I5)*
 - **C8 (datum form).** The spent datum is a well-formed `VestingDatum`. `Cancel` reads no contract output, so it imposes no constraint on output datums. *(§3.1)*
 
 `Cancel` requires **no** continuing output. *(I6, §5.1)*
 
-> **Boundary note.** The timing check is *strict*: a lower bound exactly at `recovery_time` is rejected, so the smallest accepting `now` is `recovery_time + 1` ms. A formalization should model the `Cancel` precondition as `now > recovery_time`, not `≥`.
+> For a finite lower endpoint, the timing check requires `recovery_time < now`
+> when the endpoint is inclusive and `recovery_time ≤ now` when it is exclusive.
+> A range unbounded below fails the timing check.
 
 ## 9. Soundness — when the validator returns `False` (must-reject)
 
@@ -209,16 +211,16 @@ The validator returns `False` (the spend is rejected) whenever **any** of the fo
 - **R3 (schedule tampering).** Redeemer is `Claim`, `now < end_time`, and no continuing output reproduces the spent datum byte-for-byte (any change to `beneficiary`, `locker`, `vesting`, `start_time`, `end_time`, or `recovery_time`). *(¬C3, I3)*
 - **R4 (datum-hash substitution).** A contract input spent under `Claim`, or a continuing output relied upon for C3/C4, uses a **datum hash** instead of an inline datum. *(¬C2, §3.1)*
 - **R5 (unauthorized `Cancel`).** Redeemer is `Cancel` and the `locker` credential is **not** satisfied. *(¬C6, I5)*
-- **R6 (premature recovery / malformed schedule on `Cancel`).** Redeemer is `Cancel` and `now ≤ recovery_time` (the validity range is not entirely after `recovery_time`, including the unbounded-below case), **or** the datum does not satisfy `start_time < end_time < recovery_time`. Either way the locker cannot reach *unvested* funds. *(¬C7, I5)*
+- **R6 (premature recovery or malformed schedule on `Cancel`).** A `Cancel` fails if the validity range fails the recovery check in C7 or the datum fails the ordering `start_time < end_time < recovery_time`. *(¬C7, I5)*
 - **R7 (malformed schedule on `Claim`).** Redeemer is `Claim` and the datum does not satisfy `start_time < end_time`. *(¬C0, §3.3)*
 
 ### Boundary lemmas (support R1–R6)
 
 These are properties of `vested` and of the time read; the prover uses them to close the cases above:
 
-- **B1 (floor).** `vested(T, start, end, now) ≤ T · (now − start) / (end − start)` and is integer-valued, so a `Claim` can never release more than the real-valued schedule. *(§3.3)*
+- **B1 (floor).** For `start < end` and `start ≤ now ≤ end`, `vested(T, start, end, now) ≤ T · (now − start) / (end − start)`, with real-valued division on the right. Outside this interval, use the boundary cases in §3.3.
 - **B2 (monotonicity).** `vested` is non-decreasing in `now`; combined with the ledger guarantee `real_slot ≥ lower_bound`, reading `now` as the lower bound means a `Claim` never releases more than has *actually* vested at inclusion. *(§5.2)*
-- **B3 (pre-start floor).** `now ≤ start_time ⇒ vested = 0 ⇒ required = T`, so an unbounded-below (or pre-start) validity range forces the full bundle to remain locked. *(§5.2)*
+- **B3 (pre-start floor).** For a finite lower bound `now`, `now ≤ start_time ⇒ vested = 0 ⇒ required = T`, so a pre-start claim must keep the full bundle locked. *(§5.2)*
 
 ### Scope of the formalization
 

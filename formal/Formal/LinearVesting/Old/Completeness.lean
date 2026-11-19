@@ -1,36 +1,32 @@
 /-
 Linear vesting — COMPLETENESS: `spec ⇒ accepts` (spec §8).
 
-If a transaction satisfies the spec's preconditions for an action (authorized,
-schedule well-formed, continuation reproduces the datum and holds the required
-remainder), the compiled validator accepts it. This rules out *false
-negatives* — honest spends getting stuck (frozen funds).
+Acceptance proofs for the constructed contexts under their stated hypotheses.
+These do not establish completeness for arbitrary transactions.
 -/
 import Blaster
 import PlutusCore.UPLC
 import CardanoLedgerApi.V3
 import Formal.Shared.Common
-import Formal.LinearVesting.Spec
+import Formal.LinearVesting.Old.Spec
 import Formal.LinearVesting.Script
-import Formal.LinearVesting.Soundness
+import Formal.LinearVesting.Old.Soundness
 
-namespace Formal.LinearVesting.Completeness
+namespace Formal.LinearVesting.Old.Completeness
 
 open PlutusCore.UPLC.Term (Program)
 open PlutusCore.ByteString (ByteString)
 open PlutusCore.Data (Data)
 open CardanoLedgerApi.V3 (Address Redeemer)
 open Formal.Shared.Common (validatorAccepts)
-open Formal.LinearVesting.Spec
-open Formal.LinearVesting.Soundness (mkClaimCtx mkClaimCtxW mkClaimCtxDouble withAsset scriptAddress)
+open Formal.LinearVesting.Old.Spec
+open Formal.LinearVesting.Old.Soundness (mkClaimCtx mkClaimCtxW mkClaimCtxDouble withAsset scriptAddress)
 open Formal.LinearVesting.Script (spendValidator)
 
-/-- **Partial-claim completeness (spec ⇒ accepts).** Single-asset instance.
-
-A `Claim` that meets every §8 must-accept clause — beneficiary key signed (C1),
-well-formed schedule (C0), inline datum reproduced in the continuation (C2/C3),
-and the continuation holding at least the required remainder (C4) — is accepted
-by the compiled validator. -/
+/-- The compiled validator accepts the constructed single-native-asset claim
+before vesting ends when the schedule is valid, the beneficiary key appears in
+the signatories, and the continuation reproduces the input datum and payment
+credential and holds at least the required remainder. -/
 theorem claim_complete_partial
     (d : VestingDatum) (a : VestedAsset)
     (inLovelace outLovelace inQty outQty now : Int)
@@ -43,15 +39,22 @@ theorem claim_complete_partial
     let sigs := match d.beneficiary with | .key h => [h] | .script _ => []
     let ctx := mkClaimCtx d inValue outAddr outValue outDatum now sigs r
     d.vesting = [a] ∧
+    a.policy ≠ "" ∧
     validSchedule d ∧
     now < d.endTime ∧
     (∃ h, d.beneficiary = .key h) ∧                          -- C1 (key case)
+    outAddr.addressCredential = scriptAddress.addressCredential ∧ -- C3
     outQty ≥ required a.total d.startTime d.endTime now →     -- C4
       validatorAccepts ctx spendValidator := by
-  -- General (∀) version: too large for Z3 (hangs). Left as `sorry`. The
-  -- concrete instance below is the fast end-to-end check; generalize from it
-  -- one parameter at a time.
-  sorry
+  dsimp only
+  intro h
+  rcases d with ⟨beneficiary, locker, vesting, startTime, endTime, recoveryTime⟩
+  rcases outAddr with ⟨paymentCredential, stakingCredential⟩
+  rcases h with ⟨hVesting, hPolicy, hSchedule, hTime, ⟨key, hKey⟩, hAddress, hQty⟩
+  cases hVesting
+  cases hKey
+  cases hAddress
+  blaster
 
 /-- A specific, well-formed partial `Claim`, fully concrete:
 - one asset `assetA`, total 100, schedule `[1000, 2000]`, recovery 3000;
@@ -75,7 +78,7 @@ theorem claim_accept_concrete :
       spendValidator := by
   blaster
 
-/-- Complementary coverage to `claim_accept_generic_identities` (not subsumed by
+/-- Complementary coverage to `claim_accept_generic_schedule` (not subsumed by
 it): `now` is **unconstrained** (any time, including before `start` and after
 `end`) and both ada amounts are symbolic. The continuation keeps the whole
 bundle (token qty 100 = total), so the required remainder is met for any `now`
@@ -151,17 +154,15 @@ theorem claim_accept_script_auth (bhash : ByteString) :
       spendValidator := by
   blaster
 
-/-- **Batched claim accepted (the `k`-scaling, accept side; spec §5.1).** Two
-contract inputs sharing a datum, with a single continuation holding `2 × required`
-(100 = 2 × 50 at `now = 1500`), is accepted. The companion of
-`no_double_satisfaction`: this confirms a correctly funded batch *is* accepted,
-so the rejection there is specifically about under-funding, not a 2-input
-artifact. -/
+/-- **Batched claim accepted (spec §5.1, C4).** Two contract inputs sharing a
+datum, with two separate continuations each holding the required remainder
+(50 at `now = 1500`), are accepted. -/
 theorem claim_accept_two_inputs :
     validatorAccepts
       (mkClaimCtxDouble dConcrete
         (withAsset 2000000 "policyA" "assetA" 100)   -- each input holds 100
-        (withAsset 2000000 "policyA" "assetA" 100)   -- continuation holds 2 × required
+        [withAsset 2000000 "policyA" "assetA" 50,
+         withAsset 2000000 "policyA" "assetA" 50]   -- each continuation holds required
         (datumData dConcrete)
         1500
         ["beneficiary_key_hash"]
@@ -203,4 +204,4 @@ theorem cancel_complete (now : Int) (hgt : 3000 < now) :
       spendValidator := by
   blaster
 
-end Formal.LinearVesting.Completeness
+end Formal.LinearVesting.Old.Completeness
