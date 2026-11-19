@@ -14,14 +14,13 @@
 
 import {
   type Data,
-  deserializeAddress,
   mConStr,
   mConStr0,
   mConStr1,
   mConStr2,
 } from "@meshsdk/core";
 
-import { credentialToData } from "../common";
+import { addressToData, credentialToData } from "../common";
 import { outputRefToData } from "../settings/datum";
 import type {
   AssetAllowListParams,
@@ -121,42 +120,7 @@ export function spendingPeriodLimitParamsToData(
 
 // ------------------------------------------------- recipient / asset params
 
-/**
- * Encode a bech32 address to the Aiken `cardano/address.Address` Data:
- * `Constr 0 [payment_credential, Option<StakeCredential>]`. The network id is
- * not part of the Plutus representation. Pointer-stake addresses are not
- * supported (they carry no inline stake credential to encode).
- */
-export function addressToData(bech32: string): Data {
-  const {
-    pubKeyHash,
-    scriptHash,
-    stakeCredentialHash,
-    stakeScriptCredentialHash,
-  } = deserializeAddress(bech32);
-
-  const payment = credentialToData(
-    scriptHash
-      ? { kind: "script", hash: scriptHash }
-      : { kind: "key", hash: pubKeyHash },
-  );
-
-  // Some(Inline(credential)) = Constr0 [Constr0 [credential]]; None = Constr1 [].
-  const stake =
-    stakeCredentialHash || stakeScriptCredentialHash
-      ? mConStr0([
-          mConStr0([
-            credentialToData(
-              stakeScriptCredentialHash
-                ? { kind: "script", hash: stakeScriptCredentialHash }
-                : { kind: "key", hash: stakeCredentialHash },
-            ),
-          ]),
-        ])
-      : mConStr1([]);
-
-  return mConStr0([payment, stake]);
-}
+export { addressToData };
 
 /** Encode an `AssetList` (`Pairs<PolicyId, List<AssetName>>`) as a Plutus map. */
 export function assetListToData(list: AssetList): Data {

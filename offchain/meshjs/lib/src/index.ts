@@ -19,10 +19,10 @@
 export { applyAuthorization, type ScriptAuthorizer } from "./authorization";
 export * from "./cip113";
 export * from "./common";
+// Submodules re-export this encoder; name it explicitly so the package root keeps it.
+export { addressToData } from "./common";
 export * from "./dao";
 export * from "./event_triggered";
-// Both submodules expose this encoder; retain the package's existing export.
-export { addressToData } from "./event_triggered";
 export * from "./settings";
 export * from "./smart_wallet";
 export * from "./upgradeability";

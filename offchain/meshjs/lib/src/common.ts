@@ -4,6 +4,7 @@
 
 import {
   type Data,
+  deserializeAddress,
   type MeshTxBuilder,
   mConStr0,
   mConStr1,
@@ -27,6 +28,46 @@ export type Credential =
 /** Encode a Credential to CBOR Data (mirrors Aiken's flat format). */
 export function credentialToData(c: Credential): Data {
   return c.kind === "key" ? mConStr0([c.hash]) : mConStr1([c.hash]);
+}
+
+/**
+ * Encode a bech32 address as the Aiken `cardano/address.Address` Data:
+ * `Constr 0 [payment_credential, Option<StakeCredential>]`. The network id is
+ * not part of the Plutus representation. Pointer-stake addresses are not
+ * supported (they carry no inline stake credential to encode).
+ */
+export function addressToData(bech32: string): Data {
+  const {
+    pubKeyHash,
+    scriptHash,
+    stakeCredentialHash,
+    stakeScriptCredentialHash,
+  } = deserializeAddress(bech32);
+  if (!pubKeyHash && !scriptHash) {
+    throw new Error(`Cannot decode the payment credential of ${bech32}.`);
+  }
+
+  const payment = credentialToData(
+    scriptHash
+      ? { kind: "script", hash: scriptHash }
+      : { kind: "key", hash: pubKeyHash },
+  );
+
+  // Some(Inline(credential)) = Constr0 [Constr0 [credential]]; None = Constr1 [].
+  const stake =
+    stakeCredentialHash || stakeScriptCredentialHash
+      ? mConStr0([
+          mConStr0([
+            credentialToData(
+              stakeScriptCredentialHash
+                ? { kind: "script", hash: stakeScriptCredentialHash }
+                : { kind: "key", hash: stakeCredentialHash },
+            ),
+          ]),
+        ])
+      : mConStr1([]);
+
+  return mConStr0([payment, stake]);
 }
 
 /** The amount of lovelace in 1 ADA. */

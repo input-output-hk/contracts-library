@@ -152,17 +152,7 @@ function shelleySlotConfig(stateDir: string): {
 
 const toHex = (bytes: Uint8Array): string => Buffer.from(bytes).toString("hex");
 
-/**
- * Strip a single CBOR byte-string wrapper from a hex-encoded script.
- * Some tooling emits a double-CBOR ("cbor") wrapper; the on-chain witness
- * often needs the inner single-CBOR flat script.
- */
-export function unwrapCborBytes(hex: string): string {
-  const tag = Number.parseInt(hex.slice(0, 2), 16);
-  const headerHexLen =
-    tag === 0x58 ? 4 : tag === 0x59 ? 6 : tag === 0x5a ? 10 : 0;
-  return hex.slice(headerHexLen);
-}
+export { unwrapCborBytes } from "@contracts-library/meshjs";
 
 /** Enterprise-address network id: 0 = testnet (`addr_test`), 1 = mainnet. */
 const NETWORK_ID: number = 0;

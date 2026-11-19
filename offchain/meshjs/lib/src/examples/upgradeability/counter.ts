@@ -14,11 +14,7 @@
 import {
   applyCborEncoding,
   applyParamsToScript,
-  type Data,
-  deserializeAddress,
   type MeshTxBuilder,
-  mConStr0,
-  mConStr1,
   type Network,
   type PlutusScript,
   resolveScriptHash,
@@ -27,6 +23,7 @@ import {
 } from "@meshsdk/core";
 
 import type { ScriptAuthorizer } from "../../authorization";
+import { addressToData, networkIdOf } from "../../common";
 import { opaqueRedeemer } from "../../upgradeability/datum";
 import type { SettingsRefParams } from "../../upgradeability/types";
 import { addDelegateInvocation } from "../../upgradeability/upgradeability";
@@ -54,10 +51,6 @@ import type { CounterDatum, Credential, MigrationParams } from "./types";
  */
 export const STATE_TOKEN_NAME = Buffer.from("counter").toString("hex");
 
-function networkIdOf(network: Network): 0 | 1 {
-  return network === "mainnet" ? 1 : 0;
-}
-
 // ------------------------------------------------------------- script helpers
 
 /** The script hash of a parameterized counter script (its payment credential). */
@@ -74,31 +67,10 @@ export function counterScriptAddress(
 }
 
 /**
- * Encode a bech32 address as the Aiken `Address` record a validator parameter
- * expects: `Constr 0 [payment_credential, stake_credential: Option]`, where a
- * credential is `Constr 0 [key_hash]` or `Constr 1 [script_hash]` and the
- * stake part is `Some(Inline(credential))` or `None`.
+ * Encode a bech32 address as the Aiken `Address` record. Shared with the
+ * library so the demo and the contracts cannot drift.
  */
-export function addressToData(bech32: string): Data {
-  const {
-    pubKeyHash,
-    scriptHash,
-    stakeCredentialHash,
-    stakeScriptCredentialHash,
-  } = deserializeAddress(bech32);
-  if (!pubKeyHash && !scriptHash) {
-    throw new Error(`Cannot decode the payment credential of ${bech32}.`);
-  }
-  const payment: Data = scriptHash
-    ? mConStr1([scriptHash])
-    : mConStr0([pubKeyHash]);
-  const stake: Data = stakeScriptCredentialHash
-    ? mConStr0([mConStr1([stakeScriptCredentialHash])])
-    : stakeCredentialHash
-      ? mConStr0([mConStr0([stakeCredentialHash])])
-      : mConStr1([]); // None
-  return mConStr0([payment, stake]);
-}
+export { addressToData };
 
 // ------------------------------------------------------------ script factories
 
