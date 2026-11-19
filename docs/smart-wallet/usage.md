@@ -22,7 +22,7 @@ they can change without redeploying the wallet.
 > This guide only covers day-to-day usage.
 
 | Part | Where |
-|---|---|
+| --- | --- |
 | On-chain validator | [`onchain/validators/smart_wallet/`](../../onchain/validators/smart_wallet/) (+ composable predicates in [`onchain/lib/smart_wallet/`](../../onchain/lib/smart_wallet/)) |
 | MeshJS builders | [`offchain/meshjs/lib/src/smart_wallet/`](../../offchain/meshjs/lib/src/smart_wallet/) |
 | Tx3 protocol + client | [`offchain/tx3/smart_wallet/`](../../offchain/tx3/smart_wallet/) |
@@ -84,7 +84,7 @@ stateDiagram-v2
 ## Roles
 
 | Role | Credential | Powers |
-|---|---|---|
+| --- | --- | --- |
 | **Admin** | `admin` (script parameter) | Mint, `UpdatePermissions`, `Close` |
 | **Deposit scripts** | keys of `depositors` (datum field) | Validate and approve every `Deposit` |
 | **Members** | `members`/`threshold` (settings UTxO) | Sign a `Spend` |
@@ -157,7 +157,7 @@ the script hash, which is both the wallet NFT's policy id and the payment
 credential of the wallet address (the address has **no staking credential**):
 
 | Parameter | Meaning |
-|---|---|
+| --- | --- |
 | `seedUtxo` | One-shot mint nonce: the mint transaction must spend it |
 | `settingsPolicy` | Settings script hash (= settings NFT policy id) |
 | `settingsTokenName` | Settings NFT asset name (hex) |
@@ -263,6 +263,12 @@ await buildWalletDepositTx({
   network: "preprod",
 });
 ```
+
+With an empty `depositors` map, anyone can submit a deposit, including a no-op
+one or one that adds junk assets. A deposit consumes the wallet UTxO, so it can
+invalidate concurrent `Spend`, `UpdatePermissions` or `Close` transactions, and
+owners can remove unwanted assets in a later `Spend`. This is an accepted
+denial-of-service surface.
 
 ### 3. Spend
 
@@ -459,9 +465,10 @@ Stateful: allows at most one spend per `window` milliseconds. The state is
 `SpendingWindowState { last_upper }` (POSIX ms; `0` = never spent, validated on
 registration). It records the **upper bound** of the previous spend's validity
 range — the latest possible execution time of that spend. Its `withdraw` handler
-requires both validity bounds to be finite, the current **lower bound** to be at
-least `last_upper + window` (or it is the first spend), and the output state to
-record the current **upper bound**:
+requires both validity bounds to be finite, the validity range to span at most
+`window` milliseconds, the current **lower bound** to be at least
+`last_upper + window` (or it is the first spend), and the output state to record
+the current **upper bound**:
 
 ```ts
 import {
@@ -502,7 +509,10 @@ const nextDatum = {
 `startMs(slot)` is the slot's start in POSIX ms; the state stores the upper
 bound's slot start, which the validator reads from the validity range's upper
 bound. Both bounds are mandatory: a missing or infinite upper bound cannot be
-stored safely, so the spend is rejected.
+stored safely, so the spend is rejected. The range may be at most `window` wide
+(`(slotUpper - slot) * slotLength` ms, at most `window`), so with the `window`
+above, the example's 100-slot range fits only while `slotLength` keeps it under
+one hour.
 
 ### `spending_period_limit`
 
