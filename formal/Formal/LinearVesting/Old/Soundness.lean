@@ -10,10 +10,10 @@ import PlutusCore.UPLC
 import CardanoLedgerApi.V3
 import CardanoLedgerApi.V1.Time
 import Formal.Shared.Common
-import Formal.LinearVesting.Spec
+import Formal.LinearVesting.Old.Spec
 import Formal.LinearVesting.Script
 
-namespace Formal.LinearVesting.Soundness
+namespace Formal.LinearVesting.Old.Soundness
 
 open PlutusCore.UPLC.Term (Program)
 open PlutusCore.ByteString (ByteString)
@@ -22,7 +22,7 @@ open CardanoLedgerApi.IsData.Class (IsData)
 open CardanoLedgerApi.V3 (Address Redeemer ScriptContext TxInfo TxInInfo TxOut
                           Value OutputDatum valueOf Withdrawals)
 open Formal.Shared.Common (validatorAccepts)
-open Formal.LinearVesting.Spec
+open Formal.LinearVesting.Old.Spec
 open Formal.LinearVesting.Script (spendValidator)
 
 /-! ## Ledger-context scaffold (shared) -/
@@ -217,4 +217,4 @@ theorem cancel_sound (now : Int) :
       3000 < now := by
   blaster
 
-end Formal.LinearVesting.Soundness
+end Formal.LinearVesting.Old.Soundness

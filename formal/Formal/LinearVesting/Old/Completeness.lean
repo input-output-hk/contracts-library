@@ -8,19 +8,19 @@ import Blaster
 import PlutusCore.UPLC
 import CardanoLedgerApi.V3
 import Formal.Shared.Common
-import Formal.LinearVesting.Spec
+import Formal.LinearVesting.Old.Spec
 import Formal.LinearVesting.Script
-import Formal.LinearVesting.Soundness
+import Formal.LinearVesting.Old.Soundness
 
-namespace Formal.LinearVesting.Completeness
+namespace Formal.LinearVesting.Old.Completeness
 
 open PlutusCore.UPLC.Term (Program)
 open PlutusCore.ByteString (ByteString)
 open PlutusCore.Data (Data)
 open CardanoLedgerApi.V3 (Address Redeemer)
 open Formal.Shared.Common (validatorAccepts)
-open Formal.LinearVesting.Spec
-open Formal.LinearVesting.Soundness (mkClaimCtx mkClaimCtxW mkClaimCtxDouble withAsset scriptAddress)
+open Formal.LinearVesting.Old.Spec
+open Formal.LinearVesting.Old.Soundness (mkClaimCtx mkClaimCtxW mkClaimCtxDouble withAsset scriptAddress)
 open Formal.LinearVesting.Script (spendValidator)
 
 /-- The compiled validator accepts the constructed single-native-asset claim
@@ -204,4 +204,4 @@ theorem cancel_complete (now : Int) (hgt : 3000 < now) :
       spendValidator := by
   blaster
 
-end Formal.LinearVesting.Completeness
+end Formal.LinearVesting.Old.Completeness
