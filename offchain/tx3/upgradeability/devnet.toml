@@ -1,0 +1,13 @@
+# Genesis funding for the ephemeral devnet driven by tests/devnet.test.ts.
+#
+# The faucet address belongs to the fixed throwaway TEST keypair committed
+# in ../devnet/faucet.ts: only the public address appears here, while the
+# harness signs with the matching private key. Trix translates this entry
+# into dolos custom_utxos at boot.
+#
+# Budget: each test instance funds a governor and an owner (seed + gas +
+# collateral), deploys logic/migration reference scripts, and registers
+# their stake credentials; 1M ADA comfortably covers the whole suite.
+[[utxos]]
+address = "addr_test1vq3tagm5q2dknru3w9ech3f9zr93zsj8pcfzvxjg0fd5vugnec6pd"
+value = 1000000000000

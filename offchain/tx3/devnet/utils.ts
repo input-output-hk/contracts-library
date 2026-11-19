@@ -33,6 +33,13 @@ import { Ed25519Signer, Party, PollConfig } from "tx3-sdk";
 import { FAUCET } from "./faucet";
 import { Client } from "../settings/codegen/ts-client/config-parameter-management/protocol"; // trix codegen ts-client
 
+/**
+ * Validity window for settings propose transactions: comfortably more than a
+ * few block intervals (~5s), so a fresh transaction lands before its upper
+ * bound. The settings delay counts from the end of this window.
+ */
+export const PROPOSE_TTL_MS = 30_000;
+
 /** Poll config tuned for the devnet's block interval. */
 export const DEVNET_POLL = new PollConfig(60, 1000);
 
@@ -92,8 +99,8 @@ export type DevnetKitFactory = (trpUrl: string, faucet: Party) => DevnetKit;
 export interface DevnetStartOptions {
   /** Directory (relative to this file's dir) holding `trix.toml` + `devnet.toml`. */
   protocolRoot: string;
-  /** Builds the protocol's test-kit transactions. */
-  kit: DevnetKitFactory;
+  /** Builds the protocol's test-kit transactions; defaults to the settings kit. */
+  kit?: DevnetKitFactory;
 }
 
 /** Default kit: the settings protocol's `devnet_pay` + `devnet_deploy_authorizer`. */
@@ -452,6 +459,25 @@ export class TrixDevnet {
     return { lovelace };
   }
 
+  /**
+   * Asset quantities held at an address, keyed by unit (`"lovelace"` for ada,
+   * otherwise `policyId + assetName` hex). Empty if the address has no UTxOs.
+   */
+  async assetsOf(address: string): Promise<Record<string, bigint>> {
+    const res = await fetch(`${this.minibfUrl}/addresses/${address}`);
+    if (res.status === 404) return {};
+    if (!res.ok)
+      throw new Error(`asset query failed for ${address}: HTTP ${res.status}`);
+    const body = (await res.json()) as {
+      amount?: Array<{ unit: string; quantity: string }>;
+    };
+    const totals: Record<string, bigint> = {};
+    for (const a of body.amount ?? []) {
+      totals[a.unit] = (totals[a.unit] ?? 0n) + BigInt(a.quantity);
+    }
+    return totals;
+  }
+
   /** UTxOs currently held at an address (empty if it has none). */
   async utxosOf(address: string): Promise<DevnetUtxo[]> {
     const res = await fetch(`${this.minibfUrl}/addresses/${address}/utxos`);
@@ -615,6 +641,25 @@ export class TrixDevnet {
     return Math.floor(
       (targetMs - this.slotConfig.zeroTimeMs) / this.slotConfig.slotLengthMs,
     );
+  }
+
+  /**
+   * Ledger time (POSIX ms) at the start of `slot` — the exact instant a
+   * validator reads for a validity bound on that slot.
+   */
+  slotTimeMs(slot: number): number {
+    return this.slotConfig.zeroTimeMs + slot * this.slotConfig.slotLengthMs;
+  }
+
+  /**
+   * A validity upper bound `ttlMs` after the tip: the enclosing slot and its
+   * start time, which is the upper bound a validator sees for a transaction
+   * invalid from that slot on. Settings proposals anchor their delay on it.
+   */
+  async validUntil(ttlMs: number): Promise<ChainTip> {
+    const tip = await this.tip();
+    const slot = this.slotAtTimeMs(tip.timeMs + ttlMs);
+    return { slot, timeMs: this.slotTimeMs(slot), height: tip.height };
   }
 
   /** Poll until the chain's tip time reaches `targetMs` (or throw on timeout). */

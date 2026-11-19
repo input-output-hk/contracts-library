@@ -90,13 +90,16 @@
       ),
     ),
   ),
+  validRange: (
+    upper: [*upper*],
+  ),
   notes: [
     - `settings_addr`: payment is `settings_hash`, staking is unchanged
     - `settings_nft`: policy is `settings_hash`, token name is `settings_token_name`
     - `settings_hash = hash(settings_validator(seed_utxo, propose_auth, apply_auth, apply_delay, settings_token_name))`
     - `maybe_data`: can be `None` or `Some(data)`
     - `proposed`: the proposed settings data. it is such that `validate_datum(proposed)` is true
-    - `timestamp = now + apply_delay`, where `apply_delay` is the minimum time that must pass before the proposed settings can be applied
+    - `timestamp >= upper + apply_delay`, where `upper` is the transaction's validity upper bound (required) and `apply_delay` is the minimum time that must pass before the proposed settings can be applied. A transaction cannot land after its upper bound, so the delay cannot be shortened by backdating
   ],
 )
 

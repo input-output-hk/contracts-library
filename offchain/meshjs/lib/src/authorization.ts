@@ -56,6 +56,48 @@ export interface ScriptAuthorizer {
 const UNIT: Data = mConStr0([]);
 
 /**
+ * The script hash an authorizer will invoke, or `undefined` when the
+ * credential needs no script invocation (a key credential, or `manual: true`).
+ * Throws for a script credential whose authorizer cannot be resolved.
+ *
+ * Builders use this to collect the transaction's complete withdrawal set
+ * (including the authorizer's entry) before deriving any redeemer index.
+ */
+export function authorizerScriptHash(
+  credential: Credential,
+  authorizer: ScriptAuthorizer | undefined,
+): string | undefined {
+  if (credential.kind === "key" || !authorizer || authorizer.manual) {
+    return undefined;
+  }
+  const version = authorizer.version ?? "V3";
+  const hash =
+    authorizer.scriptHash ??
+    (authorizer.scriptCbor !== undefined
+      ? resolveScriptHash(authorizer.scriptCbor, version)
+      : authorizer.reference?.output.scriptHash);
+  if (hash === undefined) {
+    throw new Error(
+      "Cannot determine the authorizer script hash: provide `scriptCbor`, or " +
+        "`scriptHash` alongside `reference`.",
+    );
+  }
+  return hash;
+}
+
+/**
+ * The reference UTxO an authorizer's script is read from, if any. Builders use
+ * this to collect the transaction's complete reference-input set before
+ * deriving any redeemer index.
+ */
+export function authorizerReference(
+  authorizer: ScriptAuthorizer | undefined,
+): UTxO | undefined {
+  if (!authorizer || authorizer.manual) return undefined;
+  return authorizer.reference;
+}
+
+/**
  * Apply the authorization for `credential` to `txBuilder`.
  *
  * - Key credential: adds the required signer (`authorizer` is ignored).
@@ -87,18 +129,7 @@ export function applyAuthorization(
   if (authorizer.manual) return;
 
   const version = authorizer.version ?? "V3";
-
-  const hash =
-    authorizer.scriptHash ??
-    (authorizer.scriptCbor !== undefined
-      ? resolveScriptHash(authorizer.scriptCbor, version)
-      : authorizer.reference?.output.scriptHash);
-  if (hash === undefined) {
-    throw new Error(
-      "Cannot determine the authorizer script hash: provide `scriptCbor`, or " +
-        "`scriptHash` alongside `reference`.",
-    );
-  }
+  const hash = authorizerScriptHash(credential, authorizer)!;
   if (hash !== credential.hash) {
     throw new Error(
       `Authorizer script hash (${hash}) does not match the credential in the ` +

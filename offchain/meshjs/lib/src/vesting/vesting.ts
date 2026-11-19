@@ -26,6 +26,7 @@ import {
 import { applyAuthorization, type ScriptAuthorizer } from "../authorization";
 import { compiledCode, plutusVersion } from "./blueprint";
 import {
+  assertValidBundle,
   cancelRedeemer,
   claimRedeemer,
   requiredRemainder,
@@ -105,6 +106,7 @@ export async function buildLockTx(p: LockParams): Promise<string> {
       "Invalid schedule: require startTime < endTime < recoveryTime",
     );
   }
+  assertValidBundle(p.datum.vesting);
   const minLovelace = p.minUtxoLovelace ?? DEFAULT_MIN_UTXO_LOVELACE;
   const scriptAddr = vestingScriptAddress(p.networkId ?? 0);
   const assets =
