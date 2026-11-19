@@ -9,7 +9,7 @@ use cardano/address.{Address, Credential, Script}
 use cardano/assets.{AssetName, Assets, Lovelace, PolicyId}
 use cardano/certificate.{RegisterCredential, UnregisterCredential}
 use cardano/transaction.{
-  InlineDatum, OutputReference, Publish, Transaction, find_input,
+  InlineDatum, Output, OutputReference, Publish, Transaction, find_input,
 }
 use smart_wallet/types.{WalletDatum}
 use smart_wallet/utils
@@ -359,6 +359,31 @@ fn value_contains(superset: Assets, subset: Assets) -> Bool {
     fn(triple) {
       let (policy, asset, qty) = triple
       assets.quantity_of(superset, policy, asset) >= qty
+    },
+  )
+}
+
+/// Aggregate value across `outputs` that sit at `credential` and carry the
+/// wallet's NFT. NFT-less outputs at the wallet address are not wallet funds.
+pub fn sum_at_credential(
+  outputs: List<Output>,
+  credential: Credential,
+  wallet_token_name: AssetName,
+) -> Assets {
+  expect Script(wallet_hash) = credential
+  list.foldl(
+    outputs,
+    assets.zero,
+    fn(output, acc) {
+      if output.address.payment_credential == credential && assets.has_nft(
+        output.value,
+        wallet_hash,
+        wallet_token_name,
+      ) {
+        assets.merge(acc, output.value)
+      } else {
+        acc
+      }
     },
   )
 }
