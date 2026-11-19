@@ -383,7 +383,8 @@ owner's behalf:
   payouts go to `pay` as a plain enterprise output (no stake credential, datum
   or reference script) — the issuer can trigger but never redirect, stake or
   lock them. An issuer-claimed coupon's paired output is the next certificate
-  (no shell); `commit` is owner-set and cleared on owner change (I7).
+  itself (`k → k+1`, same address and datum); `commit` is owner-set and
+  cleared on owner change (I7).
 - **I10 — Vault identity.** Every vault UTxO carries exactly one unit under
   `vault_nft_cs`, minted only by the deployment's `authority`; every vault
   spend preserves it into exactly one continuation with the same address and
@@ -513,20 +514,21 @@ scope.
   (bounded by I1's transferability).
 - **Issuer liveness.** Issuer triggering is a convenience: if the issuer never
   triggers, the owner can always claim and graduate through the transfer path.
-- **Issuer graduation leaves one shell.** The honest builder makes the paired
-  output the next certificate, so a claim leaves no shell; on-chain, the core
+- **Issuer graduation leaves one shell.** On a claim, the third-party logic
+  requires the certificate's paired output to carry the next name (`k → k+1`)
+  at the same address and datum, so the certificate advances in place; the core
   pairs every PLB input with a same-address/same-datum output and preserves its
-  lovelace and non-acted assets, so a hostile issuer can leave a
-  certificate-less paired continuation (a *ghost shell*) even on a claim by
-  reordering the outputs. It is inert — no `cip_policy`, no effect on claims or
-  graduation, and third-party cannot touch it (the paired input must already
-  hold the policy). The shell sits at the owner's address and holds the owner's
-  value. An issuer's *graduation* necessarily leaves the certificate-less
-  paired continuation (the design's only shell). The owner can sweep any number
-  of shells in a single owner-signed transfer-path spend (`PLG [TransferAct]` +
-  `transfer`; that path does not require paired outputs) and recover their ADA;
-  the issuer cannot (the stake is the owner's), and a CIP-113-aware builder is
-  required.
+  lovelace and non-acted assets. A hostile issuer can still leave a
+  certificate-less paired continuation (a *ghost shell*) alongside the
+  certificate by reordering the outputs. It is inert — no `cip_policy`, no
+  effect on claims or graduation, and third-party cannot touch it (the paired
+  input must already hold the policy). The shell sits at the owner's address and
+  holds the owner's value. An issuer's *graduation* necessarily leaves the
+  certificate-less paired continuation (the design's only shell). The owner can
+  sweep any number of shells in a single owner-signed transfer-path spend (`PLG
+  [TransferAct]` + `transfer`; that path does not require paired outputs) and
+  recover their ADA; the issuer cannot (the stake is the owner's), and a
+  CIP-113-aware builder is required.
 - **The certificate's asset id changes every step.** The step rides the first
   byte of the asset name, so a unit is a different asset at each step (`0…N`).
   Wallets and indexers must follow the name transition; the certificate is

@@ -355,11 +355,11 @@ coupon), so no step can be claimed twice._
 
 = Tokenized bond — issuer claim (step k, third party)
 _When the certificate commits a payment credential, the issuer claims the
-step's coupon on the owner's behalf through the third-party path. The honest
-builder makes the paired output the next certificate itself; on-chain, the
-core pairs each PLB input with a same-address/same-datum output and preserves
-its value. The coupon is a plain enterprise output (no stake credential, datum
-or reference script)._
+step's coupon on the owner's behalf through the third-party path. The core
+pairs each PLB input with a same-address/same-datum output and preserves its
+value; the third-party logic requires that pair to be the next certificate
+itself (name `k → k+1`, same address and datum). The coupon is a plain
+enterprise output (no stake credential, datum or reference script)._
 
 #let bond_issuer_claim_tx = vanilla_transaction(
   "Issuer claim (k)",
@@ -420,7 +420,7 @@ or reference script)._
   ),
   validRange: (lower: "start + k * interval"),
   notes: [
-    - The third-party path pins the paired output's address and `datum` byte-for-byte, but *not the subject policy's asset name*: the pair can carry the name `k` certificate in place, so an issuer-claimed coupon leaves no certificate-less shell.
+    - The third-party path pins the paired output's address and `datum` byte-for-byte, but *not the subject policy's asset name*; our `third_party_logic` fills that gap, requiring the pair to carry the name `k` certificate in place.
     - The minting logic's `Advance` mode burns exactly the spent name `k - 1` and mints exactly the name `k` (quantity `1` each), *and requires the coupon mint under the certificate's `cnt_policy`* (so the trigger cannot skip it). `third_party_logic` requires the issuer's signature and `commit = Some(pay)`, validates the exact `k - 1 → k` transition and binds the coupon to `pay` as a plain enterprise output: no stake credential (no issuer-chosen staking/delegation), no datum (no datum-hash lock) and no reference script. No owner signature is needed.
     - The gate is unchanged — `now ≥ start + k * interval`, and the coupon policy still binds the mint to the name advance — so the issuer can trigger but never claim early or redirect.
   ],
