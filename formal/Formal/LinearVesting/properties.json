@@ -83,9 +83,7 @@
     "theorems": [
       "Formal.LinearVesting.Robustness.claim_iff",
       "Formal.LinearVesting.Robustness.cancel_iff",
-      "Formal.LinearVesting.Robustness.authorized_iff",
-      "Formal.LinearVesting.Robustness.claim_requires_well_formed_bundle",
-      "Formal.LinearVesting.Robustness.claim_requires_clean_continuation"
+      "Formal.LinearVesting.Robustness.authorized_iff"
     ]
   },
   {

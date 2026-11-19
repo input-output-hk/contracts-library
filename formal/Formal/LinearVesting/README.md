@@ -38,8 +38,9 @@ the corresponding completeness proof.
 ## Transaction shapes
 
 Each row identifies a pair of soundness and completeness theorems.
-All five Claim shapes vest exactly one asset. The theorem statements and
-constructors specify the validity range and the remaining context fields.
+All five Claim shapes vest one asset and spend from an address without a
+staking credential. The constructors specify the validity range and other
+context fields. [Transaction constructors](TxBuilder.lean)
 
 | Theorem pair | Inputs and outputs | List bounds |
 | --- | --- | --- |

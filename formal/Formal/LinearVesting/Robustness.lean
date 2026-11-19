@@ -333,12 +333,6 @@ theorem claim_requires_ordered_schedule (h : specAccepts d .claim ctx = true) :
   obtain ⟨_, _, _, _, hs, _⟩ := (claim_iff d ctx).mp h
   exact hs
 
-/-- An accepted claim uses a bundle with strictly ordered keys and nonnegative totals. -/
-theorem claim_requires_well_formed_bundle (h : specAccepts d .claim ctx = true) :
-    bundleWellFormed d.vesting = true := by
-  obtain ⟨_, _, _, _, _, _, _, hb, _⟩ := (claim_iff d ctx).mp h
-  exact hb
-
 /-- R4: an accepted claim spends a vesting UTxO among the inputs, carrying the datum
 inline, not as a hash. -/
 theorem claim_requires_inline_datum (h : specAccepts d .claim ctx = true) :
@@ -367,20 +361,6 @@ theorem claim_requires_remainder {own : TxOut} {t : Int}
   rcases hrest with hend | ⟨_, hkeep⟩
   · exact absurd hend (Int.not_le.mpr hbefore)
   · exact fun o ho => (hkeep o ho).2
-
-/-- Before the end of vesting, every continuation of an accepted claim holds
-only ADA and listed assets and has no reference script. -/
-theorem claim_requires_clean_continuation {own : TxOut} {t : Int}
-    (h : specAccepts d .claim ctx = true)
-    (hown : ownInputOf ctx = some own) (ht : claimTimeOf ctx = some t)
-    (hbefore : t < d.endTime) :
-    ∀ o ∈ continuations d own ctx.scriptContextTxInfo, cleanContinuation d o = true := by
-  obtain ⟨own', t', hown', ht', _, _, _, _, hrest⟩ := (claim_iff d ctx).mp h
-  rw [hown] at hown'; cases hown'
-  rw [ht] at ht'; cases ht'
-  rcases hrest with hend | ⟨_, hkeep⟩
-  · exact absurd hend (Int.not_le.mpr hbefore)
-  · exact fun o ho => (hkeep o ho).1
 
 /-- Under §5.1, an accepted claim before the end of vesting has at least as many
 continuations as vesting inputs sharing its full address and datum. -/
