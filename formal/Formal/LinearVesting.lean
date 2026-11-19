@@ -7,10 +7,13 @@ See `docs/vesting/spec.md`.
 -/
 import Formal.LinearVesting.Spec
 import Formal.LinearVesting.Script
-import Formal.LinearVesting.Completeness
-import Formal.LinearVesting.Soundness
+import Formal.LinearVesting.TxBuilder
+import Formal.LinearVesting.CancelSound
+import Formal.LinearVesting.CancelComplete
+import Formal.LinearVesting.ClaimSound
+import Formal.LinearVesting.ClaimComplete
 import Formal.LinearVesting.Robustness
-import Formal.LinearVesting.SpecNew
-import Formal.LinearVesting.Cancel
-import Formal.LinearVesting.Claim
+import Formal.LinearVesting.Functionality
+import Formal.LinearVesting.MultiTx
 import Formal.LinearVesting.Corollaries
+import Formal.LinearVesting.Tests
