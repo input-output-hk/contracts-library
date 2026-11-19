@@ -23,27 +23,24 @@ formal/
 └── Formal/
     ├── Shared/
     │   └── Common.lean      # shared `validatorAccepts` / `validatorRejects`
-    ├── LinearVesting.lean   # imports both linear-vesting proof suites
+    ├── LinearVesting.lean   # imports the active linear-vesting suite
     └── LinearVesting/
-        ├── Spec.lean          # vesting arithmetic and datum encoding
-        ├── Script.lean        # loads the compiled spending validator
-        ├── Completeness.lean  # spec ⇒ accepts (§8)
-        ├── Soundness.lean     # accepts ⇒ spec (§9) and shared context builders
-        ├── Robustness.lean    # rejection theorems
-        ├── SpecNew.lean       # specification for Claim and Cancel
-        ├── Cancel.lean        # bounded agreement for Cancel
-        ├── Claim.lean         # bounded agreement for Claim
-        └── Corollaries.lean   # consequences of the agreement theorems
+        ├── Spec.lean and Script.lean      # executable model and compiled validator
+        ├── TxBuilder.lean                 # modeled transaction shapes
+        ├── {Claim,Cancel}{Sound,Complete}.lean
+        ├── Robustness.lean and Functionality.lean
+        ├── MultiTx.lean and Corollaries.lean
+        ├── Tests.lean                     # concrete fixtures and checks
+        └── Old/                          # earlier proof target
 ```
 
-Each contract gets its own `Completeness`/`Soundness`/`Robustness` under its
-folder, because the properties differ per contract. The layout follows
-`francolq/aiken-good-practices` (`order-book/verify`). Contract READMEs map theorems
-to the spec clauses they cover.
+The [linear-vesting README](Formal/LinearVesting/README.md) documents each
+transaction shape and the command to run the earlier proof target.
 
 ## Prerequisites
 
-The easiest path is **Nix** — `flake.nix` provides the whole toolchain:
+The Nix shell supplies elan, Z3, and gawk. Install `just` and Aiken
+`v1.1.22+39d6b04` and put them on `PATH` for the M1.2 snapshot.
 
 ```bash
 cd formal
@@ -65,8 +62,10 @@ Without Nix, install manually:
 
 ## Build
 
-The `justfile` in this directory drives the whole pipeline (compile Aiken →
-dump UPLC → encode to flat → check proofs):
+The `justfile` builds the checked-out Aiken sources and encodes the resulting
+UPLC to Flat for Lean. For the frozen vesting proofs, use a checkout of the
+M1.2 revision with the validator identified in the
+[vesting metadata](Formal/LinearVesting/validator-metadata.json).
 
 ```bash
 cd formal
@@ -80,14 +79,14 @@ Lean 4.24.0 and Z3 4.15.2 (provided by the dev shell).
 cd formal
 # (in `nix develop`, or with elan + z3 on PATH)
 just flats       # compile Aiken and generate Scripts/*.flat
-lake build       # type-check all modules and run every `blaster` proof
+lake build       # check the active proof suite
 ```
 
 Lake uses the dependency revisions in `lake-manifest.json`. The `just deps`
 recipe runs `lake update` when you intend to refresh those revisions.
 
-Git ignores the generated files under `Scripts/`. `lake build` requires them;
-run `just flats` before the first build and after changing the on-chain source.
+Git ignores the generated files under `Scripts/`. Run `just flats` before
+the first Lean build and after changing the on-chain source.
 
 A failing `blaster` goal can be debugged with its options, e.g.
 `blaster (verbose: 1)` or `blaster (gen-cex: 1)` to print a counterexample.

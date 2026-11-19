@@ -28,4 +28,3 @@ validator linear_vesting {
     fail
   }
 }
-
