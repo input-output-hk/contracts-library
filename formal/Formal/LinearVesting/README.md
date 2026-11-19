@@ -1,24 +1,25 @@
 # vesting/linear — formal proofs
 
 Lean model lemmas and compiled-validator proof targets for **linear vesting**.
-See the spec [`spec.md`](../../../../docs/vesting/spec.md)
+See the spec [`spec.md`](../../../docs/vesting/spec.md)
 (the source of truth, with §8 completeness / §9 soundness clauses) and the
-on-chain types [`types.ak`](../../../../onchain/lib/vesting/types.ak). For the
+on-chain types [`types.ak`](../../../onchain/lib/vesting/types.ak). For the
 toolchain, build, and general `blaster` notes, see the
-[`formal/` README](../../../README.md).
+[`formal/` README](../../README.md).
 
 For the milestone 1.2 review scope and checklist, see
 [issue #12](https://github.com/no-witness-labs/contracts-library/issues/12).
 
-[`properties.json`](properties.json) indexes the existing properties and theorem
-variants. Its summaries describe their scope.
+[`properties.json`](properties.json) indexes the 31 theorem declarations in
+`Spec`, `Completeness`, `Soundness`, and `Robustness` across 21 entries.
 
 ## Validator snapshot
 
 [`validator-metadata.json`](validator-metadata.json) records the upstream source
 snapshot. The CBOR and compiler details come from `onchain/plutus.json` at the
-recorded commit. This record does not establish a reproduced build or a match
-with the Lean `.flat` proof artifact.
+recorded commit. The source in PR #16 has one extra trailing newline. With
+Aiken `v1.1.22+39d6b04`, it produces the recorded vesting bytecode. The decoded
+CBOR payload matches the Flat artifact loaded by `Script.lean`.
 
 ## Modules
 
@@ -28,6 +29,15 @@ with the Lean `.flat` proof artifact.
 - `Completeness.lean` — `spec ⇒ accepts` (§8).
 - `Soundness.lean` — `accepts ⇒ spec` (§9), plus the shared context builders.
 - `Robustness.lean` — rejection theorems (§9 R-clauses, §5.1).
+- `SpecNew.lean` defines `specAccepts` for Claim and Cancel and proves six arithmetic lemmas.
+- `Cancel.lean` states agreement with the compiled validator for a constructed
+  cancel transaction. The theorem assumes at most two signatories for a key
+  locker or at most two withdrawals for a script locker.
+- `Claim.lean` states agreement for a constructed single-input claim with a key
+  beneficiary, one vested asset, a positive-infinite upper time bound, at most
+  one signatory, and at most two outputs.
+- `Corollaries.lean` derives nine soundness and completeness results within
+  the scope of those agreement theorems.
 
 ## Standard instance
 

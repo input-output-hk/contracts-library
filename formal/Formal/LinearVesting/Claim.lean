@@ -1,9 +1,9 @@
 import Blaster
 import CardanoLedgerApi.V3
-import Formal.Vesting.Linear.SpecNew
-import Formal.Vesting.Linear.Cancel
+import Formal.LinearVesting.SpecNew
+import Formal.LinearVesting.Cancel
 
-namespace Formal.Vesting.Linear.Claim
+namespace Formal.LinearVesting.Claim
 
 open PlutusCore.Data (Data)
 open PlutusCore.Integer (Integer)
@@ -11,8 +11,8 @@ open CardanoLedgerApi.IsData.Class (IsData)
 open CardanoLedgerApi.V1.Value (CurrencySymbol TokenName)
 open CardanoLedgerApi.V3
   (Credential POSIXTimeRange PubKeyHash ScriptContext ScriptHash TxInfo TxOut TxOutRef)
-open Formal.Vesting.Linear.SpecNew (VestedAsset VestingDatum datumData redeemerData)
-open Formal.Vesting.Linear.Cancel (Agrees)
+open Formal.LinearVesting.SpecNew (VestedAsset VestingDatum datumData redeemerData)
+open Formal.LinearVesting.Cancel (Agrees)
 
 /-- An output at a script address, with any datum, holding ada and one other asset. -/
 structure ClaimOut where
@@ -80,4 +80,4 @@ theorem claim_agrees
     | (rcases outs with _ | ⟨_, outs⟩))
   all_goals (clear hSig hOut; blaster)
 
-end Formal.Vesting.Linear.Claim
+end Formal.LinearVesting.Claim

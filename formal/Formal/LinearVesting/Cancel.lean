@@ -1,20 +1,20 @@
 import Blaster
 import CardanoLedgerApi.V3
-import Formal.Common
-import Formal.Vesting.Linear.SpecNew
-import Formal.Vesting.Linear.Script
+import Formal.Shared.Common
+import Formal.LinearVesting.SpecNew
+import Formal.LinearVesting.Script
 
-namespace Formal.Vesting.Linear.Cancel
+namespace Formal.LinearVesting.Cancel
 
 open PlutusCore.Data (Data)
 open PlutusCore.Integer (Integer)
 open CardanoLedgerApi.IsData.Class (IsData)
 open CardanoLedgerApi.V3
   (Credential POSIXTimeRange PubKeyHash ScriptContext ScriptHash TxInfo TxOutRef)
-open Formal.Common (validatorAccepts)
-open Formal.Vesting.Linear.SpecNew
+open Formal.Shared.Common (validatorAccepts)
+open Formal.LinearVesting.SpecNew
   (VestingDatum VestingRedeemer datumData redeemerData specAccepts)
-open Formal.Vesting.Linear.Script (spendValidator)
+open Formal.LinearVesting.Script (spendValidator)
 
 /-- The compiled validator accepts `ctx` exactly when the spec does. -/
 def Agrees (d : VestingDatum) (r : VestingRedeemer) (ctx : ScriptContext) : Prop :=
@@ -75,4 +75,4 @@ theorem cancel_agrees
       | (rcases wdrl with _ | ⟨⟨_ | _, _⟩, wdrl⟩))
     all_goals (clear h; blaster)
 
-end Formal.Vesting.Linear.Cancel
+end Formal.LinearVesting.Cancel

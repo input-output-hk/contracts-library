@@ -2,7 +2,7 @@ import Blaster
 import PlutusCore.UPLC
 import CardanoLedgerApi.V3
 
-namespace Formal.Vesting.Linear.SpecNew
+namespace Formal.LinearVesting.SpecNew
 
 open PlutusCore.Data
 open CardanoLedgerApi.IsData.Class
@@ -141,4 +141,4 @@ def TxSane (d : VestingDatum) (r : VestingRedeemer) (ctx : ScriptContext) : Prop
   ctx.scriptContextRedeemer = redeemerData r ∧
   ∃ ref, ctx.scriptContextScriptInfo = .SpendingScript ref (some (datumData d))
 
-end Formal.Vesting.Linear.SpecNew
+end Formal.LinearVesting.SpecNew

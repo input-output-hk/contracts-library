@@ -1,10 +1,10 @@
 import Blaster
 import CardanoLedgerApi.V3
-import Formal.Common
-import Formal.Vesting.Linear.SpecNew
-import Formal.Vesting.Linear.Script
-import Formal.Vesting.Linear.Cancel
-import Formal.Vesting.Linear.Claim
+import Formal.Shared.Common
+import Formal.LinearVesting.SpecNew
+import Formal.LinearVesting.Script
+import Formal.LinearVesting.Cancel
+import Formal.LinearVesting.Claim
 
 /-!
 # Corollaries of `cancel_agrees` and `claim_agrees`
@@ -21,18 +21,18 @@ reference, the script hash, the spent UTxO's value, the withdrawals, the rest of
 the transaction info, the upper bound for cancel) are left arbitrary here.
 -/
 
-namespace Formal.Vesting.Linear.Corollaries
+namespace Formal.LinearVesting.Corollaries
 
 open PlutusCore.Data (Data)
 open PlutusCore.Integer (Integer)
 open CardanoLedgerApi.V1.Time (UpperBound)
 open CardanoLedgerApi.V1.Value (CurrencySymbol TokenName)
 open CardanoLedgerApi.V3 (Credential PubKeyHash ScriptHash TxInfo TxOutRef)
-open Formal.Common (validatorAccepts)
-open Formal.Vesting.Linear.SpecNew (VestedAsset VestingDatum datumData required)
-open Formal.Vesting.Linear.Script (spendValidator)
-open Formal.Vesting.Linear.Cancel (CancelTx cancel_agrees agreesOn Agrees)
-open Formal.Vesting.Linear.Claim (ClaimOut ClaimTx claim_agrees claimAgreesOn)
+open Formal.Shared.Common (validatorAccepts)
+open Formal.LinearVesting.SpecNew (VestedAsset VestingDatum datumData required)
+open Formal.LinearVesting.Script (spendValidator)
+open Formal.LinearVesting.Cancel (CancelTx cancel_agrees agreesOn Agrees)
+open Formal.LinearVesting.Claim (ClaimOut ClaimTx claim_agrees claimAgreesOn)
 
 /-! ## Shapes -/
 
@@ -265,4 +265,4 @@ theorem cancel_complete
   clear h
   blaster
 
-end Formal.Vesting.Linear.Corollaries
+end Formal.LinearVesting.Corollaries

@@ -5,7 +5,7 @@
     "category": "vesting-escrow",
     "summary": "Pure model: the vested quantity is zero whenever the reference time is at or before the schedule start.",
     "theorems": [
-      "Formal.Vesting.Linear.Spec.vested_preStart"
+      "Formal.LinearVesting.Spec.vested_preStart"
     ]
   },
   {
@@ -14,7 +14,7 @@
     "category": "vesting-escrow",
     "summary": "Pure model: with start < finish, the vested quantity equals the original total whenever the reference time is at or after the finish.",
     "theorems": [
-      "Formal.Vesting.Linear.Spec.vested_full"
+      "Formal.LinearVesting.Spec.vested_full"
     ]
   },
   {
@@ -23,9 +23,9 @@
     "category": "vesting-escrow",
     "summary": "Pure model: for a nonnegative total and start < finish, the vested quantity stays between zero and the total, and the required remainder is nonnegative.",
     "theorems": [
-      "Formal.Vesting.Linear.Spec.vested_le_total",
-      "Formal.Vesting.Linear.Spec.vested_nonneg",
-      "Formal.Vesting.Linear.Spec.required_nonneg"
+      "Formal.LinearVesting.Spec.vested_le_total",
+      "Formal.LinearVesting.Spec.vested_nonneg",
+      "Formal.LinearVesting.Spec.required_nonneg"
     ]
   },
   {
@@ -34,7 +34,7 @@
     "category": "vesting-escrow",
     "summary": "Pure model: for a nonnegative total and start < finish, increasing the reference time cannot decrease the vested quantity.",
     "theorems": [
-      "Formal.Vesting.Linear.Spec.vested_mono"
+      "Formal.LinearVesting.Spec.vested_mono"
     ]
   },
   {
@@ -43,10 +43,10 @@
     "category": "vesting-escrow",
     "summary": "The compiled validator accepts constructed single-native-asset claims before vesting ends when the schedule is valid, the beneficiary key authorizes the claim, and the continuation preserves the input datum and payment credential and holds at least the required remainder. Other variants cover unconstrained recovery and fixed full-retention claims at any time.",
     "theorems": [
-      "Formal.Vesting.Linear.Completeness.claim_accept_generic_schedule",
-      "Formal.Vesting.Linear.Completeness.claim_accept_concrete",
-      "Formal.Vesting.Linear.Completeness.claim_accept_anytime",
-      "Formal.Vesting.Linear.Completeness.claim_complete_partial"
+      "Formal.LinearVesting.Completeness.claim_accept_generic_schedule",
+      "Formal.LinearVesting.Completeness.claim_accept_concrete",
+      "Formal.LinearVesting.Completeness.claim_accept_anytime",
+      "Formal.LinearVesting.Completeness.claim_complete_partial"
     ]
   },
   {
@@ -55,7 +55,7 @@
     "category": "vesting-escrow",
     "summary": "In the fixed midpoint, single-native-asset context, a zero withdrawal keyed by the symbolic beneficiary script authorizes the claim without a key signature. The continuation retains the full original quantity.",
     "theorems": [
-      "Formal.Vesting.Linear.Completeness.claim_accept_script_auth"
+      "Formal.LinearVesting.Completeness.claim_accept_script_auth"
     ]
   },
   {
@@ -64,7 +64,7 @@
     "category": "vesting-escrow",
     "summary": "In the fixed two-identical-input context at time 1500, two continuations holding 50 native tokens each satisfy the claim checked for the first input.",
     "theorems": [
-      "Formal.Vesting.Linear.Completeness.claim_accept_two_inputs"
+      "Formal.LinearVesting.Completeness.claim_accept_two_inputs"
     ]
   },
   {
@@ -73,7 +73,7 @@
     "category": "vesting-escrow",
     "summary": "For the fixed native-asset datum and beneficiary signature, a claim at now >= 2000 accepts with any nonnegative continuation token quantity. This theorem still constructs one continuing output.",
     "theorems": [
-      "Formal.Vesting.Linear.Completeness.claim_complete_full"
+      "Formal.LinearVesting.Completeness.claim_complete_full"
     ]
   },
   {
@@ -82,7 +82,7 @@
     "category": "vesting-escrow",
     "summary": "For the fixed datum and locker key signature, cancellation accepts whenever now > 3000. The constructed context still contains one output.",
     "theorems": [
-      "Formal.Vesting.Linear.Completeness.cancel_complete"
+      "Formal.LinearVesting.Completeness.cancel_complete"
     ]
   },
   {
@@ -91,8 +91,8 @@
     "category": "vesting-escrow",
     "summary": "For valid single-native-asset schedules before vesting ends, acceptance by the compiled validator in contexts built with mkClaimCtx and withAsset forces the output datum to match the input and the output quantity to be at least the required remainder.",
     "theorems": [
-      "Formal.Vesting.Linear.Soundness.claim_sound_partial_concrete",
-      "Formal.Vesting.Linear.Soundness.claim_sound_partial"
+      "Formal.LinearVesting.Soundness.claim_sound_partial_concrete",
+      "Formal.LinearVesting.Soundness.claim_sound_partial"
     ]
   },
   {
@@ -101,7 +101,7 @@
     "category": "vesting-escrow",
     "summary": "For the fixed datum and signed locker key, cancellation acceptance implies now > 3000. This does not derive authorization for arbitrary cancellation contexts.",
     "theorems": [
-      "Formal.Vesting.Linear.Soundness.cancel_sound"
+      "Formal.LinearVesting.Soundness.cancel_sound"
     ]
   },
   {
@@ -110,9 +110,9 @@
     "category": "vesting-escrow",
     "summary": "The compiled validator rejects claims with a key beneficiary and no signatories in contexts built with mkClaimCtx and withAsset. The fixed midpoint case also rejects a single non-beneficiary signer.",
     "theorems": [
-      "Formal.Vesting.Linear.Robustness.reject_unauthorized_claim_no_sig",
-      "Formal.Vesting.Linear.Robustness.reject_wrong_signer",
-      "Formal.Vesting.Linear.Robustness.reject_unauthorized_claim"
+      "Formal.LinearVesting.Robustness.reject_unauthorized_claim_no_sig",
+      "Formal.LinearVesting.Robustness.reject_wrong_signer",
+      "Formal.LinearVesting.Robustness.reject_unauthorized_claim"
     ]
   },
   {
@@ -121,8 +121,8 @@
     "category": "vesting-escrow",
     "summary": "For valid single-native-asset schedules before vesting ends, the compiled validator rejects contexts built with mkClaimCtx and withAsset when the output holds less than the required remainder.",
     "theorems": [
-      "Formal.Vesting.Linear.Robustness.reject_over_release_concrete",
-      "Formal.Vesting.Linear.Robustness.reject_over_release"
+      "Formal.LinearVesting.Robustness.reject_over_release_concrete",
+      "Formal.LinearVesting.Robustness.reject_over_release"
     ]
   },
   {
@@ -131,8 +131,8 @@
     "category": "vesting-escrow",
     "summary": "For valid single-asset schedules before vesting ends, the compiled validator rejects contexts built with mkClaimCtx and withAsset whose output datum differs from the input datum.",
     "theorems": [
-      "Formal.Vesting.Linear.Robustness.reject_datum_tamper_concrete",
-      "Formal.Vesting.Linear.Robustness.reject_datum_tamper"
+      "Formal.LinearVesting.Robustness.reject_datum_tamper_concrete",
+      "Formal.LinearVesting.Robustness.reject_datum_tamper"
     ]
   },
   {
@@ -141,7 +141,7 @@
     "category": "vesting-escrow",
     "summary": "In the fixed partial-claim context, replacing the input's inline datum with a symbolic datum hash causes rejection, even though script info still supplies the resolved datum.",
     "theorems": [
-      "Formal.Vesting.Linear.Robustness.reject_datum_hash_input"
+      "Formal.LinearVesting.Robustness.reject_datum_hash_input"
     ]
   },
   {
@@ -150,7 +150,7 @@
     "category": "vesting-escrow",
     "summary": "In the fixed midpoint context with a symbolic script beneficiary, a claim with no withdrawals or key signatures is rejected.",
     "theorems": [
-      "Formal.Vesting.Linear.Robustness.reject_script_no_withdrawal"
+      "Formal.LinearVesting.Robustness.reject_script_no_withdrawal"
     ]
   },
   {
@@ -159,7 +159,7 @@
     "category": "vesting-escrow",
     "summary": "For the fixed datum and authorized locker key, cancellation is rejected whenever now <= 3000.",
     "theorems": [
-      "Formal.Vesting.Linear.Robustness.reject_premature_cancel"
+      "Formal.LinearVesting.Robustness.reject_premature_cancel"
     ]
   },
   {
@@ -168,7 +168,7 @@
     "category": "vesting-escrow",
     "summary": "For the fixed datum at now > 3000, cancellation without the locker key signature is rejected.",
     "theorems": [
-      "Formal.Vesting.Linear.Robustness.reject_unauthorized_cancel"
+      "Formal.LinearVesting.Robustness.reject_unauthorized_cancel"
     ]
   },
   {
@@ -177,7 +177,7 @@
     "category": "vesting-escrow",
     "summary": "In the fixed two-identical-input midpoint context, a single continuation holding 50 native tokens causes rejection.",
     "theorems": [
-      "Formal.Vesting.Linear.Robustness.no_double_satisfaction"
+      "Formal.LinearVesting.Robustness.no_double_satisfaction"
     ]
   },
   {
@@ -186,7 +186,7 @@
     "category": "vesting-escrow",
     "summary": "In the fixed two-identical-input midpoint context, a single continuation holding 100 native tokens is rejected despite covering both inputs' aggregate required remainder.",
     "theorems": [
-      "Formal.Vesting.Linear.Robustness.reject_merged_instances"
+      "Formal.LinearVesting.Robustness.reject_merged_instances"
     ]
   },
   {
@@ -195,7 +195,7 @@
     "category": "vesting-escrow",
     "summary": "In the fixed two-identical-input midpoint context, continuations holding 40 and 60 native tokens are rejected because one falls below its required remainder of 50.",
     "theorems": [
-      "Formal.Vesting.Linear.Robustness.reject_underfunded_batch"
+      "Formal.LinearVesting.Robustness.reject_underfunded_batch"
     ]
   }
 ]
