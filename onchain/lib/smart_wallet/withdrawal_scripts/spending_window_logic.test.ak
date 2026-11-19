@@ -97,9 +97,42 @@ test backdated_first_spend_allowed() {
   validate(
     spend_tx(
       SpendingWindowState { last_upper: window },
-      SpendingWindowState { last_upper: 3 * window + 1_000 },
+      SpendingWindowState { last_upper: 3 * window },
       2 * window,
-      3 * window + 1_000,
+      3 * window,
+    ),
+  )
+}
+
+test range_at_window_cap_allowed() {
+  validate(
+    spend_tx(
+      SpendingWindowState { last_upper: 0 },
+      SpendingWindowState { last_upper: 1000 + window },
+      1000,
+      1000 + window,
+    ),
+  )
+}
+
+test range_over_window_cap_rejected() fail {
+  validate(
+    spend_tx(
+      SpendingWindowState { last_upper: 0 },
+      SpendingWindowState { last_upper: 1000 + window + 1 },
+      1000,
+      1000 + window + 1,
+    ),
+  )
+}
+
+test far_future_upper_rejected() fail {
+  validate(
+    spend_tx(
+      SpendingWindowState { last_upper: 0 },
+      SpendingWindowState { last_upper: 10 * 365 * window },
+      1000,
+      10 * 365 * window,
     ),
   )
 }
@@ -180,7 +213,7 @@ test prop_window_rule(
     lower,
     upper,
   )
-  let expected = ( last_upper == 0 || lower - last_upper >= window_value ) && next_upper == upper
+  let expected = ( last_upper == 0 || lower - last_upper >= window_value ) && upper_delta <= window_value && next_upper == upper
   fuzz.label_if(@"accepted", expected)
   fuzz.label_if(@"rejected", !expected)
   validate_with_window(tx, window_value) == expected

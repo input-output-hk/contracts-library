@@ -459,9 +459,10 @@ Stateful: allows at most one spend per `window` milliseconds. The state is
 `SpendingWindowState { last_upper }` (POSIX ms; `0` = never spent, validated on
 registration). It records the **upper bound** of the previous spend's validity
 range — the latest possible execution time of that spend. Its `withdraw` handler
-requires both validity bounds to be finite, the current **lower bound** to be at
-least `last_upper + window` (or it is the first spend), and the output state to
-record the current **upper bound**:
+requires both validity bounds to be finite, the validity range to span at most
+`window` milliseconds, the current **lower bound** to be at least
+`last_upper + window` (or it is the first spend), and the output state to record
+the current **upper bound**:
 
 ```ts
 import {
@@ -502,7 +503,10 @@ const nextDatum = {
 `startMs(slot)` is the slot's start in POSIX ms; the state stores the upper
 bound's slot start, which the validator reads from the validity range's upper
 bound. Both bounds are mandatory: a missing or infinite upper bound cannot be
-stored safely, so the spend is rejected.
+stored safely, so the spend is rejected. The range may be at most `window` wide
+(`(slotUpper - slot) * slotLength` ms, at most `window`), so with the `window`
+above, the example's 100-slot range fits only while `slotLength` keeps it under
+one hour.
 
 ### `spending_period_limit`
 

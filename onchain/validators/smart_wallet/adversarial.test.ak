@@ -411,7 +411,7 @@ test unprivileged_deposit_cannot_unregister_spender() fail {
 // cannot backdate its lower bound into the same instant.
 test spending_window_rejects_backdated_burst() fail {
   let s0 = [Pair(sw, window_state(hour))]
-  let upper = 3 * hour + 1_000
+  let upper = 3 * hour
   let s1 = [Pair(sw, window_state(upper))]
   let s2 = [Pair(sw, window_state(upper))]
   let tx1 = Transaction {
@@ -425,9 +425,25 @@ test spending_window_rejects_backdated_burst() fail {
     ..tx1,
     inputs: [wallet_in(wallet_out(nft_value(99 * ada), s1, []))],
     outputs: [wallet_out(nft_value(98 * ada), s2, [])],
-    validity_range: interval.between(3 * hour, upper),
+    validity_range: interval.between(upper, upper),
   }
   sw_withdraw(tx1) && sw_withdraw(tx2)
+}
+
+// Fixed: the recorded upper bound is capped at one window past the lower bound,
+// so a far-future upper bound cannot lock the Spend path for years.
+test spending_window_rejects_far_future_upper() fail {
+  let s0 = [Pair(sw, window_state(0))]
+  let upper = 100 * 365 * 24 * hour
+  let s1 = [Pair(sw, window_state(upper))]
+  let tx = Transaction {
+    ..member_tx(),
+    inputs: [wallet_in(wallet_out(nft_value(100 * ada), s0, []))],
+    outputs: [wallet_out(nft_value(99 * ada), s1, [])],
+    withdrawals: [Pair(Script(sw), 0)],
+    validity_range: interval.between(2 * hour, upper),
+  }
+  sw_withdraw(tx)
 }
 
 // ------------------------------------ 3. spending_period_limit: time bounds

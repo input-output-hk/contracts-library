@@ -27,12 +27,14 @@ pub fn initial_state_valid(data: Data) -> Bool {
   state.last_upper == 0
 }
 
-/// Validate one `Spend`: both validity bounds must be finite, at least `window`
-/// milliseconds must separate this spend's lower bound from the previous spend's
-/// upper bound, and the wallet output must record this spend's upper bound.
-/// Reads the current state from the wallet input datum and the next state from
-/// the wallet output datum, so the state transition is enforced end-to-end by
-/// this script.
+/// Validate one `Spend`: both validity bounds must be finite, the validity range
+/// may span at most `window` milliseconds, at least `window` milliseconds must
+/// separate this spend's lower bound from the previous spend's upper bound, and
+/// the wallet output must record this spend's upper bound. The width cap keeps
+/// the recorded upper bound within `window` of the lower bound, so a far-future
+/// upper bound cannot push the next allowed spend past that horizon. Reads the
+/// current state from the wallet input datum and the next state from the wallet
+/// output datum, so the state transition is enforced end-to-end by this script.
 pub fn validate_withdraw(
   self: Transaction,
   wallet: Credential,
@@ -56,5 +58,6 @@ pub fn validate_withdraw(
   )
   let first_spend = current.last_upper == 0
   let cooldown_elapsed = lower - current.last_upper >= window
-  ( first_spend || cooldown_elapsed ) && next.last_upper == upper
+  let range_bounded = upper - lower <= window
+  ( first_spend || cooldown_elapsed ) && range_bounded && next.last_upper == upper
 }

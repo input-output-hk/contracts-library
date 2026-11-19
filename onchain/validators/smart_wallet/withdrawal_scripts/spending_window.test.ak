@@ -130,6 +130,18 @@ test withdraw_accepts_after_cooldown() {
   withdraw(Script(a), tx)
 }
 
+test withdraw_rejects_range_over_window() fail {
+  let current: Data = SpendingWindowState { last_upper: 0 }
+  let next: Data = SpendingWindowState { last_upper: 1000 + window + 1 }
+  let tx = Transaction {
+    ..placeholder,
+    inputs: [wallet_input([Pair(a, current)])],
+    outputs: [wallet_output([Pair(a, next)])],
+    validity_range: interval.between(1000, 1000 + window + 1),
+  }
+  withdraw(Script(a), tx)
+}
+
 test withdraw_rejects_cooldown() fail {
   let current: Data = SpendingWindowState { last_upper: 500 }
   let next: Data = SpendingWindowState { last_upper: 3_000_100 }
