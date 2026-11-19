@@ -9,8 +9,10 @@
 ////     the next name with the same address and datum (a claim), or there is no
 ////     certificate continuation (a retirement); and
 ////   * binds the coupon minted under the certificate's `cnt_policy` to the
-////     committed payment credential: every output carrying it must pay `pay`,
-////     so the issuer can trigger but never redirect.
+////     committed payment credential: every output carrying it must pay `pay`
+////     as a plain enterprise output (no stake credential, no datum and no
+////     reference script), so the issuer can trigger but never redirect, stake
+////     or lock the coupon.
 ////
 //// The coupon mint is also required by the minting logic's `Advance`/`Retire`
 //// modes, so the trigger cannot skip it.
@@ -24,7 +26,7 @@ use aiken/collection/list
 use authorization.{is_authorized}
 use cardano/address.{Credential}
 use cardano/assets.{PolicyId, quantity_of, tokens}
-use cardano/transaction.{Input, Output, Transaction}
+use cardano/transaction.{Input, NoDatum, Output, Transaction}
 use event_triggered/certificate
 use event_triggered/registry
 use event_triggered/schedule
@@ -90,8 +92,11 @@ fn transition(
 }
 
 /// Exactly one positive coupon unit under the certificate's `cnt_policy`, and
-/// every output carrying it pays `pay` (I9). This is also the presence rule:
-/// the trigger must mint the coupon.
+/// every output carrying it pays `pay` as a plain enterprise output: no stake
+/// credential (the issuer cannot capture rewards/delegation on the coupon's
+/// min-ADA), no datum (the issuer cannot lock the coupon behind a datum hash)
+/// and no reference script (I9). This is also the presence rule: the trigger
+/// must mint the coupon.
 fn coupon_to_pay(self: Transaction, cnt: PolicyId, pay: Credential) -> Bool {
   when dict.to_pairs(tokens(self.mint, cnt)) is {
     [Pair(name, 1)] -> {
@@ -101,7 +106,14 @@ fn coupon_to_pay(self: Transaction, cnt: PolicyId, pay: Credential) -> Bool {
       )
       !list.is_empty(carriers) && list.all(
         carriers,
-        fn(output) { output.address.payment_credential == pay },
+        fn(output) {
+          and {
+            output.address.payment_credential == pay,
+            output.address.stake_credential == None,
+            output.datum == NoDatum,
+            output.reference_script == None,
+          }
+        },
       )
     }
     _ -> False

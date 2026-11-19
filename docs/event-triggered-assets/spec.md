@@ -274,9 +274,9 @@ owner's behalf through the third-party path:
 | **Mint** | `cip_policy`: `−1` of name `k-1` + `+1` of name `k` (our minting logic's `Advance` mode); the certificate's `cnt_policy`: `1` unit of asset name `amount_k`. |
 | **Withdrawals** | `programmable_logic_global` [ThirdPartyAct] → `third_party` [ThirdPartyRedeemer] → `third_party_logic` (ours); minting logic `[Advance]` → core `issuance_mint`. |
 | **Signatures** | Issuer. |
-| **Outputs** | 1. **Certificate**: the paired PLB output at the same address and `datum`, name step `k` — the next certificate itself, so **no ghost shell**. 2. **Coupon** at `[payment: pay]`: `cNt(amount_k)` × 1. |
+| **Outputs** | 1. **Certificate**: the paired PLB output at the same address and `datum`, name step `k` — the next certificate itself, so **no ghost shell**. 2. **Coupon** at a plain enterprise address with payment credential `pay`: `cNt(amount_k)` × 1 (no stake credential, datum or reference script). |
 | **Validity range** | Lower bound finite, `≥ start + k * interval`. |
-| **Constraints** | The third-party path pins the paired output's address and `datum` but **not the subject policy's asset name**, so the pair can carry the name `k` certificate in place. `third_party_logic` requires the issuer's signature, `commit = Some(pay)` and the exact `k-1 → k` transition, and binds the coupon minted under the certificate's `cnt_policy` to `pay`; the minting logic's `Advance` requires that coupon, so the trigger cannot skip it. |
+| **Constraints** | The third-party path pins the paired output's address and `datum` but **not the subject policy's asset name**, so the pair can carry the name `k` certificate in place. `third_party_logic` requires the issuer's signature, `commit = Some(pay)` and the exact `k-1 → k` transition, and binds the coupon minted under the certificate's `cnt_policy` to `pay`; every output carrying that coupon must pay `pay` as a plain enterprise output — no stake credential (no issuer-chosen staking/delegation), no datum (no datum-hash lock) and no reference script. The minting logic's `Advance` requires that coupon, so the trigger cannot skip it. |
 
 ### 4.6 Redemption (burn-to-pay, T-redeem)
 
@@ -323,9 +323,9 @@ owner's behalf:
 | **Mint** | `cip_policy`: `−1` of name `N` — our minting logic's `Retire` mode; the certificate's `cnt_policy`: `1` unit of asset name `principal`. |
 | **Withdrawals** | `programmable_logic_global` [ThirdPartyAct] → `third_party` [ThirdPartyRedeemer] → `third_party_logic` (ours); minting logic `[Retire]` → core `issuance_mint`. |
 | **Signatures** | Issuer. |
-| **Outputs** | 1. **Ghost continuation**: paired PLB output at the same address and `datum`, preserving the spent UTxO's lovelace and other assets with the certificate removed — the design's only shell. 2. **Principal coupon** at `[payment: pay]`: `cNt(principal)` × 1. |
+| **Outputs** | 1. **Ghost continuation**: paired PLB output at the same address and `datum`, preserving the spent UTxO's lovelace and other assets with the certificate removed — the design's only shell. 2. **Principal coupon** at a plain enterprise address with payment credential `pay`: `cNt(principal)` × 1 (no stake credential, datum or reference script). |
 | **Validity range** | Lower bound finite, `≥ start + N * interval`. |
-| **Constraints** | The burn's custody is covered by the third-party path (the core `issuance_logic` delegates to it); `third_party_logic` requires the issuer's signature and `commit`, validates name `N`, and binds the principal coupon minted under the certificate's `cnt_policy` to `pay`. Our minting logic's `Retire` requires that principal coupon, so the trigger cannot retire without paying it. Because the certificate disappears, the pair output is a certificate-less shell — inert and sweepable (§7). |
+| **Constraints** | The burn's custody is covered by the third-party path (the core `issuance_logic` delegates to it); `third_party_logic` requires the issuer's signature and `commit`, validates name `N`, and binds the principal coupon minted under the certificate's `cnt_policy` to `pay` as a plain enterprise output — no stake credential, datum or reference script. Our minting logic's `Retire` requires that principal coupon, so the trigger cannot retire without paying it. Because the certificate disappears, the pair output is a certificate-less shell — inert and sweepable (§7). |
 
 ## 5. Determinism & time
 
@@ -380,9 +380,11 @@ owner's behalf:
 - **I9 — Committed issuer trigger.** An issuer-triggered claim or graduation
   spends the certificate through the third-party path only when its datum
   commits a payment credential (`Some(pay)`), and the coupon and principal
-  payouts go to `pay` — the issuer can trigger but never redirect. An
-  issuer-claimed coupon's paired output is the next certificate (no shell);
-  `commit` is owner-set and cleared on owner change (I7).
+  payouts go to `pay` as a plain enterprise output (no stake credential, datum
+  or reference script) — the issuer can trigger but never redirect, stake or
+  lock them. An issuer-claimed coupon's paired output is the next certificate
+  itself (`k → k+1`, same address and datum); `commit` is owner-set and
+  cleared on owner change (I7).
 - **I10 — Vault identity.** Every vault UTxO carries exactly one unit under
   `vault_nft_cs`, minted only by the deployment's `authority`; every vault
   spend preserves it into exactly one continuation with the same address and
@@ -400,8 +402,29 @@ owner's behalf:
   `cnt_policy`, so a certificate cannot be moved to an earlier name, skip a
   step, nor advance without its coupon (I3, I7).
 - **Trigger payout redirection.** Every issuer-triggered payout is bound to the
-  certificate's committed payment credential (I9); the issuer can trigger the
-  event but cannot redirect the coupon or the principal.
+  certificate's committed payment credential in a plain enterprise output (no
+  stake credential, datum or reference script, I9); the issuer can trigger the
+  event but cannot redirect, stake or lock the coupon or the principal.
+- **Issuer-trigger dispatch.** A certificate spend is a PLB spend: the PLB
+  requires the global dispatcher; `ThirdPartyAct` requires the core third-party
+  validator, which requires this module's third-party logic; the transfer path
+  requires the certificate's inline stake credential. An issuer-triggered
+  advance or retirement therefore cannot bypass `third_party.validate` /
+  `coupon_to_pay`.
+- **Issuer-trigger value containment.** On the third-party path the core pairs
+  each PLB input with a PLB output and requires the same address, datum and
+  reference script, `lovelace(output) >= lovelace(input)`, and byte-identical
+  non-acted assets. The issuer cannot sweep the certificate UTxO's lovelace or
+  unrelated assets. On retirement the paired certificate-less shell is
+  enforced; on advance a shell can coexist with the certificate if the issuer
+  reorders the outputs, but it sits at the owner's address, holds the owner's
+  value and is owner-sweepable.
+- **Certificate custody (core-enforced).** The core `issuance_logic`
+  `no_escape` rejects any output that carries the governed policy unless it is
+  a PLB output with an inline stake credential; the deposit cannot delegate
+  custody to the transfer or third-party delegates. The minted certificate is
+  therefore always at the PLB, even though `validate_deposit` does not check
+  the address itself.
 - **Stale consent.** `commit` is cleared automatically whenever the owner
   changes (I7), so an issuer can never pay a previous owner.
 - **Early trigger.** The coupon and graduation gates are the same on both
@@ -437,6 +460,11 @@ owner's behalf:
   in the same transaction; the vault validator ties the payout total to the
   burned value.
 
+The CIP-113 core guarantees above were verified against
+`cardano-foundation/cip113-programmable-tokens` at commit `369e8c2`; that core
+is external to this repository and its deployment/upgrade governance is out of
+scope.
+
 ### Assumptions / out of scope
 
 - **Vault solvency and owner honesty.** A vault is an escrow: the owner (or
@@ -461,6 +489,14 @@ owner's behalf:
   the authority to mint each vault NFT exactly once. A certificate binds only
   to the vault's `cnt_policy`, not to a vault outref, so vaults that share a
   `cnt_policy` are interchangeable (coupons are bearer claims).
+- **Vault UTxO contention.** A vault is a single UTxO. Every deposit, top-up and
+  redemption serializes on it, and `VaultTopUp` is permissionless and accepts
+  any positive gain, so a third party can respend the vault and invalidate
+  concurrent transactions built on the stale outpoint. This is a
+  liveness/throughput limitation, not a loss: the donation stays in the vault
+  and honest transactions can be rebuilt. Deployments that need higher
+  throughput should shard across vaults with different `cnt_policy`s; a minimum
+  top-up only raises the griefing cost.
 - **Open issuance, no cap.** Deposits are permissionless and the number of
   certificates is not capped on-chain: every certificate claims its vault's
   coupons from that vault's owner-funded balance and the principal at its own
@@ -478,14 +514,18 @@ owner's behalf:
   (bounded by I1's transferability).
 - **Issuer liveness.** Issuer triggering is a convenience: if the issuer never
   triggers, the owner can always claim and graduate through the transfer path.
-- **Issuer graduation leaves one shell.** An issuer-claimed coupon pairs to the
-  next certificate, so claims leave no shell; only the issuer's *graduation*
-  removes the certificate, leaving a certificate-less paired continuation (a
-  *ghost shell*) holding the spent UTxO's lovelace and other assets (the core
-  third-party rule forbids the pair from losing value). It is inert — no
-  `cip_policy`, no effect on claims or graduation, and third-party cannot touch
-  it (the paired input must already hold the policy). The owner can sweep any
-  number of shells in a single owner-signed transfer-path spend (`PLG
+- **Issuer graduation leaves one shell.** On a claim, the third-party logic
+  requires the certificate's paired output to carry the next name (`k → k+1`)
+  at the same address and datum, so the certificate advances in place; the core
+  pairs every PLB input with a same-address/same-datum output and preserves its
+  lovelace and non-acted assets. A hostile issuer can still leave a
+  certificate-less paired continuation (a *ghost shell*) alongside the
+  certificate by reordering the outputs. It is inert — no `cip_policy`, no
+  effect on claims or graduation, and third-party cannot touch it (the paired
+  input must already hold the policy). The shell sits at the owner's address and
+  holds the owner's value. An issuer's *graduation* necessarily leaves the
+  certificate-less paired continuation (the design's only shell). The owner can
+  sweep any number of shells in a single owner-signed transfer-path spend (`PLG
   [TransferAct]` + `transfer`; that path does not require paired outputs) and
   recover their ADA; the issuer cannot (the stake is the owner's), and a
   CIP-113-aware builder is required.

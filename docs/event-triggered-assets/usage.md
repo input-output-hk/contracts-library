@@ -185,6 +185,14 @@ await buildVaultTopUpTx({
 Never send ADA to the vault address with a plain transfer: a UTxO without the
 vault NFT and inline datum is not a vault and can never be spent.
 
+The vault is a single UTxO: every deposit, top-up and redemption serializes on
+it. Because `VaultTopUp` is permissionless and accepts any positive amount, a
+third party can respend the vault and invalidate concurrent transactions built
+on the stale outpoint. This is a liveness limitation, not a loss — honest
+transactions can be rebuilt and the donation stays in the vault (§7).
+Deployments that need higher throughput should shard across vaults with
+different `cnt_policy`s; a minimum top-up only raises the griefing cost.
+
 ## Register the instrument
 
 One transaction inserts the bond's `RegistryNode` into the core registry and
@@ -258,7 +266,8 @@ Claiming the step-`k` coupon advances the certificate `k-1 → k` (same owner,
 same datum, one unit) and mints `amounts[k-1]` under the certificate's
 `cnt_policy`. The **issuer-triggered** path is permissionless on the holder
 side but requires a committed certificate; the coupon is delivered to the
-committed payment credential (I9):
+committed payment credential as a plain enterprise output — no stake
+credential, datum or reference script (I9):
 
 ```ts
 import { buildClaimIssuerTx } from "@contracts-library/meshjs";
@@ -271,7 +280,7 @@ await buildClaimIssuerTx({
   certificate,                        // the committed certificate UTxO
   step,
   datum,                              // the preserved certificate datum
-  payoutAddress,                      // its payment credential must be the commit
+  payoutAddress,                      // enterprise address; payment credential = the commit
   validFromSlot,                      // first slot reaching start + step * interval
   funding, collateral, changeAddress,
 });
@@ -318,9 +327,10 @@ continuation (I10).
 At maturity the certificate is retired: its final name is burned (no
 continuation) and the principal coupon — named `encode(principal)` under the
 certificate's `cnt_policy` — is minted (I5). The **issuer-triggered** path
-requires the commitment and delivers the coupon to `pay`, leaving a
-certificate-less **ghost shell** that preserves the spent UTxO's address and
-datum byte-for-byte (the issuer can trigger but never redirect):
+requires the commitment and delivers the coupon to `pay` as a plain
+enterprise output, leaving a certificate-less **ghost shell** that preserves the
+spent UTxO's address and datum byte-for-byte (the issuer can trigger but never
+redirect, stake or lock the coupon):
 
 ```ts
 import { buildGraduateIssuerTx } from "@contracts-library/meshjs";
@@ -333,7 +343,7 @@ await buildGraduateIssuerTx({
   certificate,                        // the committed certificate at step N
   step: final,
   datum,
-  payoutAddress,                      // must be the commit
+  payoutAddress,                      // enterprise address; must be the commit
   validFromSlot,                      // first slot reaching start + N * interval
   funding, collateral, changeAddress,
 });
@@ -551,10 +561,20 @@ Notes:
   exactly that. Payout outputs may carry the ledger min-ADA instead of the
   named amount — the excess is the payer's.
 - **Committed trigger only (I9).** The issuer-triggered paths require
-  `commit: Some(pay)`, and every output carrying the coupon must pay `pay`.
-  `commit` is owner-set, may change only on a self-transfer, and is cleared on
-  an owner change. The ghost shell preserves the spent UTxO's address and
-  datum byte-for-byte.
+  `commit: Some(pay)`, and every output carrying the coupon must pay `pay` as a
+  plain enterprise output (no stake credential, datum or reference script), so
+  the issuer cannot choose the coupon's staking/delegation or lock it behind a
+  datum hash. `commit` is owner-set, may change only on a self-transfer, and is
+  cleared on an owner change. The ghost shell preserves the spent UTxO's
+  address and datum byte-for-byte.
+- **The issuer path is enforced by the CIP-113 core.** A certificate spend is a
+  PLB spend: the PLB requires the global dispatcher, `ThirdPartyAct` requires
+  the core third-party validator, and that validator requires this module's
+  third-party logic (the transfer path requires the owner). The core also pairs
+  each PLB input with a same-address/same-datum output and preserves its
+  lovelace and non-acted assets, so the issuer cannot sweep the certificate
+  UTxO or bypass `coupon_to_pay`. Verified against
+  `cardano-foundation/cip113-programmable-tokens` at `369e8c2`.
 - **Vault identity is the NFT (I10).** Every vault UTxO carries exactly one
   `vault_nft_cs` NFT; the deposit, top-up and redemption require it, so a fake
   output at the vault address can never back a certificate. Creation is out of

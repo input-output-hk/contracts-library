@@ -47,7 +47,7 @@
     "smart_wallet.asset_deposit_deny_list": "d61dc26a48bfe7bda598f9ef77c500dc37cde9533f24feb2f1e077ea",
     "event_triggered.issuance": "e6219b586289679409833d1e0fa3e790faecbc1c1586060f9264e9cc",
     "event_triggered.transfer": "03bbe9f443c04062f145bdfc32f40ee9329e33dd2b56fc212472ec42",
-    "event_triggered.third_party": "af912f2c559a6f1115b56e9aaa34ee49e673ce9a0265b867d649e7d9",
+    "event_triggered.third_party": "43b0bcf95e3c8170b2d60350e3f2978b9aed51485531238250f34145",
     "event_triggered.vault": "9bc40f92fa084f4859bfe16f7658e985556bbcf3c5cbcb4a1b56ecde",
     "event_triggered.coupon_policy": "18704760d5ebe7b58aeac2934cde6267bb05df325d70727e2f345498",
     "event_triggered.vault_nft_policy": "601198710ff29674e394a0953a0c9a7f6905623d2fefcdba9aab7b5f",

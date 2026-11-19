@@ -590,7 +590,7 @@ describe.skipIf(!REACHABLE)(
         certificate: committedCert,
         step: 1,
         datum: committed,
-        payoutAddress: payout.address,
+        payoutAddress: payout.enterpriseAddress,
         validFromSlot: firstSlotAt(deadline),
         funding: fClaim.funding,
         collateral: fClaim.collateral,
@@ -609,15 +609,15 @@ describe.skipIf(!REACHABLE)(
       expect(
         coupon.output.address,
         "the triggered coupon goes to the committed payout",
-      ).toBe(payout.address);
+      ).toBe(payout.enterpriseAddress);
 
       // ---- redeem (the committed wallet holds the coupon) ------------------
       const vaultAfterRedeem = await redeem(
         payout,
         bond,
         d.vault,
-        [await couponOf(payout.address, bond.cntPolicy, AMOUNTS[0])],
-        [{ address: payout.address, amount: BigInt(AMOUNTS[0]) }],
+        [await couponOf(payout.enterpriseAddress, bond.cntPolicy, AMOUNTS[0])],
+        [{ address: payout.enterpriseAddress, amount: BigInt(AMOUNTS[0]) }],
       );
       expect(lovelaceOf(vaultAfterRedeem)).toBe(
         VAULT_ADA + BigInt(PRINCIPAL) - BigInt(AMOUNTS[0]),
@@ -633,7 +633,7 @@ describe.skipIf(!REACHABLE)(
         certificate: cert1,
         step: 1,
         datum: committed,
-        payoutAddress: payout.address,
+        payoutAddress: payout.enterpriseAddress,
         validFromSlot: firstSlotAt(deadline),
         funding: fGrad.funding,
         collateral: fGrad.collateral,
@@ -655,8 +655,8 @@ describe.skipIf(!REACHABLE)(
         payout,
         bond,
         vaultAfterRedeem,
-        [await couponOf(payout.address, bond.cntPolicy, PRINCIPAL)],
-        [{ address: payout.address, amount: BigInt(PRINCIPAL) }],
+        [await couponOf(payout.enterpriseAddress, bond.cntPolicy, PRINCIPAL)],
+        [{ address: payout.enterpriseAddress, amount: BigInt(PRINCIPAL) }],
       );
       expect(lovelaceOf(vaultFinal)).toBe(
         VAULT_ADA + BigInt(PRINCIPAL) - BigInt(AMOUNTS[0]) - BigInt(PRINCIPAL),
@@ -855,7 +855,7 @@ describe.skipIf(!REACHABLE)(
         certificate: d.cert,
         step: 1,
         datum: noCommit,
-        payoutAddress: issuer.address,
+        payoutAddress: issuer.enterpriseAddress,
         validFromSlot: firstSlotAt(deadline1),
         funding: fNoCommit.funding,
         collateral: fNoCommit.collateral,
