@@ -11,20 +11,20 @@ import Blaster
 import PlutusCore.UPLC
 import CardanoLedgerApi.V3
 import Formal.Shared.Common
-import Formal.LinearVesting.Spec
+import Formal.LinearVesting.Old.Spec
 import Formal.LinearVesting.Script
-import Formal.LinearVesting.Soundness
-import Formal.LinearVesting.Completeness
+import Formal.LinearVesting.Old.Soundness
+import Formal.LinearVesting.Old.Completeness
 
-namespace Formal.LinearVesting.Robustness
+namespace Formal.LinearVesting.Old.Robustness
 
 open PlutusCore.UPLC.Term (Program)
 open PlutusCore.ByteString (ByteString)
 open PlutusCore.Data (Data)
 open CardanoLedgerApi.V3 (Address Redeemer)
 open Formal.Shared.Common (validatorRejects)
-open Formal.LinearVesting.Spec
-open Formal.LinearVesting.Soundness (mkClaimCtx mkClaimCtxW mkClaimCtxHashInput mkClaimCtxDouble withAsset scriptAddress)
+open Formal.LinearVesting.Old.Spec
+open Formal.LinearVesting.Old.Soundness (mkClaimCtx mkClaimCtxW mkClaimCtxHashInput mkClaimCtxDouble withAsset scriptAddress)
 open Formal.LinearVesting.Script (spendValidator)
 -- `dConcrete`/`dScript` come from `Spec` (opened above).
 
@@ -282,4 +282,4 @@ theorem reject_underfunded_batch :
       spendValidator := by
   blaster
 
-end Formal.LinearVesting.Robustness
+end Formal.LinearVesting.Old.Robustness

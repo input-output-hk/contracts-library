@@ -5,8 +5,8 @@
 # that bytecode. The point of the flat step is that the proofs target the
 # *actual compiled validator*, not a hand-written model.
 #
-# Lean v4.24.0 + Z3 4.15.2 come from ./flake.nix (`nix develop`); `aiken` must
-# be on PATH. Run `just deps` once before the first `just verify`.
+# The Nix shell provides elan and Z3 4.15.2. Put `aiken` on PATH.
+# Lake uses the revisions in lake-manifest.json.
 
 onchain   := "../onchain"
 artifacts := onchain / "artifacts"
