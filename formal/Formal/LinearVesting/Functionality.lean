@@ -5,7 +5,7 @@ import Formal.LinearVesting.Robustness
 /-!
 # Functionality of the spec
 
-Which honest transactions `SpecNew.specAccepts` accepts, for every script context.
+Which honest transactions `Spec.specAccepts` accepts, for every script context.
 Each theorem lists, as hypotheses, what a well-formed transaction of that kind
 provides, and concludes that the spec accepts it. Proved in plain Lean, without
 Blaster, from `claim_iff` and `cancel_iff` in `Robustness.lean`.
@@ -39,52 +39,54 @@ theorem authorizedBy_script {s : ScriptHash} {amt : Integer}
 
 /-! ## Claims -/
 
-/-- C1–C4: before the end of vesting, a claim is accepted when it spends a vesting
-UTxO carrying the datum inline, on an ordered schedule, authorized by the
-beneficiary, with at least as many continuations as vesting inputs sharing the
-datum, each keeping the required remainder of every vested asset. -/
+/-- Before the end of vesting, an authorized claim on an ordered schedule and
+well-formed bundle is accepted with the inline datum and enough clean
+continuations at the same address carrying each required remainder. -/
 theorem accept_claim {own : TxOut} {t : Int}
     (hown : ownInputOf ctx = some own)
     (hd : own.txOutDatum = .OutputDatum (datumData d))
     (ht : claimTimeOf ctx = some t)
     (hs : d.startTime < d.endTime)
     (ha : AuthorizedBy d.beneficiary ctx.scriptContextTxInfo)
+    (hb : bundleWellFormed d.vesting = true)
     (hcount : sharedInputCount d own ctx.scriptContextTxInfo
       ≤ (continuations d own ctx.scriptContextTxInfo).length)
-    (hkeep : ∀ o ∈ continuations d own ctx.scriptContextTxInfo, ∀ a ∈ d.vesting,
-      valueOf a.policy a.name o.txOutValue ≥ required a.total d.startTime d.endTime t) :
+    (hkeep : ∀ o ∈ continuations d own ctx.scriptContextTxInfo,
+      cleanContinuation d o = true ∧ ∀ a ∈ d.vesting,
+        valueOf a.policy a.name o.txOutValue ≥ required a.total d.startTime d.endTime t) :
     specAccepts d .claim ctx = true :=
-  (claim_iff d ctx).mpr ⟨own, t, hown, ht, hs, ha, hd, Or.inr ⟨hcount, hkeep⟩⟩
+  (claim_iff d ctx).mpr ⟨own, t, hown, ht, hs, ha, hd, hb, Or.inr ⟨hcount, hkeep⟩⟩
 
-/-- The typical partial claim: the vesting UTxO is the only vesting input with its
-datum, and the claim has exactly one continuation, which keeps the required
-remainder. -/
+/-- A partial claim with one input in its address and datum group and one clean
+continuation keeping the required remainder. -/
 theorem accept_claim_one_continuation {own o : TxOut} {t : Int}
     (hown : ownInputOf ctx = some own)
     (hd : own.txOutDatum = .OutputDatum (datumData d))
     (ht : claimTimeOf ctx = some t)
     (hs : d.startTime < d.endTime)
     (ha : AuthorizedBy d.beneficiary ctx.scriptContextTxInfo)
+    (hb : bundleWellFormed d.vesting = true)
     (hone : sharedInputCount d own ctx.scriptContextTxInfo = 1)
     (hcont : continuations d own ctx.scriptContextTxInfo = [o])
+    (hclean : cleanContinuation d o = true)
     (hkeep : ∀ a ∈ d.vesting,
       valueOf a.policy a.name o.txOutValue ≥ required a.total d.startTime d.endTime t) :
     specAccepts d .claim ctx = true :=
-  accept_claim hown hd ht hs ha (by rw [hone, hcont]; simp)
-    (by intro o' ho'; rw [hcont] at ho'; simp at ho'; subst ho'; exact hkeep)
+  accept_claim hown hd ht hs ha hb (by rw [hone, hcont]; simp)
+    (by intro o' ho'; rw [hcont] at ho'; simp at ho'; subst ho'; exact ⟨hclean, hkeep⟩)
 
-/-- C5, I4: at or after the end of vesting, a claim is accepted when it spends a
-vesting UTxO carrying the datum inline, on an ordered schedule, authorized by the
-beneficiary, whatever its outputs. -/
+/-- At or after the end of vesting, an authorized claim on an ordered schedule
+and well-formed bundle is accepted with the inline datum, whatever its outputs. -/
 theorem accept_claim_after_end {own : TxOut} {t : Int}
     (hown : ownInputOf ctx = some own)
     (hd : own.txOutDatum = .OutputDatum (datumData d))
     (ht : claimTimeOf ctx = some t)
     (hs : d.startTime < d.endTime)
     (ha : AuthorizedBy d.beneficiary ctx.scriptContextTxInfo)
+    (hb : bundleWellFormed d.vesting = true)
     (hafter : d.endTime ≤ t) :
     specAccepts d .claim ctx = true :=
-  (claim_iff d ctx).mpr ⟨own, t, hown, ht, hs, ha, hd, Or.inl hafter⟩
+  (claim_iff d ctx).mpr ⟨own, t, hown, ht, hs, ha, hd, hb, Or.inl hafter⟩
 
 /-! ## Cancels -/
 

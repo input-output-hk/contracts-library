@@ -11,7 +11,7 @@ import CardanoLedgerApi.V3
 import CardanoLedgerApi.V1.Time
 import Formal.Shared.Common
 import Formal.LinearVesting.Old.Spec
-import Formal.LinearVesting.Script
+import Formal.LinearVesting.Old.Script
 
 namespace Formal.LinearVesting.Old.Soundness
 
@@ -23,7 +23,7 @@ open CardanoLedgerApi.V3 (Address Redeemer ScriptContext TxInfo TxInInfo TxOut
                           Value OutputDatum valueOf Withdrawals)
 open Formal.Shared.Common (validatorAccepts)
 open Formal.LinearVesting.Old.Spec
-open Formal.LinearVesting.Script (spendValidator)
+open Formal.LinearVesting.Old.Script (spendValidator)
 
 /-! ## Ledger-context scaffold (shared) -/
 

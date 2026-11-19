@@ -63,9 +63,9 @@ Without Nix, install manually:
 
 ## Build
 
-For the frozen M1.2 vesting proofs, prepare the Flat fixture from the
-recorded CBOR and verify its script hash.
-[Vesting metadata](Formal/LinearVesting/validator-metadata.json)
+Prepare the vesting Flat files before running Lake. The recipe verifies the
+current and archived script hashes against their recorded CBOR.
+[Current metadata](Formal/LinearVesting/validator-metadata.json) · [Archived metadata](Formal/LinearVesting/Old/validator-metadata.json)
 
 ```bash
 cd formal
@@ -86,7 +86,7 @@ recipe runs `lake update` when you intend to refresh those revisions.
 
 Git ignores the generated files under `Scripts/`. `just flats` builds the
 checked-out Aiken validators and encodes the other spending and minting
-fixtures. The vesting fixture comes from the recorded snapshot.
+fixtures. The vesting fixtures come from the recorded snapshots.
 
 A failing `blaster` goal can be debugged with its options, e.g.
 `blaster (verbose: 1)` or `blaster (gen-cex: 1)` to print a counterexample.

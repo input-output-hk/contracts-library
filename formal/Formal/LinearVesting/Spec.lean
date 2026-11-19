@@ -98,19 +98,35 @@ def authorized (c : Credential) (info : TxInfo) : Bool :=
   | .PubKeyCredential h => txSignedBy h info
   | .ScriptCredential _ => credentialInWithdrawals c info.txInfoWdrl
 
+def bundleWellFormed : List VestedAsset → Bool
+  | [] => true
+  | [a] => a.total ≥ 0
+  | a :: rest@(b :: _) =>
+      a.total ≥ 0 &&
+      (if a.policy == b.policy then a.name < b.name else a.policy < b.policy) &&
+      bundleWellFormed rest
+
+def cleanContinuation (d : VestingDatum) (o : TxOut) : Bool :=
+  o.txOutReferenceScript.isNone && o.txOutValue.all (fun
+    | (.B policy, .Map tokens) => tokens.all (fun
+        | (.B name, .I _) =>
+            policy == adaSymbol || d.vesting.any (fun a => a.policy == policy && a.name == name)
+        | _ => false)
+    | _ => false)
+
 def claimOk (d : VestingDatum) (own : TxOut) (info : TxInfo) (now : POSIXTime) : Bool :=
-  let ownCred := own.txOutAddress.addressCredential
   let inline : OutputDatum := .OutputDatum (datumData d)
-  let atScriptWithDatum (o : TxOut) : Bool :=
-    o.txOutAddress.addressCredential == ownCred && o.txOutDatum == inline
-  let k := (info.txInfoInputs.filter (fun i => atScriptWithDatum i.txInInfoResolved)).length
-  let conts := info.txInfoOutputs.filter atScriptWithDatum
+  let sameInstance (o : TxOut) : Bool :=
+    o.txOutAddress == own.txOutAddress && o.txOutDatum == inline
+  let k := (info.txInfoInputs.filter (fun i => sameInstance i.txInInfoResolved)).length
+  let conts := info.txInfoOutputs.filter sameInstance
   let holdsRequired (o : TxOut) : Bool :=
-    d.vesting.all (fun a =>
+    cleanContinuation d o && d.vesting.all (fun a =>
       valueOf a.policy a.name o.txOutValue ≥ required a.total d.startTime d.endTime now)
   d.startTime < d.endTime &&
   authorized d.beneficiary info &&
   own.txOutDatum == inline &&
+  bundleWellFormed d.vesting &&
   (now ≥ d.endTime || (k ≤ conts.length && conts.all holdsRequired))
 
 def cancelOk (d : VestingDatum) (info : TxInfo) (low : LowerBound) : Bool :=
