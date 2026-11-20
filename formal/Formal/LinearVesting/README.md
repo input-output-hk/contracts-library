@@ -1,10 +1,9 @@
 # Linear vesting proofs
 
-The Milestone 1.2 proofs target the linear-vesting spending validator from
-commit `d629dce7`, with script hash
-`95da21788eb1f59f51aad9669eb8c8b7081ab618c1f29b871925894a`.
-The [validator metadata](validator-metadata.json) records the source revision
-and compiled bytes. [M1.2 vesting specification](https://github.com/no-witness-labs/contracts-library/blob/28bfe6087d7313617c34b4fc977db10b681c85c4/docs/vesting/spec.md)
+The active proofs target the linear-vesting spending validator at upstream
+commit `6868c537`, built with Aiken `v1.1.24+bacbeb3`. Its script hash is
+`22de5b9b3db7c2e9f7cef943d5c8a6e667193114328c9676276a8bb1`.
+[Validator metadata](validator-metadata.json) · [Vesting specification](../../../docs/vesting/spec.md) · [Upstream change](https://github.com/input-output-hk/contracts-library/pull/72)
 
 ## Approach
 
@@ -39,8 +38,9 @@ the corresponding completeness proof.
 ## Transaction shapes
 
 Each row identifies a pair of soundness and completeness theorems.
-All five Claim shapes vest exactly one asset. The theorem statements and
-constructors specify the validity range and the remaining context fields.
+All five Claim shapes vest one asset and spend from an address without a
+staking credential. The constructors specify the validity range and other
+context fields. [Transaction constructors](TxBuilder.lean)
 
 | Theorem pair | Inputs and outputs | List bounds |
 | --- | --- | --- |
@@ -55,13 +55,14 @@ See [Claim soundness](ClaimSound.lean), [Claim completeness](ClaimComplete.lean)
 [Cancel soundness](CancelSound.lean), [Cancel completeness](CancelComplete.lean),
 and [the transaction constructors](TxBuilder.lean).
 
-## Address matching in the frozen snapshot
+## Claim rules
 
-The frozen validator groups continuations by payment credential and datum.
-`MultiTx.chain_address_fixed` therefore states equality of payment credentials
-along a linked chain of claims accepted by the model. IO later changed the
-validator to require the full address and datum. The hash above identifies the
-artifact covered by this proof suite. [Frozen code](https://github.com/input-output-hk/contracts-library/blob/d629dce7ef1a6af883215c076adc964bd37152a1/onchain/lib/vesting/linear.ak#L124-L132) · [Chain theorem](MultiTx.lean#L163-L166) · [Upstream fix](https://github.com/input-output-hk/contracts-library/pull/72)
+Claim requires strictly ordered asset keys and nonnegative totals. Before
+vesting ends, the validator groups inputs and continuations by full address
+and inline datum. Each continuation must keep the required remainder, carry
+only ADA and listed assets, and have no reference script. The model's
+`chain_address_fixed` theorem preserves both credentials along a linked
+chain of accepted claims. [Validator](../../../onchain/lib/vesting/linear.ak) · [Chain theorem](MultiTx.lean#L162)
 
 ## Properties
 
@@ -78,11 +79,14 @@ step and that the model accepts each step. [Chain definition](MultiTx.lean#L105-
 
 ### Earlier proof target and property IDs
 
-The four earlier modules live under `Formal.LinearVesting.Old`. After
-generating the same vesting fixture, run this command from `formal/` to check
-all four through the dependencies of the final module.
+The earlier proof modules under `Formal.LinearVesting.Old` use their own
+fixture from commit `d629dce7`, with script hash
+`95da21788eb1f59f51aad9669eb8c8b7081ab618c1f29b871925894a`.
+Run these commands from `formal/` to prepare it and check the suite.
+[Archived metadata](Old/validator-metadata.json)
 
 ```sh
+just vesting-snapshot
 lake build +Formal.LinearVesting.Old.Robustness
 ```
 
@@ -114,9 +118,8 @@ statement and hypotheses of each cited theorem when comparing coverage.
 
 ## Reproduce the cancellation boundary
 
-Use a checkout of the M1.2 branch that contains the frozen validator above.
-Follow the [toolchain setup](../../README.md#build), including Aiken
-`v1.1.22+39d6b04`, Lean 4.24.0 and Z3 4.15.2.
+Follow the toolchain setup using Aiken `v1.1.24+bacbeb3`, Lean 4.24.0 and
+Z3 4.15.2. [Toolchain setup](../../README.md#build)
 
 1. Run the positive and expected-rejection Aiken tests from `onchain/`.
 
@@ -125,16 +128,16 @@ Follow the [toolchain setup](../../README.md#build), including Aiken
    ```
 
    Both tests should pass. The second passes when the validator rejects the
-   premature cancellation. [Aiken test fixtures](../../../onchain/lib/vesting/linear.test.ak#L378-L388)
+   premature cancellation. [Aiken test fixtures](../../../onchain/lib/vesting/linear.test.ak#L382-L392)
 
-2. Prepare the frozen fixture and build the Lean examples from `formal/`.
+2. Prepare the fixtures and build the Lean examples from `formal/`.
 
    ```sh
    just vesting-snapshot
    lake build +Formal.LinearVesting.Tests
    ```
 
-   The recipe verifies the script hash above and writes
+   The recipe verifies the current script hash and writes
    `Scripts/linear_vesting_spend.flat`. Lake should report a successful build.
 
 3. Inspect the compiled-validator results from `formal/`.
@@ -153,4 +156,4 @@ Follow the [toolchain setup](../../README.md#build), including Aiken
    and `validatorRejects` for the same locker at the inclusive boundary of
    3000 ms. Both results list `Blaster.Tactic.blasterProven` among their
    axioms. The test suite also checks an exclusive lower endpoint at the same
-   recovery time. [Lean test fixtures](Tests.lean#L329-L355)
+   recovery time. [Lean test fixtures](Tests.lean#L350-L374)

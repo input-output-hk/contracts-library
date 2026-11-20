@@ -31,7 +31,7 @@ open PlutusCore.Data (Data)
 open PlutusCore.Integer (Integer)
 open CardanoLedgerApi.V1.Value (CurrencySymbol TokenName)
 open CardanoLedgerApi.V3
-  (Credential POSIXTimeRange PubKeyHash ScriptContext ScriptHash TxInfo TxOutRef)
+  (Address Credential POSIXTimeRange PubKeyHash ScriptContext ScriptHash TxInfo TxOut TxOutRef)
 open Formal.Shared.Common (validatorAccepts validatorRejects)
 open Formal.LinearVesting.Spec
   (VestedAsset VestingDatum VestingRedeemer datumData redeemerData specAccepts)
@@ -280,6 +280,24 @@ def claimBatch :=
 theorem spec_accept_claim_batch : specAccepts dKey .claim claimBatch = true := by
   blaster
 theorem validator_accept_claim_batch : validatorAccepts claimBatch spendValidator := by
+  blaster
+
+/-- A sorted bundle of ADA and a native token can continue at a staked address. -/
+def dStakedBundle : VestingDatum :=
+  { dKey with vesting := ⟨"", "", 4000000⟩ :: dKey.vesting }
+
+def claimStakedBundle : ScriptContext :=
+  let address : Address := ⟨.ScriptCredential sh, some (.StakingHash (.PubKeyCredential lk))⟩
+  let own := ownInput ref0 sh (val 4000000 1000) dStakedBundle
+  let input := { own with txInInfoResolved := { own.txInInfoResolved with txOutAddress := address } }
+  let output : TxOut := ⟨address, val 2000000 500, .OutputDatum (datumData dStakedBundle), none⟩
+  spendCtx emptyInfo [input] [output] [] (fromT 1500) [ben] .claim ref0 dStakedBundle
+
+theorem spec_accept_claim_staked_bundle :
+    specAccepts dStakedBundle .claim claimStakedBundle = true := by
+  blaster
+
+theorem validator_accept_claim_staked_bundle : validatorAccepts claimStakedBundle spendValidator := by
   blaster
 
 /-- Two vesting UTxOs with the same datum, but one continuation for both. -/

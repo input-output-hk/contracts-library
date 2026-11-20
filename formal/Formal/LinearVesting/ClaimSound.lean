@@ -129,9 +129,8 @@ theorem claim_sound_typical
     | (rcases outs with _ | ⟨_, outs⟩))
   all_goals (clear hSig hOut; blaster)
 
-/-- `claim_sound` for a claim with exactly one output, at any address. The validator
-compares only the output's payment credential, so the staking credential is left
-arbitrary. -/
+/-- `claim_sound` for a claim with exactly one output at any address.
+The continuation check compares the entire address with the input's address. -/
 theorem claim_sound_any_out
     (tx : ClaimAnyOutTx) (bh : PubKeyHash) (asset : VestedAsset)
     (hB : tx.datum.beneficiary = .PubKeyCredential bh)

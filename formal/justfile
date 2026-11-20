@@ -41,11 +41,11 @@ build:
 # cache of any Lean module that reads it so `verify` re-checks it. New
 # validators are picked up by the loops automatically.
 
-# Prepare the historical vesting validator identified by the proof metadata.
+# Prepare the pinned validators for the current and archived vesting proofs.
 vesting-snapshot:
     python3 scripts/prepare-vesting-snapshot.py
 
-# Encode the other compiled scripts and keep the vesting proof fixture pinned.
+# Encode the other compiled scripts and keep both vesting fixtures pinned.
 flats: build vesting-snapshot
     #!/usr/bin/env bash
     set -euo pipefail

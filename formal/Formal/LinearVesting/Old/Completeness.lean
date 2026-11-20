@@ -9,7 +9,7 @@ import PlutusCore.UPLC
 import CardanoLedgerApi.V3
 import Formal.Shared.Common
 import Formal.LinearVesting.Old.Spec
-import Formal.LinearVesting.Script
+import Formal.LinearVesting.Old.Script
 import Formal.LinearVesting.Old.Soundness
 
 namespace Formal.LinearVesting.Old.Completeness
@@ -21,7 +21,7 @@ open CardanoLedgerApi.V3 (Address Redeemer)
 open Formal.Shared.Common (validatorAccepts)
 open Formal.LinearVesting.Old.Spec
 open Formal.LinearVesting.Old.Soundness (mkClaimCtx mkClaimCtxW mkClaimCtxDouble withAsset scriptAddress)
-open Formal.LinearVesting.Script (spendValidator)
+open Formal.LinearVesting.Old.Script (spendValidator)
 
 /-- The compiled validator accepts the constructed single-native-asset claim
 before vesting ends when the schedule is valid, the beneficiary key appears in

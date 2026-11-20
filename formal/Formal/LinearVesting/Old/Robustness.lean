@@ -12,7 +12,7 @@ import PlutusCore.UPLC
 import CardanoLedgerApi.V3
 import Formal.Shared.Common
 import Formal.LinearVesting.Old.Spec
-import Formal.LinearVesting.Script
+import Formal.LinearVesting.Old.Script
 import Formal.LinearVesting.Old.Soundness
 import Formal.LinearVesting.Old.Completeness
 
@@ -25,7 +25,7 @@ open CardanoLedgerApi.V3 (Address Redeemer)
 open Formal.Shared.Common (validatorRejects)
 open Formal.LinearVesting.Old.Spec
 open Formal.LinearVesting.Old.Soundness (mkClaimCtx mkClaimCtxW mkClaimCtxHashInput mkClaimCtxDouble withAsset scriptAddress)
-open Formal.LinearVesting.Script (spendValidator)
+open Formal.LinearVesting.Old.Script (spendValidator)
 -- `dConcrete`/`dScript` come from `Spec` (opened above).
 
 /-- R1: A claim with a key beneficiary and no signatories is rejected in the

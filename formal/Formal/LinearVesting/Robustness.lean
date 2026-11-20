@@ -35,7 +35,7 @@ functions. `claimOk_eq` and `cancelOk_eq` show the names are the spec's own
 definitions. -/
 
 def isContinuation (d : VestingDatum) (own o : TxOut) : Bool :=
-  o.txOutAddress.addressCredential == own.txOutAddress.addressCredential &&
+  o.txOutAddress == own.txOutAddress &&
   o.txOutDatum == .OutputDatum (datumData d)
 
 def continuations (d : VestingDatum) (own : TxOut) (info : TxInfo) : List TxOut :=
@@ -52,9 +52,11 @@ theorem claimOk_eq (d : VestingDatum) (own : TxOut) (info : TxInfo) (now : Int) 
     claimOk d own info now =
       (decide (d.startTime < d.endTime) && authorized d.beneficiary info &&
         own.txOutDatum == .OutputDatum (datumData d) &&
+        bundleWellFormed d.vesting &&
         (decide (now ≥ d.endTime) ||
           (decide (sharedInputCount d own info ≤ (continuations d own info).length) &&
-            (continuations d own info).all (holdsRequired d now)))) := rfl
+            (continuations d own info).all
+              (fun o => cleanContinuation d o && holdsRequired d now o)))) := rfl
 
 theorem claim_accepted_inv {d : VestingDatum} {ctx : ScriptContext}
     (h : specAccepts d .claim ctx = true) :
@@ -120,17 +122,18 @@ theorem claim_parts {d : VestingDatum} {ctx : ScriptContext}
       d.startTime < d.endTime ∧
       authorized d.beneficiary ctx.scriptContextTxInfo = true ∧
       own.txInInfoResolved.txOutDatum = .OutputDatum (datumData d) ∧
+      bundleWellFormed d.vesting = true ∧
       (d.endTime ≤ now ∨
         (sharedInputCount d own.txInInfoResolved ctx.scriptContextTxInfo
             ≤ (continuations d own.txInInfoResolved ctx.scriptContextTxInfo).length ∧
           ∀ o ∈ continuations d own.txInInfoResolved ctx.scriptContextTxInfo,
-            holdsRequired d now o = true)) := by
+            cleanContinuation d o = true ∧ holdsRequired d now o = true)) := by
   obtain ⟨ref, od, now, c, own, hsi, hlow, hown, hok⟩ := claim_accepted_inv h
   rw [claimOk_eq] at hok
   simp only [Bool.and_eq_true, Bool.or_eq_true, decide_eq_true_eq, beq_iff_eq,
     List.all_eq_true] at hok
-  obtain ⟨⟨⟨hs, ha⟩, hd⟩, hrest⟩ := hok
-  exact ⟨ref, od, now, c, own, hsi, hlow, hown, hs, ha, hd, hrest⟩
+  obtain ⟨⟨⟨⟨hs, ha⟩, hd⟩, hb⟩, hrest⟩ := hok
+  exact ⟨ref, od, now, c, own, hsi, hlow, hown, hs, ha, hd, hb, hrest⟩
 
 /-- Whether a validity range starting at `low` lies after the recovery time, as
 `cancelOk` decides it. -/
@@ -233,24 +236,28 @@ theorem claimTimeOf_eq_some {ctx : ScriptContext} {t : Int}
 
 /-! ## What the spec accepts -/
 
-/-- A claim is allowed when:
+/-- An allowed claim meets these conditions.
 - the script is spending a vesting UTxO among the inputs, carrying the datum inline;
 - the validity range has a finite lower bound, the claim time;
 - the schedule starts before it ends;
+- the bundle has strictly ordered asset keys and nonnegative totals;
 - the beneficiary has authorized the transaction;
 - and either the claim time is at or after the end of vesting, or there are at least
-  as many continuations as vesting inputs sharing the datum, each keeping the
-  required remainder of every vested asset. -/
+  as many continuations as vesting inputs sharing the full address and datum.
+  Each continuation keeps the required remainder of every vested asset and
+  carries only ADA and listed assets, with no reference script. -/
 def ClaimAllowed (d : VestingDatum) (ctx : ScriptContext) : Prop :=
   ∃ own t, ownInputOf ctx = some own ∧ claimTimeOf ctx = some t ∧
     d.startTime < d.endTime ∧
     AuthorizedBy d.beneficiary ctx.scriptContextTxInfo ∧
     own.txOutDatum = .OutputDatum (datumData d) ∧
+    bundleWellFormed d.vesting = true ∧
     (d.endTime ≤ t ∨
       (sharedInputCount d own ctx.scriptContextTxInfo
           ≤ (continuations d own ctx.scriptContextTxInfo).length ∧
-        ∀ o ∈ continuations d own ctx.scriptContextTxInfo, ∀ a ∈ d.vesting,
-          valueOf a.policy a.name o.txOutValue ≥ required a.total d.startTime d.endTime t))
+        ∀ o ∈ continuations d own ctx.scriptContextTxInfo,
+          cleanContinuation d o = true ∧ ∀ a ∈ d.vesting,
+            valueOf a.policy a.name o.txOutValue ≥ required a.total d.startTime d.endTime t))
 
 /-- A cancel is allowed when the script is spending a UTxO, the schedule is ordered
 `start < end < recovery`, the locker has authorized the transaction, and the
@@ -272,14 +279,14 @@ theorem claim_iff (d : VestingDatum) (ctx : ScriptContext) :
     specAccepts d .claim ctx = true ↔ ClaimAllowed d ctx := by
   constructor
   · intro h
-    obtain ⟨ref, od, t, c, i, hsi, hlow, hres, hs, ha, hd, hrest⟩ := claim_parts h
-    refine ⟨i.txInInfoResolved, t, ?_, ?_, hs, (authorized_iff _ _).mp ha, hd, ?_⟩
+    obtain ⟨ref, od, t, c, i, hsi, hlow, hres, hs, ha, hd, hb, hrest⟩ := claim_parts h
+    refine ⟨i.txInInfoResolved, t, ?_, ?_, hs, (authorized_iff _ _).mp ha, hd, hb, ?_⟩
     · simp [ownInputOf, hsi, hres]
     · simp [claimTimeOf, lowerBoundOf, hlow]
     · rcases hrest with h1 | ⟨h2, h3⟩
       · exact Or.inl h1
-      · exact Or.inr ⟨h2, fun o ho => (holdsRequired_iff d t o).mp (h3 o ho)⟩
-  · rintro ⟨own, t, hown, ht, hs, ha, hd, hrest⟩
+      · exact Or.inr ⟨h2, fun o ho => ⟨(h3 o ho).1, (holdsRequired_iff d t o).mp (h3 o ho).2⟩⟩
+  · rintro ⟨own, t, hown, ht, hs, ha, hd, hb, hrest⟩
     obtain ⟨ref, od, i, hsi, hres, rfl⟩ := ownInputOf_eq_some hown
     obtain ⟨c, hlow⟩ := claimTimeOf_eq_some ht
     unfold lowerBoundOf at hlow
@@ -287,10 +294,10 @@ theorem claim_iff (d : VestingDatum) (ctx : ScriptContext) :
     rw [claimOk_eq]
     simp only [Bool.and_eq_true, Bool.or_eq_true, decide_eq_true_eq, beq_iff_eq,
       List.all_eq_true]
-    refine ⟨⟨⟨hs, (authorized_iff _ _).mpr ha⟩, hd⟩, ?_⟩
+    refine ⟨⟨⟨⟨hs, (authorized_iff _ _).mpr ha⟩, hd⟩, hb⟩, ?_⟩
     rcases hrest with h1 | ⟨h2, h3⟩
     · exact Or.inl h1
-    · exact Or.inr ⟨h2, fun o ho => (holdsRequired_iff d t o).mpr (h3 o ho)⟩
+    · exact Or.inr ⟨h2, fun o ho => ⟨(h3 o ho).1, (holdsRequired_iff d t o).mpr (h3 o ho).2⟩⟩
 
 /-- The spec accepts a cancel exactly when it is allowed. -/
 theorem cancel_iff (d : VestingDatum) (ctx : ScriptContext) :
@@ -348,23 +355,22 @@ theorem claim_requires_remainder {own : TxOut} {t : Int}
     (hbefore : t < d.endTime) :
     ∀ o ∈ continuations d own ctx.scriptContextTxInfo, ∀ a ∈ d.vesting,
       valueOf a.policy a.name o.txOutValue ≥ required a.total d.startTime d.endTime t := by
-  obtain ⟨own', t', hown', ht', _, _, _, hrest⟩ := (claim_iff d ctx).mp h
+  obtain ⟨own', t', hown', ht', _, _, _, _, hrest⟩ := (claim_iff d ctx).mp h
   rw [hown] at hown'; cases hown'
   rw [ht] at ht'; cases ht'
   rcases hrest with hend | ⟨_, hkeep⟩
   · exact absurd hend (Int.not_le.mpr hbefore)
-  · exact hkeep
+  · exact fun o ho => (hkeep o ho).2
 
-/-- §5.1: before the end of vesting, an accepted claim has at least as many
-continuations as vesting inputs sharing its datum, so one continuation cannot
-satisfy two inputs. -/
+/-- Under §5.1, an accepted claim before the end of vesting has at least as many
+continuations as vesting inputs sharing its full address and datum. -/
 theorem claim_requires_continuation_per_input {own : TxOut} {t : Int}
     (h : specAccepts d .claim ctx = true)
     (hown : ownInputOf ctx = some own) (ht : claimTimeOf ctx = some t)
     (hbefore : t < d.endTime) :
     sharedInputCount d own ctx.scriptContextTxInfo
       ≤ (continuations d own ctx.scriptContextTxInfo).length := by
-  obtain ⟨own', t', hown', ht', _, _, _, hrest⟩ := (claim_iff d ctx).mp h
+  obtain ⟨own', t', hown', ht', _, _, _, _, hrest⟩ := (claim_iff d ctx).mp h
   rw [hown] at hown'; cases hown'
   rw [ht] at ht'; cases ht'
   rcases hrest with hend | ⟨hle, _⟩
@@ -378,7 +384,7 @@ theorem claim_requires_datum_preserved {own : TxOut} {t : Int}
     (hown : ownInputOf ctx = some own) (ht : claimTimeOf ctx = some t)
     (hbefore : t < d.endTime) :
     ∃ o ∈ ctx.scriptContextTxInfo.txInfoOutputs,
-      o.txOutAddress.addressCredential = own.txOutAddress.addressCredential ∧
+      o.txOutAddress = own.txOutAddress ∧
       o.txOutDatum = .OutputDatum (datumData d) := by
   have hle := claim_requires_continuation_per_input h hown ht hbefore
   obtain ⟨own', hown', hd'⟩ := claim_requires_inline_datum h
@@ -480,7 +486,7 @@ theorem reject_claim_datum_tamper {own : TxOut} {t : Int}
     (hown : ownInputOf ctx = some own) (ht : claimTimeOf ctx = some t)
     (hbefore : t < d.endTime)
     (hno : ∀ o ∈ ctx.scriptContextTxInfo.txInfoOutputs,
-      o.txOutAddress.addressCredential = own.txOutAddress.addressCredential →
+      o.txOutAddress = own.txOutAddress →
         o.txOutDatum ≠ .OutputDatum (datumData d)) :
     specAccepts d .claim ctx = false :=
   Bool.eq_false_iff.mpr fun h => by
@@ -498,8 +504,7 @@ theorem reject_claim_datum_hash {own : TxOut} {dh : DatumHash}
     rw [hd] at hd'; cases hd'
 
 /-- §5.1, I2: before the end of vesting, a claim with fewer continuations than
-vesting inputs sharing its datum is rejected: one continuation cannot satisfy two
-inputs. -/
+vesting inputs sharing its full address and datum is rejected. -/
 theorem reject_claim_double_satisfaction {own : TxOut} {t : Int}
     (hown : ownInputOf ctx = some own) (ht : claimTimeOf ctx = some t)
     (hbefore : t < d.endTime)

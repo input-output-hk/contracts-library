@@ -79,7 +79,7 @@
     "id": "LV-008",
     "title": "Exact conditions for claims and cancels",
     "category": "vesting-escrow",
-    "summary": "The model characterizes an accepted Claim by its resolved spending input, finite lower bound, ordered schedule, beneficiary authorization and matching inline datum. A partial claim also requires enough matching continuations and the per-asset remainder in each. The model characterizes an accepted Cancel by its spending purpose, ordered schedule, locker authorization and recovery interval.",
+    "summary": "The model characterizes an accepted Claim by its resolved spending input, finite lower bound, ordered schedule, beneficiary authorization, matching inline datum and well-formed asset bundle. A partial claim needs enough continuations at the same full address and datum. Each holds the per-asset remainder, contains only ADA and listed assets, and has no reference script. The model characterizes an accepted Cancel by its spending purpose, ordered schedule, locker authorization and recovery interval.",
     "theorems": [
       "Formal.LinearVesting.Robustness.claim_iff",
       "Formal.LinearVesting.Robustness.cancel_iff",
@@ -127,9 +127,9 @@
   },
   {
     "id": "LV-011",
-    "title": "Continuations keep the datum and the script",
+    "title": "Continuations keep the full address and datum",
     "category": "vesting-escrow",
-    "summary": "A partial claim the model accepts has a continuation at the vesting input's payment credential with the same inline datum. The compiled-validator corollary for a single arbitrary-address output derives the payment credential and datum equality within its stated bounds.",
+    "summary": "A partial claim the model accepts has a continuation at the vesting input's full address with the same inline datum. The compiled-validator corollary for a single arbitrary-address output derives full address and datum equality within its stated bounds.",
     "theorems": [
       "Formal.LinearVesting.Robustness.claim_requires_datum_preserved",
       "Formal.LinearVesting.Robustness.reject_claim_datum_tamper",
@@ -157,7 +157,7 @@
     "id": "LV-013",
     "title": "No double satisfaction",
     "category": "vesting-escrow",
-    "summary": "A partial claim the model accepts has at least as many continuations as inputs in the same payment-credential and datum group. Each continuation independently holds the per-asset remainder. Compiled-validator tests check the two-input cases.",
+    "summary": "A partial claim the model accepts has at least as many continuations as inputs at the same full address and datum. Each continuation independently holds the per-asset remainder. Compiled-validator tests check the two-input cases.",
     "theorems": [
       "Formal.LinearVesting.Robustness.claim_requires_continuation_per_input",
       "Formal.LinearVesting.Robustness.reject_claim_double_satisfaction",
@@ -238,7 +238,7 @@
     "id": "LV-018",
     "title": "The beneficiary can claim what has vested",
     "category": "vesting-escrow",
-    "summary": "For a partial Claim, the model proves acceptance given a resolved input with the datum inline, an ordered schedule, beneficiary authorization, a finite lower bound, sufficient matching continuations and every required remainder in each. The validator results cover the constructed shapes under their corresponding completeness hypotheses.",
+    "summary": "For a partial Claim, the model proves acceptance given a resolved input with the datum inline, an ordered schedule, beneficiary authorization, a finite lower bound, a well-formed asset bundle and enough clean continuations keeping the required remainders. The validator results cover the constructed shapes and include a concrete claim with ADA and a native token at a staked address.",
     "theorems": [
       "Formal.LinearVesting.Functionality.authorizedBy_key",
       "Formal.LinearVesting.Functionality.authorizedBy_script",
@@ -259,14 +259,16 @@
       "Formal.LinearVesting.Tests.spec_accept_claim_typical",
       "Formal.LinearVesting.Tests.validator_accept_claim_typical",
       "Formal.LinearVesting.Tests.spec_accept_claim_batch",
-      "Formal.LinearVesting.Tests.validator_accept_claim_batch"
+      "Formal.LinearVesting.Tests.validator_accept_claim_batch",
+      "Formal.LinearVesting.Tests.spec_accept_claim_staked_bundle",
+      "Formal.LinearVesting.Tests.validator_accept_claim_staked_bundle"
     ]
   },
   {
     "id": "LV-019",
     "title": "The beneficiary can claim everything after the end",
     "category": "vesting-escrow",
-    "summary": "At or after vesting ends, the model accepts a Claim with a resolved inline-datum input, an ordered schedule, beneficiary authorization and a finite lower bound. The compiled-validator corollary uses one vested asset and a key beneficiary. A concrete validator test exercises Claim with no continuation at the end time.",
+    "summary": "At or after vesting ends, the model accepts a Claim with a resolved inline-datum input, an ordered schedule, beneficiary authorization, a finite lower bound and a well-formed asset bundle. The compiled-validator corollary uses one vested asset with a nonnegative total and a key beneficiary. A concrete validator test exercises Claim with no continuation at the end time.",
     "theorems": [
       "Formal.LinearVesting.Functionality.accept_claim_after_end",
       "Formal.LinearVesting.Corollaries.claim_complete_full",
@@ -302,9 +304,9 @@
   },
   {
     "id": "LV-022",
-    "title": "The payment credential is fixed along a chain of claims",
+    "title": "The full address is fixed along a chain of claims",
     "category": "vesting-escrow",
-    "summary": "In a linked chain of claims accepted by the model, each vesting input has the first input's payment credential. The claim concerns the frozen validator's continuation rule and the theorem's linked-chain premises.",
+    "summary": "In a linked chain of claims accepted by the model, each vesting input has the first input's full address, including its staking credential.",
     "theorems": [
       "Formal.LinearVesting.MultiTx.link_address_fixed",
       "Formal.LinearVesting.MultiTx.chain_address_fixed"

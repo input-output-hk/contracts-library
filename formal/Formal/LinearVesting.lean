@@ -1,7 +1,7 @@
 /-
-This module imports the linear-vesting model, its completeness, soundness,
-and robustness theorems, and the bounded Claim and Cancel agreement proofs
-with their corollaries. Both suites use the same compiled spending validator.
+This module imports the active linear-vesting model, the bounded Claim and
+Cancel agreement proofs for the current spending validator, and their
+corollaries and tests.
 
 See `docs/vesting/spec.md`.
 -/

@@ -164,6 +164,7 @@ export async function buildClaimTx(p: ClaimParams): Promise<string> {
   if (datum.startTime >= datum.endTime) {
     throw new Error("Invalid schedule: startTime must be < endTime");
   }
+  assertValidBundle(datum.vesting);
 
   const network = p.network ?? "preprod";
   const minLovelace = p.minUtxoLovelace ?? DEFAULT_MIN_UTXO_LOVELACE;

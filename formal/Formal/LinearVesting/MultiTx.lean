@@ -11,7 +11,7 @@ length and any transactions, and proved in plain Lean, without Blaster.
 
 - `chain_schedule_fixed`: every claim in the chain is validated under the first
   claim's datum, so the beneficiary, locker, schedule and assets never change.
-- `chain_address_fixed`: the vesting UTxO stays at the same payment credential.
+- `chain_address_fixed` preserves the full vesting address.
 - `chain_never_faster_than_schedule`: before the end of vesting, the funds left in
   the contract never drop below what has not yet vested, however the claims are
   split up.
@@ -134,10 +134,9 @@ theorem link_datum_fixed {s s' : ClaimStep} (hl : Links s s') (h' : s'.Accepted)
   injection hd' with hd'
   exact (datumData_inj hd').symm
 
-/-- A claim that spends a continuation of an accepted claim spends a UTxO at the
-same payment credential. -/
+/-- A claim spending a continuation uses the same full address. -/
 theorem link_address_fixed {s s' : ClaimStep} (hl : Links s s') :
-    s'.own.txOutAddress.addressCredential = s.own.txOutAddress.addressCredential := by
+    s'.own.txOutAddress = s.own.txOutAddress := by
   have hcont := (List.mem_filter.mp hl).2
   simp only [isContinuation, Bool.and_eq_true, beq_iff_eq] at hcont
   exact hcont.1
@@ -158,12 +157,11 @@ theorem chain_schedule_fixed {s₀ : ClaimStep} {rest : List ClaimStep}
     · rfl
     · rw [ih' s hs, h₁]
 
-/-- Every vesting UTxO in a chain of claims sits at the same payment credential as
+/-- Every vesting UTxO in a chain of claims sits at the same full address as
 the first. -/
 theorem chain_address_fixed {s₀ : ClaimStep} {rest : List ClaimStep}
     (h : ClaimChain (s₀ :: rest)) :
-    ∀ s ∈ s₀ :: rest,
-      s.own.txOutAddress.addressCredential = s₀.own.txOutAddress.addressCredential := by
+    ∀ s ∈ s₀ :: rest, s.own.txOutAddress = s₀.own.txOutAddress := by
   induction rest generalizing s₀ with
   | nil => intro s hs; simp at hs; rw [hs]
   | cons s₁ rest ih =>

@@ -113,7 +113,7 @@ theorem claim_sound_partial
 
 /-- I2, I3: before the end of vesting, if the validator accepts a claim signed by the
 beneficiary whose one output, at any address, carries the vested asset, that output
-is at the vesting script, reproduces the datum and keeps at least the required
+is at the input's full address, reproduces the datum and keeps at least the required
 remainder. -/
 theorem claim_sound_partial_any_out
     (bh : PubKeyHash) (locker : Credential) (a : VestedAsset) (start finish recovery : Integer)
@@ -125,26 +125,26 @@ theorem claim_sound_partial_any_out
         (claimAnyOutAt (keyDatum bh locker a start finish recovery) ownRef sh ownValue now [bh]
           wdrl ⟨outAddr, outDatum, ada, a.policy, a.name, outQty⟩ rest).ctx
         spendValidator →
-      outAddr.addressCredential = .ScriptCredential sh ∧
+      outAddr = ⟨.ScriptCredential sh, none⟩ ∧
       outDatum = datumData (keyDatum bh locker a start finish recovery) ∧
       outQty ≥ required a.total start finish now := by
+  rcases outAddr with ⟨outCred, outStake⟩
   intro hacc
   have hs := claim_sound_any_out
     (claimAnyOutAt (keyDatum bh locker a start finish recovery) ownRef sh ownValue now [bh]
-      wdrl ⟨outAddr, outDatum, ada, a.policy, a.name, outQty⟩ rest)
+      wdrl ⟨⟨outCred, outStake⟩, outDatum, ada, a.policy, a.name, outQty⟩ rest)
     bh a rfl rfl (by simp [claimAnyOutAt]) hacc
   clear hacc
   revert hs
   blaster
 
-/-- C1–C4: before the end of vesting, the validator accepts a claim signed by the
-beneficiary whose one output is at the vesting script, reproduces the datum and keeps
-the required remainder. -/
+/-- Before vesting ends, the validator accepts this signed claim with a
+nonnegative total and an output that keeps the full address, datum and remainder. -/
 theorem claim_complete_partial
     (bh : PubKeyHash) (locker : Credential) (a : VestedAsset) (start finish recovery : Integer)
     (ownRef : TxOutRef) (sh : ScriptHash) (ownValue : List (Data × Data))
     (now ada outQty : Integer) (wdrl : List (Credential × Integer)) (rest : TxInfo)
-    (hpol : a.policy ≠ "") (hsf : start < finish) (hnow : now < finish)
+    (hpol : a.policy ≠ "") (hTotal : 0 ≤ a.total) (hsf : start < finish) (hnow : now < finish)
     (hq : outQty ≥ required a.total start finish now) :
     validatorAccepts
       (claimAt (keyDatum bh locker a start finish recovery) ownRef sh ownValue now [bh] wdrl
@@ -158,36 +158,36 @@ theorem claim_complete_partial
     bh a rfl rfl rfl rfl rfl (by simp [claimAt]) (by simp [claimAt])
   blaster
 
-/-- C1–C4: before the end of vesting, the validator accepts a claim signed by the
-beneficiary whose one output has the vesting script's payment credential, with any
-staking credential, reproduces the datum and keeps the required remainder. -/
+/-- Before vesting ends, the validator accepts this signed claim with a
+nonnegative total and an output that keeps the full address, datum and remainder. -/
 theorem claim_complete_partial_any_out
     (bh : PubKeyHash) (locker : Credential) (a : VestedAsset) (start finish recovery : Integer)
     (ownRef : TxOutRef) (sh : ScriptHash) (ownValue : List (Data × Data))
     (now ada outQty : Integer) (outAddr : Address)
     (wdrl : List (Credential × Integer)) (rest : TxInfo)
-    (hpol : a.policy ≠ "") (hsf : start < finish) (hnow : now < finish)
-    (hAddr : outAddr.addressCredential = .ScriptCredential sh)
+    (hpol : a.policy ≠ "") (hTotal : 0 ≤ a.total) (hsf : start < finish) (hnow : now < finish)
+    (hAddr : outAddr = ⟨.ScriptCredential sh, none⟩)
     (hq : outQty ≥ required a.total start finish now) :
     validatorAccepts
       (claimAnyOutAt (keyDatum bh locker a start finish recovery) ownRef sh ownValue now [bh]
         wdrl ⟨outAddr, datumData (keyDatum bh locker a start finish recovery), ada, a.policy,
           a.name, outQty⟩ rest).ctx
       spendValidator := by
+  subst outAddr
   apply claim_complete_any_out
     (claimAnyOutAt (keyDatum bh locker a start finish recovery) ownRef sh ownValue now [bh]
-      wdrl ⟨outAddr, datumData (keyDatum bh locker a start finish recovery), ada, a.policy,
-        a.name, outQty⟩ rest)
+      wdrl ⟨⟨.ScriptCredential sh, none⟩, datumData (keyDatum bh locker a start finish recovery),
+        ada, a.policy, a.name, outQty⟩ rest)
     bh a rfl rfl (by simp [claimAnyOutAt])
   blaster
 
-/-- §8.2, I4: at or after the end of vesting, the validator accepts a claim signed by
-the beneficiary, whatever its one output at a script address holds. -/
+/-- At or after vesting ends, the validator accepts this signed claim with a
+nonnegative total, whatever its output at a script address holds. -/
 theorem claim_complete_full
     (bh : PubKeyHash) (locker : Credential) (a : VestedAsset) (start finish recovery : Integer)
     (ownRef : TxOutRef) (sh : ScriptHash) (ownValue : List (Data × Data))
     (now : Integer) (out : ScriptOut) (wdrl : List (Credential × Integer)) (rest : TxInfo)
-    (hsf : start < finish) (hafter : finish ≤ now) :
+    (hTotal : 0 ≤ a.total) (hsf : start < finish) (hafter : finish ≤ now) :
     validatorAccepts
       (claimAt (keyDatum bh locker a start finish recovery) ownRef sh ownValue now [bh] wdrl
         [out] rest).ctx
