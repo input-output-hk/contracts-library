@@ -5,8 +5,9 @@
 # that bytecode. The point of the flat step is that the proofs target the
 # *actual compiled validator*, not a hand-written model.
 #
-# Lean v4.24.0 + Z3 4.15.2 come from ./flake.nix (`nix develop`); `aiken` must
-# be on PATH. Run `just deps` once before the first `just verify`.
+# The Nix shell provides elan, Python 3 and Z3 4.15.2.
+# Put `aiken` on PATH when building the current on-chain sources.
+# Lake uses the revisions in lake-manifest.json.
 
 onchain   := "../onchain"
 artifacts := onchain / "artifacts"
@@ -25,7 +26,14 @@ deps:
 
 # Compile validators and dump textual UPLC under ../onchain/artifacts/.
 build:
-    cd {{onchain}} && aiken build -u
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{onchain}}"
+    # Aiken expects the export directories for nested validators to exist.
+    while IFS= read -r -d '' directory; do
+      mkdir -p "artifacts/${directory#validators/}"
+    done < <(find validators -mindepth 1 -type d -print0)
+    aiken build -u
 
 # Encode each artifacts/<module>.<validator>.<handler>.uplc into
 # Scripts/<module>_<handler>.flat, for the handlers we verify (`spend` and
@@ -33,8 +41,12 @@ build:
 # cache of any Lean module that reads it so `verify` re-checks it. New
 # validators are picked up by the loops automatically.
 
-# Encode compiled UPLC to flat bytes under Scripts/.
-flats: build
+# Prepare the pinned validators for the current and archived vesting proofs.
+vesting-snapshot:
+    python3 scripts/prepare-vesting-snapshot.py
+
+# Encode the other compiled scripts and keep both vesting fixtures pinned.
+flats: build vesting-snapshot
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p {{scripts}}
@@ -71,6 +83,7 @@ flats: build
     shopt -s nullglob
     for f in {{artifacts}}/*.spend.uplc; do
       base="$(basename "$f" .spend.uplc)"; module="${base%%.*}"
+      if [[ "$module" == "linear_vesting" ]]; then continue; fi
       encode_flat "$f" "{{scripts}}/${module}_spend.flat"
     done
     for f in {{artifacts}}/*.mint.uplc; do

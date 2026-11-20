@@ -31,6 +31,7 @@
             # reads ./lean-toolchain (leanprover/lean4:v4.24.0) and fetches it.
             pkgs.elan
             z3
+            pkgs.python3
             pkgs.gawk   # `just verify` pipes lake output through annotate-blaster-logs.awk
           ];
 
@@ -39,7 +40,7 @@
             echo "  z3:   $(z3 --version 2>/dev/null || echo missing)"
             echo "  elan: $(elan --version 2>/dev/null || echo missing)  (Lean pinned in ./lean-toolchain)"
             echo
-            echo "  build the proofs:  lake update && lake build"
+            echo "  check the vesting proofs:  just vesting-snapshot && lake build"
           '';
         };
 

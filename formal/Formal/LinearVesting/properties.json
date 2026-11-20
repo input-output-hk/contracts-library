@@ -1,0 +1,340 @@
+[
+  {
+    "id": "LV-001",
+    "title": "No vesting at or before the start",
+    "category": "vesting-escrow",
+    "summary": "Spec arithmetic: the vested quantity is zero whenever the reference time is at or before the schedule start.",
+    "theorems": [
+      "Formal.LinearVesting.Spec.vested_preStart"
+    ]
+  },
+  {
+    "id": "LV-002",
+    "title": "Full vesting at or after the end",
+    "category": "vesting-escrow",
+    "summary": "Spec arithmetic: with start < end, the vested quantity equals the total whenever the reference time is at or after the end.",
+    "theorems": [
+      "Formal.LinearVesting.Spec.vested_full"
+    ]
+  },
+  {
+    "id": "LV-003",
+    "title": "Vested quantities and remainders stay within bounds",
+    "category": "vesting-escrow",
+    "summary": "Spec arithmetic: for a nonnegative total and start < end, the vested quantity stays between zero and the total, and the required remainder is nonnegative.",
+    "theorems": [
+      "Formal.LinearVesting.Spec.vested_le_total",
+      "Formal.LinearVesting.Spec.vested_nonneg",
+      "Formal.LinearVesting.Spec.required_nonneg"
+    ]
+  },
+  {
+    "id": "LV-004",
+    "title": "Vesting is nondecreasing over time",
+    "category": "vesting-escrow",
+    "summary": "Spec arithmetic: for a nonnegative total and start < end, a later reference time never gives a smaller vested quantity.",
+    "theorems": [
+      "Formal.LinearVesting.Spec.vested_mono"
+    ]
+  },
+  {
+    "id": "LV-005",
+    "title": "The validator agrees with the spec on cancels",
+    "category": "vesting-escrow",
+    "summary": "The compiled validator and model agree on the Cancel shape. The constructed context has a vesting input followed by arbitrary inputs and permits arbitrary outputs. The theorems bound a key locker's signatories or a script locker's withdrawals to at most two.",
+    "theorems": [
+      "Formal.LinearVesting.CancelSound.cancel_sound",
+      "Formal.LinearVesting.CancelComplete.cancel_complete"
+    ]
+  },
+  {
+    "id": "LV-006",
+    "title": "The validator agrees with the spec on claims",
+    "category": "vesting-escrow",
+    "summary": "The compiled validator and model agree on five separate Claim shapes, each with one vested asset. The shapes cover a key beneficiary, a script beneficiary, a two-input batch, a wallet input with a key payout, and a single arbitrary-address output. The theorem pair for each shape states its own bounds.",
+    "theorems": [
+      "Formal.LinearVesting.ClaimSound.claim_sound",
+      "Formal.LinearVesting.ClaimSound.claim_sound_script",
+      "Formal.LinearVesting.ClaimSound.claim_sound_batch",
+      "Formal.LinearVesting.ClaimSound.claim_sound_typical",
+      "Formal.LinearVesting.ClaimSound.claim_sound_any_out",
+      "Formal.LinearVesting.ClaimComplete.claim_complete",
+      "Formal.LinearVesting.ClaimComplete.claim_complete_script",
+      "Formal.LinearVesting.ClaimComplete.claim_complete_batch",
+      "Formal.LinearVesting.ClaimComplete.claim_complete_typical",
+      "Formal.LinearVesting.ClaimComplete.claim_complete_any_out"
+    ]
+  },
+  {
+    "id": "LV-007",
+    "title": "Spec results carry over to the validator",
+    "category": "vesting-escrow",
+    "summary": "Wherever the validator is sound with respect to the spec, every transaction the spec rejects is rejected by the validator; wherever it is complete, every transaction the spec accepts is accepted by the validator.",
+    "theorems": [
+      "Formal.LinearVesting.Corollaries.rejects_of_sound",
+      "Formal.LinearVesting.Corollaries.accepts_of_complete"
+    ]
+  },
+  {
+    "id": "LV-008",
+    "title": "Exact conditions for claims and cancels",
+    "category": "vesting-escrow",
+    "summary": "The model characterizes an accepted Claim by its resolved spending input, finite lower bound, ordered schedule, beneficiary authorization, matching inline datum and well-formed asset bundle. A partial claim needs enough continuations at the same full address and datum. Each holds the per-asset remainder, contains only ADA and listed assets, and has no reference script. The model characterizes an accepted Cancel by its spending purpose, ordered schedule, locker authorization and recovery interval.",
+    "theorems": [
+      "Formal.LinearVesting.Robustness.claim_iff",
+      "Formal.LinearVesting.Robustness.cancel_iff",
+      "Formal.LinearVesting.Robustness.authorized_iff"
+    ]
+  },
+  {
+    "id": "LV-009",
+    "title": "Only the beneficiary can claim",
+    "category": "vesting-escrow",
+    "summary": "A claim the model accepts has beneficiary authorization through a key signatory or a withdrawal for the script credential. Concrete validator checks cover missing signatories, the wrong signer and a missing script withdrawal.",
+    "theorems": [
+      "Formal.LinearVesting.Robustness.claim_requires_authorization",
+      "Formal.LinearVesting.Robustness.reject_claim_unauthorized",
+      "Formal.LinearVesting.Robustness.reject_claim_no_signatories",
+      "Formal.LinearVesting.Robustness.reject_claim_wrong_signer",
+      "Formal.LinearVesting.Robustness.reject_claim_no_withdrawal",
+      "Formal.LinearVesting.Tests.spec_reject_claim_wrong_signer",
+      "Formal.LinearVesting.Tests.validator_reject_claim_wrong_signer",
+      "Formal.LinearVesting.Tests.spec_reject_claim_no_signatories",
+      "Formal.LinearVesting.Tests.validator_reject_claim_no_signatories",
+      "Formal.LinearVesting.Tests.spec_reject_claim_no_withdrawal",
+      "Formal.LinearVesting.Tests.validator_reject_claim_no_withdrawal"
+    ]
+  },
+  {
+    "id": "LV-010",
+    "title": "No release beyond the vested amount",
+    "category": "vesting-escrow",
+    "summary": "Every matching continuation of a partial claim accepted by the model holds the required remainder of every vested asset. The compiled-validator corollaries cover constructed single-native-asset claims with one output under their stated hypotheses. Tests exercise the exact remainder, one unit short, time boundaries and rounding.",
+    "theorems": [
+      "Formal.LinearVesting.Robustness.claim_requires_remainder",
+      "Formal.LinearVesting.Robustness.reject_claim_over_release",
+      "Formal.LinearVesting.Corollaries.claim_sound_partial",
+      "Formal.LinearVesting.Corollaries.claim_sound_partial_any_out",
+      "Formal.LinearVesting.Tests.spec_reject_claim_over_release",
+      "Formal.LinearVesting.Tests.validator_reject_claim_over_release",
+      "Formal.LinearVesting.Tests.spec_reject_claim_at_start",
+      "Formal.LinearVesting.Tests.validator_reject_claim_at_start",
+      "Formal.LinearVesting.Tests.spec_reject_claim_rounding",
+      "Formal.LinearVesting.Tests.validator_reject_claim_rounding",
+      "Formal.LinearVesting.Tests.spec_reject_claim_before_end",
+      "Formal.LinearVesting.Tests.validator_reject_claim_before_end"
+    ]
+  },
+  {
+    "id": "LV-011",
+    "title": "Continuations keep the full address and datum",
+    "category": "vesting-escrow",
+    "summary": "A partial claim the model accepts has a continuation at the vesting input's full address with the same inline datum. The compiled-validator corollary for a single arbitrary-address output derives full address and datum equality within its stated bounds.",
+    "theorems": [
+      "Formal.LinearVesting.Robustness.claim_requires_datum_preserved",
+      "Formal.LinearVesting.Robustness.reject_claim_datum_tamper",
+      "Formal.LinearVesting.Corollaries.claim_sound_partial",
+      "Formal.LinearVesting.Corollaries.claim_sound_partial_any_out",
+      "Formal.LinearVesting.Tests.spec_reject_claim_datum_tamper",
+      "Formal.LinearVesting.Tests.validator_reject_claim_datum_tamper",
+      "Formal.LinearVesting.Tests.spec_reject_claim_other_script",
+      "Formal.LinearVesting.Tests.validator_reject_claim_other_script"
+    ]
+  },
+  {
+    "id": "LV-012",
+    "title": "The vesting input must have an inline datum",
+    "category": "vesting-escrow",
+    "summary": "The model rejects a Claim with a hashed datum on the resolved input. The compiled-validator test rejects any hash in the constructed fixture.",
+    "theorems": [
+      "Formal.LinearVesting.Robustness.claim_requires_inline_datum",
+      "Formal.LinearVesting.Robustness.reject_claim_datum_hash",
+      "Formal.LinearVesting.Tests.spec_reject_claim_datum_hash",
+      "Formal.LinearVesting.Tests.validator_reject_claim_datum_hash"
+    ]
+  },
+  {
+    "id": "LV-013",
+    "title": "No double satisfaction",
+    "category": "vesting-escrow",
+    "summary": "A partial claim the model accepts has at least as many continuations as inputs at the same full address and datum. Each continuation independently holds the per-asset remainder. Compiled-validator tests check the two-input cases.",
+    "theorems": [
+      "Formal.LinearVesting.Robustness.claim_requires_continuation_per_input",
+      "Formal.LinearVesting.Robustness.reject_claim_double_satisfaction",
+      "Formal.LinearVesting.Robustness.reject_claim_merged_instances",
+      "Formal.LinearVesting.Robustness.reject_claim_underfunded_batch",
+      "Formal.LinearVesting.Tests.spec_reject_claim_double_satisfaction",
+      "Formal.LinearVesting.Tests.validator_reject_claim_double_satisfaction",
+      "Formal.LinearVesting.Tests.spec_reject_claim_merged_instances",
+      "Formal.LinearVesting.Tests.validator_reject_claim_merged_instances",
+      "Formal.LinearVesting.Tests.spec_reject_claim_underfunded_batch",
+      "Formal.LinearVesting.Tests.validator_reject_claim_underfunded_batch"
+    ]
+  },
+  {
+    "id": "LV-014",
+    "title": "Claims need an ordered schedule and a time",
+    "category": "vesting-escrow",
+    "summary": "For every transaction, the spec rejects a claim whose datum does not have start < end, or whose validity range has no finite lower bound.",
+    "theorems": [
+      "Formal.LinearVesting.Robustness.claim_requires_ordered_schedule",
+      "Formal.LinearVesting.Robustness.claim_requires_time",
+      "Formal.LinearVesting.Robustness.reject_claim_bad_schedule",
+      "Formal.LinearVesting.Robustness.reject_claim_no_time",
+      "Formal.LinearVesting.Robustness.reject_claim_infinite_lower",
+      "Formal.LinearVesting.Tests.spec_reject_claim_bad_schedule",
+      "Formal.LinearVesting.Tests.validator_reject_claim_bad_schedule",
+      "Formal.LinearVesting.Tests.spec_reject_claim_no_time",
+      "Formal.LinearVesting.Tests.validator_reject_claim_no_time"
+    ]
+  },
+  {
+    "id": "LV-015",
+    "title": "Only the locker can cancel",
+    "category": "vesting-escrow",
+    "summary": "Every cancellation the model accepts satisfies the locker credential. Concrete compiled-validator checks cover a different signer and an empty signatory list for a key locker.",
+    "theorems": [
+      "Formal.LinearVesting.Robustness.cancel_requires_authorization",
+      "Formal.LinearVesting.Robustness.reject_cancel_unauthorized",
+      "Formal.LinearVesting.Robustness.reject_cancel_unsigned",
+      "Formal.LinearVesting.Tests.spec_reject_cancel_wrong_signer",
+      "Formal.LinearVesting.Tests.validator_reject_cancel_wrong_signer",
+      "Formal.LinearVesting.Tests.spec_reject_cancel_unsigned",
+      "Formal.LinearVesting.Tests.validator_reject_cancel_unsigned"
+    ]
+  },
+  {
+    "id": "LV-016",
+    "title": "No cancel before the recovery time",
+    "category": "vesting-escrow",
+    "summary": "A cancellation the model accepts has a validity interval entirely after recovery. For a finite lower endpoint, inclusive equality fails and exclusive equality satisfies the time check. The key-locker compiled-validator corollary uses an inclusive lower endpoint. Concrete compiled-validator checks exercise both equality cases.",
+    "theorems": [
+      "Formal.LinearVesting.Robustness.cancel_requires_recovery_time",
+      "Formal.LinearVesting.Robustness.cancel_requires_recovery_time_inclusive",
+      "Formal.LinearVesting.Robustness.reject_cancel_premature",
+      "Formal.LinearVesting.Robustness.reject_cancel_premature_inclusive",
+      "Formal.LinearVesting.Corollaries.cancel_sound_after_recovery",
+      "Formal.LinearVesting.Tests.spec_reject_cancel_premature",
+      "Formal.LinearVesting.Tests.validator_reject_cancel_premature",
+      "Formal.LinearVesting.Tests.spec_reject_cancel_at_recovery",
+      "Formal.LinearVesting.Tests.validator_reject_cancel_at_recovery",
+      "Formal.LinearVesting.Tests.spec_accept_cancel_exclusive",
+      "Formal.LinearVesting.Tests.validator_accept_cancel_exclusive"
+    ]
+  },
+  {
+    "id": "LV-017",
+    "title": "Cancels need start < end < recovery",
+    "category": "vesting-escrow",
+    "summary": "For every transaction, the spec rejects a cancel whose datum does not have start < end < recovery.",
+    "theorems": [
+      "Formal.LinearVesting.Robustness.cancel_requires_ordered_schedule",
+      "Formal.LinearVesting.Robustness.reject_cancel_bad_schedule",
+      "Formal.LinearVesting.Tests.spec_reject_cancel_bad_schedule",
+      "Formal.LinearVesting.Tests.validator_reject_cancel_bad_schedule"
+    ]
+  },
+  {
+    "id": "LV-018",
+    "title": "The beneficiary can claim what has vested",
+    "category": "vesting-escrow",
+    "summary": "For a partial Claim, the model proves acceptance given a resolved input with the datum inline, an ordered schedule, beneficiary authorization, a finite lower bound, a well-formed asset bundle and enough clean continuations keeping the required remainders. The validator results cover the constructed shapes and include a concrete claim with ADA and a native token at a staked address.",
+    "theorems": [
+      "Formal.LinearVesting.Functionality.authorizedBy_key",
+      "Formal.LinearVesting.Functionality.authorizedBy_script",
+      "Formal.LinearVesting.Functionality.accept_claim",
+      "Formal.LinearVesting.Functionality.accept_claim_one_continuation",
+      "Formal.LinearVesting.Corollaries.claim_complete_partial",
+      "Formal.LinearVesting.Corollaries.claim_complete_partial_any_out",
+      "Formal.LinearVesting.Tests.spec_accept_claim_halfway",
+      "Formal.LinearVesting.Tests.validator_accept_claim_halfway",
+      "Formal.LinearVesting.Tests.spec_accept_claim_at_start",
+      "Formal.LinearVesting.Tests.validator_accept_claim_at_start",
+      "Formal.LinearVesting.Tests.spec_accept_claim_anytime",
+      "Formal.LinearVesting.Tests.validator_accept_claim_anytime",
+      "Formal.LinearVesting.Tests.spec_accept_claim_rounding",
+      "Formal.LinearVesting.Tests.validator_accept_claim_rounding",
+      "Formal.LinearVesting.Tests.spec_accept_claim_script",
+      "Formal.LinearVesting.Tests.validator_accept_claim_script",
+      "Formal.LinearVesting.Tests.spec_accept_claim_typical",
+      "Formal.LinearVesting.Tests.validator_accept_claim_typical",
+      "Formal.LinearVesting.Tests.spec_accept_claim_batch",
+      "Formal.LinearVesting.Tests.validator_accept_claim_batch",
+      "Formal.LinearVesting.Tests.spec_accept_claim_staked_bundle",
+      "Formal.LinearVesting.Tests.validator_accept_claim_staked_bundle"
+    ]
+  },
+  {
+    "id": "LV-019",
+    "title": "The beneficiary can claim everything after the end",
+    "category": "vesting-escrow",
+    "summary": "At or after vesting ends, the model accepts a Claim with a resolved inline-datum input, an ordered schedule, beneficiary authorization, a finite lower bound and a well-formed asset bundle. The compiled-validator corollary uses one vested asset with a nonnegative total and a key beneficiary. A concrete validator test exercises Claim with no continuation at the end time.",
+    "theorems": [
+      "Formal.LinearVesting.Functionality.accept_claim_after_end",
+      "Formal.LinearVesting.Corollaries.claim_complete_full",
+      "Formal.LinearVesting.Tests.spec_accept_claim_at_end",
+      "Formal.LinearVesting.Tests.validator_accept_claim_at_end"
+    ]
+  },
+  {
+    "id": "LV-020",
+    "title": "The locker can cancel after the recovery time",
+    "category": "vesting-escrow",
+    "summary": "The model accepts a Cancel with a spending purpose, an ordered schedule, locker authorization and a validity interval entirely after recovery. The compiled-validator corollary covers a signed key-locker Cancel with a finite inclusive lower bound strictly after recovery.",
+    "theorems": [
+      "Formal.LinearVesting.Functionality.accept_cancel",
+      "Formal.LinearVesting.Functionality.accept_cancel_key",
+      "Formal.LinearVesting.Corollaries.cancel_complete_after_recovery",
+      "Formal.LinearVesting.Tests.spec_accept_cancel",
+      "Formal.LinearVesting.Tests.validator_accept_cancel",
+      "Formal.LinearVesting.Tests.spec_accept_cancel_exclusive",
+      "Formal.LinearVesting.Tests.validator_accept_cancel_exclusive"
+    ]
+  },
+  {
+    "id": "LV-021",
+    "title": "The schedule is fixed along a chain of claims",
+    "category": "vesting-escrow",
+    "summary": "In any chain of claims the spec accepts, each spending a continuation of the one before, every step is validated under the first step's datum: beneficiary, locker, assets, and times never change.",
+    "theorems": [
+      "Formal.LinearVesting.MultiTx.datumData_inj",
+      "Formal.LinearVesting.MultiTx.link_datum_fixed",
+      "Formal.LinearVesting.MultiTx.chain_schedule_fixed"
+    ]
+  },
+  {
+    "id": "LV-022",
+    "title": "The full address is fixed along a chain of claims",
+    "category": "vesting-escrow",
+    "summary": "In a linked chain of claims accepted by the model, each vesting input has the first input's full address, including its staking credential.",
+    "theorems": [
+      "Formal.LinearVesting.MultiTx.link_address_fixed",
+      "Formal.LinearVesting.MultiTx.chain_address_fixed"
+    ]
+  },
+  {
+    "id": "LV-023",
+    "title": "A chain of claims never releases faster than the schedule",
+    "category": "vesting-escrow",
+    "summary": "In any chain of claims the spec accepts, with nonnegative totals, every continuation produced before the end of vesting holds at least the remainder the original schedule requires at that step's time, and so at any later time, however the earlier claims were split.",
+    "theorems": [
+      "Formal.LinearVesting.MultiTx.vested_le_of_le",
+      "Formal.LinearVesting.MultiTx.required_le_of_le",
+      "Formal.LinearVesting.MultiTx.chain_never_faster_than_schedule"
+    ]
+  },
+  {
+    "id": "LV-024",
+    "title": "Malformed inputs are rejected",
+    "category": "vesting-escrow",
+    "summary": "The validator tests reject a malformed redeemer, a missing or malformed datum, a minting purpose and an unresolved spending input in the constructed contexts.",
+    "theorems": [
+      "Formal.LinearVesting.Tests.validator_reject_malformed_redeemer",
+      "Formal.LinearVesting.Tests.validator_reject_missing_datum",
+      "Formal.LinearVesting.Tests.validator_reject_malformed_datum",
+      "Formal.LinearVesting.Tests.validator_reject_minting_purpose",
+      "Formal.LinearVesting.Tests.validator_reject_own_input_missing",
+      "Formal.LinearVesting.Tests.spec_reject_own_input_missing"
+    ]
+  }
+]
