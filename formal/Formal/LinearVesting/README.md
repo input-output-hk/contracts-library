@@ -116,6 +116,21 @@ statement and hypotheses of each cited theorem when comparing coverage.
 | LV-020 | Merged continuation rejected | LV-013 |
 | LV-021 | Underfunded batch rejected | LV-013 |
 
+## Check the milestone build
+
+GitHub Actions runs **M1.2 Lean build** on the milestone PR and on PRs into
+`fv/m1.2-linear-vesting`. To reproduce the check from `formal/`, run:
+
+```sh
+python3 scripts/prepare-vesting-snapshot.py
+lake build Formal +Formal.LinearVesting
+lake env lean scripts/check-m12-proofs.lean
+```
+
+Green requires the full active build and its proof checks to pass. Ordinary
+warnings are allowed. A missing catalogue theorem or a project proof using
+`sorry` fails the check even when Lean can compile the file.
+
 ## Reproduce the cancellation boundary
 
 Follow the toolchain setup using Aiken `v1.1.24+bacbeb3`, Lean 4.24.0 and
