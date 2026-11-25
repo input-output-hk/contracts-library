@@ -8,7 +8,7 @@ import tempfile
 import unittest
 
 FORMAL = Path(__file__).resolve().parents[2]
-CHECKER = FORMAL / "scripts/check-m12-proofs.lean"
+CHECKER = FORMAL / "scripts/check-m1-2-proofs.lean"
 GOOD = "theorem valid : True := True.intro"
 FULL = "Formal.LinearVesting.Spec.valid"
 

@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: m12-lean-pr-${{ github.event.pull_request.number }}
+  group: m1-2-lean-pr-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
@@ -66,7 +66,7 @@ jobs:
 
       - name: Verify the milestone proofs
         run: |
-          if ! lake env lean scripts/check-m12-proofs.lean; then
+          if ! lake env lean scripts/check-m1-2-proofs.lean; then
             echo "Build passed. Proof checks are incomplete. See the Lean diagnostic above." >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi

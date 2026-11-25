@@ -124,7 +124,7 @@ GitHub Actions runs **M1.2 Lean build** on the milestone PR and on PRs into
 ```sh
 python3 scripts/prepare-vesting-snapshot.py
 lake build Formal +Formal.LinearVesting
-lake env lean scripts/check-m12-proofs.lean
+lake env lean scripts/check-m1-2-proofs.lean
 ```
 
 Green requires the full active build and its proof checks to pass. Ordinary
