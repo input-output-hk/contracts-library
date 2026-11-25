@@ -3,7 +3,7 @@
 Transaction builders for the [linear vesting](../../../../../docs/vesting/spec.md) contract. This is the primary developer-facing API: you can lock and claim vested funds without reading the Aiken validator.
 
 - **Spec**: [`docs/vesting/spec.md`](../../../../../docs/vesting/spec.md)
-- **On-chain**: [`onchain/`](../../../onchain), pinned via `./blueprint.ts` (validator hash `fa1144f1…`, Aiken v1.1.22, Plutus V3).
+- The SDK uses the pinned Plutus V3 spending validator. [Blueprint](blueprint.ts) · [Aiken source](../../../../../onchain/validators/linear_vesting.ak)
 
 ## The model in one paragraph
 
@@ -41,7 +41,7 @@ const datum: VestingDatum = {
 };
 ```
 
-`policyId: ""` / `assetName: ""` is ada. Quantities are `bigint`. The `vesting` list must be strictly ascending by `(policyId, assetName)` with no duplicates and no negative totals, or the instance can never be claimed (only recovered by the locker). `buildLockTx` checks this; use `sortVestingBundle` to put entries in order. The `locker` can recover anything still locked after `recoveryTime`.
+`policyId: ""` / `assetName: ""` is ada. Quantities are `bigint`. The `vesting` list must be strictly ascending by `(policyId, assetName)` with no duplicates and no negative totals, or the instance can never be claimed (only recovered by the locker). `buildLockTx` and `buildClaimTx` check the bundle. Use `sortVestingBundle` to order entries. The `locker` can recover anything still locked after `recoveryTime`.
 
 ## Full example
 

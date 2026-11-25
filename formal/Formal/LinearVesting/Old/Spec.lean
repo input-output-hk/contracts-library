@@ -2,9 +2,8 @@
 Linear vesting — pure-Lean specification model. No UPLC here.
 
 Two layers:
-  1. The schedule arithmetic (`vested`/`required`) and its properties — spec
-     §3.3 and the §9 boundary lemmas B1-B3. These are self-contained and
-     proved by `blaster`.
+  1. Schedule arithmetic (`vested`/`required`) and model lemmas (spec §3.3).
+     These are self-contained and proved by `blaster`.
   2. The datum/redeemer encoding and the "valid instance / valid transition"
      relations the Completeness/Soundness/Robustness proofs are stated against.
      The encodings mirror `onchain/lib/vesting/types.ak` exactly.
@@ -15,7 +14,7 @@ import Blaster
 import PlutusCore.UPLC
 import CardanoLedgerApi.V3
 
-namespace Formal.Vesting.Linear.Spec
+namespace Formal.LinearVesting.Old.Spec
 
 open PlutusCore.Data (Data)
 open PlutusCore.ByteString (ByteString)
@@ -47,14 +46,14 @@ theorem vested_full (T start finish now : Int)
   unfold vested
   blaster
 
-/-- **B1 (floor / no over-release).** Spec §9 B1. -/
+/-- The model's vested quantity does not exceed the original total. -/
 theorem vested_le_total (T start finish now : Int)
     (hT : 0 ≤ T) (hs : start < finish) :
     vested T start finish now ≤ T := by
   unfold vested
   blaster
 
-/-- Required remainder is non-negative — the dual of B1. -/
+/-- Required remainder is non-negative. -/
 theorem required_nonneg (T start finish now : Int)
     (hT : 0 ≤ T) (hs : start < finish) :
     0 ≤ required T start finish now := by
@@ -157,4 +156,4 @@ def dScript (bhash : ByteString) : VestingDatum :=
     vesting := [{ policy := "policyA", name := "assetA", total := 100 }],
     startTime := 1000, endTime := 2000, recoveryTime := 3000 }
 
-end Formal.Vesting.Linear.Spec
+end Formal.LinearVesting.Old.Spec

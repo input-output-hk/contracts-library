@@ -9,13 +9,14 @@ nothing to execute and makes proofs hang.
 -/
 import PlutusCore.UPLC
 
-namespace Formal.Vesting.Linear.Script
+namespace Formal.LinearVesting.Script
 
 open PlutusCore.UPLC.Term (Program)
 
-#import_uplc linearVestingSpendScript PlutusV3 flat_hex "Scripts/linear_vesting_spend.flat"
+#import_uplc linearVestingSpendScript PlutusV3 flat_hex "./Scripts/linear_vesting_spend.flat"
 
 /-- The compiled `spend` handler of `validators/linear_vesting.ak`. -/
 def spendValidator : Program := linearVestingSpendScript.script
+#print linearVestingSpendScript
 
-end Formal.Vesting.Linear.Script
+end Formal.LinearVesting.Script

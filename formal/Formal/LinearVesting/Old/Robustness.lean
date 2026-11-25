@@ -4,34 +4,32 @@ Linear vesting — ROBUSTNESS: explicit rejection theorems (spec §9 R-clauses,
 Soundness: soundness says "if accepted, then good"; robustness names specific
 bad transactions and proves they are *not* accepted.
 
-The headline one is no-double-satisfaction (§5.1, I2): two contract inputs
-sharing a datum cannot be satisfied by a single continuation; the `k`-scaling
-rule forces `k × required`.
+The fixed two-input examples (§5.1, I2) require two separate continuations,
+each holding its own required remainder.
 -/
 import Blaster
 import PlutusCore.UPLC
 import CardanoLedgerApi.V3
-import Formal.Common
-import Formal.Vesting.Linear.Spec
-import Formal.Vesting.Linear.Script
-import Formal.Vesting.Linear.Soundness
-import Formal.Vesting.Linear.Completeness
+import Formal.Shared.Common
+import Formal.LinearVesting.Old.Spec
+import Formal.LinearVesting.Old.Script
+import Formal.LinearVesting.Old.Soundness
+import Formal.LinearVesting.Old.Completeness
 
-namespace Formal.Vesting.Linear.Robustness
+namespace Formal.LinearVesting.Old.Robustness
 
 open PlutusCore.UPLC.Term (Program)
 open PlutusCore.ByteString (ByteString)
 open PlutusCore.Data (Data)
 open CardanoLedgerApi.V3 (Address Redeemer)
-open Formal.Common (validatorRejects)
-open Formal.Vesting.Linear.Spec
-open Formal.Vesting.Linear.Soundness (mkClaimCtx mkClaimCtxW mkClaimCtxHashInput mkClaimCtxDouble withAsset scriptAddress)
-open Formal.Vesting.Linear.Script (spendValidator)
+open Formal.Shared.Common (validatorRejects)
+open Formal.LinearVesting.Old.Spec
+open Formal.LinearVesting.Old.Soundness (mkClaimCtx mkClaimCtxW mkClaimCtxHashInput mkClaimCtxDouble withAsset scriptAddress)
+open Formal.LinearVesting.Old.Script (spendValidator)
 -- `dConcrete`/`dScript` come from `Spec` (opened above).
 
-/-- **R1 — unauthorized claim is rejected.** No signatory satisfies the
-beneficiary key ⇒ the validator rejects the `Claim`. General target; the
-concrete instances below are the proved ones. -/
+/-- R1: A claim with a key beneficiary and no signatories is rejected in the
+constructed spend context. -/
 theorem reject_unauthorized_claim
     (d : VestingDatum) (a : VestedAsset)
     (inLovelace outLovelace inQty outQty now : Int)
@@ -41,9 +39,12 @@ theorem reject_unauthorized_claim
     let ctx := mkClaimCtx d inValue outAddr outValue outDatum now [] claimRedeemer
     (∃ h, d.beneficiary = .key h) →   -- key-auth instance, but NO signatories
       validatorRejects ctx spendValidator := by
-  -- General version (∀ d/amounts/addr) hangs, like the completeness analogues.
-  -- See the concrete instances below.
-  sorry
+  dsimp only
+  intro h
+  rcases d with ⟨beneficiary, locker, vesting, startTime, endTime, recoveryTime⟩
+  rcases h with ⟨key, hk⟩
+  cases hk
+  blaster
 
 /-- **R1, concrete: no signatory ⇒ reject.** The honest claim of
 `claim_accept_concrete`, but with an EMPTY signatory list, is rejected: the
@@ -79,8 +80,9 @@ theorem reject_wrong_signer (w : ByteString)
       spendValidator := by
   blaster
 
-/-- **R2 — over-release is rejected.** A `Claim` whose continuation holds less
-than the required remainder is rejected (spec §9 R2, I2/B1). -/
+/-- R2: For a valid schedule before vesting ends, the compiled validator rejects
+the constructed single-native-asset claim when its output holds less than the
+required remainder. -/
 theorem reject_over_release
     (d : VestingDatum) (a : VestedAsset)
     (inLovelace outLovelace inQty outQty now : Int)
@@ -90,14 +92,16 @@ theorem reject_over_release
     let outDatum := datumData d
     let sigs := match d.beneficiary with | .key h => [h] | .script _ => []
     let ctx := mkClaimCtx d inValue outAddr outValue outDatum now sigs claimRedeemer
+    a.policy ≠ "" ∧
     d.vesting = [a] ∧ validSchedule d ∧ now < d.endTime ∧
     outQty < required a.total d.startTime d.endTime now →   -- too little kept
       validatorRejects ctx spendValidator := by
-  -- Unproven (`sorry`): the ∀-quantified statement makes blaster execute the
-  -- CEK machine over an unconstrained datum/schedule/amounts, which does not
-  -- terminate. The concrete `reject_over_release_concrete` proves the same for
-  -- the standard instance.
-  sorry
+  dsimp only
+  intro h
+  rcases d with ⟨beneficiary, locker, vesting, startTime, endTime, recoveryTime⟩
+  rcases h with ⟨hPolicy, hVesting, hSchedule, hTime, hQty⟩
+  cases hVesting
+  cases beneficiary <;> blaster
 
 /-- **R2, concrete: under-funded continuation ⇒ reject.** The honest claim, but
 the continuation keeps `outQty < required` (here required = 50 at `now = 1500`).
@@ -117,8 +121,8 @@ theorem reject_over_release_concrete (outQty : Int)
       spendValidator := by
   blaster
 
-/-- **R3 — schedule tampering is rejected.** A continuation whose datum differs
-from the input's is rejected (spec §9 R3, I3). -/
+/-- R3: Before vesting ends, the compiled validator rejects the constructed
+one-input/one-output claim when the output datum differs from the input's. -/
 theorem reject_datum_tamper
     (d : VestingDatum) (a : VestedAsset)
     (inLovelace outLovelace inQty outQty now : Int)
@@ -130,10 +134,12 @@ theorem reject_datum_tamper
     d.vesting = [a] ∧ validSchedule d ∧ now < d.endTime ∧
     outDatum ≠ datumData d →           -- tampered continuation datum
       validatorRejects ctx spendValidator := by
-  -- Unproven (`sorry`): same reason as the other ∀ targets — symbolic execution
-  -- over an unconstrained datum/schedule does not terminate. The concrete
-  -- `reject_datum_tamper_concrete` proves the same for the standard instance.
-  sorry
+  dsimp only
+  intro h
+  rcases d with ⟨beneficiary, locker, vesting, startTime, endTime, recoveryTime⟩
+  rcases h with ⟨hVesting, hSchedule, hTime, hDatum⟩
+  cases hVesting
+  cases beneficiary <;> blaster
 
 /-- **R3, concrete: tampered continuation datum ⇒ reject.** The honest claim of
 `claim_accept_concrete`, but the continuation carries a datum `outDatum` that
@@ -231,17 +237,14 @@ theorem reject_unauthorized_cancel (now : Int) (hgt : 3000 < now) :
   blaster
 
 /-- **No double satisfaction (spec §5.1, I2).** Two contract inputs sharing a
-byte-identical datum, with a single continuation holding only `1 × required`
-(50 at `now = 1500`), is rejected: invoked for the first input, the validator
-computes `k = 2` and requires `2 × required` (100), which the lone 50-output
-fails to meet. So one shared continuation cannot satisfy two inputs; an attacker
-cannot pocket the duplicate. Contrast `claim_accept_two_inputs`, where the same
-two inputs with a `2 × required` continuation are accepted. -/
+byte-identical datum, with a single continuation holding one required remainder
+(50 at `now = 1500`), are rejected. The continuation count must remain at least
+two; `claim_accept_two_inputs` supplies two separately funded continuations. -/
 theorem no_double_satisfaction :
     validatorRejects
       (mkClaimCtxDouble dConcrete
         (withAsset 2000000 "policyA" "assetA" 100)   -- each input holds 100
-        (withAsset 2000000 "policyA" "assetA" 50)    -- ONE continuation: only 1 × required
+        [withAsset 2000000 "policyA" "assetA" 50]   -- only one continuation
         (datumData dConcrete)
         1500
         ["beneficiary_key_hash"]
@@ -249,4 +252,34 @@ theorem no_double_satisfaction :
       spendValidator := by
   blaster
 
-end Formal.Vesting.Linear.Robustness
+/-- **No instance merging (spec §5.1, C4).** One continuation is rejected even
+when it holds the aggregate required remainder for both inputs. -/
+theorem reject_merged_instances :
+    validatorRejects
+      (mkClaimCtxDouble dConcrete
+        (withAsset 2000000 "policyA" "assetA" 100)
+        [withAsset 2000000 "policyA" "assetA" 100]
+        (datumData dConcrete)
+        1500
+        ["beneficiary_key_hash"]
+        claimRedeemer)
+      spendValidator := by
+  blaster
+
+/-- **Each continuation must be funded (spec §5.1, C4).** Two continuations
+with the correct aggregate remainder are rejected if one holds less than its
+own required remainder. -/
+theorem reject_underfunded_batch :
+    validatorRejects
+      (mkClaimCtxDouble dConcrete
+        (withAsset 2000000 "policyA" "assetA" 100)
+        [withAsset 2000000 "policyA" "assetA" 40,
+         withAsset 2000000 "policyA" "assetA" 60]
+        (datumData dConcrete)
+        1500
+        ["beneficiary_key_hash"]
+        claimRedeemer)
+      spendValidator := by
+  blaster
+
+end Formal.LinearVesting.Old.Robustness

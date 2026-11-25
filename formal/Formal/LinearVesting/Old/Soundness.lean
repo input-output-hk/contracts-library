@@ -9,11 +9,11 @@ import Blaster
 import PlutusCore.UPLC
 import CardanoLedgerApi.V3
 import CardanoLedgerApi.V1.Time
-import Formal.Common
-import Formal.Vesting.Linear.Spec
-import Formal.Vesting.Linear.Script
+import Formal.Shared.Common
+import Formal.LinearVesting.Old.Spec
+import Formal.LinearVesting.Old.Script
 
-namespace Formal.Vesting.Linear.Soundness
+namespace Formal.LinearVesting.Old.Soundness
 
 open PlutusCore.UPLC.Term (Program)
 open PlutusCore.ByteString (ByteString)
@@ -21,9 +21,9 @@ open PlutusCore.Data (Data)
 open CardanoLedgerApi.IsData.Class (IsData)
 open CardanoLedgerApi.V3 (Address Redeemer ScriptContext TxInfo TxInInfo TxOut
                           Value OutputDatum valueOf Withdrawals)
-open Formal.Common (validatorAccepts)
-open Formal.Vesting.Linear.Spec
-open Formal.Vesting.Linear.Script (spendValidator)
+open Formal.Shared.Common (validatorAccepts)
+open Formal.LinearVesting.Old.Spec
+open Formal.LinearVesting.Old.Script (spendValidator)
 
 /-! ## Ledger-context scaffold (shared) -/
 
@@ -115,24 +115,23 @@ def mkClaimCtxHashInput
     scriptContextScriptInfo := .SpendingScript utxoRef inDatumData }
 
 /-- A spend context with **two** contract inputs that share a byte-identical
-datum and value (refs differ only by index), and a **single** continuation
-carrying that datum. The validator, invoked for the first input, computes
-`k = 2` and requires the continuation to hold `2 × required`; this builder lets
-us test both that a correctly funded batch is accepted and that an under-funded
-one (one continuation for two inputs) is rejected (spec §5.1, I2). -/
+datum and value (refs differ only by index), with explicit continuation values.
+Before `end_time`, a claim requires at least two continuations, each holding the
+full remainder (spec §5.1, I2). -/
 def mkClaimCtxDouble
     (datum : VestingDatum) (inValue : Value)
-    (outValue : Value) (outDatum : Data)
+    (outValues : List Value) (outDatum : Data)
     (now : Int) (sigs : List ByteString) (r : Redeemer) : ScriptContext :=
   let inDatumData := datumData datum
   let ref0 := ⟨"txid_placeholder_32bytes!!!!!!!!", 0⟩
   let ref1 := ⟨"txid_placeholder_32bytes!!!!!!!!", 1⟩
   let inUtxo : TxOut := ⟨scriptAddress, inValue, .OutputDatum inDatumData, none⟩
-  let outUtxo : TxOut := ⟨scriptAddress, outValue, .OutputDatum outDatum, none⟩
+  let outUtxos : List TxOut := outValues.map fun value =>
+    ⟨scriptAddress, value, .OutputDatum outDatum, none⟩
   let txInfo :=
     { baseTxInfo now sigs with
       txInfoInputs := [⟨ref0, inUtxo⟩, ⟨ref1, inUtxo⟩]  -- two inputs, same datum
-      txInfoOutputs := [outUtxo]                          -- one continuation
+      txInfoOutputs := outUtxos
       txInfoRedeemers := [(.Spending ref0, r), (.Spending ref1, r)] }
   { scriptContextTxInfo := txInfo
     scriptContextRedeemer := r
@@ -140,12 +139,9 @@ def mkClaimCtxDouble
 
 /-! ## Soundness theorems -/
 
-/-- **Partial-claim soundness (accepts ⇒ spec).** Single-asset instance.
-
-If the validator accepts a `Claim` over `mkClaimCtx` with the beneficiary key
-signed and a well-formed schedule, then the continuing output reproduces the
-datum and keeps at least the required remainder of the asset (spec §9 R2/R3,
-I2/I3). The output's datum/value are free, so accepting *forces* them. -/
+/-- Before vesting ends, acceptance of the constructed single-native-asset
+claim with a valid schedule implies that its output reproduces the input datum
+and holds at least the required remainder (spec §9 I2/I3). -/
 theorem claim_sound_partial
     (d : VestingDatum) (a : VestedAsset)
     (inLovelace outLovelace inQty outQty now : Int)
@@ -158,6 +154,7 @@ theorem claim_sound_partial
     let sigs := match d.beneficiary with | .key h => [h] | .script _ => []
     let ctx := mkClaimCtx d inValue outAddr outValue outDatum now sigs r
     d.vesting = [a] ∧
+    a.policy ≠ "" ∧
     validSchedule d ∧
     now < d.endTime ∧
     validatorAccepts ctx spendValidator →   -- the CONCRETE compiled validator
@@ -165,11 +162,12 @@ theorem claim_sound_partial
       outDatum = datumData d ∧
       -- ... and keeps the required remainder (I2/B1).
       outQty ≥ required a.total d.startTime d.endTime now := by
-  -- The general (∀ datum/amounts/addresses) version is too large for Z3 even
-  -- over the concrete validator (hangs for minutes). Left as `sorry`; the
-  -- concrete instance `claim_sound_partial_concrete` below proves the soundness
-  -- direction for the fixed datum with symbolic (attacker-controlled) outputs.
-  sorry
+  dsimp only
+  intro h
+  rcases d with ⟨beneficiary, locker, vesting, startTime, endTime, recoveryTime⟩
+  rcases h with ⟨hVesting, hPolicy, hSchedule, hTime, hAccept⟩
+  cases hVesting
+  cases beneficiary <;> blaster
 
 /-- **Partial-claim soundness (accepts ⇒ spec), concrete instance.** Fix the
 datum/schedule/`now`; leave the continuation's claimed amount `outQty` and datum
@@ -203,8 +201,8 @@ theorem claim_sound_partial_concrete (outQty : Int) (outDatum : Data) :
 (recovery = 3000) and sign the locker (so acceptance is possible); leave `now`
 symbolic. If the validator accepts a `Cancel`, then `now > recovery_time`
 (`3000 < now`): the locker cannot recover before the recovery time (strict;
-spec §9 R6, C7). The positive form of `reject_premature_cancel`; together they
-give `accepts ⟺ 3000 < now` for the signed locker. -/
+spec §9 R6, C7). Together with `cancel_complete`, this gives
+`accepts ⟺ 3000 < now` for the same signed-locker context. -/
 theorem cancel_sound (now : Int) :
     validatorAccepts
       (mkClaimCtx dConcrete
@@ -219,4 +217,4 @@ theorem cancel_sound (now : Int) :
       3000 < now := by
   blaster
 
-end Formal.Vesting.Linear.Soundness
+end Formal.LinearVesting.Old.Soundness

@@ -1,0 +1,72 @@
+name: M1.2 Linear Vesting
+
+on:
+  pull_request:
+    branches: [main, fv/m1.2-linear-vesting]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: m1-2-lean-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: M1.2 Lean build
+    if: >-
+      github.base_ref == 'fv/m1.2-linear-vesting' ||
+      (github.head_ref == 'fv/m1.2-linear-vesting' &&
+       github.event.pull_request.head.repo.full_name == 'no-witness-labs/contracts-library')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    defaults:
+      run:
+        shell: bash
+        working-directory: formal
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Download Lean and Z3
+        working-directory: ${{ runner.temp }}
+        run: |
+          curl --fail --silent --show-error --location --retry 3 -o lean.tar.zst \
+            https://github.com/leanprover/lean4/releases/download/v4.24.0/lean-4.24.0-linux.tar.zst
+          curl --fail --silent --show-error --location --retry 3 -o z3.zip \
+            https://github.com/Z3Prover/z3/releases/download/z3-4.15.2/z3-4.15.2-x64-glibc-2.39.zip
+
+      - name: Verify toolchain checksums
+        working-directory: ${{ runner.temp }}
+        run: |
+          sha256sum --check <<'DIGESTS'
+          b14f5e5159219dd1a1956c3b806813319f5e94ccd5bdfd56f54520609a5bb5ec  lean.tar.zst
+          85d2da1bf440fca3288874c2a06e23f96d09befcc21b5a7489fe0fa40444e685  z3.zip
+          DIGESTS
+
+      - name: Install the verified tools
+        working-directory: ${{ runner.temp }}
+        run: |
+          tar --zstd -xf lean.tar.zst
+          unzip -q z3.zip 'z3-4.15.2-x64-glibc-2.39/bin/z3'
+          echo "$RUNNER_TEMP/lean-4.24.0-linux/bin" >> "$GITHUB_PATH"
+          echo "$RUNNER_TEMP/z3-4.15.2-x64-glibc-2.39/bin" >> "$GITHUB_PATH"
+
+      - name: Prepare the pinned validator
+        run: |
+          test "$(cat lean-toolchain)" = leanprover/lean4:v4.24.0
+          lean --version
+          z3 --version
+          python3 scripts/prepare-vesting-snapshot.py
+
+      - name: Compile the active milestone
+        run: lake build Formal +Formal.LinearVesting
+
+      - name: Verify the milestone proofs
+        run: |
+          if ! lake env lean scripts/check-m1-2-proofs.lean; then
+            echo "Build passed. Proof checks are incomplete. See the Lean diagnostic above." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
